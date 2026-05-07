@@ -294,6 +294,51 @@ impl GajeIndex {
         }
         Ok(results)
     }
+
+    #[pyo3(signature = (input_vector))]
+    pub fn genomic_linear_forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+        let q_len = input_vector.len();
+        let c = &self.centroids;
+        let is_multi = c.len() == q_len * 4;
+        
+        // 1. Precompute LUT para Producto Punto (Input * Centroids)
+        // En lugar de distancias (L2), calculamos productos directos
+        let mut lut = Vec::with_capacity(q_len * 4);
+        for (d_idx, &val) in input_vector.iter().enumerate() {
+            for b in 0..4 {
+                let centroid = if is_multi {
+                    let b_idx = d_idx * 4;
+                    match b { 0 => c[b_idx], 1 => c[b_idx+1], 2 => c[b_idx+2], 3 => c[b_idx+3], _ => 0.0 }
+                } else {
+                    match b { 0 => c[0], 1 => c[1], 2 => c[2], 3 => c[3], _ => 0.0 }
+                };
+                lut.push(val * centroid);
+            }
+        }
+
+        // 2. Perform Forward Pass (Parallel MatMul over 2-bit weights)
+        let n_neurons = self.database.len() / self.stride;
+        let results: Vec<f32> = (0..n_neurons).into_par_iter().map(|neuron_idx| {
+            let weights = self.get_strand(neuron_idx);
+            let mut sum = 0.0f32;
+            let mut dims = 0;
+            for &byte in weights {
+                for j in 0..4 {
+                    if dims >= q_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let lut_idx = match bits {
+                        0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0,
+                    };
+                    sum += lut[dims * 4 + lut_idx];
+                    dims += 1;
+                }
+            }
+            sum
+        }).collect();
+
+        Ok(results)
+    }
 }
 
 #[pyfunction]
