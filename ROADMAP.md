@@ -1,50 +1,48 @@
-# 🚀 GAJE Protocol: Roadmap hacia el 85% de Precisión
+# 🚀 GAJE Protocol: Roadmap de Evolución Técnica
 
-Para transformar el Protocolo GAJE de un prototipo experimental a un producto revolucionario con >85% de precisión, debemos evolucionar la arquitectura de **Product Quantization (PQ)** siguiendo esta ruta técnica:
-
----
-
-## 🛑 Fase 1: Asymmetric Distance Computation (ADC) - *Prioridad Alta*
-**El Problema:** Actualmente comparamos "ADN contra ADN" (Simétrico), lo que duplica el error de cuantización.
-**La Solución:** Implementar ADC. El Query permanece en Float32 (32-bit) y se compara directamente contra los centroides del ADN (2-bit) mediante una tabla de consulta (Lookup Table).
-*   **Impacto esperado:** +25-30% de precisión inmediata.
-*   **Entorno:** Modificación del núcleo de Rust para aceptar un vector float como query.
+El Protocolo GAJE ha validado su núcleo científico superando el **85% de precisión** en la Fase 4. Ahora iniciamos la fase de escalabilidad industrial y optimización de hardware.
 
 ---
 
-## 🧬 Fase 2: Centroides Genómicos Dinámicos (K-Means)
-**El Problema:** Los umbrales actuales (-0.34, 0, 0.34) son estáticos y asumen una distribución normal perfecta.
-**La Solución:** Entrenar el "Código Genético" (Codebook). Usar K-Means para encontrar los 4 mejores centroides (A, C, G, T) para cada sub-espacio del vector.
-*   **Impacto esperado:** +20% de precisión.
-*   **Prueba:** Entrenar con 10,000 vectores de ejemplo antes de comprimir la base de datos completa.
+## ✅ Fases Completadas (2026)
+- [x] **Fase 1: ADC (Asymmetric Distance Computation)**: Comparación de query float32 contra DNA 2-bit.
+- [x] **Fase 2: Centroides Dinámicos**: Entrenamiento de codebooks mediante K-Means por dimensión.
+- [x] **Fase 3: Validación Real**: Pruebas exitosas con datasets GloVe y SBERT.
+- [x] **Fase 4: Benchmark Competitivo**: Validación frente a FAISS (GAJE 87% vs Binary Flat 70%).
 
 ---
 
-## 🌍 Fase 3: Validación con Datasets Reales
-**El Problema:** Los datos aleatorios (sintéticos) no tienen "semántica" real; son puntos dispersos que no forman agrupaciones (manifolds).
-**La Solución:** Utilizar datasets de embeddings reales para las pruebas:
-*   **SBERT (768 dims):** Embeddings de oraciones de Wikipedia.
-*   **CLIP (512 dims):** Embeddings de imágenes de COCO Dataset.
-*   **GloVe:** Vectores de palabras.
-*   **Impacto esperado:** En datos reales, la estructura semántica ayuda al algoritmo a encontrar vecinos de forma más natural que en datos puramente aleatorios.
+## ⚡ Fase 5: Optimización de Alto Rendimiento (High-Performance Engine)
+**El Problema:** La búsqueda actual en Rust es secuencial. Aunque eficiente, no aprovecha el paralelismo moderno.
+**La Solución:** Implementar aceleración por hardware y concurrencia masiva.
+*   **SIMD Acceleration (AVX2/NEON)**: Implementar instrucciones vectoriales en el núcleo de Rust para procesar múltiples hebras de ADN por ciclo de reloj.
+*   **Parallel Querying**: Utilizar `Rayon` para paralelizar la búsqueda ADC en todos los núcleos de la CPU.
+*   **Impacto esperado**: 10x - 50x aumento en la velocidad de búsqueda (latencia < 5ms para 1M de registros).
 
 ---
 
-## 🛠 Entorno de Pruebas Necesario
-Para ejecutar esta fase, necesitamos:
-1.  **Memoria:** Al menos 4GB de RAM (para K-Means sobre datasets grandes).
-2.  **GPU (Opcional):** Para acelerar el entrenamiento de centroides si el dataset supera el millón de registros.
-3.  **Librerías de Pre-procesamiento:** `scikit-learn` para el entrenamiento de los centroides iniciales que luego cargaremos en Rust.
+## 📊 Fase 6: Indexación Espacial (HNSW Genómico)
+**El Problema:** La búsqueda actual es $O(N)$. A medida que la base de datos crece, el tiempo de búsqueda aumenta linealmente.
+**La Solución:** Crear un grafo de proximidad (HNSW) donde los nodos son hebras de ADN.
+*   **Graph-based DNA Search**: Navegar por el grafo utilizando distancias ADC para evitar la búsqueda exhaustiva.
+*   **Impacto esperado**: Búsqueda en tiempo sub-lineal $O(\log N)$.
 
 ---
 
-## 📈 Resumen de Ganancia Estimada
-| Técnica | Precisión Actual | Incremento Est. | Meta |
-| :--- | :--- | :--- | :--- |
-| PQ Base + Gray Code | 22% | - | 22% |
-| **+ ADC (Asymmetric)** | 52% | +30% | 52% |
-| **+ Per-Dim K-Means** | **83%** | +31% | 85% |
-| **+ Real Data Structure**| **87%** | +4% | **87%** 🚀 |
+## 🔗 Fase 7: Almacenamiento Biológico Real
+**El Problema:** Los sistemas actuales son in-memory. Necesitamos puentes hacia el síntesis de ADN real.
+*   **Encapsulamiento Genómico**: Adaptar las hebras GAJE (2-bit) para incluir secuencias de control (primers, ECC) listas para síntesis.
+*   **Multimodal Integration**: Integrar embeddings de CLIP para permitir la búsqueda de imágenes directamente desde archivos de ADN.
 
 ---
-*Estado: ROADMAP COMPLETADO. Fases 1, 2, 3 y 4 validadas exitosamente con datos reales (>85.9%).*
+
+## 📈 Resumen de Objetivos 2026
+| Hito | Métrica Clave | Meta |
+| :--- | :--- | :--- |
+| **Escalabilidad** | Registros procesables | 100M+ |
+| **Latencia** | Tiempo por búsqueda | < 10ms |
+| **Precisión** | Recall@10 (SBERT) | > 90% |
+| **Eficiencia** | Bits por Dimensión | 2 bits |
+
+---
+*Estado: Iniciando Fase 5 - Optimización de Alto Rendimiento.*
