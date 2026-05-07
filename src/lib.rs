@@ -33,9 +33,11 @@ impl Ord for Neighbor {
 #[pyclass]
 pub struct GajeIndex {
     #[pyo3(get)]
-    pub database: Vec<Vec<u8>>,
+    pub database: Vec<u8>,
     #[pyo3(get)]
     pub centroids: Vec<f32>,
+    #[pyo3(get)]
+    pub stride: usize,
     layers: Vec<Vec<Vec<usize>>>,
     max_level: i32,
     entry_point: Option<usize>,
@@ -45,8 +47,13 @@ pub struct GajeIndex {
 }
 
 impl GajeIndex {
+    fn get_strand(&self, idx: usize) -> &[u8] {
+        let start = idx * self.stride;
+        &self.database[start..start + self.stride]
+    }
+
     fn calculate_distance_lut(&self, lut: &[f32], target_idx: usize) -> f32 {
-        let strand = &self.database[target_idx];
+        let strand = self.get_strand(target_idx);
         let mut dist_sq = 0.0f32;
         let mut dims = 0;
         let lut_len = lut.len() / 4;
@@ -69,17 +76,25 @@ impl GajeIndex {
     fn search_layer_lut(&self, lut: &[f32], ep: usize, ef: usize, level: usize) -> BinaryHeap<Neighbor> {
         let mut visited = std::collections::HashSet::new();
         let mut candidates = BinaryHeap::new();
-        let mut found_neighbors = BinaryHeap::new();
-
+        // found_neighbors debe ser un MAX-HEAP de distancias para poder sacar el más lejano.
+        // Como Neighbor es un MIN-HEAP (pop el menor), usamos un heap de distancias invertidas o simplemente cambiamos la lógica.
+        // Pero para mantener la consistencia con HNSW, necesitamos sacar el más lejano cuando excedemos ef.
+        
         let d_ep = self.calculate_distance_lut(lut, ep);
         let ep_neigh = Neighbor { idx: ep, distance: d_ep };
         
         visited.insert(ep);
         candidates.push(ep_neigh);
-        found_neighbors.push(ep_neigh);
+        
+        // Usaremos un BinaryHeap de Neighbor normal para candidatos (pop el más cercano).
+        // Y para found_neighbors, usaremos un vector y lo mantendremos como un Max-Heap manualmente o usaremos otra técnica.
+        // En Rust, la forma más fácil es usar un struct diferente.
+        
+        let mut found_neighbors = BinaryHeap::new(); // Este será un MIN-HEAP por defecto con Neighbor
+        found_neighbors.push(std::cmp::Reverse(ep_neigh)); // Reverse lo convierte en Max-Heap
 
         while let Some(c) = candidates.pop() {
-            let furthest_dist = found_neighbors.peek().map(|f| f.distance).unwrap_or(f32::MAX);
+            let furthest_dist = found_neighbors.peek().map(|f| f.0.distance).unwrap_or(f32::MAX);
             if c.distance > furthest_dist && found_neighbors.len() >= ef {
                 break;
             }
@@ -92,7 +107,7 @@ impl GajeIndex {
                     
                     if d < furthest_dist || found_neighbors.len() < ef {
                         candidates.push(n);
-                        found_neighbors.push(n);
+                        found_neighbors.push(std::cmp::Reverse(n));
                         if found_neighbors.len() > ef {
                             found_neighbors.pop();
                         }
@@ -100,7 +115,8 @@ impl GajeIndex {
                 }
             }
         }
-        found_neighbors
+        // Devolver un heap de Neighbor normal
+        found_neighbors.into_iter().map(|r| r.0).collect()
     }
 }
 
@@ -109,9 +125,15 @@ impl GajeIndex {
     #[new]
     #[pyo3(signature = (database, centroids, m=32, ef_construction=200))]
     pub fn new(database: Vec<Vec<u8>>, centroids: Vec<f32>, m: usize, ef_construction: usize) -> Self {
+        let stride = if database.is_empty() { 0 } else { database[0].len() };
+        let mut flat_db = Vec::with_capacity(database.len() * stride);
+        for s in database {
+            flat_db.extend(s);
+        }
         GajeIndex {
-            database,
+            database: flat_db,
             centroids,
+            stride,
             layers: Vec::new(),
             max_level: -1,
             entry_point: None,
@@ -122,8 +144,8 @@ impl GajeIndex {
     }
 
     pub fn build(&mut self) -> PyResult<()> {
-        println!("[*] Building Optimized DNA Graph (M={}, ef_c={})...", self.m, self.ef_construction);
-        let n = self.database.len();
+        let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
+        println!("[*] Building Optimized DNA Graph (N={}, M={}, ef_c={})...", n, self.m, self.ef_construction);
         self.layers = vec![vec![vec![]; n]; 1]; 
         for i in 0..n {
             self.insert_node(i);
@@ -132,18 +154,66 @@ impl GajeIndex {
         Ok(())
     }
 
+    pub fn add_batch(&mut self, strands: Vec<Vec<u8>>) -> PyResult<()> {
+        if self.stride == 0 && !strands.is_empty() {
+            self.stride = strands[0].len();
+        }
+        for s in strands {
+            self.database.extend(s);
+        }
+        Ok(())
+    }
+
+    pub fn flat_search(&self, query_vector: Vec<f32>, k: usize) -> PyResult<Vec<(usize, f32)>> {
+        let c = &self.centroids;
+        let q_len = query_vector.len();
+        let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
+        
+        let mut results: Vec<(usize, f32)> = (0..n).into_par_iter().map(|idx| {
+            let strand = self.get_strand(idx);
+            let mut dist_sq = 0.0f32;
+            let mut dims = 0;
+            let is_multi = c.len() == q_len * 4;
+            for &byte in strand {
+                for j in 0..4 {
+                    if dims >= q_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let centroid = if is_multi {
+                        let b = dims * 4; match bits { 0b00=>c[b], 0b01=>c[b+1], 0b11=>c[b+2], 0b10=>c[b+3], _=>0.0 }
+                    } else {
+                        match bits { 0b00=>c[0], 0b01=>c[1], 0b11=>c[2], 0b10=>c[3], _=>0.0 }
+                    };
+                    let diff = query_vector[dims] - centroid;
+                    dist_sq += diff * diff;
+                    dims += 1;
+                }
+            }
+            (idx, dist_sq.sqrt())
+        }).collect();
+        
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        if k > 0 && k < results.len() {
+            results.truncate(k);
+        }
+        
+        Ok(results)
+    }
+
     fn insert_node(&mut self, idx: usize) {
         let mut rng = rand::thread_rng();
         let level = (-rng.gen::<f64>().ln() * self.level_mult) as i32;
+        let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
         
         if self.entry_point.is_none() {
             self.max_level = level;
             self.entry_point = Some(idx);
-            self.layers = vec![vec![vec![]; self.database.len()]; (level + 1) as usize];
+            self.layers = vec![vec![vec![]; n]; (level + 1) as usize];
             return;
         }
 
-        let q = dequantize_embedding(self.database[idx].clone(), 768, Some(self.centroids.clone())).unwrap();
+        let q = dequantize_embedding(self.get_strand(idx).to_vec(), self.stride * 4, Some(self.centroids.clone())).unwrap();
         let mut lut = Vec::with_capacity(q.len() * 4);
         let c = &self.centroids;
         let is_multi = c.len() == q.len() * 4;
@@ -180,17 +250,19 @@ impl GajeIndex {
         }
 
         if level > self.max_level {
-            for _ in self.max_level..level { self.layers.push(vec![vec![]; self.database.len()]); }
+            for _ in self.max_level..level { self.layers.push(vec![vec![]; n]); }
             self.max_level = level;
             self.entry_point = Some(idx);
         }
     }
 
-    pub fn search(&self, query_vector: Vec<f32>, ef: usize) -> PyResult<Vec<(usize, f32)>> {
+    #[pyo3(signature = (query_vector, k=10, ef=None))]
+    pub fn search(&self, query_vector: Vec<f32>, k: usize, ef: Option<usize>) -> PyResult<Vec<(usize, f32)>> {
         if self.entry_point.is_none() {
-            return dna_similarity_search_adc(query_vector, self.database.clone(), Some(self.centroids.clone()));
+            return self.flat_search(query_vector, k);
         }
 
+        let ef_val = ef.unwrap_or(std::cmp::max(k, 50));
         let mut lut = Vec::with_capacity(query_vector.len() * 4);
         let c = &self.centroids;
         let is_multi = c.len() == query_vector.len() * 4;
@@ -213,16 +285,20 @@ impl GajeIndex {
             if let Some(best) = res.peek() { curr_ep = best.idx; }
         }
 
-        let final_neighbors = self.search_layer_lut(&lut, curr_ep, ef, 0);
+        let final_neighbors = self.search_layer_lut(&lut, curr_ep, ef_val, 0);
         let mut results: Vec<(usize, f32)> = final_neighbors.into_iter().map(|n| (n.idx, n.distance)).collect();
         results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        
+        if k > 0 && k < results.len() {
+            results.truncate(k);
+        }
         Ok(results)
     }
 }
 
 #[pyfunction]
 #[pyo3(signature = (vector, thresholds=None))]
-pub fn quantize_embedding(vector: Vec<f32>, thresholds: Option<Vec<f32>>) -> PyResult<Vec<u8>> {
+pub fn quantize_embedding(vector: Vec<f32>, thresholds: Option<Vec<f32>>, py: Python<'_>) -> PyResult<PyObject> {
     let t = thresholds.unwrap_or_else(|| vec![-0.34, 0.0, 0.34]);
     let sub_size = 4;
     let mut packed = Vec::with_capacity(vector.len() / sub_size);
@@ -238,18 +314,18 @@ pub fn quantize_embedding(vector: Vec<f32>, thresholds: Option<Vec<f32>>) -> PyR
         }
         packed.push(byte);
     }
-    Ok(packed)
+    Ok(pyo3::types::PyBytes::new_bound(py, &packed).into())
 }
 
 #[pyfunction]
 #[pyo3(signature = (vector, thresholds=None))]
-pub fn quantize_pq(vector: Vec<f32>, thresholds: Option<Vec<f32>>) -> PyResult<Vec<u8>> {
-    quantize_embedding(vector, thresholds)
+pub fn quantize_pq(vector: Vec<f32>, thresholds: Option<Vec<f32>>, py: Python<'_>) -> PyResult<PyObject> {
+    quantize_embedding(vector, thresholds, py)
 }
 
 #[pyfunction]
-#[pyo3(signature = (query_vector, database, centroids=None))]
-pub fn dna_similarity_search_adc(query_vector: Vec<f32>, database: Vec<Vec<u8>>, centroids: Option<Vec<f32>>) -> PyResult<Vec<(usize, f32)>> {
+#[pyo3(signature = (query_vector, database, centroids=None, k=10))]
+pub fn dna_similarity_search_adc(query_vector: Vec<f32>, database: Vec<Vec<u8>>, centroids: Option<Vec<f32>>, k: usize) -> PyResult<Vec<(usize, f32)>> {
     let c = centroids.unwrap_or_else(|| vec![-0.68, -0.17, 0.17, 0.68]);
     let q_len = query_vector.len();
     let mut results: Vec<(usize, f32)> = database.par_iter().enumerate().map(|(idx, strand)| {
@@ -274,13 +350,16 @@ pub fn dna_similarity_search_adc(query_vector: Vec<f32>, database: Vec<Vec<u8>>,
         (idx, dist_sq.sqrt())
     }).collect();
     results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    if k > 0 && k < results.len() {
+        results.truncate(k);
+    }
     Ok(results)
 }
 
 #[pyfunction]
-#[pyo3(signature = (query, database, centroids=None))]
-pub fn dna_similarity_search(query: PyObject, database: Vec<Vec<u8>>, centroids: Option<Vec<f32>>, py: Python<'_>) -> PyResult<Vec<(usize, f32)>> {
-    if let Ok(qv) = query.extract::<Vec<f32>>(py) { return dna_similarity_search_adc(qv, database, centroids); }
+#[pyo3(signature = (query, database, centroids=None, k=10))]
+pub fn dna_similarity_search(query: PyObject, database: Vec<Vec<u8>>, centroids: Option<Vec<f32>>, k: usize, py: Python<'_>) -> PyResult<Vec<(usize, f32)>> {
+    if let Ok(qv) = query.extract::<Vec<f32>>(py) { return dna_similarity_search_adc(qv, database, centroids, k); }
     if let Ok(qd) = query.extract::<Vec<u8>>(py) {
         let c = centroids.unwrap_or_else(|| vec![-0.68, -0.17, 0.17, 0.68]);
         let mut res: Vec<(usize, f32)> = database.par_iter().enumerate().map(|(idx, strand)| {
@@ -298,6 +377,9 @@ pub fn dna_similarity_search(query: PyObject, database: Vec<Vec<u8>>, centroids:
             (idx, d.sqrt())
         }).collect();
         res.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        if k > 0 && k < res.len() {
+            res.truncate(k);
+        }
         return Ok(res);
     }
     Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>("Query error"))

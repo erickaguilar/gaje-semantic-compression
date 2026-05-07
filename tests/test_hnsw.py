@@ -6,7 +6,9 @@ def test_hnsw_index_creation():
     db_dna = [os.urandom(192) for _ in range(10)] # 768 / 4 = 192 bytes
     centroids = [0.0] * (768 * 4)
     index = dna_semantic_compression.GajeIndex(db_dna, centroids)
-    assert len(index.database) == 10
+    # Almacenamiento plano: len es el total de bytes
+    assert len(index.database) == 10 * 192
+    assert index.stride == 192
 
 def test_hnsw_search_accuracy():
     dims = 768
