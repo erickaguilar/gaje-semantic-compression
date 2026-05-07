@@ -99,6 +99,35 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 This project is the result of a hybrid collaboration between human architectural vision and AI algorithmic optimization.
 
 ---
+
+## 🛠 Workflow & Versioning (Gitflow)
+This project uses **Gitflow** alongside a hybrid versioning system (`bump-my-version`) and `pre-commit` hooks for Rust and Python.
+
+### Gitflow Structure:
+*   `main`: Stable releases.
+*   `develop`: Integration branch.
+*   `feature/*`: New features and benchmarks.
+*   `release/*`: Preparing new version releases.
+
+### Releasing a new version:
+1. Ensure you are on `develop` and ready to cut a release.
+2. Run the bump command (it updates `pyproject.toml`, `Cargo.toml`, generates a commit and a git tag):
+```bash
+bump-my-version bump patch # or minor, or major
+```
+3. Push the new tag and branch to the repository:
+```bash
+git push --follow-tags
+```
+
+### Pre-commit Hooks:
+All commits are checked using `pre-commit` framework:
+*   Python: `ruff` (formatting and linting).
+*   Rust: `cargo fmt` and `cargo clippy`.
+*   Safety checks prevent large file uploads.
+*   A `pre-push` hook will run the unit tests and the compilation step (`maturin develop`).
+
+---
 *Inspired by the efficiency of the human genome.*
 
 

@@ -1,4 +1,3 @@
-import os
 import sys
 import numpy as np
 from semantic import DNASemanticRecord
@@ -8,6 +7,7 @@ try:
 except ImportError:
     print("Error: Library not built. Run 'maturin develop' first.")
     sys.exit(1)
+
 
 def main():
     # 1. Initialize the engine
@@ -21,7 +21,7 @@ def main():
     chromosome = record_handler.pack(text, embedding)
 
     # 4. Results
-    orig_size = len(text.encode('utf-8')) + (len(embedding) * 4)
+    orig_size = len(text.encode("utf-8")) + (len(embedding) * 4)
     final_size = len(chromosome)
     reduction = (1 - (final_size / orig_size)) * 100
 
@@ -34,6 +34,7 @@ def main():
     print("-" * 40)
     print("Chromosome Sample (Hex):")
     print(f"{chromosome[:40].hex()}...")
+
 
 if __name__ == "__main__":
     main()

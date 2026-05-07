@@ -1,11 +1,12 @@
 import struct
-import numpy as np
+
 
 class GenomicCodonMapper:
     """
     Biological-inspired text compression.
     Mapps high-frequency semantic markers to short binary codons.
     """
+
     def __init__(self):
         self.codon_map = {
             "ai": b"\x00",
@@ -22,8 +23,9 @@ class GenomicCodonMapper:
             if token in self.codon_map:
                 encoded.extend(self.codon_map[token])
             else:
-                encoded.extend(token.encode('utf-8') + b" ")
+                encoded.extend(token.encode("utf-8") + b" ")
         return bytes(encoded)
+
 
 class DNASemanticRecord:
     def __init__(self, engine):
@@ -37,8 +39,8 @@ class DNASemanticRecord:
         """
         dna_text = self.mapper.encode(text)
         dna_vector = self.engine.quantize_embedding(embedding)
-        
-        header = b"DNA\x02" # Magic number + version
+
+        header = b"DNA\x02"  # Magic number + version
         text_len = struct.pack("I", len(dna_text))
-        
+
         return header + text_len + dna_text + bytes(dna_vector)

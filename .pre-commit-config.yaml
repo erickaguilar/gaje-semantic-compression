@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=500'] # Prevent committing very large datasets
+      - id: detect-private-key
+
+  # Python Formatting & Linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.6
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format
+
+  # Rust Formatting & Linting (Local)
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: env PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 cargo clippy -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # Pre-push validation tests
+      - id: python-tests
+        name: Run Python tests (pre-push)
+        entry: bash -c "source .venv/bin/activate && export PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 && maturin develop && python tests/test_validation.py"
+        language: system
+        stages: [pre-push]
+        pass_filenames: false

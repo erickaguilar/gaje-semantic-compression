@@ -18,3 +18,13 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Eggs
+/eggs
+*.eggs
+
+# docs
+/docs
+
+# Data
+/data/

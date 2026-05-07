@@ -11,7 +11,7 @@
 We are entering the era of "Local AI," where models run directly on smartphones. However, these devices lack the memory to store "Long-Term Context." Storing years of a user's digital life or a complete library in a standard vector database requires gigabytes of RAM—a luxury most mobile hardware cannot afford.
 
 ## 2. The Solution: GAJE Protocol
-The **GAJE Protocol** (Genomic Adaptive Joint Encoding) solves this by providing a specialized engine for **Personal Semantic Memory**. 
+The **GAJE Protocol** (Genomic Adaptive Joint Encoding) solves this by providing a specialized engine for **Personal Semantic Memory**.
 
 By compressing AI vectors by **93.75%**, GAJE allows a smartphone to hold a "digital twin" of a user's knowledge in just a few megabytes. This enables truly private and offline Retrieval-Augmented Generation (RAG).
 
