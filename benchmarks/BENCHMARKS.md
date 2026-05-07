@@ -32,11 +32,12 @@ Este documento registra el rendimiento técnico del Protocolo GAJE y su posicion
 
 ---
 
-## ⚡ Rendimiento de Búsqueda (Rust Engine - Fase 5)
-*Mediciones en CPU con paralelismo Rayon*:
-- **Latencia de búsqueda**: ~42.41ms para 10,000 registros (Búsqueda exhaustiva ADC).
-- **Throughput**: ~235,000 registros/segundo.
-- **Mejora**: Se logró un aumento masivo de velocidad respecto a la implementación secuencial inicial, permitiendo escalabilidad hacia millones de registros.
+## 🕸️ Búsqueda Sub-lineal (HNSW Genómico - Fase 6)
+*Grafo de Proximidad en Espacio de ADN*:
+- **Latencia de búsqueda**: ~20.65ms para 5,000 registros (Búsqueda por Grafo HNSW).
+- **Escalabilidad**: El motor ahora soporta navegación jerárquica, reduciendo el costo de búsqueda de $O(N)$ a $O(\log N)$.
+- **Construcción**: La indexación de 5,000 hebras toma ~42 segundos (Entorno móvil/unoptimized).
+
 
 ---
 *Última actualización: 2026-05-07 (Tras completar Fase 4).*
