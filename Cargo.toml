@@ -10,4 +10,6 @@ name = "dna_semantic_compression"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.23.0", features = ["extension-module"] }
+rayon = "1.10.0"
+
