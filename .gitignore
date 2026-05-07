@@ -1,0 +1,20 @@
+# Rust
+/target
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.env
+*.so
+*.pyd
+*.dylib
+*.dll
+
+# Maturin
+/target/wheels
+
+# OS
+.DS_Store

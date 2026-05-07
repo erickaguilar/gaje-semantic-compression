@@ -1,0 +1,40 @@
+{
+    "compression": {
+        "128_dims": {
+            "float32_bytes": 512,
+            "dna_bytes": 32,
+            "ratio": "16.0x",
+            "saving_pct": "93.75%"
+        },
+        "384_dims": {
+            "float32_bytes": 1536,
+            "dna_bytes": 96,
+            "ratio": "16.0x",
+            "saving_pct": "93.75%"
+        },
+        "768_dims": {
+            "float32_bytes": 3072,
+            "dna_bytes": 192,
+            "ratio": "16.0x",
+            "saving_pct": "93.75%"
+        },
+        "1536_dims": {
+            "float32_bytes": 6144,
+            "dna_bytes": 384,
+            "ratio": "16.0x",
+            "saving_pct": "93.75%"
+        }
+    },
+    "latency": {
+        "768_dims": {
+            "avg_encoding_ms": 0.1027063000947237,
+            "avg_decoding_ms": 0.08165242034010589
+        }
+    },
+    "search_throughput": {
+        "1000_records": {
+            "duration_s": 0.04360099299810827,
+            "ops_per_sec": 22935.25746175981
+        }
+    }
+}

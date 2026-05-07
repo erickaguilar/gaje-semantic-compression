@@ -1,0 +1,13 @@
+[package]
+name = "dna_semantic_compression"
+version = "0.1.0"
+edition = "2021"
+authors = ["Erick Aguilar"]
+description = "High-performance genomic quantization engine for semantic data."
+
+[lib]
+name = "dna_semantic_compression"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }

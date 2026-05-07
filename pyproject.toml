@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "dna-semantic-compression"
+version = "0.2.0"
+description = "Genomic Semantic Compression Protocol (GAJE) for high-density vector storage."
+authors = [{name = "Erick Aguilar"}]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20.0",
+]
+
+[project.scripts]
+gaje = "python.cli:main"
+
+[tool.maturin]
+module-name = "dna_semantic_compression"
+python-source = "python"
