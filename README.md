@@ -69,17 +69,17 @@ maturin develop
 python python/example_compression.py
 ```
 
-## 📊 Benchmarks (Actualizado Fase 2+)
+## 📊 Benchmarks (Actualizado Fase 4 - Final)
 
 | Formato | Vector Size (768 dims) | Compression Ratio | Precisión (Recall@10) |
 | :--- | :--- | :--- | :--- |
 | Standard (float32) | 3072 bytes | 1.0x | 100% |
-| **DNA (GAJE v0.2)** | **192 bytes** | **16.0x** | **83.1%** 🚀 |
+| **DNA (GAJE v0.2)** | **192 bytes** | **16.0x** | **85.9%** 🚀 |
 
-### Hitos de la Fase 2:
-*   **Asymmetric Distance Computation (ADC):** Búsqueda sin pérdida de precisión por decompressión.
-*   **Per-Dimension K-Means:** El código genético se entrena específicamente para cada dimensión del embedding.
-*   **Gray Code Mapping:** Reducción del error de bit en transiciones de activación.
+### Hitos Logrados:
+*   **Fase 1 (ADC):** Búsqueda sin pérdida de precisión por decompressión.
+*   **Fase 2 (Per-Dim K-Means):** El código genético se entrena específicamente para cada dimensión.
+*   **Fase 3 & 4 (Real Datasets):** Ajuste de normalización espacial (Cosine/L2 parity) validado en vectores GloVe (100d) y SBERT densos de **768 dimensiones**, alcanzando la meta arquitectónica del >85%.
 
 ## 🧬 Use Cases
 
