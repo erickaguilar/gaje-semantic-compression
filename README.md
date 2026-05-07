@@ -1,134 +1,36 @@
----
-title: GAJE DNA Semantic Protocol
-emoji: 🧬
-colorFrom: blue
-colorTo: green
-sdk: docker
-pinned: false
-license: mit
----
+# 🧬 Protocolo GAJE: Compresión Semántica Genómica
 
-# GAJE: Genomic Adaptive Joint Encoding 🧬
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-[![Rust](https://img.shields.io/badge/rust-v1.70+-orange.svg)](https://www.rust-lang.org)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+**GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de compresión de alta densidad diseñado para almacenar embeddings vectoriales de gran escala utilizando el alfabeto genómico (A, C, G, T).
 
-**GAJE Protocol** (Genomic Adaptive Joint Encoding) is a specialized engine designed to manage **Personal Semantic Memory** for local AI agents. It enables mobile devices and edge hardware to store years of context and massive knowledge bases locally, by reducing the footprint of AI embeddings by **93.75%** through biological-inspired genomic quantization.
+## 🚀 Innovación: El "Punto Dulce" de la Compresión
+GAJE resuelve el compromiso entre precisión y espacio, superando los estándares industriales en alta dimensionalidad (768d+):
 
-## 🌟 The Vision
-While GAJE starts as a tool for personal data empowerment, its architecture is built to eventually scale into a global open standard.
+| Método | Recall@10 | Bits/Dim | Eficiencia |
+| :--- | :---: | :---: | :--- |
+| **Scalar Quant (SQ8)** | 99% | 8.0 | Baja |
+| **GAJE Protocol (DNA)** | **88.4%** | **2.0** | **Alta (Ganador)** |
+| **Binary Flat (1-bit)** | 64% | 1.0 | Degradada |
 
-## 🚀 Immediate Focus: Local AI Memory
-Current mobile LLMs (like Llama-3 or Gemma) face a "Memory Wall." GAJE breaks this wall by allowing devices to hold vast amounts of long-term semantic context in a few megabytes, ensuring privacy and offline functionality.
+## ⚡ Características Principales (v0.2.0)
+- **HNSW Genómico**: Motor de búsqueda sub-lineal basado en grafos de proximidad ($O(\log N)$).
+- **LUT-ADC Optimization**: Latencia de búsqueda de **~5ms** para 5k registros mediante Tablas de Consulta (LUT).
+- **Multimodal Ready**: Soporte validado para embeddings de CLIP (Imágenes) y SBERT (Texto).
+- **Native Rust Core**: Procesamiento paralelo masivo con Rayon.
 
-Traditional vector databases store embeddings as `float32` arrays (32 bits per dimension). This project introduces **Genomic Quantization**, which maps semantic activations to the four nitrogenous bases of DNA:
-
-*   **A (00):** Strongly Inhibited
-*   **C (01):** Weakly Inhibited
-*   **G (10):** Weakly Activated
-*   **T (11):** Strongly Activated
-
-By packing **4 dimensions into a single byte**, we achieve the theoretical information density of biological DNA while maintaining semantic search viability.
-
-## 🚀 Key Features
-
-*   **Hybrid Engine:** Rust core for bit-level manipulation with Python orchestration.
-*   **93.75% Vector Compression:** Transform a 1536-dim embedding (6KB) into a dense genomic strand (384 bytes).
-*   **Semantic Codon Mapping:** Text compression inspired by the genetic code dictionary.
-*   **Edge-Ready:** Minimal memory overhead, ideal for mobile devices and embedded AI.
-
-## 🛠 Project Structure
-
-```text
-dna-semantic-compression/
-├── src/                # Rust Core (Genomic Engine)
-│   └── lib.rs          # Bit-packing and Quantization logic
-├── python/             # Python API & Orchestrator
-│   ├── dna_engine.py   # Wrapper for the Rust module
-│   └── semantic.py     # Codon mapping and text logic
-├── benchmarks/         # Performance & Efficiency tests
-└── Cargo.toml          # Rust dependencies (PyO3)
-```
-
-## ⚡ Quick Start
-
-### 1. Requirements
-*   Rust (Cargo)
-*   Python 3.9+
-*   `maturin` (for building the bridge)
-
-### 2. Build the Engine
+## 🛠️ Instalación y Uso
 ```bash
-pip install maturin
-maturin develop
+# Compilar el núcleo de Rust e instalar la librería
+pip install .
+
+# Ejecutar el demo de búsqueda HNSW
+python python/hnsw_demo.py
 ```
 
-### 3. Run a Semantic Test
-```bash
-python python/example_compression.py
-```
-
-## 📊 Benchmarks (Actualizado Fase 4 - Final)
-
-| Formato | Vector Size (768 dims) | Compression Ratio | Precisión (Recall@10) |
-| :--- | :--- | :--- | :--- |
-| Standard (float32) | 3072 bytes | 1.0x | 100% |
-| **DNA (GAJE v0.2)** | **192 bytes** | **16.0x** | **85.9%** 🚀 |
-
-### Hitos Logrados:
-*   **Fase 1 (ADC):** Búsqueda sin pérdida de precisión por decompressión.
-*   **Fase 2 (Per-Dim K-Means):** El código genético se entrena específicamente para cada dimensión.
-*   **Fase 3 & 4 (Real Datasets):** Ajuste de normalización espacial (Cosine/L2 parity) validado en vectores GloVe (100d) y SBERT densos de **768 dimensiones**, alcanzando la meta arquitectónica del >85%.
-
-## 🧬 Use Cases
-
-1.  **Local Edge AI:** Deploy massive RAG (Retrieval-Augmented Generation) systems on smartphones and IoT without cloud dependency.
-2.  **Long-Term AI Memory:** Store years of agent interactions and personal contexts in a few MBs.
-3.  **Low-Bandwidth Sync:** Synchronize complex knowledge bases across limited networks (Satellite, LoRa, or Tactical comms).
-4.  **Bio-Digital Bridge:** Prepare digital semantic data for long-term storage in synthetic DNA synthesis.
-
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👤 Authorship & Intellectual Property
-
-*   **Original Vision & Idea Creator:** Erick Jonathan Aguilar García
-*   **Advanced Algorithms & Formulas Developer:** Gemini (Interactive CLI Agent)
-
-This project is the result of a hybrid collaboration between human architectural vision and AI algorithmic optimization.
+## 📈 Benchmarks Reales
+Para ver el análisis comparativo completo contra FAISS y las pruebas de velocidad, consulta [BENCHMARKS.md](benchmarks/BENCHMARKS.md).
 
 ---
-
-## 🛠 Workflow & Versioning (Gitflow)
-This project uses **Gitflow** alongside a hybrid versioning system (`bump-my-version`) and `pre-commit` hooks for Rust and Python.
-
-### Gitflow Structure:
-*   `main`: Stable releases.
-*   `develop`: Integration branch.
-*   `feature/*`: New features and benchmarks.
-*   `release/*`: Preparing new version releases.
-
-### Releasing a new version:
-1. Ensure you are on `develop` and ready to cut a release.
-2. Run the bump command (it updates `pyproject.toml`, `Cargo.toml`, generates a commit and a git tag):
-```bash
-bump-my-version bump patch # or minor, or major
-```
-3. Push the new tag and branch to the repository:
-```bash
-git push --follow-tags
-```
-
-### Pre-commit Hooks:
-All commits are checked using `pre-commit` framework:
-*   Python: `ruff` (formatting and linting).
-*   Rust: `cargo fmt` and `cargo clippy`.
-*   Safety checks prevent large file uploads.
-*   A `pre-push` hook will run the unit tests and the compilation step (`maturin develop`).
-
----
-*Inspired by the efficiency of the human genome.*
-
-
-*Dios cuida de la humanidad.*
+*Desarrollado para la frontera del almacenamiento de datos en ADN.*
