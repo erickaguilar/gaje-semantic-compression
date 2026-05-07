@@ -47,16 +47,44 @@ class GenomicTransformerBlock:
         x = np.array(x)
         return x / np.sqrt(np.mean(x**2) + eps)
 
-    def forward(self, x):
-        # x: vector de activación
-        # 1. Self-Attention Sim (solo proyección Q para este test)
-        attn_out = self.layers['attn_q'].forward(x)[:len(x)]
-        x = self.rms_norm(x + attn_out)
+    def apply_rope(self, x, pos, base=10000.0):
+        """
+        Aplica Rotary Position Embeddings (RoPE) a un vector de activación.
+        """
+        dim = len(x)
+        # Solo aplicamos a las dimensiones pares/impares para simular la rotación compleja
+        res = np.zeros_like(x)
+        theta = 1.0 / (base ** (np.arange(0, dim, 2)[:dim//2] / dim))
+        m_theta = pos * theta
+        
+        cos_mt = np.cos(m_theta)
+        sin_mt = np.sin(m_theta)
+        
+        for i in range(0, dim // 2):
+            idx = i * 2
+            if idx + 1 < dim:
+                x0, x1 = x[idx], x[idx+1]
+                res[idx] = x0 * cos_mt[i] - x1 * sin_mt[i]
+                res[idx+1] = x1 * cos_mt[i] + x0 * sin_mt[i]
+        return res
+
+    def forward(self, x, pos=0):
+        """
+        Inferencia estabilizada con RMSNorm y RoPE.
+        """
+        x_in = np.array(x)
+        
+        # 1. Rama de Atención con RoPE
+        # Aplicamos RoPE a la proyección Query para dar noción de posición
+        q = np.array(self.layers['attn_q'].forward(x_in.tolist()))
+        q = self.apply_rope(q[:len(x_in)], pos)
+        
+        attn_impact = q # Simplificación: Q es el proxy del impacto posicional
+        x = self.rms_norm(x_in + attn_impact)
         
         # 2. FFN (up -> gate -> down)
         up = self.layers['ffn_up'].forward(x)
         gate = self.layers['ffn_gate'].forward(x)
-        # Activation: SiLU sim (x * sigmoid(x))
         h = (up * (1.0 / (1.0 + np.exp(-gate))))
         down = self.layers['ffn_down'].forward(h)[:len(x)]
         
@@ -105,16 +133,21 @@ class GenomicLLM:
         print("[*] Generando", end="", flush=True)
         
         generated_text = prompt
+        token_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        
         for _ in range(max_new_tokens):
-            # Obtener el siguiente token usando ADN Genómico
-            next_word = self.generate_step(generated_text, silent=True)
+            # Obtener el siguiente token usando ADN Genómico y RoPE
+            # La posición es la longitud actual de la secuencia
+            pos = len(token_ids)
+            next_word = self.generate_step(generated_text, pos=pos, silent=True)
             generated_text += next_word
+            token_ids = self.tokenizer.encode(generated_text, add_special_tokens=False)
             print(".", end="", flush=True)
             
         print(" [Hecho]")
         return generated_text
 
-    def generate_step(self, text, silent=False):
+    def generate_step(self, text, pos=0, silent=False):
         # A. Tokenización
         token_ids = self.tokenizer.encode(text, add_special_tokens=False)
         last_id = token_ids[-1]
@@ -128,9 +161,9 @@ class GenomicLLM:
         x = np.array(dna_semantic_compression.dequantize_embedding(list(dna_strand), self.hidden_dim, self.embeddings.centroids))
         
         # C. Inferencia por Bloques (ADN -> ADN)
-        if not silent: print(f"[*] Procesando ADN a través de {len(self.blocks)} bloques genómicos...")
+        if not silent: print(f"[*] Procesando ADN a través de {len(self.blocks)} bloques genómicos con RoPE (pos={pos})...")
         for block in self.blocks:
-            x = block.forward(x)
+            x = block.forward(x, pos=pos)
             
         # D. Proyección Final (De-Tokenizer Head)
         logits = self.lm_head.forward(x)
@@ -144,16 +177,18 @@ def run_full_pipeline():
         print("❌ Modelo no encontrado.")
         return
 
-    # Usamos 4 bloques para mayor coherencia en la generación de oraciones
-    llm = GenomicLLM(model_path, num_blocks=4)
+    # CARGA TOTAL: 24 bloques (El cerebro completo de Qwen2-0.5B)
+    llm = GenomicLLM(model_path, num_blocks=24)
     
-    prompt = "El ADN es"
+    prompt = "El ADN es la base de la"
     
     start = time.perf_counter()
-    full_sentence = llm.generate(prompt, max_new_tokens=8)
+    # Generar 20 tokens para ver coherencia real
+    full_sentence = llm.generate(prompt, max_new_tokens=20)
     end = time.perf_counter()
     
-    print(f"\n✨ Resultado Final: '{full_sentence}'")
+    print(f"\n✨ Resultado Final (LLM Genómico Completo):")
+    print(f"'{full_sentence}'")
     print(f"⏱️ Tiempo total de generación: {(end-start)*1000:.2f} ms")
     
     # RAM Stats
