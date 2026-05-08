@@ -581,6 +581,21 @@ impl GenomicAttention {
     }
 }
 
+#[pyfunction]
+#[pyo3(signature = (logits, history, penalty=1.2))]
+pub fn apply_repetition_penalty(mut logits: Vec<f32>, history: Vec<usize>, penalty: f32) -> PyResult<Vec<f32>> {
+    for &id in &history {
+        if id < logits.len() {
+            if logits[id] > 0.0 {
+                logits[id] /= penalty;
+            } else {
+                logits[id] *= penalty;
+            }
+        }
+    }
+    Ok(logits)
+}
+
 #[pymodule]
 fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
@@ -590,5 +605,6 @@ fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search, m)?)?;
     m.add_function(wrap_pyfunction!(dequantize_embedding, m)?)?;
+    m.add_function(wrap_pyfunction!(apply_repetition_penalty, m)?)?;
     Ok(())
 }

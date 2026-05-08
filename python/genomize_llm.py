@@ -148,9 +148,9 @@ class GenomicLLM:
         
         self.blocks = [GenomicTransformerBlock(i, self.reader) for i in range(num_blocks)]
 
-    def generate(self, prompt, max_new_tokens=20):
+    def generate(self, prompt, max_new_tokens=20, repetition_penalty=1.2):
         input_ids = self.tokenizer.encode(prompt)
-        print(f"\n🚀 Generando con Block-Quant: '{prompt}'")
+        print(f"\n🚀 Generando con Block-Quant + Penalty: '{prompt}'")
         
         generated_ids = []
         for i in range(max_new_tokens):
@@ -160,7 +160,12 @@ class GenomicLLM:
             for j, block in enumerate(self.blocks):
                 x = block.forward(x, len(input_ids) - 1)
             
-            logits = np.dot(self.embedding_matrix, x)
+            # 3. Output Head + Repetition Penalty
+            logits = np.dot(self.embedding_matrix, x).tolist()
+            logits = dna_semantic_compression.apply_repetition_penalty(
+                logits, input_ids, repetition_penalty
+            )
+            
             next_id = np.argmax(logits)
             
             if next_id == self.tokenizer.eos_token_id: break
