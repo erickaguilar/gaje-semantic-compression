@@ -487,7 +487,7 @@ impl GenomicAttention {
         }
     }
 
-    pub fn forward(&mut self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+    pub fn forward(&mut self, input_vector: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> {
         let q_len = input_vector.len();
         let c = &self.centroids;
         
@@ -519,9 +519,30 @@ impl GenomicAttention {
             }).collect()
         };
 
-        let q = project(&self.w_q, self.n_heads_q * self.head_dim);
-        let k = project(&self.w_k, self.n_heads_kv * self.head_dim);
+        let mut q = project(&self.w_q, self.n_heads_q * self.head_dim);
+        let mut k = project(&self.w_k, self.n_heads_kv * self.head_dim);
         let v = project(&self.w_v, self.n_heads_kv * self.head_dim);
+
+        // 2. Apply RoPE (Rotary Positional Embeddings)
+        let apply_rope = |vec: &mut [f32], n_heads: usize, head_dim: usize, p: usize| {
+            for h in 0..n_heads {
+                let h_start = h * head_dim;
+                for i in 0..(head_dim / 2) {
+                    let theta = (p as f32) / (10000.0f32.powf((2 * i) as f32 / head_dim as f32));
+                    let cos = theta.cos();
+                    let sin = theta.sin();
+                    
+                    let v0 = vec[h_start + i];
+                    let v1 = vec[h_start + i + head_dim / 2];
+                    
+                    vec[h_start + i] = v0 * cos - v1 * sin;
+                    vec[h_start + i + head_dim / 2] = v0 * sin + v1 * cos;
+                }
+            }
+        };
+
+        apply_rope(&mut q, self.n_heads_q, self.head_dim, pos);
+        apply_rope(&mut k, self.n_heads_kv, self.head_dim, pos);
 
         self.k_cache.push(k);
         self.v_cache.push(v);
