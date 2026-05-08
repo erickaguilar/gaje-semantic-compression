@@ -445,6 +445,49 @@ pub fn dequantize_embedding(dna_packed: Vec<u8>, dims: usize, centroids: Option<
     Ok(rec)
 }
 
+#[inline(always)]
+unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
+    use std::arch::aarch64::*;
+    let n = a.len();
+    let mut sum_v = vdupq_n_f32(0.0);
+    let mut i = 0;
+
+    while i + 4 <= n {
+        let va = vld1q_f32(a.as_ptr().add(i));
+        let vb = vld1q_f32(b.as_ptr().add(i));
+        sum_v = vfmaq_f32(sum_v, va, vb);
+        i += 4;
+    }
+
+    let mut sum = vaddvq_f32(sum_v);
+    while i < n {
+        sum += a[i] * b[i];
+        i += 1;
+    }
+    sum
+}
+
+#[inline(always)]
+unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
+    use std::arch::aarch64::*;
+    let n = out.len();
+    let wv = vdupq_n_f32(weight);
+    let mut i = 0;
+
+    while i + 4 <= n {
+        let v_out = vld1q_f32(out.as_ptr().add(i));
+        let v_v = vld1q_f32(v.as_ptr().add(i));
+        let res = vfmaq_f32(v_out, v_v, wv);
+        vst1q_f32(out.as_mut_ptr().add(i), res);
+        i += 4;
+    }
+
+    while i < n {
+        out[i] += v[i] * weight;
+        i += 1;
+    }
+}
+
 #[pyclass]
 pub struct GenomicAttention {
     pub w_q: Vec<u8>,
@@ -555,7 +598,7 @@ impl GenomicAttention {
             let mut scores = Vec::with_capacity(self.k_cache.len());
             for k_full in &self.k_cache {
                 let k_head = &k_full[kv_start..kv_start + self.head_dim];
-                let score = q_head.iter().zip(k_head.iter()).map(|(a, b)| a * b).sum::<f32>() * scale;
+                let score = unsafe { dot_product_neon(q_head, k_head) } * scale;
                 scores.push(score);
             }
 
@@ -566,9 +609,8 @@ impl GenomicAttention {
             for (t, exp_s) in exp_scores.iter().enumerate() {
                 let weight = exp_s / sum_exp;
                 let v_head = &self.v_cache[t][kv_start..kv_start + self.head_dim];
-                for i in 0..self.head_dim {
-                    output[q_start + i] += weight * v_head[i];
-                }
+                let out_head = &mut output[q_start..q_start + self.head_dim];
+                unsafe { add_weighted_neon(out_head, v_head, weight) };
             }
         }
 
