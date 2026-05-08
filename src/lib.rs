@@ -298,28 +298,20 @@ impl GajeIndex {
     #[pyo3(signature = (input_vector))]
     pub fn genomic_linear_forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         let q_len = input_vector.len();
-        let c = &self.centroids;
-        let is_multi = c.len() == q_len * 4;
+        let c_all = &self.centroids;
+        let is_multi = c_all.len() > 4;
         
-        // 1. Precompute LUT para Producto Punto (Input * Centroids)
-        // En lugar de distancias (L2), calculamos productos directos
-        let mut lut = Vec::with_capacity(q_len * 4);
-        for (d_idx, &val) in input_vector.iter().enumerate() {
-            for b in 0..4 {
-                let centroid = if is_multi {
-                    let b_idx = d_idx * 4;
-                    match b { 0 => c[b_idx], 1 => c[b_idx+1], 2 => c[b_idx+2], 3 => c[b_idx+3], _ => 0.0 }
-                } else {
-                    match b { 0 => c[0], 1 => c[1], 2 => c[2], 3 => c[3], _ => 0.0 }
-                };
-                lut.push(val * centroid);
-            }
-        }
-
         // 2. Perform Forward Pass (Parallel MatMul over 2-bit weights)
         let n_neurons = self.database.len() / self.stride;
         let results: Vec<f32> = (0..n_neurons).into_par_iter().map(|neuron_idx| {
             let weights = self.get_strand(neuron_idx);
+            let c = if is_multi {
+                let offset = neuron_idx * 4;
+                &c_all[offset..offset + 4]
+            } else {
+                &c_all[0..4]
+            };
+
             let mut sum = 0.0f32;
             let mut dims = 0;
             for &byte in weights {
@@ -327,10 +319,10 @@ impl GajeIndex {
                     if dims >= q_len { break; }
                     let shift = (3 - j) * 2;
                     let bits = (byte >> shift) & 0b11;
-                    let lut_idx = match bits {
-                        0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0,
+                    let val = match bits {
+                        0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
                     };
-                    sum += lut[dims * 4 + lut_idx];
+                    sum += input_vector[dims] * val;
                     dims += 1;
                 }
             }
@@ -458,7 +450,7 @@ pub struct GenomicAttention {
     pub w_q: Vec<u8>,
     pub w_k: Vec<u8>,
     pub w_v: Vec<u8>,
-    pub centroids: Vec<f32>,
+    pub centroids: Vec<f32>, // Ahora puede ser un array plano de [n_neurons * 4]
     pub stride: usize,
     pub n_heads_q: usize,
     pub n_heads_kv: usize,
@@ -471,13 +463,6 @@ pub struct GenomicAttention {
 impl GenomicAttention {
     #[new]
     pub fn new(w_q: Vec<u8>, w_k: Vec<u8>, w_v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_heads_q: usize, n_heads_kv: usize) -> Self {
-        let head_dim = (stride * 4); // El stride * 4 es la dimensión de entrada. 
-        // Pero necesitamos la dimensión por cabeza. 
-        // Normalmente in_dim == out_dim para Q.
-        // n_heads_q * head_dim = w_q_rows. 
-        // Como no tenemos w_q_rows aquí directamente de forma elegante, 
-        // la calcularemos en el forward o la pediremos.
-        // Asumiremos que head_dim se deriva de w_q.len() / (stride * n_heads_q)
         let head_dim = (w_q.len() / stride) / n_heads_q;
         
         GenomicAttention {
@@ -489,20 +474,23 @@ impl GenomicAttention {
 
     pub fn forward(&mut self, input_vector: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> {
         let q_len = input_vector.len();
-        let c = &self.centroids;
+        let c_all = &self.centroids;
+        let is_multi = c_all.len() > 4; // Check if we have per-neuron centroids
         
-        let mut lut = Vec::with_capacity(q_len * 4);
-        for (_d_idx, &val) in input_vector.iter().enumerate() {
-            for b in 0..4 {
-                let centroid = match b { 0 => c[0], 1 => c[1], 2 => c[2], 3 => c[3], _ => 0.0 };
-                lut.push(val * centroid);
-            }
-        }
-
-        let project = |weights: &[u8], n_outputs: usize| -> Vec<f32> {
+        // 1. Projection function con soporte para Multi-Centroids (Block-Quant)
+        let project = |weights: &[u8], n_outputs: usize, c_offset_base: usize| -> Vec<f32> {
             (0..n_outputs).into_par_iter().map(|idx| {
                 let start = idx * self.stride;
                 let neuron_weights = &weights[start..start + self.stride];
+                
+                // Si es multi-centroide, cada neurona tiene sus propios 4 centroides
+                let c = if is_multi {
+                    let offset = (c_offset_base + idx) * 4;
+                    &c_all[offset..offset + 4]
+                } else {
+                    &c_all[0..4]
+                };
+
                 let mut sum = 0.0f32;
                 let mut dims = 0;
                 for &byte in neuron_weights {
@@ -510,8 +498,10 @@ impl GenomicAttention {
                         if dims >= q_len { break; }
                         let shift = (3 - j) * 2;
                         let bits = (byte >> shift) & 0b11;
-                        let lut_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
-                        sum += lut[dims * 4 + lut_idx];
+                        let val = match bits {
+                            0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                        };
+                        sum += input_vector[dims] * val;
                         dims += 1;
                     }
                 }
@@ -519,9 +509,13 @@ impl GenomicAttention {
             }).collect()
         };
 
-        let mut q = project(&self.w_q, self.n_heads_q * self.head_dim);
-        let mut k = project(&self.w_k, self.n_heads_kv * self.head_dim);
-        let v = project(&self.w_v, self.n_heads_kv * self.head_dim);
+        // Calculamos offsets para los centroides de Q, K, V en el array plano
+        let q_rows = self.n_heads_q * self.head_dim;
+        let k_rows = self.n_heads_kv * self.head_dim;
+        
+        let mut q = project(&self.w_q, q_rows, 0);
+        let mut k = project(&self.w_k, k_rows, q_rows);
+        let v = project(&self.w_v, k_rows, q_rows + k_rows);
 
         // 2. Apply RoPE (Rotary Positional Embeddings)
         let apply_rope = |vec: &mut [f32], n_heads: usize, head_dim: usize, p: usize| {

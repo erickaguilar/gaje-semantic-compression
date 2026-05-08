@@ -22,46 +22,85 @@ def dequantize_q8_0(data_u8, out_features, in_features):
     return weights_f32
 
 class GenomicLLMLayer:
+    """
+    Capa de LLM con pesos genomizados a 2 bits (Soporta Block-Quant).
+    """
     def __init__(self, name, tensor):
         self.in_features = tensor.shape[0]
         self.out_features = tensor.shape[1]
+        
         print(f"[*] Genomizando capa '{name}' (In:{self.in_features} -> Out:{self.out_features})...")
         weights_f32 = dequantize_q8_0(tensor.data, self.out_features, self.in_features)
-        std = np.std(weights_f32)
-        mean = np.mean(weights_f32)
-        self.thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
-        self.centroids = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
-        dna_batch = [dna_semantic_compression.quantize_embedding(w.tolist(), self.thresholds) for w in weights_f32]
-        self.engine = dna_semantic_compression.GajeIndex([], self.centroids)
+        
+        # 1. Block-Quant: Calcular centroides por cada neurona (fila)
+        all_centroids = []
+        dna_batch = []
+        
+        start_q = time.time()
+        for i in range(self.out_features):
+            w = weights_f32[i]
+            std = np.std(w)
+            mean = np.mean(w)
+            
+            # Max-Lloyd 2-bit per neuron
+            thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
+            centroids = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
+            
+            all_centroids.extend(centroids)
+            dna_batch.append(dna_semantic_compression.quantize_embedding(w.tolist(), thresholds))
+        
+        self.engine = dna_semantic_compression.GajeIndex([], all_centroids)
         self.engine.add_batch(dna_batch)
+        
+        self.comp_time = time.time() - start_q
+        print(f"    [+] Block-Quant (16x) completada en {self.comp_time:.2f}s")
 
     def forward(self, x):
         if isinstance(x, np.ndarray): x = x.tolist()
         return self.engine.genomic_linear_forward(x)
 
 class GenomicAttentionLayer:
-    def __init__(self, reader, prefix, centroids):
+    """
+    Capa de Atención Multi-Head acelerada en Rust (Soporta GQA + Block-Quant).
+    """
+    def __init__(self, reader, prefix):
         tensor_q = next(t for t in reader.tensors if t.name == prefix + "attn_q.weight")
         tensor_k = next(t for t in reader.tensors if t.name == prefix + "attn_k.weight")
-        in_features = tensor_q.shape[0]
+        
         head_dim = 64
         self.n_heads_q = tensor_q.shape[1] // head_dim
         self.n_heads_kv = tensor_k.shape[1] // head_dim
+        
         print(f"[*] GQA Config: Q_Heads={self.n_heads_q}, KV_Heads={self.n_heads_kv}, Head_Dim={head_dim}")
 
-        def get_dna_weights(name):
+        def get_dna_and_centroids(name):
             tensor = next(t for t in reader.tensors if t.name == prefix + name + ".weight")
             w_f32 = dequantize_q8_0(tensor.data, tensor.shape[1], tensor.shape[0])
-            std = np.std(w_f32)
-            mean = np.mean(w_f32)
-            thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
-            packed_rows = [dna_semantic_compression.quantize_embedding(row.tolist(), thresholds) for row in w_f32]
-            return b"".join(packed_rows), tensor.shape[0] // 4
+            
+            packed_rows = []
+            layer_centroids = []
+            
+            for row in w_f32:
+                std = np.std(row)
+                mean = np.mean(row)
+                thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
+                centroids = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
+                
+                layer_centroids.extend(centroids)
+                packed_rows.append(dna_semantic_compression.quantize_embedding(row.tolist(), thresholds))
+                
+            return b"".join(packed_rows), layer_centroids, tensor.shape[0] // 4
 
-        w_q_dna, stride = get_dna_weights("attn_q")
-        w_k_dna, _ = get_dna_weights("attn_k")
-        w_v_dna, _ = get_dna_weights("attn_v")
-        self.kernel = dna_semantic_compression.GenomicAttention(w_q_dna, w_k_dna, w_v_dna, centroids, stride, self.n_heads_q, self.n_heads_kv)
+        print(f"[*] Genomizando proyecciones Q, K, V para {prefix} (Block-Quant)...")
+        w_q_dna, c_q, stride = get_dna_and_centroids("attn_q")
+        w_k_dna, c_k, _ = get_dna_and_centroids("attn_k")
+        w_v_dna, c_v, _ = get_dna_and_centroids("attn_v")
+        
+        all_centroids = c_q + c_k + c_v
+        
+        self.kernel = dna_semantic_compression.GenomicAttention(
+            w_q_dna, w_k_dna, w_v_dna, all_centroids, stride, self.n_heads_q, self.n_heads_kv
+        )
 
     def forward(self, x, pos):
         return self.kernel.forward(x, pos)
@@ -71,9 +110,12 @@ class GenomicTransformerBlock:
         self.block_idx = block_idx
         self.layers = {}
         prefix = f"blk.{block_idx}."
-        print(f"\n🧬 [Bloque {block_idx}] Genomizando...")
-        self.centroids = [-1.510, -0.4528, 0.4528, 1.510]
-        self.attn = GenomicAttentionLayer(reader, prefix, self.centroids)
+        print(f"\n🧬 [Bloque {block_idx}] Genomizando con Block-Quant...")
+        
+        # 1. Inicializar Atención Acelerada
+        self.attn = GenomicAttentionLayer(reader, prefix)
+        
+        # 2. Inicializar FFN
         for name in ["ffn_up", "ffn_down"]:
             tensor = next(t for t in reader.tensors if t.name == prefix + name + ".weight")
             self.layers[name] = GenomicLLMLayer(tensor.name, tensor)
@@ -87,9 +129,11 @@ class GenomicTransformerBlock:
         x_in = np.array(x)
         attn_out = np.array(self.attn.forward(x_in.tolist(), pos))
         x_mid = self.rms_norm(x_in + attn_out)
+        
         ffn_up = np.array(self.layers['ffn_up'].forward(x_mid))
-        ffn_up = np.maximum(0, ffn_up)
+        ffn_up = np.maximum(0, ffn_up) # ReLU
         ffn_down = np.array(self.layers['ffn_down'].forward(ffn_up.tolist()))
+        
         x_final = self.rms_norm(np.array(x_mid) + ffn_down[:len(x_mid)])
         return x_final
 
@@ -98,37 +142,24 @@ class GenomicLLM:
         self.reader = gguf.GGUFReader(model_path)
         self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
         
-        # 1. Embeddings
-        print("\n[*] Genomizando Embeddings...")
+        print("\n[*] Preparando matriz de Embeddings...")
         embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
-        # El tensor de embedding es especial: [896, 151936]. De-cuantizar fila a fila es lento.
-        # Para el chat, de-cuantizamos solo lo necesario o genomizamos por bloques.
-        # Aquí simplificamos de-cuantizando todo una vez (toma ~30s para 151k tokens).
         self.embedding_matrix = dequantize_q8_0(embd_tensor.data, embd_tensor.shape[1], embd_tensor.shape[0])
         
-        # 2. Bloques
         self.blocks = [GenomicTransformerBlock(i, self.reader) for i in range(num_blocks)]
-        
-        # 3. Output Norm
-        self.output_norm = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
 
     def generate(self, prompt, max_new_tokens=20):
         input_ids = self.tokenizer.encode(prompt)
-        print(f"\n🚀 Generando para: '{prompt}'")
+        print(f"\n🚀 Generando con Block-Quant: '{prompt}'")
         
         generated_ids = []
         for i in range(max_new_tokens):
-            # 1. Embedding
             last_id = input_ids[-1]
             x = self.embedding_matrix[last_id].tolist()
             
-            # 2. Blocks
             for j, block in enumerate(self.blocks):
                 x = block.forward(x, len(input_ids) - 1)
             
-            # 3. Output Head (Simulado con similitud de embedding ya que lm_head = token_embd)
-            # En un modelo real usaríamos Softmax(x * W_out)
-            # Aquí hacemos una búsqueda rápida de similitud
             logits = np.dot(self.embedding_matrix, x)
             next_id = np.argmax(logits)
             
