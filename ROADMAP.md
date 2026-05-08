@@ -26,8 +26,8 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 
 ## 🤖 Fase 10: Genomic Distillation (The Quality Leap)
 **El Objetivo:** Elevar la inteligencia del alfabeto genómico de 2 bits a niveles de precisión float32.
-*   **Knowledge Injection**: Proceso de destilación donde un modelo "Maestro" (float32) entrena los centroides del modelo "Estudiante" (GAJE 2-bit) para minimizar la divergencia KL.
-*   **Iterative Quantization-Aware Training (IQAT)**: Ajustar los pesos genómicos basándose en el error de predicción de tokens reales, no solo en la distancia L2 de los pesos.
+*   [x] **Knowledge Injection**: Implementación de destilación integral (MHA + FFN) refinando centroides mediante activaciones del Maestro (F32).
+*   [ ] **Iterative Quantization-Aware Training (IQAT)**: Ajuste fino de pesos genómicos basándose en el error de predicción de tokens (PPL optimization).
 *   **Semantic Anchor Fine-tuning**: Preservar tokens críticos (conectores lógicos, verbos clave) con mayor precisión que tokens de relleno.
 *   **Mobile-Native Learning**: Implementar un optimizador ligero en Rust para que el modelo aprenda de las correcciones del usuario localmente.
 
