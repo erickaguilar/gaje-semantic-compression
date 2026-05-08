@@ -18,15 +18,18 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
     - [x] **Genomic Attention Kernel**: Multiplicación de matrices (MatMul) operando directamente sobre ADN de 2 bits con soporte GQA.
     - [x] **Infinite Context (KV-Cache DNA)**: Implementación de KV-Cache interno en Rust para ahorro masivo de RAM.
     - [x] **Flash-Genomic Attention**: Optimización con instrucciones SIMD (NEON/ASIMD) para alcanzar >30 tps.
+    - [x] **Stochastic Engine**: Implementación de Sampling (Top-P, Temperature) y Repetition Penalty nativo.
+    - [x] **Native GGUF Loader**: De-cuantización Q8_0 acelerada en Rust para carga instantánea.
     - [ ] **Kernel Fusion**: Fusión de operaciones para minimizar el tráfico de memoria.
 
 ---
 
-## 🤖 Fase 10: Gemma 4 / Mobile-Native LLM
-**El Objetivo:** Crear un modelo de lenguaje que "viva" y aprenda en el espacio genómico.
-*   **Genomic Student Distillation**: Destilar el conocimiento de modelos de 7B (Llama 3, Gemma 2) en modelos genómicos de 2 bits.
-*   **On-Device Learning**: Implementar backpropagation en espacio genómico para permitir que el LLM aprenda de la experiencia del usuario sin salir del dispositivo.
-*   **Universal Genomizer**: App/Herramienta para convertir cualquier modelo GGUF a Protocolo GAJE en un click.
+## 🤖 Fase 10: Genomic Distillation (The Quality Leap)
+**El Objetivo:** Elevar la inteligencia del alfabeto genómico de 2 bits a niveles de precisión float32.
+*   **Knowledge Injection**: Proceso de destilación donde un modelo "Maestro" (float32) entrena los centroides del modelo "Estudiante" (GAJE 2-bit) para minimizar la divergencia KL.
+*   **Iterative Quantization-Aware Training (IQAT)**: Ajustar los pesos genómicos basándose en el error de predicción de tokens reales, no solo en la distancia L2 de los pesos.
+*   **Semantic Anchor Fine-tuning**: Preservar tokens críticos (conectores lógicos, verbos clave) con mayor precisión que tokens de relleno.
+*   **Mobile-Native Learning**: Implementar un optimizador ligero en Rust para que el modelo aprenda de las correcciones del usuario localmente.
 
 ---
 
