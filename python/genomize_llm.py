@@ -7,19 +7,17 @@ from transformers import AutoTokenizer
 
 def dequantize_q8_0(data_u8, out_features, in_features):
     """
-    De-cuantiza bloques Q8_0 (Block size 32) de GGUF a float32.
+    De-cuantiza bloques Q8_0 usando el motor acelerado en Rust.
     """
-    n_blocks = in_features // 32
-    weights_f32 = np.zeros((out_features, in_features), dtype=np.float32)
-    data_raw = data_u8.view(np.uint8).reshape(out_features, -1)
-    for i in range(out_features):
-        row_data = data_raw[i]
-        for b in range(n_blocks):
-            offset = b * 34
-            delta = np.frombuffer(row_data[offset:offset+2], dtype=np.float16)[0].astype(np.float32)
-            qs = row_data[offset+2:offset+34].view(np.int8).astype(np.float32)
-            weights_f32[i, b*32 : (b+1)*32] = qs * delta
-    return weights_f32
+    if isinstance(data_u8, np.ndarray):
+        data_bytes = data_u8.tobytes()
+    else:
+        data_bytes = data_u8
+
+    flat_weights = dna_semantic_compression.dequantize_q8_0_native(
+        data_bytes, out_features, in_features
+    )
+    return np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
 
 class GenomicLLMLayer:
     """
@@ -32,7 +30,6 @@ class GenomicLLMLayer:
         print(f"[*] Genomizando capa '{name}' (In:{self.in_features} -> Out:{self.out_features})...")
         weights_f32 = dequantize_q8_0(tensor.data, self.out_features, self.in_features)
         
-        # 1. Block-Quant: Calcular centroides por cada neurona (fila)
         all_centroids = []
         dna_batch = []
         
@@ -42,7 +39,6 @@ class GenomicLLMLayer:
             std = np.std(w)
             mean = np.mean(w)
             
-            # Max-Lloyd 2-bit per neuron
             thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
             centroids = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
             
@@ -112,10 +108,7 @@ class GenomicTransformerBlock:
         prefix = f"blk.{block_idx}."
         print(f"\n🧬 [Bloque {block_idx}] Genomizando con Block-Quant...")
         
-        # 1. Inicializar Atención Acelerada
         self.attn = GenomicAttentionLayer(reader, prefix)
-        
-        # 2. Inicializar FFN
         for name in ["ffn_up", "ffn_down"]:
             tensor = next(t for t in reader.tensors if t.name == prefix + name + ".weight")
             self.layers[name] = GenomicLLMLayer(tensor.name, tensor)
@@ -146,11 +139,19 @@ class GenomicLLM:
         embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
         self.embedding_matrix = dequantize_q8_0(embd_tensor.data, embd_tensor.shape[1], embd_tensor.shape[0])
         
+        print("[*] Cargando RMSNorm final...")
+        self.output_norm_weight = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
+        
         self.blocks = [GenomicTransformerBlock(i, self.reader) for i in range(num_blocks)]
 
-    def generate(self, prompt, max_new_tokens=20, repetition_penalty=1.2):
+    def rms_norm(self, x, weight, eps=1e-6):
+        x = np.array(x)
+        rms = np.sqrt(np.mean(x**2) + eps)
+        return (x / rms) * weight
+
+    def generate(self, prompt, max_new_tokens=20, temperature=0.8, top_p=0.9, repetition_penalty=1.1):
         input_ids = self.tokenizer.encode(prompt)
-        print(f"\n🚀 Generando con Block-Quant + Penalty: '{prompt}'")
+        print(f"\n🚀 Generando (Temp={temperature}, Top-P={top_p}): '{prompt}'")
         
         generated_ids = []
         for i in range(max_new_tokens):
@@ -160,13 +161,16 @@ class GenomicLLM:
             for j, block in enumerate(self.blocks):
                 x = block.forward(x, len(input_ids) - 1)
             
-            # 3. Output Head + Repetition Penalty
+            # Final Normalization
+            x = self.rms_norm(x, self.output_norm_weight)
+            
+            # Output Head + Sampling
             logits = np.dot(self.embedding_matrix, x).tolist()
             logits = dna_semantic_compression.apply_repetition_penalty(
                 logits, input_ids, repetition_penalty
             )
             
-            next_id = np.argmax(logits)
+            next_id = dna_semantic_compression.sample_top_p(logits, temperature, top_p)
             
             if next_id == self.tokenizer.eos_token_id: break
             
@@ -180,5 +184,6 @@ class GenomicLLM:
 
 if __name__ == "__main__":
     model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
-    model = GenomicLLM(model_path, num_blocks=2)
-    model.generate("El protocolo GAJE es", max_new_tokens=10)
+    # Cargamos 12 bloques para balancear velocidad y calidad en este test
+    model = GenomicLLM(model_path, num_blocks=12)
+    model.generate("El protocolo GAJE es", max_new_tokens=50, temperature=0.7)

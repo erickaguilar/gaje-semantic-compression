@@ -3,6 +3,7 @@ use rayon::prelude::*;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use rand::Rng;
+use half::f16;
 
 #[derive(Clone, Copy)]
 struct Neighbor {
@@ -638,6 +639,78 @@ pub fn apply_repetition_penalty(mut logits: Vec<f32>, history: Vec<usize>, penal
     Ok(logits)
 }
 
+#[pyfunction]
+#[pyo3(signature = (data_u8, out_features, in_features))]
+pub fn dequantize_q8_0_native(data_u8: Vec<u8>, out_features: usize, in_features: usize) -> PyResult<Vec<f32>> {
+    let n_blocks = in_features / 32;
+    let block_size = 34; // 2 bytes delta + 32 bytes weights
+    let mut results = vec![0.0f32; out_features * in_features];
+
+    results.par_chunks_mut(in_features).enumerate().for_each(|(i, row)| {
+        let row_offset = i * n_blocks * block_size;
+        for b in 0..n_blocks {
+            let offset = row_offset + b * block_size;
+            if offset + 2 > data_u8.len() { break; }
+            
+            // Extract delta (float16)
+            let delta_bytes = [data_u8[offset], data_u8[offset + 1]];
+            let delta = f16::from_le_bytes(delta_bytes).to_f32();
+            
+            // Extract and scale weights
+            for j in 0..32 {
+                if offset + 2 + j >= data_u8.len() { break; }
+                let q = data_u8[offset + 2 + j] as i8;
+                row[b * 32 + j] = (q as f32) * delta;
+            }
+        }
+    });
+
+    Ok(results)
+}
+
+#[pyfunction]
+#[pyo3(signature = (logits, temperature=1.0, top_p=0.9))]
+pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+    let mut probs: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &l)| {
+        (i, (l / temperature).exp())
+    }).collect();
+
+    let sum_exp: f32 = probs.iter().map(|(_, p)| p).sum();
+    for p in &mut probs {
+        p.1 /= sum_exp;
+    }
+
+    // Sort by probability descending
+    probs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+
+    // Top-P filtering
+    let mut cumulative_prob = 0.0;
+    let mut cutoff_idx = probs.len();
+    for (i, &(_, p)) in probs.iter().enumerate() {
+        cumulative_prob += p;
+        if cumulative_prob > top_p {
+            cutoff_idx = i + 1;
+            break;
+        }
+    }
+    probs.truncate(cutoff_idx);
+
+    // Re-normalize after truncation
+    let final_sum: f32 = probs.iter().map(|(_, p)| p).sum();
+    let mut rng = rand::thread_rng();
+    let r: f32 = rng.gen::<f32>() * final_sum;
+
+    let mut current_sum = 0.0;
+    for &(id, p) in &probs {
+        current_sum += p;
+        if r <= current_sum {
+            return Ok(id);
+        }
+    }
+
+    Ok(probs[0].0)
+}
+
 #[pymodule]
 fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
@@ -648,5 +721,7 @@ fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dna_similarity_search, m)?)?;
     m.add_function(wrap_pyfunction!(dequantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(apply_repetition_penalty, m)?)?;
+    m.add_function(wrap_pyfunction!(dequantize_q8_0_native, m)?)?;
+    m.add_function(wrap_pyfunction!(sample_top_p, m)?)?;
     Ok(())
 }
