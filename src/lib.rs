@@ -719,10 +719,76 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
     Ok(probs[0].0)
 }
 
+#[pyclass]
+pub struct GenomicLinear {
+    #[pyo3(get)]
+    pub database: Vec<u8>,
+    #[pyo3(get, set)]
+    pub centroids: Vec<f32>,
+    #[pyo3(get)]
+    pub out_features: usize,
+    #[pyo3(get)]
+    pub in_features: usize,
+    #[pyo3(get)]
+    pub block_size: usize,
+    stride: usize,
+}
+
+#[pymethods]
+impl GenomicLinear {
+    #[new]
+    pub fn new(database: Vec<u8>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize) -> Self {
+        let stride = block_size / 4;
+        GenomicLinear {
+            database,
+            centroids,
+            out_features,
+            in_features,
+            block_size,
+            stride,
+        }
+    }
+
+    pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+        let n_blocks_per_row = self.in_features / self.block_size;
+        
+        let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
+            let mut row_sum = 0.0f32;
+            let row_offset = i * n_blocks_per_row * self.stride;
+            
+            for j in 0..n_blocks_per_row {
+                let block_start = row_offset + j * self.stride;
+                let block_weights = &self.database[block_start..block_start + self.stride];
+                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                
+                let c_offset = (i * n_blocks_per_row + j) * 4;
+                let c = &self.centroids[c_offset..c_offset + 4];
+                
+                let mut dims = 0;
+                for &byte in block_weights {
+                    for k in 0..4 {
+                        let shift = (3 - k) * 2;
+                        let bits = (byte >> shift) & 0b11;
+                        let val = match bits {
+                            0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                        };
+                        row_sum += input_block[dims] * val;
+                        dims += 1;
+                    }
+                }
+            }
+            row_sum
+        }).collect();
+
+        Ok(results)
+    }
+}
+
 #[pymodule]
 fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
+    m.add_class::<GenomicLinear>()?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;
