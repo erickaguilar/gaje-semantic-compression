@@ -8,6 +8,12 @@ Este documento define la estrategia para medir la degradación de la inteligenci
 | :--- | :--- | :--- | :--- |
 | **Fidelidad Logits** | ✅ Completado | > 0.90 CosSim | Validado con **0.9456** CosSim y **0.0125** KL Div. |
 | **Perplexity (PPL)** | ⚠️ En Mejora | < 1.1x vs F32 | Inicial: >1M. Requiere integración de KV-Cache y MHA en Rust. |
+| **Top-k overlap** | ✅ Implementado | Preservación logits | `benchmarks/advanced_metrics.py` |
+| **Jensen-Shannon divergence** | ✅ Implementado | Mejor estabilidad que KL | `benchmarks/advanced_metrics.py` |
+| **Attention entropy** | ✅ Implementado | Detectar colapso | `benchmarks/advanced_metrics.py` |
+| **Activation drift per layer** | ✅ Implementado | Localizar degradación | `benchmarks/advanced_metrics.py` |
+| **Token repetition score** | ✅ Implementado | Loops autoregresivos | `benchmarks/advanced_metrics.py` |
+| **Semantic consistency score** | ✅ Implementado | Coherencia narrativa | `benchmarks/advanced_metrics.py` |
 | **MMLU** | Faltante | > 85% retención | Evaluar conocimiento general en 57 tareas. |
 | **GSM8K** | Faltante | > 70% retención | Resolver problemas matemáticos de primaria para validar razonamiento lógico en 2 bits. |
 | **Hallucination Rate** | Faltante | < 5% incremento | Comparar respuestas basadas en hechos (NQ Dataset) entre original y genómico. |
@@ -40,3 +46,16 @@ Este documento define la estrategia para medir la degradación de la inteligenci
 - **Baseline (F32):** Inteligencia de referencia (100%).
 - **GAJE Alpha (Current):** Estimado 80-85% de retención de inteligencia.
 - **GAJE Beta (Target):** >95% de retención con compresión 16x.
+
+---
+
+## 🔍 Detalle de Métricas Técnicas (Nuevas)
+
+Para asegurar la integridad del modelo tras la compresión de 2 bits, se implementan las siguientes métricas de monitoreo profundo:
+
+1.  **Top-k Overlap:** Mide cuántos de los top-k tokens (ej. k=10) se mantienen iguales entre el modelo F32 y GAJE. Es vital para asegurar que la "intención" inmediata del modelo no cambie.
+2.  **Jensen-Shannon Divergence (JSD):** A diferencia de KL, JSD es simétrica y siempre acotada, lo que proporciona una métrica de estabilidad superior para comparar distribuciones de softmax muy divergentes.
+3.  **Attention Entropy:** Un colapso en la entropía de atención indicaría que el modelo se está enfocando en un solo token (posiblemente basura) debido a la cuantización agresiva.
+4.  **Activation Drift per Layer:** Permite localizar exactamente en qué capa (bloque transformer) se empieza a perder la fidelidad de la señal, facilitando el "fine-tuning" selectivo de centroides.
+5.  **Token Repetition Score:** Crucial para detectar si el modelo de 2 bits entra en bucles infinitos de repetición (loops autoregresivos), un síntoma común de degradación semántica.
+6.  **Semantic Consistency Score:** Utiliza un modelo de embeddings externo para validar que el significado global de la respuesta generada sea consistente con la intención original, más allá de la coincidencia exacta de tokens.

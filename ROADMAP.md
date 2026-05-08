@@ -13,6 +13,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 - [x] **Fase 6: Indexación Espacial (HNSW Genómico)**: Búsqueda sub-lineal en grafos de 2 bits.
 - [x] **Fase 7: Multimodal Integration**: Soporte para proyecciones genómicas CLIP y texto real.
 - [x] **Fase 8: Arquitectura Neuronal Genómica**: Inferencia de LLM real (Qwen2) usando pesos de 2 bits y RMSNorm/RoPE.
+- [x] **Protocolo de Validación Reforzado**: Implementación de métricas de fidelidad profunda (JSD, Top-k overlap, Activation Drift) para monitoreo de degradación semántica.
 
 ---
 
