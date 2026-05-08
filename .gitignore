@@ -23,8 +23,5 @@ __pycache__/
 /eggs
 *.eggs
 
-# docs
-/docs
-
 # Data
 /data/
