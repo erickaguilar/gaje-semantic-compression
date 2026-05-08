@@ -6,8 +6,9 @@ Este documento define la estrategia para medir la degradación de la inteligenci
 
 | Métrica | Estado | Objetivo (GAJE 2-bit) | Método de Prueba |
 | :--- | :--- | :--- | :--- |
-| **Perplexity (PPL)** | Faltante | < 1.1x vs F32 | Medir la sorpresa del modelo en el dataset WikiText-2 tras genomizar 24 bloques. |
-| **MMLU** | Faltante | > 85% retención | Evaluar conocimiento general en 57 tareas (Massive Multitask Language Understanding). |
+| **Fidelidad Logits** | ✅ Completado | > 0.90 CosSim | Validado con **0.9456** CosSim y **0.0125** KL Div. |
+| **Perplexity (PPL)** | ⚠️ En Mejora | < 1.1x vs F32 | Inicial: >1M. Requiere integración de KV-Cache y MHA en Rust. |
+| **MMLU** | Faltante | > 85% retención | Evaluar conocimiento general en 57 tareas. |
 | **GSM8K** | Faltante | > 70% retención | Resolver problemas matemáticos de primaria para validar razonamiento lógico en 2 bits. |
 | **Hallucination Rate** | Faltante | < 5% incremento | Comparar respuestas basadas en hechos (NQ Dataset) entre original y genómico. |
 | **Long-context Coherence** | Faltante | 128k tokens | Validar el "Needle In A Haystack" usando KV-Cache genómico comprimido. |

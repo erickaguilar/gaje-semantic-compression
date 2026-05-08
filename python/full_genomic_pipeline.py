@@ -39,13 +39,25 @@ class GenomicTransformerBlock:
         prefix = f"blk.{block_idx}."
         
         for tensor in reader.tensors:
-            if tensor.name.startswith(prefix) and "weight" in tensor.name and len(tensor.shape) == 2:
-                short_name = tensor.name.replace(prefix, "").replace(".weight", "")
-                self.layers[short_name] = GenomicLayer(tensor.name, tensor.data.astype(np.float32))
+            if tensor.name.startswith(prefix) and "weight" in tensor.name:
+                if len(tensor.shape) == 2:
+                    short_name = tensor.name.replace(prefix, "").replace(".weight", "")
+                    self.layers[short_name] = GenomicLayer(tensor.name, tensor.data.astype(np.float32))
+                elif "norm" in tensor.name:
+                    short_name = tensor.name.replace(prefix, "").replace(".weight", "")
+                    self.layers[short_name] = tensor.data.astype(np.float32)
 
-    def rms_norm(self, x, eps=1e-6):
+    def rms_norm(self, x, weight_name, eps=1e-6):
         x = np.array(x)
-        return x / np.sqrt(np.mean(x**2) + eps)
+        if x.size == 0: return x
+        scale = self.layers.get(weight_name, 1.0)
+        norm = x / np.sqrt(np.mean(x**2) + eps)
+        # Asegurar que scale sea un escalar o tenga la misma forma que x
+        return norm * scale
+
+    def safe_silu(self, x):
+        x = np.clip(x, -20, 20)
+        return x * (1.0 / (1.0 + np.exp(-x)))
 
     def apply_rope(self, x, pos, base=10000.0):
         """
@@ -70,25 +82,50 @@ class GenomicTransformerBlock:
 
     def forward(self, x, pos=0):
         """
-        Inferencia estabilizada con RMSNorm y RoPE.
+        Inferencia estabilizada con Multi-Query Attention Genómica (Qwen2 style).
         """
         x_in = np.array(x)
         
-        # 1. Rama de Atención con RoPE
-        # Aplicamos RoPE a la proyección Query para dar noción de posición
-        q = np.array(self.layers['attn_q'].forward(x_in.tolist()))
-        q = self.apply_rope(q[:len(x_in)], pos)
+        # 1. Rama de Atención
+        # Qwen2-0.5B usa GQA (Grouped Query Attention) o MQA
+        # q: 896, k: 128, v: 128
+        q_raw = np.array(self.layers['attn_q'].forward(x_in.tolist()))
+        k_raw = np.array(self.layers['attn_k'].forward(x_in.tolist()))
+        v_raw = np.array(self.layers['attn_v'].forward(x_in.tolist()))
         
-        attn_impact = q # Simplificación: Q es el proxy del impacto posicional
-        x = self.rms_norm(x_in + attn_impact)
+        # RoPE se aplica a Q y K. 
+        # Para K (128 dims), aplicamos a las primeras 128 de Q para el dot product
+        q_rope = self.apply_rope(q_raw[:128], pos)
+        k_rope = self.apply_rope(k_raw[:128], pos)
+        
+        # Score de atención (simplificado para el token actual)
+        score = np.dot(q_rope, k_rope) / np.sqrt(128)
+        score = np.clip(score, -10, 10)
+        
+        # Proyectar impacto (usamos V de 128 y lo expandimos/proyectamos)
+        attn_impact_v = v_raw * score
+        
+        # Qwen2 requiere proyectar de vuelta al espacio hidden (896)
+        # Como attn_output es 896x896, necesitamos que la entrada sea 896.
+        # En una arquitectura real, esto sumaría todos los heads.
+        # Aquí simulamos rellenando con ceros o repitiendo.
+        v_expanded = np.zeros(896)
+        v_expanded[:128] = attn_impact_v
+        
+        if 'attn_output' in self.layers:
+            attn_out = self.layers['attn_output'].forward(v_expanded.tolist())[:len(x_in)]
+        else:
+            attn_out = v_expanded[:len(x_in)]
+            
+        x = self.rms_norm(x_in + attn_out, 'attn_norm')
         
         # 2. FFN (up -> gate -> down)
         up = self.layers['ffn_up'].forward(x)
         gate = self.layers['ffn_gate'].forward(x)
-        h = (up * (1.0 / (1.0 + np.exp(-gate))))
+        h = up * self.safe_silu(gate)
         down = self.layers['ffn_down'].forward(h)[:len(x)]
         
-        return self.rms_norm(x + down)
+        return self.rms_norm(x + down, 'ffn_norm')
 
 class GenomicLLM:
     def __init__(self, model_path, num_blocks=2):
