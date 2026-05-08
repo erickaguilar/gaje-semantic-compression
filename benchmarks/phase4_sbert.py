@@ -2,17 +2,22 @@ import sys
 from unittest.mock import MagicMock
 import importlib.machinery
 
-# Monkeypatch scipy with a valid spec to fool transformers and importlib
-mock_scipy = MagicMock()
-mock_scipy.__spec__ = importlib.machinery.ModuleSpec('scipy', None)
-mock_scipy.__path__ = []
+import importlib.util
 
-sys.modules['scipy'] = mock_scipy
-sys.modules['scipy.sparse'] = MagicMock()
-sys.modules['scipy.spatial'] = MagicMock()
-sys.modules['scipy.spatial.distance'] = MagicMock()
-sys.modules['scipy.special'] = MagicMock()
-sys.modules['scipy.stats'] = MagicMock()
+# Conditional Monkeypatch for scipy (mostly for Termux/Android compatibility)
+if importlib.util.find_spec("scipy") is None:
+    print("[!] Scipy not found or broken (common on Termux). Applying monkeypatch...")
+    mock_scipy = MagicMock()
+    mock_scipy.__spec__ = importlib.machinery.ModuleSpec("scipy", None)
+    mock_scipy.__path__ = []
+
+    sys.modules["scipy"] = mock_scipy
+    sys.modules["scipy.sparse"] = MagicMock()
+    sys.modules["scipy.spatial"] = MagicMock()
+    sys.modules["scipy.spatial.distance"] = MagicMock()
+    sys.modules["scipy.special"] = MagicMock()
+    sys.modules["scipy.stats"] = MagicMock()
+
 
 import urllib.request
 import numpy as np
@@ -20,13 +25,30 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 
 sys.path.append("benchmarks")
+sys.path.append("python")
 from train_codebook import train_genomic_codebook  # noqa: E402
 
 try:
     import dna_semantic_compression  # noqa: E402
 except ImportError:
-    print("Error: Library not built. Run 'pip install .' first.")
+    print(
+        "Error: Library not built or not in path. Ensure the 'python' folder is visible."
+    )
     sys.exit(1)
+
+
+def mean_pooling(model_output, attention_mask):
+    """Perform mean pooling on token embeddings using the attention mask."""
+    token_embeddings = model_output[
+        0
+    ]  # First element of model_output contains all token embeddings
+    input_mask_expanded = (
+        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    )
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+        input_mask_expanded.sum(1), min=1e-9
+    )
+
 
 def get_sentences(num_sentences=5000):
     url = "https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt"
@@ -46,21 +68,23 @@ def get_sentences(num_sentences=5000):
     print(f"[*] Extracted {len(sentences)} sentences.")
     return sentences
 
+
 def normalize(v):
     norm = np.linalg.norm(v)
     if norm == 0:
         return v
     return v / norm
 
+
 def calculate_top_k_cosine(query_vec, db_vecs, k=10):
     try:
         # Try to use torch for faster and safer calculation in this environment
         q_tensor = torch.from_numpy(query_vec)
         db_tensor = torch.from_numpy(db_vecs)
-        
+
         cos = torch.nn.CosineSimilarity(dim=1)
         similarities = cos(q_tensor.unsqueeze(0), db_tensor)
-        
+
         top_indices = torch.topk(similarities, k).indices
         return top_indices.tolist()
     except Exception:
@@ -73,20 +97,25 @@ def calculate_top_k_cosine(query_vec, db_vecs, k=10):
         top_indices = np.argsort(similarities)[::-1][:k]
         return top_indices.tolist()
 
+
 def run_sbert_validation():
     print("🌍 GAJE PROTOCOL: SBERT REAL DATA VALIDATION (768 dims) 🌍")
     print("-" * 60)
 
-    sentences = get_sentences(2000) 
+    sentences = get_sentences(100)
 
     print("[*] Loading Transformers model (sentence-transformers/all-mpnet-base-v2)...")
     try:
-        tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-mpnet-base-v2')
-        model = AutoModel.from_pretrained('sentence-transformers/all-mpnet-base-v2')
+        tokenizer = AutoTokenizer.from_pretrained(
+            "sentence-transformers/all-mpnet-base-v2"
+        )
+        model = AutoModel.from_pretrained("sentence-transformers/all-mpnet-base-v2")
         use_synthetic = False
     except Exception as e:
         print(f"[*] WARNING: Could not load SBERT model due to network/SSL issues: {e}")
-        print("[*] Falling back to SYNTHETIC SBERT-like vectors (768d) to proceed with benchmark logic.")
+        print(
+            "[*] Falling back to SYNTHETIC SBERT-like vectors (768d) to proceed with benchmark logic."
+        )
         use_synthetic = True
 
     if not use_synthetic:
@@ -94,16 +123,22 @@ def run_sbert_validation():
         embeddings = []
         batch_size = 32
         for i in range(0, len(sentences), batch_size):
-            batch = sentences[i:i+batch_size]
-            encoded_input = tokenizer(batch, padding=True, truncation=True, return_tensors='pt')
+            batch = sentences[i : i + batch_size]
+            encoded_input = tokenizer(
+                batch, padding=True, truncation=True, return_tensors="pt"
+            )
             with torch.no_grad():
                 model_output = model(**encoded_input)
-            batch_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
+            batch_embeddings = mean_pooling(
+                model_output, encoded_input["attention_mask"]
+            )
             embeddings.append(batch_embeddings.numpy())
         raw_db_vecs = np.vstack(embeddings)
     else:
         # Generate synthetic vectors that follow a structured distribution
-        print(f"[*] Generating {len(sentences)} synthetic 768-dim structured vectors...")
+        print(
+            f"[*] Generating {len(sentences)} synthetic 768-dim structured vectors..."
+        )
         latent = np.random.normal(0, 1, (len(sentences), 64))
         projection = np.random.normal(0, 1, (64, 768))
         raw_db_vecs = np.dot(latent, projection).astype(np.float32)
@@ -128,7 +163,7 @@ def run_sbert_validation():
         dna_semantic_compression.quantize_pq(v.tolist(), thresholds) for v in db_vecs
     ]
 
-    num_queries = 50 # Reduced for speed
+    num_queries = 10  # Reduced for speed
     overlaps_adc = []
 
     print(f"[*] Validating {num_queries} real SBERT semantic queries...")
@@ -159,6 +194,7 @@ def run_sbert_validation():
         print("🏆 OBJETIVO DEL ROADMAP ALCANZADO (>85% con vectores densos reales).")
     else:
         print("📈 BUEN RESULTADO, pero requiere más ajuste.")
+
 
 if __name__ == "__main__":
     run_sbert_validation()

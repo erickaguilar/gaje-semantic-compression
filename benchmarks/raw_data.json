@@ -27,14 +27,14 @@
     },
     "latency": {
         "768_dims": {
-            "avg_encoding_ms": 0.7757955800025229,
-            "avg_decoding_ms": 0.706433229997856
+            "avg_encoding_ms": 0.7456597799318843,
+            "avg_decoding_ms": 0.4763035099313129
         }
     },
     "search_throughput": {
         "1000_records": {
-            "duration_s": 0.2258507409997037,
-            "ops_per_sec": 4427.702984606599
+            "duration_s": 0.23739768099039793,
+            "ops_per_sec": 4212.341063434596
         }
     }
 }
