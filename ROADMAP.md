@@ -17,7 +17,8 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 - [x] **Fase 9: Aceleración de Atención en Rust (Paper-Grade)**:
     - [x] **Genomic Attention Kernel**: Multiplicación de matrices (MatMul) operando directamente sobre ADN de 2 bits con soporte GQA.
     - [x] **Infinite Context (KV-Cache DNA)**: Implementación de KV-Cache interno en Rust para ahorro masivo de RAM.
-    - [ ] **Flash-Genomic Attention**: Optimización adicional de loops para alcanzar >30 tps.
+    - [x] **Flash-Genomic Attention**: Optimización con instrucciones SIMD (NEON/ASIMD) para alcanzar >30 tps.
+    - [ ] **Kernel Fusion**: Fusión de operaciones para minimizar el tráfico de memoria.
 
 ---
 
