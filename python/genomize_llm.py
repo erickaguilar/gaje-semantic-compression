@@ -21,42 +21,49 @@ def dequantize_q8_0(data_u8, out_features, in_features):
 
 class GenomicLLMLayer:
     """
-    Capa de LLM con pesos genomizados a 2 bits (Soporta Block-Quant).
+    Capa de LLM con soporte para modo Genómico (2-bit) o Referencia (F32).
     """
-    def __init__(self, name, tensor=None, database=None, centroids=None):
+    def __init__(self, name, tensor=None, database=None, centroids=None, mode='genomic'):
+        self.mode = mode
         if tensor is not None:
             self.in_features = tensor.shape[0]
             self.out_features = tensor.shape[1]
-            print(f"[*] Genomizando capa '{name}' (In:{self.in_features} -> Out:{self.out_features})...")
-            weights_f32 = dequantize_q8_0(tensor.data, self.out_features, self.in_features)
             
-            all_centroids = []
-            dna_batch = []
-            for i in range(self.out_features):
-                w = weights_f32[i]
-                std = np.std(w)
-                mean = np.mean(w)
-                thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
-                centroids_row = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
-                all_centroids.extend(centroids_row)
-                dna_batch.append(dna_semantic_compression.quantize_embedding(w.tolist(), thresholds))
+            # Siempre cargamos pesos F32 para referencia o para genomizar
+            self.weights_f32 = dequantize_q8_0(tensor.data, self.out_features, self.in_features)
             
-            self.engine = dna_semantic_compression.GajeIndex([], all_centroids)
-            self.engine.add_batch(dna_batch)
+            if mode == 'genomic':
+                print(f"[*] Genomizando capa '{name}' (In:{self.in_features} -> Out:{self.out_features})...")
+                all_centroids = []
+                dna_batch = []
+                for i in range(self.out_features):
+                    w = self.weights_f32[i]
+                    std = np.std(w); mean = np.mean(w)
+                    thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
+                    centroids_row = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
+                    all_centroids.extend(centroids_row)
+                    dna_batch.append(dna_semantic_compression.quantize_embedding(w.tolist(), thresholds))
+                
+                self.engine = dna_semantic_compression.GajeIndex([], all_centroids)
+                self.engine.add_batch(dna_batch)
         else:
-            # Cargar desde datos persistidos
+            # Cargar desde datos persistidos (siempre genómico)
             self.engine = dna_semantic_compression.GajeIndex([], centroids.tolist())
             self.engine.add_batch([database])
 
     def forward(self, x):
+        if self.mode == 'f32':
+            return np.dot(self.weights_f32, x).tolist()
+        
         if isinstance(x, np.ndarray): x = x.tolist()
         return self.engine.genomic_linear_forward(x)
 
 class GenomicAttentionLayer:
     """
-    Capa de Atención Multi-Head acelerada en Rust (Soporta GQA + Block-Quant).
+    Capa de Atención Multi-Head acelerada en Rust (Soporta GQA + Block-Quant + Modo F32).
     """
-    def __init__(self, reader=None, prefix=None, centroids=None, w_q=None, w_k=None, w_v=None, stride=None, n_heads_q=None, n_heads_kv=None):
+    def __init__(self, reader=None, prefix=None, centroids=None, w_q=None, w_k=None, w_v=None, stride=None, n_heads_q=None, n_heads_kv=None, mode='genomic'):
+        self.mode = mode
         if reader is not None:
             tensor_q = next(t for t in reader.tensors if t.name == prefix + "attn_q.weight")
             tensor_k = next(t for t in reader.tensors if t.name == prefix + "attn_k.weight")
@@ -65,42 +72,56 @@ class GenomicAttentionLayer:
             self.n_heads_q = tensor_q.shape[1] // head_dim
             self.n_heads_kv = tensor_k.shape[1] // head_dim
             
-            def get_dna_and_centroids(name):
-                tensor = next(t for t in reader.tensors if t.name == prefix + name + ".weight")
-                w_f32 = dequantize_q8_0(tensor.data, tensor.shape[1], tensor.shape[0])
-                packed_rows, layer_centroids = [], []
-                for row in w_f32:
-                    std = np.std(row); mean = np.mean(row)
-                    thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
-                    centroids_row = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
-                    layer_centroids.extend(centroids_row)
-                    packed_rows.append(dna_semantic_compression.quantize_embedding(row.tolist(), thresholds))
-                return b"".join(packed_rows), layer_centroids, tensor.shape[0] // 4
+            # Cargar pesos F32 para modo f32
+            self.w_q_f32 = dequantize_q8_0(tensor_q.data, tensor_q.shape[1], tensor_q.shape[0])
+            self.w_k_f32 = dequantize_q8_0(tensor_k.data, tensor_k.shape[1], tensor_k.shape[0])
+            tensor_v = next(t for t in reader.tensors if t.name == prefix + "attn_v.weight")
+            self.w_v_f32 = dequantize_q8_0(tensor_v.data, tensor_v.shape[1], tensor_v.shape[0])
+            self.head_dim = head_dim
 
-            w_q_dna, c_q, stride = get_dna_and_centroids("attn_q")
-            w_k_dna, c_k, _ = get_dna_and_centroids("attn_k")
-            w_v_dna, c_v, _ = get_dna_and_centroids("attn_v")
-            all_centroids = c_q + c_k + c_v
-            self.kernel = dna_semantic_compression.GenomicAttention(w_q_dna, w_k_dna, w_v_dna, all_centroids, stride, self.n_heads_q, self.n_heads_kv)
+            if mode == 'genomic':
+                def get_dna_and_centroids(w_f32, in_f):
+                    packed_rows, layer_centroids = [], []
+                    for row in w_f32:
+                        std = np.std(row); mean = np.mean(row)
+                        thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
+                        centroids_row = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
+                        layer_centroids.extend(centroids_row)
+                        packed_rows.append(dna_semantic_compression.quantize_embedding(row.tolist(), thresholds))
+                    return b"".join(packed_rows), layer_centroids, in_f // 4
+
+                w_q_dna, c_q, stride = get_dna_and_centroids(self.w_q_f32, tensor_q.shape[0])
+                w_k_dna, c_k, _ = get_dna_and_centroids(self.w_k_f32, tensor_k.shape[0])
+                w_v_dna, c_v, _ = get_dna_and_centroids(self.w_v_f32, tensor_v.shape[0])
+                all_centroids = c_q + c_k + c_v
+                self.kernel = dna_semantic_compression.GenomicAttention(w_q_dna, w_k_dna, w_v_dna, all_centroids, stride, self.n_heads_q, self.n_heads_kv)
         else:
+            # Cargar desde datos persistidos
             self.kernel = dna_semantic_compression.GenomicAttention(w_q, w_k, w_v, centroids.tolist(), stride, n_heads_q, n_heads_kv)
 
     def forward(self, x, pos):
+        if self.mode == 'f32':
+            # MHA F32 Simplificado (Teacher proxy)
+            q = np.dot(self.w_q_f32, x)
+            return q.tolist() # Para el proxy, q es suficiente para activar FFN
+            
         return self.kernel.forward(x, pos)
 
 class GenomicTransformerBlock:
-    def __init__(self, block_idx, reader=None, input_dir=None):
+    def __init__(self, block_idx, reader=None, input_dir=None, mode='genomic'):
         self.block_idx = block_idx
         self.layers = {}
+        self.mode = mode
         
         if reader is not None:
             prefix = f"blk.{block_idx}."
-            print(f"\n🧬 [Bloque {block_idx}] Genomizando con Block-Quant...")
-            self.attn = GenomicAttentionLayer(reader, prefix)
+            if mode == 'genomic': print(f"\n🧬 [Bloque {block_idx}] Genomizando con Block-Quant...")
+            self.attn = GenomicAttentionLayer(reader, prefix, mode=mode)
             for name in ["ffn_up", "ffn_down"]:
                 tensor = next(t for t in reader.tensors if t.name == prefix + name + ".weight")
-                self.layers[name] = GenomicLLMLayer(tensor.name, tensor)
+                self.layers[name] = GenomicLLMLayer(tensor.name, tensor, mode=mode)
         else:
+            # ... (Carga desde disco omitida para brevedad, permanece igual)
             # Cargar desde disco
             block_dir = os.path.join(input_dir, f"block_{block_idx}")
             
@@ -142,21 +163,23 @@ class GenomicTransformerBlock:
         return x_final
 
 class GenomicLLM:
-    def __init__(self, model_path_or_dir, num_blocks=1, load_genomic=False):
+    def __init__(self, model_path_or_dir, num_blocks=1, load_genomic=False, mode='genomic'):
         self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
+        self.mode = mode
         
         if load_genomic:
             self.load_genomic_model(model_path_or_dir)
         else:
             self.reader = gguf.GGUFReader(model_path_or_dir)
-            print("\n[*] Preparando matriz de Embeddings...")
+            print(f"\n[*] Inicializando Modelo (Modo: {mode})...")
+            
             embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
             self.embedding_matrix = dequantize_q8_0(embd_tensor.data, embd_tensor.shape[1], embd_tensor.shape[0])
             
             print("[*] Cargando RMSNorm final...")
             self.output_norm_weight = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
             
-            self.blocks = [GenomicTransformerBlock(i, reader=self.reader) for i in range(num_blocks)]
+            self.blocks = [GenomicTransformerBlock(i, reader=self.reader, mode=mode) for i in range(num_blocks)]
 
     def save_genomic_model(self, output_dir):
         """

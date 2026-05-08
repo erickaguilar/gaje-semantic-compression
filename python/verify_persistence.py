@@ -24,4 +24,4 @@ def verify_persistence(gaje_dir):
     print("✅ Verificación completada.")
 
 if __name__ == "__main__":
-    verify_persistence("gaje_model_v1")
+    verify_persistence("gaje_v2_premium")
