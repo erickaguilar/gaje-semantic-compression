@@ -32,7 +32,7 @@ class GenomicLayer:
         self.out_features, self.in_features = weights_f32.shape
         self.block_size = block_size
         
-        # Ensure in_features is multiple of block_size
+        # 1. PRIMARY STRAND (DNA)
         reshaped = weights_f32.reshape(-1, block_size)
         stds = np.std(reshaped, axis=1, keepdims=True)
         means = np.mean(reshaped, axis=1, keepdims=True)
@@ -41,10 +41,10 @@ class GenomicLayer:
         block_centroids = (means + base_centroids * stds).astype(np.float32)
         
         base_thresholds = np.array([-1.0, 0.0, 1.0])
-        
         dna_batch = []
+        residuals = np.zeros_like(reshaped)
+        
         for i in range(len(reshaped)):
-            # Per-block thresholding: center at mean, spread by std
             block_mean = means[i][0]
             block_std = stds[i][0]
             t = (block_mean + base_thresholds * block_std).tolist()
@@ -52,9 +52,38 @@ class GenomicLayer:
             dna = dna_semantic_compression.quantize_embedding(reshaped[i].tolist(), t)
             dna_batch.append(dna)
             
+            # Calculate Residuals for the Epigenetic Layer
+            # (Actual weights - Dequantized weights)
+            dequantized = np.array(dna_semantic_compression.dequantize_embedding(dna, block_size, block_centroids[i].tolist()))
+            residuals[i] = reshaped[i] - dequantized
+
+        # 2. EPIGENETIC STRAND (Residuals)
+        res_stds = np.std(residuals, axis=1, keepdims=True)
+        res_means = np.mean(residuals, axis=1, keepdims=True)
+        
+        # Max-Lloyd inspired centroids for residuals: 
+        # Focus more on the "tails" to capture outliers that cause PPL explosion
+        # Optimized for Lapalacian-like residual distribution
+        base_res_centroids = np.array([-2.15, -0.65, 0.65, 2.15], dtype=np.float32)
+        res_centroids = (res_means + base_res_centroids * res_stds).astype(np.float32)
+        
+        epi_batch = []
+        # Quantization thresholds for residuals (optimized for Laplacian)
+        base_res_thresholds = np.array([-1.2, 0.0, 1.2])
+        
+        for i in range(len(residuals)):
+            block_mean = res_means[i][0]
+            block_std = res_stds[i][0]
+            t = (block_mean + base_res_thresholds * block_std).tolist()
+            
+            epi_dna = dna_semantic_compression.quantize_embedding(residuals[i].tolist(), t)
+            epi_batch.append(epi_dna)
+
         self.linear = dna_semantic_compression.GenomicLinear(
             b"".join(dna_batch),
+            b"".join(epi_batch),
             block_centroids.flatten().tolist(),
+            res_centroids.flatten().tolist(),
             self.out_features,
             self.in_features,
             self.block_size
@@ -67,15 +96,24 @@ class GenomicLayer:
         n_blocks = self.in_features // self.block_size
         stride = self.block_size // 4
         row_offset = idx * n_blocks * stride
-        dna_row = self.linear.database[row_offset : row_offset + n_blocks * stride]
         
-        # Dequantize block-by-block
+        dna_row = self.linear.database[row_offset : row_offset + n_blocks * stride]
+        epi_row = self.linear.epigenetic_database[row_offset : row_offset + n_blocks * stride]
+        
         res = np.zeros(self.in_features, dtype=np.float32)
         for b in range(n_blocks):
             dna_block = dna_row[b*stride : (b+1)*stride]
+            epi_block = epi_row[b*stride : (b+1)*stride]
+            
             c_offset = (idx * n_blocks + b) * 4
             c = self.linear.centroids[c_offset : c_offset + 4]
-            res[b*self.block_size : (b+1)*self.block_size] = dna_semantic_compression.dequantize_embedding(dna_block, self.block_size, c)
+            ce = self.linear.epigenetic_centroids[c_offset : c_offset + 4]
+            
+            # Combine strands
+            w_base = np.array(dna_semantic_compression.dequantize_embedding(dna_block, self.block_size, c))
+            w_epi = np.array(dna_semantic_compression.dequantize_embedding(epi_block, self.block_size, ce))
+            res[b*self.block_size : (b+1)*self.block_size] = w_base + w_epi
+            
         return res
 
 class GenomicAttentionLayer:

@@ -723,8 +723,12 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
 pub struct GenomicLinear {
     #[pyo3(get)]
     pub database: Vec<u8>,
+    #[pyo3(get)]
+    pub epigenetic_database: Vec<u8>, // Second DNA strand for residuals
     #[pyo3(get, set)]
     pub centroids: Vec<f32>,
+    #[pyo3(get, set)]
+    pub epigenetic_centroids: Vec<f32>, // Centroids for the residual strand
     #[pyo3(get)]
     pub out_features: usize,
     #[pyo3(get)]
@@ -737,11 +741,21 @@ pub struct GenomicLinear {
 #[pymethods]
 impl GenomicLinear {
     #[new]
-    pub fn new(database: Vec<u8>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize) -> Self {
+    pub fn new(
+        database: Vec<u8>, 
+        epigenetic_database: Vec<u8>,
+        centroids: Vec<f32>, 
+        epigenetic_centroids: Vec<f32>,
+        out_features: usize, 
+        in_features: usize, 
+        block_size: usize
+    ) -> Self {
         let stride = block_size / 4;
         GenomicLinear {
             database,
+            epigenetic_database,
             centroids,
+            epigenetic_centroids,
             out_features,
             in_features,
             block_size,
@@ -751,11 +765,10 @@ impl GenomicLinear {
 
     pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         let n_blocks_per_row = self.in_features / self.block_size;
-        
-        // 1. Calculate input variance for dynamic scaling (Homeostasis)
-        let input_mean = input_vector.iter().sum::<f32>() / input_vector.len() as f32;
-        let input_var = input_vector.iter().map(|&x| (x - input_mean).powi(2)).sum::<f32>() / input_vector.len() as f32;
-        let input_std = input_var.sqrt().max(1e-6);
+        let has_epigenetics = !self.epigenetic_database.is_empty();
+
+        // 1. Homeostasis: Calculate input energy to stabilize gain
+        let input_rms = (input_vector.iter().map(|&x| x * x).sum::<f32>() / input_vector.len() as f32).sqrt().max(1e-6);
 
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let mut row_sum = 0.0f32;
@@ -769,22 +782,49 @@ impl GenomicLinear {
                 let c_offset = (i * n_blocks_per_row + j) * 4;
                 let c = &self.centroids[c_offset..c_offset + 4];
                 
+                // Secondary strand (Epigenetic)
+                let epi_weights = if has_epigenetics {
+                    &self.epigenetic_database[block_start..block_start + self.stride]
+                } else {
+                    &[]
+                };
+                let ce = if has_epigenetics {
+                    &self.epigenetic_centroids[c_offset..c_offset + 4]
+                } else {
+                    &[0.0, 0.0, 0.0, 0.0]
+                };
+
                 let mut dims = 0;
-                for &byte in block_weights {
-                    for k in 0..4 {
-                        let shift = (3 - k) * 2;
+                for k in 0..self.stride {
+                    let byte = block_weights[k];
+                    let epi_byte = if has_epigenetics { epi_weights[k] } else { 0 };
+                    
+                    for s in 0..4 {
+                        let shift = (3 - s) * 2;
                         let bits = (byte >> shift) & 0b11;
                         let val = match bits {
                             0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
                         };
-                        row_sum += input_block[dims] * val;
+                        
+                        let mut final_val = val;
+                        if has_epigenetics {
+                            let epi_bits = (epi_byte >> shift) & 0b11;
+                            let epi_val = match epi_bits {
+                                0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0
+                            };
+                            final_val += epi_val;
+                        }
+
+                        row_sum += input_block[dims] * final_val;
                         dims += 1;
                     }
                 }
             }
             
-            // 2. Logit Clamping: Prevent extreme values that cause PPL explosion
-            row_sum.clamp(-100.0, 100.0)
+            // 2. Predictable Linear Scaling
+            let n_in = self.in_features as f32;
+            let scale = 1.0 / n_in.sqrt();
+            (row_sum * scale).clamp(-100.0, 100.0)
         }).collect();
 
         Ok(results)
