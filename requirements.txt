@@ -2,3 +2,11 @@ numpy
 gradio
 maturin
 sentence-transformers
+gguf
+tokenizers
+transformers
+scikit-learn
+scipy
+tqdm
+pyyaml
+requests

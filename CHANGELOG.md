@@ -1,8 +1,22 @@
 # Changelog
 
-## [0.2.0] - 2026-05-07
-
+## [0.3.0-alpha] - 2026-05-07
 ### Added
+- **Genomic Neural Architecture:** Experimental support for 2-bit weight inference.
+- **LUT-ADC Forward Pass:** Ultra-fast linear layer execution in Rust.
+- **Deep Stabilization:** Implementation of RMSNorm and RoPE (Rotary Embeddings) for deep signal propagation.
+- **GGUF Genomizer:** Script to convert standard LLM models (Qwen2, Llama) to 2-bit DNA format.
+- **Genomic Tokenizer:** Frontend for high-fidelity text-to-DNA conversion (98% accuracy).
+- **MLP Demo:** Native Multi-Layer Perceptron running on 100% genomic weights.
+
+### Changed
+- Refactored `GajeIndex` to use Flat Storage buffer, reducing fragmentation.
+- Optimized Python-Rust bindings using `PyBytes` for 16x memory efficiency during ingestion.
+
+### Fixed
+- HNSW result heap ordering (Max-Heap vs Min-Heap consistency).
+- Out-of-memory crashes in extreme-scale benchmarks (10M+).
+
 - **Phase 4 SBERT Validation**: Successfully implemented and verified high-density vector search (768 dimensions) using real-world text data (Shakespeare).
 - **ADC Search Protocol**: Enabled Asymmetric Distance Computation (ADC) in the benchmark suite for cosine-equivalent search in DNA space.
 - **Recall@10 Metric**: Integrated structured accuracy reporting for Phase 4, reaching **85.40%** precision.
