@@ -35,7 +35,7 @@ impl Ord for Neighbor {
 pub struct GajeIndex {
     #[pyo3(get)]
     pub database: Vec<u8>,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub centroids: Vec<f32>,
     #[pyo3(get)]
     pub stride: usize,
@@ -491,13 +491,21 @@ unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
 
 #[pyclass]
 pub struct GenomicAttention {
+    #[pyo3(get)]
     pub w_q: Vec<u8>,
+    #[pyo3(get)]
     pub w_k: Vec<u8>,
+    #[pyo3(get)]
     pub w_v: Vec<u8>,
+    #[pyo3(get, set)]
     pub centroids: Vec<f32>, // Ahora puede ser un array plano de [n_neurons * 4]
+    #[pyo3(get)]
     pub stride: usize,
+    #[pyo3(get)]
     pub n_heads_q: usize,
+    #[pyo3(get)]
     pub n_heads_kv: usize,
+    #[pyo3(get)]
     pub head_dim: usize,
     pub k_cache: Vec<Vec<f32>>,
     pub v_cache: Vec<Vec<f32>>,
