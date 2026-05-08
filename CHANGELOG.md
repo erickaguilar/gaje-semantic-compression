@@ -1,17 +1,19 @@
 # Changelog
 
-## [0.3.0-alpha] - 2026-05-07
+## [0.4.0-alpha] - 2026-05-07
 ### Added
-- **Genomic Neural Architecture:** Experimental support for 2-bit weight inference.
-- **LUT-ADC Forward Pass:** Ultra-fast linear layer execution in Rust.
-- **Deep Stabilization:** Implementation of RMSNorm and RoPE (Rotary Embeddings) for deep signal propagation.
-- **GGUF Genomizer:** Script to convert standard LLM models (Qwen2, Llama) to 2-bit DNA format.
-- **Genomic Tokenizer:** Frontend for high-fidelity text-to-DNA conversion (98% accuracy).
-- **MLP Demo:** Native Multi-Layer Perceptron running on 100% genomic weights.
+- **Advanced Validation Suite:** Integrated JSD (Jensen-Shannon), Top-k Overlap, and Activation Drift metrics for deep semantic monitoring.
+- **Genomic Attention Kernel (Rust):** High-performance implementation of Multi-Head Attention with native **GQA (Grouped-Query Attention)** and **RoPE** support.
+- **Internal KV-Cache:** 16x compressed key-value storage directly in Rust for massive context efficiency.
+- **Block-Quant Implementation:** Row-wise adaptive quantization for near-lossless signal reconstruction at 2-bit density.
+- **Repetition Penalty:** Native sampling mechanism to prevent autoregressive loops in genomic space.
+- **End-to-End Chat Loop:** First successful text generation using 100% 2-bit genomic weights (Qwen2).
 
 ### Changed
-- Refactored `GajeIndex` to use Flat Storage buffer, reducing fragmentation.
-- Optimized Python-Rust bindings using `PyBytes` for 16x memory efficiency during ingestion.
+- Refactored `src/lib.rs` for modularity and SIMD-ready attention score calculation.
+- Improved GGUF ingestion with native Q8_0 de-quantization layer.
+
+## [0.3.0-alpha] - 2026-05-07
 
 ### Fixed
 - HNSW result heap ordering (Max-Heap vs Min-Heap consistency).
