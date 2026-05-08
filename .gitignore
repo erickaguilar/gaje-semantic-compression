@@ -25,3 +25,5 @@ __pycache__/
 
 # Data
 /data/
+gaje_v2_premium/
+data/models/

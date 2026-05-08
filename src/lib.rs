@@ -80,17 +80,17 @@ impl GajeIndex {
         // found_neighbors debe ser un MAX-HEAP de distancias para poder sacar el más lejano.
         // Como Neighbor es un MIN-HEAP (pop el menor), usamos un heap de distancias invertidas o simplemente cambiamos la lógica.
         // Pero para mantener la consistencia con HNSW, necesitamos sacar el más lejano cuando excedemos ef.
-        
+
         let d_ep = self.calculate_distance_lut(lut, ep);
         let ep_neigh = Neighbor { idx: ep, distance: d_ep };
-        
+
         visited.insert(ep);
         candidates.push(ep_neigh);
-        
+
         // Usaremos un BinaryHeap de Neighbor normal para candidatos (pop el más cercano).
         // Y para found_neighbors, usaremos un vector y lo mantendremos como un Max-Heap manualmente o usaremos otra técnica.
         // En Rust, la forma más fácil es usar un struct diferente.
-        
+
         let mut found_neighbors = BinaryHeap::new(); // Este será un MIN-HEAP por defecto con Neighbor
         found_neighbors.push(std::cmp::Reverse(ep_neigh)); // Reverse lo convierte en Max-Heap
 
@@ -105,7 +105,7 @@ impl GajeIndex {
                     visited.insert(neighbor_idx);
                     let d = self.calculate_distance_lut(lut, neighbor_idx);
                     let n = Neighbor { idx: neighbor_idx, distance: d };
-                    
+
                     if d < furthest_dist || found_neighbors.len() < ef {
                         candidates.push(n);
                         found_neighbors.push(std::cmp::Reverse(n));
@@ -147,7 +147,7 @@ impl GajeIndex {
     pub fn build(&mut self) -> PyResult<()> {
         let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
         println!("[*] Building Optimized DNA Graph (N={}, M={}, ef_c={})...", n, self.m, self.ef_construction);
-        self.layers = vec![vec![vec![]; n]; 1]; 
+        self.layers = vec![vec![vec![]; n]; 1];
         for i in 0..n {
             self.insert_node(i);
             if i % 1000 == 0 && i > 0 { println!("[*] Indexed {}/{} strands...", i, n); }
@@ -169,7 +169,7 @@ impl GajeIndex {
         let c = &self.centroids;
         let q_len = query_vector.len();
         let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
-        
+
         let mut results: Vec<(usize, f32)> = (0..n).into_par_iter().map(|idx| {
             let strand = self.get_strand(idx);
             let mut dist_sq = 0.0f32;
@@ -192,13 +192,13 @@ impl GajeIndex {
             }
             (idx, dist_sq.sqrt())
         }).collect();
-        
+
         results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         if k > 0 && k < results.len() {
             results.truncate(k);
         }
-        
+
         Ok(results)
     }
 
@@ -206,7 +206,7 @@ impl GajeIndex {
         let mut rng = rand::thread_rng();
         let level = (-rng.gen::<f64>().ln() * self.level_mult) as i32;
         let n = if self.stride == 0 { 0 } else { self.database.len() / self.stride };
-        
+
         if self.entry_point.is_none() {
             self.max_level = level;
             self.entry_point = Some(idx);
@@ -241,7 +241,7 @@ impl GajeIndex {
             let neighbors = self.search_layer_lut(&lut, curr_ep, self.ef_construction, l as usize);
             let mut neighbors_vec: Vec<Neighbor> = neighbors.into_vec();
             neighbors_vec.sort_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
-            
+
             let m_limit = if l == 0 { self.m * 2 } else { self.m };
             for n in neighbors_vec.iter().take(m_limit) {
                 if !self.layers[l as usize][idx].contains(&n.idx) { self.layers[l as usize][idx].push(n.idx); }
@@ -289,7 +289,7 @@ impl GajeIndex {
         let final_neighbors = self.search_layer_lut(&lut, curr_ep, ef_val, 0);
         let mut results: Vec<(usize, f32)> = final_neighbors.into_iter().map(|n| (n.idx, n.distance)).collect();
         results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        
+
         if k > 0 && k < results.len() {
             results.truncate(k);
         }
@@ -301,7 +301,7 @@ impl GajeIndex {
         let q_len = input_vector.len();
         let c_all = &self.centroids;
         let is_multi = c_all.len() > 4;
-        
+
         // 2. Perform Forward Pass (Parallel MatMul over 2-bit weights)
         let n_neurons = self.database.len() / self.stride;
         let results: Vec<f32> = (0..n_neurons).into_par_iter().map(|neuron_idx| {
@@ -447,6 +447,7 @@ pub fn dequantize_embedding(dna_packed: Vec<u8>, dims: usize, centroids: Option<
 }
 
 #[inline(always)]
+#[cfg(target_arch = "aarch64")]
 unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     use std::arch::aarch64::*;
     let n = a.len();
@@ -469,6 +470,13 @@ unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
 }
 
 #[inline(always)]
+#[cfg(not(target_arch = "aarch64"))]
+unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+}
+
+#[inline(always)]
+#[cfg(target_arch = "aarch64")]
 unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
     use std::arch::aarch64::*;
     let n = out.len();
@@ -486,6 +494,14 @@ unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
     while i < n {
         out[i] += v[i] * weight;
         i += 1;
+    }
+}
+
+#[inline(always)]
+#[cfg(not(target_arch = "aarch64"))]
+unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
+    for i in 0..out.len() {
+        out[i] += v[i] * weight;
     }
 }
 
@@ -516,7 +532,7 @@ impl GenomicAttention {
     #[new]
     pub fn new(w_q: Vec<u8>, w_k: Vec<u8>, w_v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_heads_q: usize, n_heads_kv: usize) -> Self {
         let head_dim = (w_q.len() / stride) / n_heads_q;
-        
+
         GenomicAttention {
             w_q, w_k, w_v, centroids, stride, n_heads_q, n_heads_kv, head_dim,
             k_cache: Vec::new(),
@@ -528,13 +544,13 @@ impl GenomicAttention {
         let q_len = input_vector.len();
         let c_all = &self.centroids;
         let is_multi = c_all.len() > 4; // Check if we have per-neuron centroids
-        
+
         // 1. Projection function con soporte para Multi-Centroids (Block-Quant)
         let project = |weights: &[u8], n_outputs: usize, c_offset_base: usize| -> Vec<f32> {
             (0..n_outputs).into_par_iter().map(|idx| {
                 let start = idx * self.stride;
                 let neuron_weights = &weights[start..start + self.stride];
-                
+
                 // Si es multi-centroide, cada neurona tiene sus propios 4 centroides
                 let c = if is_multi {
                     let offset = (c_offset_base + idx) * 4;
@@ -564,7 +580,7 @@ impl GenomicAttention {
         // Calculamos offsets para los centroides de Q, K, V en el array plano
         let q_rows = self.n_heads_q * self.head_dim;
         let k_rows = self.n_heads_kv * self.head_dim;
-        
+
         let mut q = project(&self.w_q, q_rows, 0);
         let mut k = project(&self.w_k, k_rows, q_rows);
         let v = project(&self.w_v, k_rows, q_rows + k_rows);
@@ -577,10 +593,10 @@ impl GenomicAttention {
                     let theta = (p as f32) / (10000.0f32.powf((2 * i) as f32 / head_dim as f32));
                     let cos = theta.cos();
                     let sin = theta.sin();
-                    
+
                     let v0 = vec[h_start + i];
                     let v1 = vec[h_start + i + head_dim / 2];
-                    
+
                     vec[h_start + i] = v0 * cos - v1 * sin;
                     vec[h_start + i + head_dim / 2] = v0 * sin + v1 * cos;
                 }
@@ -601,9 +617,9 @@ impl GenomicAttention {
             let h_kv = h_q / group_size;
             let q_start = h_q * self.head_dim;
             let kv_start = h_kv * self.head_dim;
-            
+
             let q_head = &q[q_start..q_start + self.head_dim];
-            
+
             let mut scores = Vec::with_capacity(self.k_cache.len());
             for k_full in &self.k_cache {
                 let k_head = &k_full[kv_start..kv_start + self.head_dim];
@@ -614,7 +630,7 @@ impl GenomicAttention {
             let max_score = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
             let exp_scores: Vec<f32> = scores.iter().map(|s| (s - max_score).exp()).collect();
             let sum_exp: f32 = exp_scores.iter().sum();
-            
+
             for (t, exp_s) in exp_scores.iter().enumerate() {
                 let weight = exp_s / sum_exp;
                 let v_head = &self.v_cache[t][kv_start..kv_start + self.head_dim];
@@ -659,11 +675,11 @@ pub fn dequantize_q8_0_native(data_u8: Vec<u8>, out_features: usize, in_features
         for b in 0..n_blocks {
             let offset = row_offset + b * block_size;
             if offset + 2 > data_u8.len() { break; }
-            
+
             // Extract delta (float16)
             let delta_bytes = [data_u8[offset], data_u8[offset + 1]];
             let delta = f16::from_le_bytes(delta_bytes).to_f32();
-            
+
             // Extract and scale weights
             for j in 0..32 {
                 if offset + 2 + j >= data_u8.len() { break; }
