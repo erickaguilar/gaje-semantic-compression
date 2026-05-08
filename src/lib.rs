@@ -752,6 +752,11 @@ impl GenomicLinear {
     pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         let n_blocks_per_row = self.in_features / self.block_size;
         
+        // 1. Calculate input variance for dynamic scaling (Homeostasis)
+        let input_mean = input_vector.iter().sum::<f32>() / input_vector.len() as f32;
+        let input_var = input_vector.iter().map(|&x| (x - input_mean).powi(2)).sum::<f32>() / input_vector.len() as f32;
+        let input_std = input_var.sqrt().max(1e-6);
+
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let mut row_sum = 0.0f32;
             let row_offset = i * n_blocks_per_row * self.stride;
@@ -777,7 +782,9 @@ impl GenomicLinear {
                     }
                 }
             }
-            row_sum
+            
+            // 2. Logit Clamping: Prevent extreme values that cause PPL explosion
+            row_sum.clamp(-100.0, 100.0)
         }).collect();
 
         Ok(results)

@@ -40,19 +40,16 @@ class GenomicLayer:
         base_centroids = np.array([-1.510, -0.4528, 0.4528, 1.510], dtype=np.float32)
         block_centroids = (means + base_centroids * stds).astype(np.float32)
         
-        # Norm-Invariant Layer: Scale weights to preserve input variance
-        # This acts as the 'Metabolic Clamping' described in the Manifesto
-        target_std = 0.02 # Empirical target for stabilized 2-bit
-        current_std = np.std(block_centroids)
-        if current_std > 0:
-            block_centroids *= (target_std / current_std)
-        
-        base_thresholds = np.array([-0.9816, 0.0, 0.9816])
-        block_thresholds = means + base_thresholds * stds
+        base_thresholds = np.array([-1.0, 0.0, 1.0])
         
         dna_batch = []
         for i in range(len(reshaped)):
-            dna = dna_semantic_compression.quantize_embedding(reshaped[i].tolist(), block_thresholds[i].tolist())
+            # Per-block thresholding: center at mean, spread by std
+            block_mean = means[i][0]
+            block_std = stds[i][0]
+            t = (block_mean + base_thresholds * block_std).tolist()
+            
+            dna = dna_semantic_compression.quantize_embedding(reshaped[i].tolist(), t)
             dna_batch.append(dna)
             
         self.linear = dna_semantic_compression.GenomicLinear(
