@@ -453,9 +453,123 @@ pub fn dequantize_embedding(dna_packed: Vec<u8>, dims: usize, centroids: Option<
     Ok(rec)
 }
 
+#[pyclass]
+pub struct GenomicAttention {
+    pub w_q: Vec<u8>,
+    pub w_k: Vec<u8>,
+    pub w_v: Vec<u8>,
+    pub centroids: Vec<f32>,
+    pub stride: usize,
+    pub n_heads_q: usize,
+    pub n_heads_kv: usize,
+    pub head_dim: usize,
+    pub k_cache: Vec<Vec<f32>>,
+    pub v_cache: Vec<Vec<f32>>,
+}
+
+#[pymethods]
+impl GenomicAttention {
+    #[new]
+    pub fn new(w_q: Vec<u8>, w_k: Vec<u8>, w_v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_heads_q: usize, n_heads_kv: usize) -> Self {
+        let head_dim = (stride * 4); // El stride * 4 es la dimensión de entrada. 
+        // Pero necesitamos la dimensión por cabeza. 
+        // Normalmente in_dim == out_dim para Q.
+        // n_heads_q * head_dim = w_q_rows. 
+        // Como no tenemos w_q_rows aquí directamente de forma elegante, 
+        // la calcularemos en el forward o la pediremos.
+        // Asumiremos que head_dim se deriva de w_q.len() / (stride * n_heads_q)
+        let head_dim = (w_q.len() / stride) / n_heads_q;
+        
+        GenomicAttention {
+            w_q, w_k, w_v, centroids, stride, n_heads_q, n_heads_kv, head_dim,
+            k_cache: Vec::new(),
+            v_cache: Vec::new(),
+        }
+    }
+
+    pub fn forward(&mut self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+        let q_len = input_vector.len();
+        let c = &self.centroids;
+        
+        let mut lut = Vec::with_capacity(q_len * 4);
+        for (_d_idx, &val) in input_vector.iter().enumerate() {
+            for b in 0..4 {
+                let centroid = match b { 0 => c[0], 1 => c[1], 2 => c[2], 3 => c[3], _ => 0.0 };
+                lut.push(val * centroid);
+            }
+        }
+
+        let project = |weights: &[u8], n_outputs: usize| -> Vec<f32> {
+            (0..n_outputs).into_par_iter().map(|idx| {
+                let start = idx * self.stride;
+                let neuron_weights = &weights[start..start + self.stride];
+                let mut sum = 0.0f32;
+                let mut dims = 0;
+                for &byte in neuron_weights {
+                    for j in 0..4 {
+                        if dims >= q_len { break; }
+                        let shift = (3 - j) * 2;
+                        let bits = (byte >> shift) & 0b11;
+                        let lut_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                        sum += lut[dims * 4 + lut_idx];
+                        dims += 1;
+                    }
+                }
+                sum
+            }).collect()
+        };
+
+        let q = project(&self.w_q, self.n_heads_q * self.head_dim);
+        let k = project(&self.w_k, self.n_heads_kv * self.head_dim);
+        let v = project(&self.w_v, self.n_heads_kv * self.head_dim);
+
+        self.k_cache.push(k);
+        self.v_cache.push(v);
+
+        let scale = 1.0 / (self.head_dim as f32).sqrt();
+        let mut output = vec![0.0f32; q.len()];
+        let group_size = self.n_heads_q / self.n_heads_kv;
+
+        for h_q in 0..self.n_heads_q {
+            let h_kv = h_q / group_size;
+            let q_start = h_q * self.head_dim;
+            let kv_start = h_kv * self.head_dim;
+            
+            let q_head = &q[q_start..q_start + self.head_dim];
+            
+            let mut scores = Vec::with_capacity(self.k_cache.len());
+            for k_full in &self.k_cache {
+                let k_head = &k_full[kv_start..kv_start + self.head_dim];
+                let score = q_head.iter().zip(k_head.iter()).map(|(a, b)| a * b).sum::<f32>() * scale;
+                scores.push(score);
+            }
+
+            let max_score = scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+            let exp_scores: Vec<f32> = scores.iter().map(|s| (s - max_score).exp()).collect();
+            let sum_exp: f32 = exp_scores.iter().sum();
+            
+            for (t, exp_s) in exp_scores.iter().enumerate() {
+                let weight = exp_s / sum_exp;
+                let v_head = &self.v_cache[t][kv_start..kv_start + self.head_dim];
+                for i in 0..self.head_dim {
+                    output[q_start + i] += weight * v_head[i];
+                }
+            }
+        }
+
+        Ok(output)
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.k_cache.clear();
+        self.v_cache.clear();
+    }
+}
+
 #[pymodule]
 fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
+    m.add_class::<GenomicAttention>()?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

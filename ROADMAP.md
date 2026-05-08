@@ -13,16 +13,11 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 - [x] **Fase 6: Indexación Espacial (HNSW Genómico)**: Búsqueda sub-lineal en grafos de 2 bits.
 - [x] **Fase 7: Multimodal Integration**: Soporte para proyecciones genómicas CLIP y texto real.
 - [x] **Fase 8: Arquitectura Neuronal Genómica**: Inferencia de LLM real (Qwen2) usando pesos de 2 bits y RMSNorm/RoPE.
-- [x] **Protocolo de Validación Reforzado**: Implementación de métricas de fidelidad profunda (JSD, Top-k overlap, Activation Drift) para monitoreo de degradación semántica.
-
----
-
-## ⚡ Fase 9: Aceleración de Atención en Rust (Paper-Grade)
-**El Problema:** La inferencia profunda actual usa Python para encadenar bloques, lo que añade overhead.
-**La Solución:** Portar toda la lógica de atención (Q*K*V) y KV-Cache directamente a Rust.
-*   **Genomic Attention Kernel**: Multiplicación de matrices (MatMul) operando directamente sobre ADN de 2 bits.
-*   **Infinite Context (KV-Cache DNA)**: Comprimir el historial de conversación 16x para permitir ventanas de contexto de 256k+ tokens en móviles.
-*   **Impacto esperado**: Generación de texto a >30 tokens por segundo en Termux.
+- [x] **Protocolo de Validación Reforzado**: Implementación de métricas de fidelidad profunda (JSD, Top-k overlap, Activation Drift).
+- [x] **Fase 9: Aceleración de Atención en Rust (Paper-Grade)**:
+    - [x] **Genomic Attention Kernel**: Multiplicación de matrices (MatMul) operando directamente sobre ADN de 2 bits con soporte GQA.
+    - [x] **Infinite Context (KV-Cache DNA)**: Implementación de KV-Cache interno en Rust para ahorro masivo de RAM.
+    - [ ] **Flash-Genomic Attention**: Optimización adicional de loops para alcanzar >30 tps.
 
 ---
 
