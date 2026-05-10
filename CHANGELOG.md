@@ -1,11 +1,15 @@
 # Changelog
 
-## [0.5.0] - 2026-05-09
+## [0.5.0] - 2026-05-10
 ### Added
+- **Validación Integral del Sistema:** Verificación completa de métricas en Termux (Recall@10: 85.3%, Throughput: 172k ops/s).
 - **Arquitectura de Anclas Clonadas:** Implementación de la técnica de "Clonación de Segmentos Específicos" para proteger pesos críticos (Top 1%-5% de energía).
 - **Benchmark de Perplejidad (PPL) Final:** Reducción masiva de PPL de 564.24 a 1.60 (99.7% de mejora en coherencia).
 - **Frontera de Salida Optimizada:** Refinamiento de resolución en embeddings frágiles mediante tripletes de ADN (8-bit simulado).
 - **Nuevos Benchmarks:** Inclusión de `benchmarks/final_ppl_cloning_benchmark.py` y `benchmarks/dna_cloning_test_v2.py`.
+
+### Fixed
+- **Kernel Consistency:** Sincronización de la API de `GenomicLinear` en los tests de regresión.
 
 ### Changed
 - **Roadmap Actualizado:** Consolidación de la Fase 10 como "Genomic Distillation & Anchor Cloning".

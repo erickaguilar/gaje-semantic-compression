@@ -724,11 +724,9 @@ pub struct GenomicLinear {
     #[pyo3(get)]
     pub database: Vec<u8>,
     #[pyo3(get)]
-    pub epigenetic_database: Vec<u8>, // Second DNA strand for residuals
+    pub anchors: Vec<f32>, // High-Fidelity Anchor weights (F32)
     #[pyo3(get, set)]
     pub centroids: Vec<f32>,
-    #[pyo3(get, set)]
-    pub epigenetic_centroids: Vec<f32>, // Centroids for the residual strand
     #[pyo3(get)]
     pub out_features: usize,
     #[pyo3(get)]
@@ -743,9 +741,8 @@ impl GenomicLinear {
     #[new]
     pub fn new(
         database: Vec<u8>, 
-        epigenetic_database: Vec<u8>,
+        anchors: Vec<f32>,
         centroids: Vec<f32>, 
-        epigenetic_centroids: Vec<f32>,
         out_features: usize, 
         in_features: usize, 
         block_size: usize
@@ -753,9 +750,8 @@ impl GenomicLinear {
         let stride = block_size / 4;
         GenomicLinear {
             database,
-            epigenetic_database,
+            anchors,
             centroids,
-            epigenetic_centroids,
             out_features,
             in_features,
             block_size,
@@ -765,10 +761,7 @@ impl GenomicLinear {
 
     pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         let n_blocks_per_row = self.in_features / self.block_size;
-        let has_epigenetics = !self.epigenetic_database.is_empty();
-
-        // 1. Homeostasis: Calculate input energy to stabilize gain
-        let input_rms = (input_vector.iter().map(|&x| x * x).sum::<f32>() / input_vector.len() as f32).sqrt().max(1e-6);
+        let has_anchors = !self.anchors.is_empty();
 
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let mut row_sum = 0.0f32;
@@ -782,23 +775,9 @@ impl GenomicLinear {
                 let c_offset = (i * n_blocks_per_row + j) * 4;
                 let c = &self.centroids[c_offset..c_offset + 4];
                 
-                // Secondary strand (Epigenetic)
-                let epi_weights = if has_epigenetics {
-                    &self.epigenetic_database[block_start..block_start + self.stride]
-                } else {
-                    &[]
-                };
-                let ce = if has_epigenetics {
-                    &self.epigenetic_centroids[c_offset..c_offset + 4]
-                } else {
-                    &[0.0, 0.0, 0.0, 0.0]
-                };
-
                 let mut dims = 0;
                 for k in 0..self.stride {
                     let byte = block_weights[k];
-                    let epi_byte = if has_epigenetics { epi_weights[k] } else { 0 };
-                    
                     for s in 0..4 {
                         let shift = (3 - s) * 2;
                         let bits = (byte >> shift) & 0b11;
@@ -806,25 +785,20 @@ impl GenomicLinear {
                             0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
                         };
                         
-                        let mut final_val = val;
-                        if has_epigenetics {
-                            let epi_bits = (epi_byte >> shift) & 0b11;
-                            let epi_val = match epi_bits {
-                                0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0
-                            };
-                            final_val += epi_val;
-                        }
-
-                        row_sum += input_block[dims] * final_val;
+                        row_sum += input_block[dims] * val;
                         dims += 1;
                     }
                 }
             }
             
-            // 2. Predictable Linear Scaling
-            let n_in = self.in_features as f32;
-            let scale = 1.0 / n_in.sqrt();
-            (row_sum * scale).clamp(-100.0, 100.0)
+            // 2. Add High-Fidelity Anchor contribution (if present)
+            if has_anchors {
+                let anchor_row = &self.anchors[i * self.in_features .. (i + 1) * self.in_features];
+                // Use NEON for anchor dot product
+                row_sum += unsafe { dot_product_neon(anchor_row, &input_vector) };
+            }
+            
+            row_sum.clamp(-100.0, 100.0)
         }).collect();
 
         Ok(results)
@@ -832,7 +806,7 @@ impl GenomicLinear {
 }
 
 #[pymodule]
-fn dna_semantic_compression(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;

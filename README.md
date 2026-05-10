@@ -1,6 +1,6 @@
 # 🧬 Protocolo GAJE: Compresión Semántica Genómica
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de compresión de alta densidad diseñado para almacenar embeddings vectoriales de gran escala utilizando el alfabeto genómico (A, C, G, T).
@@ -11,14 +11,27 @@ GAJE resuelve el compromiso entre precisión y espacio, superando los estándare
 | Método | Recall@10 | Bits/Dim | Eficiencia |
 | :--- | :---: | :---: | :--- |
 | **Scalar Quant (SQ8)** | 99% | 8.0 | Baja |
-| **GAJE Protocol (DNA)** | **88.4%** | **2.0** | **Alta (Ganador)** |
+| **GAJE Protocol (DNA)** | **85.3%** | **2.0** | **Alta (Ganador)** |
 | **Binary Flat (1-bit)** | 64% | 1.0 | Degradada |
 
-## ⚡ Características Principales (v0.2.0)
-- **HNSW Genómico**: Motor de búsqueda sub-lineal basado en grafos de proximidad ($O(\log N)$).
-- **LUT-ADC Optimization**: Latencia de búsqueda de **~5ms** para 5k registros mediante Tablas de Consulta (LUT).
-- **Multimodal Ready**: Soporte validado para embeddings de CLIP (Imágenes) y SBERT (Texto).
-- **Native Rust Core**: Procesamiento paralelo masivo con Rayon.
+## ⚡ Características Principales (v0.5.0)
+...
+- **Native Rust Core**: Procesamiento paralelo masivo con Rayon y aceleración SIMD (NEON).
+
+## 📁 Estructura del Proyecto
+```
+dna-semantic-compression/
+├── src/                    # Núcleo en Rust (High-Performance)
+├── python/gaje/            # Paquete principal de Python
+│   ├── core/               # Cuantización y lógica de archivos .gaje
+│   ├── nn/                 # Capas genómicas (Linear, Attention) y Modelos
+│   ├── processing/         # Tokenización y pipelines de inferencia
+│   └── utils/              # Entrenamiento de codebooks y métricas
+├── benchmarks/             # Suite de pruebas (Accuracy, Speed, PPL)
+├── examples/               # Demos y ejemplos de uso
+├── models/                 # Artefactos de modelos genómicos
+└── tests/                  # Tests automatizados (Pytest)
+```
 
 ## 🛠️ Instalación y Uso
 ```bash

@@ -25,3 +25,4 @@ __pycache__/
 
 # Data
 /data/
+maintenance/local_artifacts/
