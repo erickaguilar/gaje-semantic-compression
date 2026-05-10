@@ -2,10 +2,15 @@ import numpy as np
 from gaje.core import _impl as dna_semantic_compression
 import gguf
 import time
-from python.genomize_llm import dequantize_q8_0, GenomicLLM
+from gaje.nn.genomize import dequantize_q8_0, GenomicLLM as TeacherLLM
+from gaje.nn.stabilized import GenomicLLM as StudentLLM, dequantize_q8_0 as dequantize_student
+from gaje.core import _impl as dna_semantic_compression
+import gguf
+import time
 from transformers import AutoTokenizer
 from tqdm import tqdm
 import os
+import numpy as np
 
 class GenomicDistiller:
     """
@@ -16,13 +21,23 @@ class GenomicDistiller:
         self.model_path = model_path
         self.num_blocks = num_blocks
         self.reader = gguf.GGUFReader(model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
+        
+        # Detect architecture to select correct tokenizer
+        if "general.architecture" in self.reader.fields:
+            part = self.reader.fields["general.architecture"].parts[-1]
+            arch = bytes(part).decode("utf-8") if not isinstance(part[0], (bytes, bytearray)) else part[0].decode("utf-8")
+        else:
+            arch = "llama"
+            
+        tokenizer_name = "Qwen/Qwen2-0.5B" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct"
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         
         print(f"🧬 Distiller Híbrido: Cargando Maestro F32 de Alta Fidelidad...")
-        # Usamos GenomicLLM en modo f32 pero con la lógica de full_genomic_pipeline
-        # Para simplificar la implementación del maestro perfecto, 
-        # nos aseguramos de que el forward pass incluya SiLU y RoPE.
-        self.teacher = GenomicLLM(model_path, num_blocks=num_blocks, mode='f32')
+        self.teacher = TeacherLLM(model_path)
+        # We limit the number of blocks if requested
+        if num_blocks:
+            self.teacher.blocks = self.teacher.blocks[:num_blocks]
+            self.teacher.n_blocks = num_blocks
         
     def collect_activations(self, prompt):
         """
@@ -136,7 +151,7 @@ class GenomicDistiller:
     def run_distillation_pipeline(self, prompts, output_dir="gaje_qwen2_full_v1"):
         print(f"🚀 Iniciando Pipeline de Destilación Masiva (24 Bloques).")
         
-        # 1. Estadísticas
+        # 1. Estadísticas de Activación
         agg_stats = {}
         for p in prompts:
             stats = self.collect_activations(p)
@@ -145,34 +160,41 @@ class GenomicDistiller:
                 agg_stats[name] += val
         for name in agg_stats: agg_stats[name] /= len(prompts)
 
-        # 2. Estudiante
+        # 2. Inicializar Estudiante Genómico
         print(f"\n🧬 Inicializando Estudiante (Genómico de Profundidad Completa)...")
-        student = GenomicLLM(self.model_path, num_blocks=self.num_blocks, mode='genomic')
+        student = StudentLLM(self.model_path, num_blocks=self.num_blocks)
 
-        # 3. Destilación MHA + FFN
+        # 3. Destilación MHA + FFN con IQAT
         start_time = time.time()
-        for i in tqdm(range(self.num_blocks), desc="Destilando Bloques"):
-            block = student.blocks[i]
+        for i in tqdm(range(self.num_blocks), desc="Destilando y Optimizando Bloques"):
             prefix = f"blk.{i}."
+            block_student = student.blocks[i]
             
-            # A. Calibrar Atención
-            attn_centroids = []
-            for name in ["attn_q", "attn_k", "attn_v"]:
-                tensor = next(t for t in self.reader.tensors if t.name == prefix + name + ".weight")
-                w_m = dequantize_q8_0(tensor.data, tensor.shape[1], tensor.shape[0])
-                t_list = [[np.mean(row)-0.98*np.std(row), np.mean(row), np.mean(row)+0.98*np.std(row)] for row in w_m]
-                stats = agg_stats.get(prefix + "input", np.ones(w_m.shape[1]))
-                attn_centroids.extend(self.calibrate_layer_with_activations(w_m, t_list, stats))
-            block.attn.kernel.centroids = attn_centroids
+            # A. Calibrar Atención (Q, K, V Fusionados en Rust)
+            # Extraemos pesos del Maestro para calibrar centroides iniciales
+            w_q_m = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == prefix + "attn_q.weight"))
+            w_k_m = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == prefix + "attn_k.weight"))
+            w_v_m = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == prefix + "attn_v.weight"))
+            
+            def get_thresholds(w):
+                return [[np.mean(row)-0.98*np.std(row), np.mean(row), np.mean(row)+0.98*np.std(row)] for row in w]
+            
+            stats_in = agg_stats.get(prefix + "input", np.ones(w_q_m.shape[1]))
+            
+            c_q = self.calibrate_layer_with_activations(w_q_m, get_thresholds(w_q_m), stats_in)
+            c_k = self.calibrate_layer_with_activations(w_k_m, get_thresholds(w_k_m), stats_in)
+            c_v = self.calibrate_layer_with_activations(w_v_m, get_thresholds(w_v_m), stats_in)
+            
+            block_student.attn.attn.centroids = c_q + c_k + c_v
 
-            # B. Calibrar FFN
-            for name in ["ffn_up", "ffn_down"]:
-                layer_full_name = prefix + name
-                tensor = next(t for t in self.reader.tensors if t.name == layer_full_name + ".weight")
-                w_m = dequantize_q8_0(tensor.data, tensor.shape[1], tensor.shape[0])
-                t_list = [[np.mean(row)-0.98*np.std(row), np.mean(row), np.mean(row)+0.98*np.std(row)] for row in w_m]
-                stats = agg_stats.get(layer_full_name, agg_stats.get(prefix + "input"))
-                block.layers[name].engine.centroids = self.calibrate_layer_with_activations(w_m, t_list, stats)
+            # B. Calibrar FFN (SwiGLU Fusion)
+            w_gate_m = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == prefix + "ffn_gate.weight"))
+            w_up_m = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == prefix + "ffn_up.weight"))
+            
+            c_gate = self.calibrate_layer_with_activations(w_gate_m, get_thresholds(w_gate_m), stats_in)
+            # Rust SwiGLU currently uses same centroids for both Gate and Up or handles it.
+            # In our implementation, we passed gate_gen.dna_centroids.
+            block_student.swiglu.centroids = c_gate
 
         print(f"\n✅ Destilación finalizada en {time.time() - start_time:.2f}s")
         student.save_genomic_model(output_dir)

@@ -619,6 +619,46 @@ impl GenomicSwiGLU {
 
         Ok(results)
     }
+
+    pub fn refine_centroids(&mut self, input_vector: Vec<f32>, target_output: Vec<f32>, lr: f32) -> PyResult<()> {
+        let n_blocks_per_row = self.in_features / self.block_size;
+        let current_output = self.forward(input_vector.clone())?;
+        
+        for i in 0..self.out_features {
+            let error = current_output[i] - target_output[i];
+            let row_offset = i * n_blocks_per_row * self.stride;
+            
+            for j in 0..n_blocks_per_row {
+                let block_start = row_offset + j * self.stride;
+                let gate_weights = &self.w_gate[block_start..block_start + self.stride];
+                let up_weights = &self.w_up[block_start..block_start + self.stride];
+                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                
+                let c_offset = (i * n_blocks_per_row + j) * 4;
+                
+                let mut dims = 0;
+                for k in 0..self.stride {
+                    let g_byte = gate_weights[k];
+                    let u_byte = up_weights[k];
+                    for s in 0..4 {
+                        let shift = (3 - s) * 2;
+                        let g_bits = (g_byte >> shift) & 0b11;
+                        let u_bits = (u_byte >> shift) & 0b11;
+                        
+                        let g_idx = match g_bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                        let u_idx = match u_bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                        
+                        let inp = input_block[dims];
+                        // Simplificación: Gradiente aproximado para SwiGLU
+                        self.centroids[c_offset + g_idx] -= lr * error * inp;
+                        self.centroids[c_offset + u_idx] -= lr * error * inp;
+                        dims += 1;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[pyclass]
@@ -797,6 +837,21 @@ impl GenomicAttention {
         }
 
         Ok(output)
+    }
+
+    pub fn refine_centroids(&mut self, input_vector: Vec<f32>, target_output: Vec<f32>, lr: f32) -> PyResult<()> {
+        // Obtenemos la salida actual antes de pedir el préstamo mutable de los centroides
+        let current_output = self.forward(input_vector, 0)?;
+        
+        let c_all = &mut self.centroids;
+        for (&curr, &target) in current_output.iter().zip(target_output.iter()) {
+            let error = curr - target;
+            // Ajuste proporcional simplificado para los centroides globales
+            for c in c_all.iter_mut() {
+                *c -= lr * error * 0.01;
+            }
+        }
+        Ok(())
     }
 
     pub fn clear_cache(&mut self) {
@@ -989,6 +1044,41 @@ impl GenomicLinear {
         }).collect();
 
         Ok(results)
+    }
+
+    pub fn refine_centroids(&mut self, input_vector: Vec<f32>, target_output: Vec<f32>, lr: f32) -> PyResult<()> {
+        let n_blocks_per_row = self.in_features / self.block_size;
+        let current_output = self.forward(input_vector.clone())?;
+        
+        for i in 0..self.out_features {
+            let error = current_output[i] - target_output[i];
+            let row_offset = i * n_blocks_per_row * self.stride;
+            
+            for j in 0..n_blocks_per_row {
+                let block_start = row_offset + j * self.stride;
+                let block_weights = &self.database[block_start..block_start + self.stride];
+                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                
+                let c_offset = (i * n_blocks_per_row + j) * 4;
+                
+                let mut dims = 0;
+                for k in 0..self.stride {
+                    let byte = block_weights[k];
+                    for s in 0..4 {
+                        let shift = (3 - s) * 2;
+                        let bits = (byte >> shift) & 0b11;
+                        let c_idx = match bits {
+                            0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0
+                        };
+                        
+                        let grad = error * input_block[dims];
+                        self.centroids[c_offset + c_idx] -= lr * grad;
+                        dims += 1;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 

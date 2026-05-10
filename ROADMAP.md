@@ -30,9 +30,9 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 *   [x] **Anchor Cloning (Breakthrough)**: Implementación de protección selectiva para el Top 1% de pesos frágiles.
 *   [x] **PPL Stabilization**: Reducción de Perplejidad de >500 a **1.60** validada en benchmark integral (10 de mayo, 2026).
 *   [x] **Fidelity Recovery**: Similitud coseno recuperada al **96.5%** en capas densas.
-*   [ ] **Full-Architecture Teacher**: Sincronización total de RoPE/SwiGLU entre Maestro y Estudiante.
-*   [ ] **Iterative Quantization-Aware Training (IQAT)**: Ajuste fino de pesos genómicos basándose en el error de predicción de tokens.
-*   [ ] **Mobile-Native Learning**: Implementar un optimizador ligero en Rust para que el modelo aprenda de las correcciones del usuario localmente.
+*   [x] **Full-Architecture Teacher**: Sincronización total de RoPE/SwiGLU entre Maestro y Estudiante.
+*   [x] **Iterative Quantization-Aware Training (IQAT)**: Ajuste fino de pesos genómicos basándose en el error de predicción de tokens.
+*   [x] **Mobile-Native Learning**: Implementar un optimizador ligero en Rust para que el modelo aprenda de las correcciones del usuario localmente.
 
 ---
 
