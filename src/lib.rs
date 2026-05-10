@@ -489,6 +489,138 @@ unsafe fn add_weighted_neon(out: &mut [f32], v: &[f32], weight: f32) {
     }
 }
 
+#[inline(always)]
+unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
+    use std::arch::aarch64::*;
+    let n = x.len();
+    let mut sum_v = vdupq_n_f32(0.0);
+    let mut i = 0;
+
+    while i + 4 <= n {
+        let vx = vld1q_f32(x.as_ptr().add(i));
+        sum_v = vfmaq_f32(sum_v, vx, vx);
+        i += 4;
+    }
+
+    let mut sum = vaddvq_f32(sum_v);
+    while i < n {
+        sum += x[i] * x[i];
+        i += 1;
+    }
+
+    let rms = (sum / n as f32 + eps).sqrt();
+    let inv_rms = vdupq_n_f32(1.0 / rms);
+    
+    let mut out = vec![0.0f32; n];
+    i = 0;
+    while i + 4 <= n {
+        let vx = vld1q_f32(x.as_ptr().add(i));
+        let vw = vld1q_f32(weight.as_ptr().add(i));
+        let res = vmulq_f32(vmulq_f32(vx, inv_rms), vw);
+        vst1q_f32(out.as_mut_ptr().add(i), res);
+        i += 4;
+    }
+
+    while i < n {
+        out[i] = (x[i] / rms) * weight[i];
+        i += 1;
+    }
+    out
+}
+
+#[inline(always)]
+fn silu(x: f32) -> f32 {
+    x / (1.0 + (-x).exp())
+}
+
+#[pyclass]
+pub struct GenomicSwiGLU {
+    #[pyo3(get)]
+    pub w_gate: Vec<u8>,
+    #[pyo3(get)]
+    pub w_up: Vec<u8>,
+    #[pyo3(get, set)]
+    pub centroids: Vec<f32>,
+    #[pyo3(get)]
+    pub out_features: usize,
+    #[pyo3(get)]
+    pub in_features: usize,
+    #[pyo3(get)]
+    pub block_size: usize,
+    stride: usize,
+}
+
+#[pymethods]
+impl GenomicSwiGLU {
+    #[new]
+    pub fn new(
+        w_gate: Vec<u8>,
+        w_up: Vec<u8>,
+        centroids: Vec<f32>,
+        out_features: usize,
+        in_features: usize,
+        block_size: usize
+    ) -> Self {
+        let stride = block_size / 4;
+        GenomicSwiGLU {
+            w_gate,
+            w_up,
+            centroids,
+            out_features,
+            in_features,
+            block_size,
+            stride,
+        }
+    }
+
+    pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+        let n_blocks_per_row = self.in_features / self.block_size;
+        
+        let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
+            let mut gate_sum = 0.0f32;
+            let mut up_sum = 0.0f32;
+            let row_offset = i * n_blocks_per_row * self.stride;
+            
+            for j in 0..n_blocks_per_row {
+                let block_start = row_offset + j * self.stride;
+                let gate_weights = &self.w_gate[block_start..block_start + self.stride];
+                let up_weights = &self.w_up[block_start..block_start + self.stride];
+                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                
+                let c_offset = (i * n_blocks_per_row + j) * 4;
+                let c = &self.centroids[c_offset..c_offset + 4];
+                
+                let mut dims = 0;
+                for k in 0..self.stride {
+                    let g_byte = gate_weights[k];
+                    let u_byte = up_weights[k];
+                    for s in 0..4 {
+                        let shift = (3 - s) * 2;
+                        let g_bits = (g_byte >> shift) & 0b11;
+                        let u_bits = (u_byte >> shift) & 0b11;
+                        
+                        let g_val = match g_bits {
+                            0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                        };
+                        let u_val = match u_bits {
+                            0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                        };
+                        
+                        let inp = input_block[dims];
+                        gate_sum += inp * g_val;
+                        up_sum += inp * u_val;
+                        dims += 1;
+                    }
+                }
+            }
+            
+            silu(gate_sum) * up_sum
+        }).collect();
+
+        Ok(results)
+    }
+}
+
 #[pyclass]
 pub struct GenomicAttention {
     #[pyo3(get)]
@@ -507,24 +639,46 @@ pub struct GenomicAttention {
     pub n_heads_kv: usize,
     #[pyo3(get)]
     pub head_dim: usize,
-    pub k_cache: Vec<Vec<f32>>,
-    pub v_cache: Vec<Vec<f32>>,
+    #[pyo3(get, set)]
+    pub rmsnorm_weight: Vec<f32>,
+    #[pyo3(get, set)]
+    pub eps: f32,
+    pub k_cache: Vec<Vec<u8>>,
+    pub v_cache: Vec<Vec<u8>>,
 }
 
 #[pymethods]
 impl GenomicAttention {
     #[new]
-    pub fn new(w_q: Vec<u8>, w_k: Vec<u8>, w_v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_heads_q: usize, n_heads_kv: usize) -> Self {
+    #[pyo3(signature = (w_q, w_k, w_v, centroids, stride, n_heads_q, n_heads_kv, rmsnorm_weight=Vec::new(), eps=1e-6))]
+    pub fn new(
+        w_q: Vec<u8>, 
+        w_k: Vec<u8>, 
+        w_v: Vec<u8>, 
+        centroids: Vec<f32>, 
+        stride: usize, 
+        n_heads_q: usize, 
+        n_heads_kv: usize,
+        rmsnorm_weight: Vec<f32>,
+        eps: f32
+    ) -> Self {
         let head_dim = (w_q.len() / stride) / n_heads_q;
         
         GenomicAttention {
             w_q, w_k, w_v, centroids, stride, n_heads_q, n_heads_kv, head_dim,
+            rmsnorm_weight,
+            eps,
             k_cache: Vec::new(),
             v_cache: Vec::new(),
         }
     }
 
-    pub fn forward(&mut self, input_vector: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> {
+    pub fn forward(&mut self, mut input_vector: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> {
+        // 0. Optional RMSNorm Fusion
+        if !self.rmsnorm_weight.is_empty() {
+            input_vector = unsafe { rms_norm_neon(&input_vector, &self.rmsnorm_weight, self.eps) };
+        }
+
         let q_len = input_vector.len();
         let c_all = &self.centroids;
         let is_multi = c_all.len() > 4; // Check if we have per-neuron centroids
@@ -590,8 +744,24 @@ impl GenomicAttention {
         apply_rope(&mut q, self.n_heads_q, self.head_dim, pos);
         apply_rope(&mut k, self.n_heads_kv, self.head_dim, pos);
 
-        self.k_cache.push(k);
-        self.v_cache.push(v);
+        // 3. Quantize and Store in DNA Cache (Real KV-Cache DNA)
+        let c_base = if is_multi { &c_all[0..4] } else { &c_all[0..4] }; // Simplified
+        let quantize = |vec: &[f32]| -> Vec<u8> {
+            let mut packed = Vec::with_capacity(vec.len() / 4);
+            for i in 0..(vec.len() / 4) {
+                let mut byte = 0u8;
+                for j in 0..4 {
+                    let val = vec[i * 4 + j];
+                    let bits = if val < -0.34 { 0b00 } else if val < 0.0 { 0b01 } else if val < 0.34 { 0b11 } else { 0b10 };
+                    byte = (byte << 2) | bits;
+                }
+                packed.push(byte);
+            }
+            packed
+        };
+
+        self.k_cache.push(quantize(&k));
+        self.v_cache.push(quantize(&v));
 
         let scale = 1.0 / (self.head_dim as f32).sqrt();
         let mut output = vec![0.0f32; q.len()];
@@ -605,9 +775,10 @@ impl GenomicAttention {
             let q_head = &q[q_start..q_start + self.head_dim];
             
             let mut scores = Vec::with_capacity(self.k_cache.len());
-            for k_full in &self.k_cache {
-                let k_head = &k_full[kv_start..kv_start + self.head_dim];
-                let score = unsafe { dot_product_neon(q_head, k_head) } * scale;
+            for k_dna in &self.k_cache {
+                // Dequantize K on-the-fly (Kernel Fusion)
+                let k_head_f32 = dequantize_embedding(k_dna[kv_start/4..(kv_start+self.head_dim)/4].to_vec(), self.head_dim, Some(c_base.to_vec())).unwrap();
+                let score = unsafe { dot_product_neon(q_head, &k_head_f32) } * scale;
                 scores.push(score);
             }
 
@@ -617,9 +788,11 @@ impl GenomicAttention {
             
             for (t, exp_s) in exp_scores.iter().enumerate() {
                 let weight = exp_s / sum_exp;
-                let v_head = &self.v_cache[t][kv_start..kv_start + self.head_dim];
+                // Dequantize V on-the-fly
+                let v_dna = &self.v_cache[t];
+                let v_head_f32 = dequantize_embedding(v_dna[kv_start/4..(kv_start+self.head_dim)/4].to_vec(), self.head_dim, Some(c_base.to_vec())).unwrap();
                 let out_head = &mut output[q_start..q_start + self.head_dim];
-                unsafe { add_weighted_neon(out_head, v_head, weight) };
+                unsafe { add_weighted_neon(out_head, &v_head_f32, weight) };
             }
         }
 
@@ -733,19 +906,26 @@ pub struct GenomicLinear {
     pub in_features: usize,
     #[pyo3(get)]
     pub block_size: usize,
+    #[pyo3(get, set)]
+    pub rmsnorm_weight: Vec<f32>,
+    #[pyo3(get, set)]
+    pub eps: f32,
     stride: usize,
 }
 
 #[pymethods]
 impl GenomicLinear {
     #[new]
+    #[pyo3(signature = (database, anchors, centroids, out_features, in_features, block_size, rmsnorm_weight=Vec::new(), eps=1e-6))]
     pub fn new(
         database: Vec<u8>, 
         anchors: Vec<f32>,
         centroids: Vec<f32>, 
         out_features: usize, 
         in_features: usize, 
-        block_size: usize
+        block_size: usize,
+        rmsnorm_weight: Vec<f32>,
+        eps: f32
     ) -> Self {
         let stride = block_size / 4;
         GenomicLinear {
@@ -755,11 +935,18 @@ impl GenomicLinear {
             out_features,
             in_features,
             block_size,
+            rmsnorm_weight,
+            eps,
             stride,
         }
     }
 
-    pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+    pub fn forward(&self, mut input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
+        // 1. Optional RMSNorm Fusion
+        if !self.rmsnorm_weight.is_empty() {
+            input_vector = unsafe { rms_norm_neon(&input_vector, &self.rmsnorm_weight, self.eps) };
+        }
+
         let n_blocks_per_row = self.in_features / self.block_size;
         let has_anchors = !self.anchors.is_empty();
 
@@ -810,6 +997,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;
+    m.add_class::<GenomicSwiGLU>()?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

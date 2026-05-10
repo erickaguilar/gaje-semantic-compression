@@ -10,23 +10,34 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
     flat_weights = dna_semantic_compression.dequantize_q8_0_native(data, out_features, in_features)
     w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
     
-    # Des-permutación para Llama 3 (GGUF)
+    # Des-permutación para Llama 3 / Qwen2 (GGUF)
     # Llama.cpp permuta Q y K para que el RoPE split sea contiguo en memoria.
-    # Para usar RoPE interleaved, debemos des-permutar.
-    if False and is_q_or_k and n_head is not None and head_dim is not None:
+    if is_q_or_k and n_head is not None and head_dim is not None:
         w_new = np.zeros_like(w)
         for h in range(n_head):
             for i in range(head_dim // 2):
-                w_new[h * head_dim + 2 * i] = w[h * head_dim + i]
-                w_new[h * head_dim + 2 * i + 1] = w[h * head_dim + i + head_dim // 2]
+                w_new[h * head_dim + i] = w[h * head_dim + 2 * i]
+                w_new[h * head_dim + head_dim // 2 + i] = w[h * head_dim + 2 * i + 1]
         return w_new
     return w
 
 class GenomicLLM:
     def __init__(self, model_path):
+        print("DEBUG: Using GenomicLLM from genomize.py (RoPE Split + De-permutation)")
         print(f"🧬 Sincronizando Organismo Completo: {os.path.basename(model_path)}")
         self.reader = gguf.GGUFReader(model_path)
-        arch = "llama"
+        
+        # Detect architecture
+        if "general.architecture" in self.reader.fields:
+            part = self.reader.fields["general.architecture"].parts[-1]
+            if isinstance(part[0], (bytes, bytearray)):
+                arch = part[0].decode("utf-8")
+            else:
+                arch = bytes(part).decode("utf-8")
+        else:
+            arch = "llama"
+        print(f"[*] Arquitectura detectada: {arch}")
+
         self.n_embd = int(self.reader.fields[f"{arch}.embedding_length"].parts[-1][0])
         self.n_head = int(self.reader.fields[f"{arch}.attention.head_count"].parts[-1][0])
         self.n_head_kv = int(self.reader.fields[f"{arch}.attention.head_count_kv"].parts[-1][0])
@@ -43,7 +54,11 @@ class GenomicLLM:
         for i in range(self.n_blocks):
             self.blocks.append(TransformerBlock(self.reader, i, self.n_head, self.n_head_kv, self.head_dim, self.rope_base, self.eps))
             if (i+1) % 10 == 0: print(f"    [~] Bloque {i+1}/{self.n_blocks} sincronizado...")
-        self.tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct")
+        
+        # Select correct tokenizer
+        tokenizer_name = "Qwen/Qwen2-0.5B" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct"
+        print(f"[*] Cargando tokenizer: {tokenizer_name}")
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
     def rms_norm(self, x, weight):
         rms = np.sqrt(np.mean(x**2) + self.eps)
@@ -118,9 +133,9 @@ class AttentionLayer:
         theta = pos * inv_freq
         cos = np.cos(theta); sin = np.sin(theta)
         for h in range(n_heads):
-            v0 = x[h, 0::2]; v1 = x[h, 1::2]
-            res[h, 0::2] = v0 * cos - v1 * sin
-            res[h, 1::2] = v0 * sin + v1 * cos
+            v0 = x[h, :dim//2]; v1 = x[h, dim//2:]
+            res[h, :dim//2] = v0 * cos - v1 * sin
+            res[h, dim//2:] = v0 * sin + v1 * cos
         return res
 
     def forward(self, x, pos):

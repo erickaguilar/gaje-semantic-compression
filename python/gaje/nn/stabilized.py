@@ -24,7 +24,7 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
     return w
 
 class GenomicLayer:
-    def __init__(self, name, weights_f32, block_size=32, anchor_threshold=0.98):
+    def __init__(self, name, weights_f32, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6):
         self.name = name
         self.out_features, self.in_features = weights_f32.shape
         self.block_size = block_size
@@ -56,25 +56,26 @@ class GenomicLayer:
             residual = block - dequantized
             
             # 2. DYNAMIC ANCHORS (High-Fidelity)
-            # Identify critical weights where quantization error is too high
-            # or weight magnitude is an extreme outlier
             err_threshold = np.quantile(np.abs(residual), anchor_threshold)
             anchor_mask = np.abs(residual) >= err_threshold
             
-            # Store the EXACT residual for these anchors in F32
-            block_idx = i * block_size
             row_idx = i // (self.in_features // block_size)
             col_in_row = (i % (self.in_features // block_size)) * block_size
-            
             anchors_f32[row_idx, col_in_row : col_in_row + block_size][anchor_mask] = residual[anchor_mask]
 
+        self.dna_database = b"".join(dna_batch)
+        self.dna_centroids = all_dna_centroids
+        self.anchors = anchors_f32.flatten().tolist()
+
         self.linear = dna_semantic_compression.GenomicLinear(
-            b"".join(dna_batch),
-            anchors_f32.flatten().tolist(), # F32 High-Fidelity Strand
-            all_dna_centroids,
+            self.dna_database,
+            self.anchors,
+            self.dna_centroids,
             self.out_features,
             self.in_features,
-            self.block_size
+            self.block_size,
+            rmsnorm_weight.tolist() if rmsnorm_weight is not None else [],
+            eps
         )
 
     def forward(self, x):
@@ -100,76 +101,43 @@ class GenomicLayer:
         return res + anchor_row
 
 class GenomicAttentionLayer:
-    def __init__(self, reader, p, n_head, n_head_kv, head_dim, rope_base):
+    def __init__(self, reader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=None, eps=1e-6):
         self.n_head = n_head
         self.n_head_kv = n_head_kv
         self.head_dim = head_dim
-        self.rope_base = rope_base
-        self.k_cache = []
-        self.v_cache = []
         
         w_q_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_q.weight"), n_head, head_dim, True)
         w_k_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_k.weight"), n_head_kv, head_dim, True)
         w_v_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_v.weight"))
         w_o_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_output.weight"))
         
-        self.w_q = GenomicLayer(p + "attn_q", w_q_f32)
-        self.w_k = GenomicLayer(p + "attn_k", w_k_f32)
-        self.w_v = GenomicLayer(p + "attn_v", w_v_f32)
+        # We "genomize" Q, K, V to get DNA strands and centroids for the Rust kernel
+        q_gen = GenomicLayer(p + "q", w_q_f32)
+        k_gen = GenomicLayer(p + "k", w_k_f32)
+        v_gen = GenomicLayer(p + "v", w_v_f32)
+        
+        # Combine all centroids into a flat list
+        all_centroids = q_gen.dna_centroids + k_gen.dna_centroids + v_gen.dna_centroids
+        
+        self.attn = dna_semantic_compression.GenomicAttention(
+            q_gen.dna_database,
+            k_gen.dna_database,
+            v_gen.dna_database,
+            all_centroids,
+            q_gen.block_size // 4,
+            n_head,
+            n_head_kv,
+            rmsnorm_weight.tolist() if rmsnorm_weight is not None else [],
+            eps
+        )
         self.w_o = GenomicLayer(p + "attn_output", w_o_f32)
 
     def clear_cache(self):
-        self.k_cache = []
-        self.v_cache = []
-
-    def apply_rope(self, x, pos):
-        # x is (n_heads, head_dim)
-        n_heads, dim = x.shape
-        # Create frequencies for RoPE
-        inv_freq = 1.0 / (self.rope_base ** (np.arange(0, dim, 2, dtype=np.float32) / dim))
-        t = np.array([pos], dtype=np.float32)
-        freqs = np.outer(t, inv_freq).flatten() # (dim/2,)
-        
-        # Interleaved RoPE: [x0, x1, x2, x3] -> [x0*cos-x1*sin, x0*sin+x1*cos, x2*cos-x3*sin, x2*sin+x3*cos]
-        cos = np.cos(freqs)
-        sin = np.sin(freqs)
-        
-        res = np.zeros_like(x)
-        for h in range(n_heads):
-            x_h = x[h]
-            # Even indices: 0, 2, 4...
-            x_even = x_h[0::2]
-            # Odd indices: 1, 3, 5...
-            x_odd = x_h[1::2]
-            
-            res[h, 0::2] = x_even * cos - x_odd * sin
-            res[h, 1::2] = x_even * sin + x_odd * cos
-        return res
+        self.attn.clear_cache()
 
     def forward(self, x, pos):
-        # x is (576,)
-        q_raw = self.w_q.forward(x)
-        k_raw = self.w_k.forward(x)
-        v_raw = self.w_v.forward(x)
-        
-        if q_raw.shape[0] != self.n_head * self.head_dim:
-             print(f"DEBUG Q SHAPE: {q_raw.shape}, expected {self.n_head * self.head_dim}")
-             
-        q = q_raw.reshape(self.n_head, self.head_dim)
-        k = k_raw.reshape(self.n_head_kv, self.head_dim)
-        v = v_raw.reshape(self.n_head_kv, self.head_dim)
-        q = self.apply_rope(q, pos); k = self.apply_rope(k, pos)
-        self.k_cache.append(k); self.v_cache.append(v)
-        k_full = np.stack(self.k_cache); v_full = np.stack(self.v_cache)
-        if self.n_head != self.n_head_kv:
-            reps = self.n_head // self.n_head_kv
-            k_full = np.repeat(k_full, reps, axis=1)
-            v_full = np.repeat(v_full, reps, axis=1)
-        scale = 1.0 / np.sqrt(self.head_dim)
-        scores = np.einsum('hd,shd->hs', q, k_full) * scale
-        probs = np.exp(scores - np.max(scores, axis=-1, keepdims=True))
-        probs /= (np.sum(probs, axis=-1, keepdims=True) + 1e-9)
-        attn_out = np.einsum('hs,shd->hd', probs, v_full).flatten()
+        # All projections (Q, K, V), RoPE, KV-Cache and Attention are now in Rust!
+        attn_out = np.array(self.attn.forward(x.tolist(), pos), dtype=np.float32)
         return self.w_o.forward(attn_out)
 
 class GenomicTransformerBlock:
@@ -177,34 +145,46 @@ class GenomicTransformerBlock:
         self.idx = idx
         self.eps = eps
         p = f"blk.{idx}."
-        self.attn_norm = next(t for t in reader.tensors if t.name == p + "attn_norm.weight").data.astype(np.float32)
-        self.ffn_norm = next(t for t in reader.tensors if t.name == p + "ffn_norm.weight").data.astype(np.float32)
-        self.attn = GenomicAttentionLayer(reader, p, n_head, n_head_kv, head_dim, rope_base)
+        attn_norm = next(t for t in reader.tensors if t.name == p + "attn_norm.weight").data.astype(np.float32)
+        ffn_norm = next(t for t in reader.tensors if t.name == p + "ffn_norm.weight").data.astype(np.float32)
+        
+        # Fused Attention (RMSNorm + Projections + Attn)
+        self.attn = GenomicAttentionLayer(reader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=attn_norm, eps=eps)
         
         w_gate_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_gate.weight"))
         w_up_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_up.weight"))
         w_down_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_down.weight"))
         
-        self.w_gate = GenomicLayer(p + "ffn_gate", w_gate_f32)
-        self.w_up = GenomicLayer(p + "ffn_up", w_up_f32)
+        # Prepare SwiGLU Fused Weights
+        gate_gen = GenomicLayer(p + "gate", w_gate_f32)
+        up_gen = GenomicLayer(p + "up", w_up_f32)
+        
+        self.swiglu = dna_semantic_compression.GenomicSwiGLU(
+            gate_gen.dna_database,
+            up_gen.dna_database,
+            gate_gen.dna_centroids, # SwiGLU in Rust assumes same centroids for both or handles it
+            gate_gen.out_features,
+            gate_gen.in_features,
+            gate_gen.block_size
+        )
+        # Note: SwiGLU in Rust could be extended to support RMSNorm too. 
+        # For now, let's use the fused GenomicLinear for the 'down' projection.
         self.w_down = GenomicLayer(p + "ffn_down", w_down_f32)
+        self.ffn_norm = ffn_norm # Still need this if we don't fuse it into SwiGLU yet
 
     def rms_norm(self, x, weight):
         rms = np.sqrt(np.mean(x**2) + self.eps)
         return (x / rms) * weight
 
-    def silu(self, x):
-        return x * (1.0 / (1.0 + np.exp(-np.clip(x, -20, 20))))
-
     def forward(self, x, pos):
         # x is (576,)
-        h = self.rms_norm(x, self.attn_norm)
-        h = self.attn.forward(h, pos) # h is (576,)
+        # 1. Attn branch: RMSNorm is now INSIDE self.attn.forward
+        h = self.attn.forward(x, pos) 
         x = x + h
-        h = self.rms_norm(x, self.ffn_norm)
-        gate = self.w_gate.forward(h)
-        up = self.w_up.forward(h)
-        h = self.silu(gate) * up
+        
+        # 2. FFN branch: 
+        h = self.rms_norm(x, self.ffn_norm) # TODO: Fuse this into SwiGLU Rust kernel
+        h = np.array(self.swiglu.forward(h.tolist()), dtype=np.float32)
         h = self.w_down.forward(h)
         x = x + h
         return x

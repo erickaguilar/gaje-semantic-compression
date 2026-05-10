@@ -6,6 +6,7 @@
 - **Arquitectura de Anclas Clonadas:** Implementación de la técnica de "Clonación de Segmentos Específicos" para proteger pesos críticos (Top 1%-5% de energía).
 - **Benchmark de Perplejidad (PPL) Final:** Reducción masiva de PPL de 564.24 a 1.60 (99.7% de mejora en coherencia).
 - **Frontera de Salida Optimizada:** Refinamiento de resolución en embeddings frágiles mediante tripletes de ADN (8-bit simulado).
+- **Fusión de Kernels (Fase 9):** Implementación de `GenomicSwiGLU`, `RMSNorm Fusion` y `Real KV-Cache DNA` (2-bit) para optimización extrema de RAM y velocidad.
 - **Nuevos Benchmarks:** Inclusión de `benchmarks/final_ppl_cloning_benchmark.py` y `benchmarks/dna_cloning_test_v2.py`.
 
 ### Fixed

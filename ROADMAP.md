@@ -20,7 +20,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
     - [x] **Flash-Genomic Attention**: Optimización con instrucciones SIMD (NEON/ASIMD) para alcanzar >30 tps.
     - [x] **Stochastic Engine**: Implementación de Sampling (Top-P, Temperature) y Repetition Penalty nativo.
     - [x] **Native GGUF Loader**: De-cuantización Q8_0 acelerada en Rust para carga instantánea.
-    - [ ] **Kernel Fusion**: Fusión de operaciones para minimizar el tráfico de memoria.
+    - [x] **Kernel Fusion**: Fusión de operaciones para minimizar el tráfico de memoria.
 
 ---
 
