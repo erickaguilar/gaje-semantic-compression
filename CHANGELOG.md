@@ -1,5 +1,6 @@
 ## [0.6.1] - 2026-05-10
 ### Added
+- **Direct Genomic Ingestion (DGI):** Puente de alta fidelidad que carga tensores F16/F32 directamente desde GGUF a ADN de 2 bits, eliminando la pérdida de calidad del paso intermedio Q8_0.
 - **Capa Epigenética (Fase 11):** Implementación de Residual Quantization (RQ) mediante un segundo strand de ADN (ARN regulador).
 - **Dual-Core ADC:** Kernel de Rust optimizado para búsqueda asimétrica con de-cuantización combinada de 16 valores por dimensión.
 - **GAJE Archive v3:** Soporte para persistencia de modelos de alta fidelidad con strands duales.

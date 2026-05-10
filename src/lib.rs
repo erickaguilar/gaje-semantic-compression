@@ -944,6 +944,117 @@ pub fn apply_repetition_penalty(mut logits: Vec<f32>, history: Vec<usize>, penal
 }
 
 #[pyfunction]
+pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec<u8>, Vec<f32>)> {
+    let f32_data: &[f32] = unsafe {
+        std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4)
+    };
+
+    let n_elements = f32_data.len();
+    let n_blocks = n_elements / block_size;
+    let mut dna_database = Vec::with_capacity(n_elements / 4);
+    let mut all_centroids = Vec::with_capacity(n_blocks * 4);
+
+    let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
+
+    for i in 0..n_blocks {
+        let start = i * block_size;
+        let block_f32 = &f32_data[start..start + block_size];
+        
+        let mut sum = 0.0f32;
+        for &val in block_f32 {
+            sum += val;
+        }
+        let mean = sum / block_size as f32;
+        
+        let mut var_sum = 0.0f32;
+        for &val in block_f32 {
+            let diff = val - mean;
+            var_sum += diff * diff;
+        }
+        let std = (var_sum / block_size as f32).sqrt() + 1e-6;
+
+        let t = [mean - std, mean, mean + std];
+        let mut packed_block = Vec::with_capacity(block_size / 4);
+        for k in 0..(block_size / 4) {
+            let mut byte = 0u8;
+            for s in 0..4 {
+                let val = block_f32[k * 4 + s];
+                let bits = if val < t[0] { 0b00 } 
+                          else if val < t[1] { 0b01 } 
+                          else if val < t[2] { 0b11 } 
+                          else { 0b10 };
+                byte = (byte << 2) | bits;
+            }
+            packed_block.push(byte);
+        }
+        dna_database.extend(packed_block);
+
+        for &bc in &base_c {
+            all_centroids.push(mean + bc * std);
+        }
+    }
+
+    Ok((dna_database, all_centroids))
+}
+
+#[pyfunction]
+pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec<u8>, Vec<f32>)> {
+    let f16_data: &[f16] = unsafe {
+        std::slice::from_raw_parts(data_u8.as_ptr() as *const f16, data_u8.len() / 2)
+    };
+
+    let n_elements = f16_data.len();
+    let n_blocks = n_elements / block_size;
+    let mut dna_database = Vec::with_capacity(n_elements / 4);
+    let mut all_centroids = Vec::with_capacity(n_blocks * 4);
+
+    let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
+
+    for i in 0..n_blocks {
+        let start = i * block_size;
+        let block_f16 = &f16_data[start..start + block_size];
+        
+        let mut block_f32 = vec![0.0f32; block_size];
+        let mut sum = 0.0f32;
+        for j in 0..block_size {
+            let val = block_f16[j].to_f32();
+            block_f32[j] = val;
+            sum += val;
+        }
+        let mean = sum / block_size as f32;
+        
+        let mut var_sum = 0.0f32;
+        for &val in &block_f32 {
+            let diff = val - mean;
+            var_sum += diff * diff;
+        }
+        let std = (var_sum / block_size as f32).sqrt() + 1e-6;
+
+        let t = [mean - std, mean, mean + std];
+        let mut packed_block = Vec::with_capacity(block_size / 4);
+        for k in 0..(block_size / 4) {
+            let mut byte = 0u8;
+            for s in 0..4 {
+                let val = block_f32[k * 4 + s];
+                let bits = if val < t[0] { 0b00 } 
+                          else if val < t[1] { 0b01 } 
+                          else if val < t[2] { 0b11 } 
+                          else { 0b10 };
+                byte = (byte << 2) | bits;
+            }
+            packed_block.push(byte);
+        }
+        dna_database.extend(packed_block);
+
+        for &bc in &base_c {
+            all_centroids.push(mean + bc * std);
+        }
+    }
+
+    Ok((dna_database, all_centroids))
+}
+
+#[pyfunction]
 #[pyo3(signature = (data_u8, out_features, in_features))]
 pub fn dequantize_q8_0_native(data_u8: Vec<u8>, out_features: usize, in_features: usize) -> PyResult<Vec<f32>> {
     let n_blocks = in_features / 32;
@@ -1171,6 +1282,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(dna_similarity_search, m)?)?;
     m.add_function(wrap_pyfunction!(dequantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(apply_repetition_penalty, m)?)?;
+    m.add_function(wrap_pyfunction!(genomize_f32_native, m)?)?;
+    m.add_function(wrap_pyfunction!(genomize_f16_native, m)?)?;
     m.add_function(wrap_pyfunction!(dequantize_q8_0_native, m)?)?;
     m.add_function(wrap_pyfunction!(sample_top_p, m)?)?;
     Ok(())

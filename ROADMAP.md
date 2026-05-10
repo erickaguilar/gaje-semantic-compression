@@ -38,6 +38,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 
 ## 🧬 Fase 11: Epigenetic Search & Residual Quantization (RQ)
 **El Objetivo:** Romper la barrera del **90% de Recall** en búsqueda semántica mediante capas de corrección genómica.
+*   [x] **Direct Genomic Ingestion (DGI)**: Bypass de la cuantización Q8_0 para cargar tensores F16/F32 directamente a ADN, maximizando la fidelidad base.
 *   [ ] **Epigenetic Strand**: Implementar un segundo nivel de cuantización (residuo) almacenado como ARN regulador.
 *   [ ] **Dual-Core ADC**: Modificar el kernel de Rust para sumar `Base + Residuo` al vuelo mediante SIMD.
 *   [ ] **Search-Aware IQAT**: Optimización de centroides dirigida a la separabilidad de vecinos cercanos.

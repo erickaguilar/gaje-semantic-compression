@@ -5,57 +5,43 @@ import gguf
 import time
 from transformers import AutoTokenizer
 
-def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
+def dequantize_q8_0(tensor):
     in_features, out_features = tensor.shape
     data = tensor.data.tobytes()
     flat_weights = dna_semantic_compression.dequantize_q8_0_native(data, out_features, in_features)
     w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
-    # GGUF weights are already in the 'split' format suitable for our Rust/Python RoPE
     return w
 
 class GenomicLayer:
-    def __init__(self, name, weights_f32, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6):
+    def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6):
         self.name = name
-        self.out_features, self.in_features = weights_f32.shape
         self.block_size = block_size
         
-        # 1. PRIMARY STRAND (DNA) - Base Quantization
-        reshaped = weights_f32.reshape(-1, block_size)
-        
-        base_centroids = np.array([-1.510, -0.4528, 0.4528, 1.510], dtype=np.float32)
-        
-        dna_batch = []
-        all_dna_centroids = []
-        anchors_f32 = np.zeros_like(weights_f32)
-        
-        for i in range(len(reshaped)):
-            block = reshaped[i]
-            block_mean = np.mean(block)
-            block_std = np.std(block) + 1e-6
+        # 1. DIRECT GENOMIC INGESTION (DGI) - Bypass Q8 loss
+        if hasattr(weights_f32_or_tensor, 'tensor_type'):
+            tensor = weights_f32_or_tensor
+            self.out_features, self.in_features = tensor.shape[::-1] if len(tensor.shape) == 2 else (tensor.shape[0], 1)
             
-            # DNAs Thresholds
-            t = [block_mean - 1.0 * block_std, block_mean, block_mean + 1.0 * block_std]
-            dna = dna_semantic_compression.quantize_embedding(block.tolist(), t)
-            dna_batch.append(dna)
-            
-            # Dequantize to find residuals
-            c = (block_mean + base_centroids * block_std).astype(np.float32)
-            all_dna_centroids.extend(c.tolist())
-            
-            dequantized = np.array(dna_semantic_compression.dequantize_embedding(dna, block_size, c.tolist()))
-            residual = block - dequantized
-            
-            # 2. DYNAMIC ANCHORS (High-Fidelity)
-            err_threshold = np.quantile(np.abs(residual), anchor_threshold)
-            anchor_mask = np.abs(residual) >= err_threshold
-            
-            row_idx = i // (self.in_features // block_size)
-            col_in_row = (i % (self.in_features // block_size)) * block_size
-            anchors_f32[row_idx, col_in_row : col_in_row + block_size][anchor_mask] = residual[anchor_mask]
-
-        self.dna_database = b"".join(dna_batch)
-        self.dna_centroids = all_dna_centroids
-        self.anchors = anchors_f32.flatten().tolist()
+            if tensor.tensor_type == gguf.GGMLQuantizationType.F16:
+                # Streaming Conversion: F16 -> 2-bit DNA directly in Rust
+                dna, centroids = dna_semantic_compression.genomize_f16_native(tensor.data.tobytes(), block_size)
+                self.dna_database = dna
+                self.dna_centroids = centroids
+                self.anchors = [0.0] * (self.out_features * self.in_features) # No anchors in DGI (Native F16)
+            elif tensor.tensor_type == gguf.GGMLQuantizationType.F32:
+                # Streaming Conversion: F32 -> 2-bit DNA directly in Rust
+                dna, centroids = dna_semantic_compression.genomize_f32_native(tensor.data.tobytes(), block_size)
+                self.dna_database = dna
+                self.dna_centroids = centroids
+                self.anchors = [0.0] * (self.out_features * self.in_features)
+            else:
+                # Fallback to standard dequantization (Q8_0, Q4_K, etc.)
+                weights_f32 = dequantize_q8_0(tensor)
+                self._init_from_f32(weights_f32, block_size, anchor_threshold)
+        else:
+            weights_f32 = weights_f32_or_tensor
+            self.out_features, self.in_features = weights_f32.shape
+            self._init_from_f32(weights_f32, block_size, anchor_threshold)
 
         self.linear = dna_semantic_compression.GenomicLinear(
             self.dna_database,
@@ -67,6 +53,39 @@ class GenomicLayer:
             rmsnorm_weight.tolist() if rmsnorm_weight is not None else [],
             eps
         )
+
+    def _init_from_f32(self, weights_f32, block_size, anchor_threshold):
+        reshaped = weights_f32.reshape(-1, block_size)
+        base_centroids = np.array([-1.510, -0.4528, 0.4528, 1.510], dtype=np.float32)
+        
+        dna_batch = []
+        all_dna_centroids = []
+        anchors_f32 = np.zeros_like(weights_f32)
+        
+        for i in range(len(reshaped)):
+            block = reshaped[i]
+            block_mean = np.mean(block)
+            block_std = np.std(block) + 1e-6
+            t = [block_mean - 1.0 * block_std, block_mean, block_mean + 1.0 * block_std]
+            dna = dna_semantic_compression.quantize_embedding(block.tolist(), t)
+            dna_batch.append(dna)
+            
+            c = (block_mean + base_centroids * block_std).astype(np.float32)
+            all_dna_centroids.extend(c.tolist())
+            
+            dequantized = np.array(dna_semantic_compression.dequantize_embedding(dna, block_size, c.tolist()))
+            residual = block - dequantized
+            
+            err_threshold = np.quantile(np.abs(residual), anchor_threshold)
+            anchor_mask = np.abs(residual) >= err_threshold
+            
+            row_idx = i // (self.in_features // block_size)
+            col_in_row = (i % (self.in_features // block_size)) * block_size
+            anchors_f32[row_idx, col_in_row : col_in_row + block_size][anchor_mask] = residual[anchor_mask]
+
+        self.dna_database = b"".join(dna_batch)
+        self.dna_centroids = all_dna_centroids
+        self.anchors = anchors_f32.flatten().tolist()
 
     def forward(self, x):
         return np.array(self.linear.forward(x.tolist()), dtype=np.float32)
@@ -96,15 +115,15 @@ class GenomicAttentionLayer:
         self.n_head_kv = n_head_kv
         self.head_dim = head_dim
         
-        w_q_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_q.weight"), n_head, head_dim, True)
-        w_k_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_k.weight"), n_head_kv, head_dim, True)
-        w_v_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_v.weight"))
-        w_o_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "attn_output.weight"))
+        t_q = next(t for t in reader.tensors if t.name == p + "attn_q.weight")
+        t_k = next(t for t in reader.tensors if t.name == p + "attn_k.weight")
+        t_v = next(t for t in reader.tensors if t.name == p + "attn_v.weight")
+        t_o = next(t for t in reader.tensors if t.name == p + "attn_output.weight")
         
-        # We "genomize" Q, K, V to get DNA strands and centroids for the Rust kernel
-        q_gen = GenomicLayer(p + "q", w_q_f32)
-        k_gen = GenomicLayer(p + "k", w_k_f32)
-        v_gen = GenomicLayer(p + "v", w_v_f32)
+        # DGI initialization for Q, K, V
+        q_gen = GenomicLayer(p + "q", t_q)
+        k_gen = GenomicLayer(p + "k", t_k)
+        v_gen = GenomicLayer(p + "v", t_v)
         
         # Combine all centroids into a flat list
         all_centroids = q_gen.dna_centroids + k_gen.dna_centroids + v_gen.dna_centroids
@@ -120,7 +139,7 @@ class GenomicAttentionLayer:
             rmsnorm_weight.tolist() if rmsnorm_weight is not None else [],
             eps
         )
-        self.w_o = GenomicLayer(p + "attn_output", w_o_f32)
+        self.w_o = GenomicLayer(p + "attn_output", t_o)
 
     def clear_cache(self):
         self.attn.clear_cache()
@@ -138,29 +157,27 @@ class GenomicTransformerBlock:
         attn_norm = next(t for t in reader.tensors if t.name == p + "attn_norm.weight").data.astype(np.float32)
         ffn_norm = next(t for t in reader.tensors if t.name == p + "ffn_norm.weight").data.astype(np.float32)
         
-        # Fused Attention (RMSNorm + Projections + Attn)
+        # Fused Attention (DGI enabled)
         self.attn = GenomicAttentionLayer(reader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=attn_norm, eps=eps)
         
-        w_gate_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_gate.weight"))
-        w_up_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_up.weight"))
-        w_down_f32 = dequantize_q8_0(next(t for t in reader.tensors if t.name == p + "ffn_down.weight"))
+        t_gate = next(t for t in reader.tensors if t.name == p + "ffn_gate.weight")
+        t_up = next(t for t in reader.tensors if t.name == p + "ffn_up.weight")
+        t_down = next(t for t in reader.tensors if t.name == p + "ffn_down.weight")
         
-        # Prepare SwiGLU Fused Weights
-        gate_gen = GenomicLayer(p + "gate", w_gate_f32)
-        up_gen = GenomicLayer(p + "up", w_up_f32)
+        # DGI initialization for FFN
+        gate_gen = GenomicLayer(p + "gate", t_gate)
+        up_gen = GenomicLayer(p + "up", t_up)
         
         self.swiglu = dna_semantic_compression.GenomicSwiGLU(
             gate_gen.dna_database,
             up_gen.dna_database,
-            gate_gen.dna_centroids, # SwiGLU in Rust assumes same centroids for both or handles it
+            gate_gen.dna_centroids, 
             gate_gen.out_features,
             gate_gen.in_features,
             gate_gen.block_size
         )
-        # Note: SwiGLU in Rust could be extended to support RMSNorm too. 
-        # For now, let's use the fused GenomicLinear for the 'down' projection.
-        self.w_down = GenomicLayer(p + "ffn_down", w_down_f32)
-        self.ffn_norm = ffn_norm # Still need this if we don't fuse it into SwiGLU yet
+        self.w_down = GenomicLayer(p + "ffn_down", t_down)
+        self.ffn_norm = ffn_norm
 
     def rms_norm(self, x, weight):
         rms = np.sqrt(np.mean(x**2) + self.eps)
@@ -195,17 +212,17 @@ class GenomicLLM:
         self.rope_base = float(self.reader.fields[f"{arch}.rope.freq_base"].parts[-1][0])
         self.eps = float(self.reader.fields[f"{arch}.attention.layer_norm_rms_epsilon"].parts[-1][0])
         
-        w_embd_f32 = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == "token_embd.weight"))
-        self.embeddings = GenomicLayer("token_embd", w_embd_f32)
+        w_embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
+        self.embeddings = GenomicLayer("token_embd", w_embd_tensor)
         
         self.output_norm = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
         
         try:
-            w_head_f32 = dequantize_q8_0(next(t for t in self.reader.tensors if t.name == "output.weight"))
+            w_head_tensor = next(t for t in self.reader.tensors if t.name == "output.weight")
         except StopIteration:
-            w_head_f32 = w_embd_f32
+            w_head_tensor = w_embd_tensor
             
-        self.lm_head = GenomicLayer("lm_head", w_head_f32)
+        self.lm_head = GenomicLayer("lm_head", w_head_tensor)
 
         self.blocks = []
         for i in range(self.n_blocks):
