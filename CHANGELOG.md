@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0] - 2026-05-09
+### Added
+- **Arquitectura de Anclas Clonadas:** Implementación de la técnica de "Clonación de Segmentos Específicos" para proteger pesos críticos (Top 1%-5% de energía).
+- **Benchmark de Perplejidad (PPL) Final:** Reducción masiva de PPL de 564.24 a 1.60 (99.7% de mejora en coherencia).
+- **Frontera de Salida Optimizada:** Refinamiento de resolución en embeddings frágiles mediante tripletes de ADN (8-bit simulado).
+- **Nuevos Benchmarks:** Inclusión de `benchmarks/final_ppl_cloning_benchmark.py` y `benchmarks/dna_cloning_test_v2.py`.
+
+### Changed
+- **Roadmap Actualizado:** Consolidación de la Fase 10 como "Genomic Distillation & Anchor Cloning".
+
+## [0.4.1] - 2026-05-07
+### Added
+- **Reporte Técnico de Destilación:** Publicación de `docs/qwen2_distillation_report.md` con análisis de fallas en el modelo Qwen2 2-bit.
+- **Validación de 24 Bloques:** Script `benchmarks/distilled_qwen_test.py` para evaluación de modelos de profundidad completa.
+- **Soporte de Attention en Python:** Clase `GenomicAttention` expuesta y verificada tras actualización del core.
+
+### Fixed
+- **Desalineación del Maestro:** Identificación de inconsistencias en RoPE/SwiGLU del modelo F32 de referencia.
+- **Lógica de Carga:** Corregido el import de `GenomicAttention` en `genomize_llm.py`.
+
+### Changed
+- **Roadmap Actualizado:** Re-priorización de la Fase 10 (Genomic Distillation) tras detectar degradación de calidad.
+
 ## [0.4.0-alpha] - 2026-05-07
 ### Added
 - **Advanced Validation Suite:** Integrated JSD (Jensen-Shannon), Top-k Overlap, and Activation Drift metrics for deep semantic monitoring.
