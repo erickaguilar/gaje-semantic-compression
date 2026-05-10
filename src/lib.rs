@@ -313,7 +313,7 @@ impl GajeIndex {
         let ef_val = ef.unwrap_or(std::cmp::max(k, 50));
         let has_epi = !self.epigenetic_database.is_empty();
         
-        let mut lut = if !has_epi {
+        let lut = if !has_epi {
             let mut l = Vec::with_capacity(query_vector.len() * 4);
             let c = &self.centroids;
             let is_multi = c.len() == query_vector.len() * 4;
@@ -361,6 +361,79 @@ impl GajeIndex {
             results.truncate(k);
         }
         Ok(results)
+    }
+
+    #[pyo3(signature = (query_vector, target_idx, negative_idx=None, lr=0.01))]
+    pub fn refine_search_centroids(&mut self, query_vector: Vec<f32>, target_idx: usize, negative_idx: Option<usize>, lr: f32) -> PyResult<()> {
+        let has_epi = !self.epigenetic_database.is_empty();
+        let q_len = query_vector.len();
+        let stride = self.stride;
+        
+        // 1. PULL: Move centroids toward Target
+        let strand = self.get_strand(target_idx).to_vec();
+        if !has_epi {
+            let c_base = &mut self.centroids;
+            let is_multi = c_base.len() == q_len * 4;
+            let mut dims = 0;
+            for &byte in &strand {
+                for j in 0..4 {
+                    if dims >= q_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    let g_c_idx = if is_multi { dims * 4 + c_idx } else { c_idx };
+                    c_base[g_c_idx] += lr * (query_vector[dims] - c_base[g_c_idx]) * 0.1;
+                    dims += 1;
+                }
+            }
+        } else {
+            let epi_strand = self.get_epigenetic_strand(target_idx).to_vec();
+            let c_base = &mut self.centroids;
+            let c_epi = &mut self.epigenetic_centroids;
+            let is_multi = c_base.len() == q_len * 4;
+            let is_epi_multi = c_epi.len() == q_len * 4;
+            let mut dims = 0;
+            for i in 0..stride {
+                let byte = strand[i];
+                let epi_byte = epi_strand[i];
+                for j in 0..4 {
+                    if dims >= q_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let epi_bits = (epi_byte >> shift) & 0b11;
+                    let b_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    let e_idx = match epi_bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    let g_b_idx = if is_multi { dims * 4 + b_idx } else { b_idx };
+                    let g_e_idx = if is_epi_multi { dims * 4 + e_idx } else { e_idx };
+                    
+                    let diff = query_vector[dims] - (c_base[g_b_idx] + c_epi[g_e_idx]);
+                    c_base[g_b_idx] += lr * diff * 0.05;
+                    c_epi[g_e_idx] += lr * diff * 0.05;
+                    dims += 1;
+                }
+            }
+        }
+
+        // 2. PUSH: Move centroids away from Negative sample (Optional)
+        if let Some(neg_idx) = negative_idx {
+            let neg_strand = self.get_strand(neg_idx).to_vec();
+            let c_base = &mut self.centroids;
+            let is_multi = c_base.len() == q_len * 4;
+            let mut dims = 0;
+            for &byte in &neg_strand {
+                for j in 0..4 {
+                    if dims >= q_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    let g_c_idx = if is_multi { dims * 4 + c_idx } else { c_idx };
+                    // Push away (Negative direction)
+                    c_base[g_c_idx] -= lr * (query_vector[dims] - c_base[g_c_idx]) * 0.02;
+                    dims += 1;
+                }
+            }
+        }
+        Ok(())
     }
 
     #[pyo3(signature = (input_vector))]
