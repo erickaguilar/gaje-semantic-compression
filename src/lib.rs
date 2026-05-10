@@ -38,6 +38,10 @@ pub struct GajeIndex {
     #[pyo3(get, set)]
     pub centroids: Vec<f32>,
     #[pyo3(get)]
+    pub epigenetic_database: Vec<u8>,
+    #[pyo3(get, set)]
+    pub epigenetic_centroids: Vec<f32>,
+    #[pyo3(get)]
     pub stride: usize,
     layers: Vec<Vec<Vec<usize>>>,
     max_level: i32,
@@ -53,22 +57,50 @@ impl GajeIndex {
         &self.database[start..start + self.stride]
     }
 
+    fn get_epigenetic_strand(&self, idx: usize) -> &[u8] {
+        let start = idx * self.stride;
+        &self.epigenetic_database[start..start + self.stride]
+    }
+
     fn calculate_distance_lut(&self, lut: &[f32], target_idx: usize) -> f32 {
         let strand = self.get_strand(target_idx);
+        let has_epi = !self.epigenetic_database.is_empty();
         let mut dist_sq = 0.0f32;
         let mut dims = 0;
-        let lut_len = lut.len() / 4;
+        let lut_len = if has_epi { lut.len() / 16 } else { lut.len() / 4 };
 
-        for &byte in strand {
-            for j in 0..4 {
-                if dims >= lut_len { break; }
-                let shift = (3 - j) * 2;
-                let bits = (byte >> shift) & 0b11;
-                let lut_idx = match bits {
-                    0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0,
-                };
-                dist_sq += lut[dims * 4 + lut_idx];
-                dims += 1;
+        if !has_epi {
+            for &byte in strand {
+                for j in 0..4 {
+                    if dims >= lut_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let lut_idx = match bits {
+                        0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0,
+                    };
+                    dist_sq += lut[dims * 4 + lut_idx];
+                    dims += 1;
+                }
+            }
+        } else {
+            let epi_strand = self.get_epigenetic_strand(target_idx);
+            for i in 0..self.stride {
+                let byte = strand[i];
+                let epi_byte = epi_strand[i];
+                for j in 0..4 {
+                    if dims >= lut_len { break; }
+                    let shift = (3 - j) * 2;
+                    let bits = (byte >> shift) & 0b11;
+                    let epi_bits = (epi_byte >> shift) & 0b11;
+                    
+                    // Map GAJE bits to sorted centroid indices
+                    let b_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    let e_idx = match epi_bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
+                    
+                    let lut_idx = (b_idx << 2) | e_idx;
+                    dist_sq += lut[dims * 16 + lut_idx];
+                    dims += 1;
+                }
             }
         }
         dist_sq.sqrt()
@@ -124,16 +156,31 @@ impl GajeIndex {
 #[pymethods]
 impl GajeIndex {
     #[new]
-    #[pyo3(signature = (database, centroids, m=32, ef_construction=200))]
-    pub fn new(database: Vec<Vec<u8>>, centroids: Vec<f32>, m: usize, ef_construction: usize) -> Self {
+    #[pyo3(signature = (database, centroids, epigenetic_database=Vec::new(), epigenetic_centroids=Vec::new(), m=32, ef_construction=200))]
+    pub fn new(
+        database: Vec<Vec<u8>>, 
+        centroids: Vec<f32>, 
+        epigenetic_database: Vec<Vec<u8>>,
+        epigenetic_centroids: Vec<f32>,
+        m: usize, 
+        ef_construction: usize
+    ) -> Self {
         let stride = if database.is_empty() { 0 } else { database[0].len() };
         let mut flat_db = Vec::with_capacity(database.len() * stride);
         for s in database {
             flat_db.extend(s);
         }
+        
+        let mut flat_epi_db = Vec::with_capacity(epigenetic_database.len() * stride);
+        for s in epigenetic_database {
+            flat_epi_db.extend(s);
+        }
+
         GajeIndex {
             database: flat_db,
             centroids,
+            epigenetic_database: flat_epi_db,
+            epigenetic_centroids,
             stride,
             layers: Vec::new(),
             max_level: -1,
@@ -264,21 +311,41 @@ impl GajeIndex {
         }
 
         let ef_val = ef.unwrap_or(std::cmp::max(k, 50));
-        let mut lut = Vec::with_capacity(query_vector.len() * 4);
-        let c = &self.centroids;
-        let is_multi = c.len() == query_vector.len() * 4;
-        for (d_idx, &val) in query_vector.iter().enumerate() {
-            for b in 0..4 {
-                let centroid = if is_multi {
-                    let b_idx = d_idx * 4;
-                    match b { 0 => c[b_idx], 1 => c[b_idx+1], 2 => c[b_idx+2], 3 => c[b_idx+3], _ => 0.0 }
-                } else {
-                    match b { 0 => c[0], 1 => c[1], 2 => c[2], 3 => c[3], _ => 0.0 }
-                };
-                let diff = val - centroid;
-                lut.push(diff * diff);
+        let has_epi = !self.epigenetic_database.is_empty();
+        
+        let mut lut = if !has_epi {
+            let mut l = Vec::with_capacity(query_vector.len() * 4);
+            let c = &self.centroids;
+            let is_multi = c.len() == query_vector.len() * 4;
+            for (d_idx, &val) in query_vector.iter().enumerate() {
+                let cd = if is_multi { &c[d_idx*4..(d_idx+1)*4] } else { &c[0..4] };
+                for b in 0..4 {
+                    let diff = val - cd[b];
+                    l.push(diff * diff);
+                }
             }
-        }
+            l
+        } else {
+            // Combined LUT: (Base + Epigenetic) -> 16 possibilities per dimension
+            let mut l = Vec::with_capacity(query_vector.len() * 16);
+            let c_base = &self.centroids;
+            let c_epi = &self.epigenetic_centroids;
+            let is_multi = c_base.len() == query_vector.len() * 4;
+            let is_epi_multi = c_epi.len() == query_vector.len() * 4;
+
+            for (d_idx, &val) in query_vector.iter().enumerate() {
+                let cb = if is_multi { &c_base[d_idx*4..(d_idx+1)*4] } else { &c_base[0..4] };
+                let ce = if is_epi_multi { &c_epi[d_idx*4..(d_idx+1)*4] } else { &c_epi[0..4] };
+                
+                for &b_val in cb {
+                    for &e_val in ce {
+                        let diff = val - (b_val + e_val);
+                        l.push(diff * diff);
+                    }
+                }
+            }
+            l
+        };
 
         let mut curr_ep = self.entry_point.unwrap();
         for l in (1..=self.max_level).rev() {
@@ -623,6 +690,7 @@ impl GenomicSwiGLU {
     pub fn refine_centroids(&mut self, input_vector: Vec<f32>, target_output: Vec<f32>, lr: f32) -> PyResult<()> {
         let n_blocks_per_row = self.in_features / self.block_size;
         let current_output = self.forward(input_vector.clone())?;
+        let block_scale = 1.0 / self.block_size as f32;
         
         for i in 0..self.out_features {
             let error = current_output[i] - target_output[i];
@@ -649,9 +717,9 @@ impl GenomicSwiGLU {
                         let u_idx = match u_bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
                         
                         let inp = input_block[dims];
-                        // Simplificación: Gradiente aproximado para SwiGLU
-                        self.centroids[c_offset + g_idx] -= lr * error * inp;
-                        self.centroids[c_offset + u_idx] -= lr * error * inp;
+                        // Simplificación: Gradiente aproximado para SwiGLU estabilizado
+                        self.centroids[c_offset + g_idx] -= lr * error * inp * block_scale;
+                        self.centroids[c_offset + u_idx] -= lr * error * inp * block_scale;
                         dims += 1;
                     }
                 }
@@ -1048,7 +1116,15 @@ impl GenomicLinear {
 
     pub fn refine_centroids(&mut self, input_vector: Vec<f32>, target_output: Vec<f32>, lr: f32) -> PyResult<()> {
         let n_blocks_per_row = self.in_features / self.block_size;
-        let current_output = self.forward(input_vector.clone())?;
+        
+        // 1. Obtener activaciones reales (normalizadas si es necesario)
+        let mut activations = input_vector.clone();
+        if !self.rmsnorm_weight.is_empty() {
+            activations = unsafe { rms_norm_neon(&activations, &self.rmsnorm_weight, self.eps) };
+        }
+        
+        let current_output = self.forward(input_vector)?;
+        let block_scale = 1.0 / self.block_size as f32;
         
         for i in 0..self.out_features {
             let error = current_output[i] - target_output[i];
@@ -1057,7 +1133,7 @@ impl GenomicLinear {
             for j in 0..n_blocks_per_row {
                 let block_start = row_offset + j * self.stride;
                 let block_weights = &self.database[block_start..block_start + self.stride];
-                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                let input_block = &activations[j * self.block_size .. (j + 1) * self.block_size];
                 
                 let c_offset = (i * n_blocks_per_row + j) * 4;
                 
@@ -1071,7 +1147,8 @@ impl GenomicLinear {
                             0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0
                         };
                         
-                        let grad = error * input_block[dims];
+                        // Gradient normalized by block size to prevent explosion
+                        let grad = error * input_block[dims] * block_scale;
                         self.centroids[c_offset + c_idx] -= lr * grad;
                         dims += 1;
                     }

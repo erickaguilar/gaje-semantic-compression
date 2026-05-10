@@ -27,16 +27,17 @@ El Intérprete mantiene una "memoria de error". Sabe que el almacenamiento GAJE 
 Para asegurar que el modelo no se desvíe en el "espacio de ADN", el Intérprete implementa tres mecanismos de defensa avanzados:
 
 ### I. Residual Quantization (RQ): La Capa Epigenética
-En lugar de un mapeo rígido a un solo centroide, el Intérprete puede gestionar un segundo nivel de "error" (el residuo). 
-*   **Visión:** El ADN da la instrucción base, y el residuo (ARN) ajusta los detalles finos. Esto permite estabilizar la PPL drásticamente al capturar pesos atípicos (outliers) que de otro modo causarían alucinaciones.
+En lugar de un mapeo rígido a un solo centroide, el Intérprete gestiona un segundo nivel de "error" (el residuo). 
+*   **Visión:** El ADN da la instrucción base, y el residuo (ARN) ajusta los detalles finos. Esto permite estabilizar la PPL y, en búsqueda semántica, permite que el Recall suba al capturar variaciones sutiles entre vectores muy cercanos.
+*   **Mecanismo:** `ADN_Final = Centroide_Base + Centroide_Residuo`.
 
-### II. Temperature Scaling en K-Means: Fluidez Genómica
-Implementación de un factor de temperatura en la asignación de centroides durante la fase de entrenamiento. 
-*   **Visión:** Evita asignaciones "rígidas". Una distribución más suave de los tokens de ADN ayuda a que la transición energética entre capas sea menos errática, reduciendo el ruido secuencial del LLM.
+### II. Search-Aware IQAT: Evolución por Separabilidad
+Uso del optimizador nativo para ajustar centroides no solo para minimizar el error, sino para maximizar la distancia entre vectores que no deberían estar juntos.
+*   **Visión:** Los centroides se convierten en un "paisaje evolutivo" que se adapta a la topología de los datos.
 
-### III. Gray Code Mapping: Resiliencia Mutacional
-Asegura que errores de un solo bit en la base de datos resulten en cambios mínimos en el valor de energía.
-*   **Visión:** Si un bit cambia por ruido térmico o error de lectura, el valor resultante se mantiene en un "entorno semántico" cercano (centroide vecino) en lugar de saltar a un estado opuesto. Esto evita la explosión de PPL ante mutaciones accidentales.
+### III. Triplet Frontier (6-bit Navigation)
+Uso de codones de 3 nucleótidos para las capas críticas de navegación en HNSW.
+*   **Visión:** Precisión quirúrgica en la entrada, densidad genómica masiva en el interior.
 
 ## 4. Adaptatividad Entrópica: Modo de Alta Fidelidad Dinámico
 

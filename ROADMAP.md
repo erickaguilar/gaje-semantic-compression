@@ -36,6 +36,15 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 
 ---
 
+## 🧬 Fase 11: Epigenetic Search & Residual Quantization (RQ)
+**El Objetivo:** Romper la barrera del **90% de Recall** en búsqueda semántica mediante capas de corrección genómica.
+*   [ ] **Epigenetic Strand**: Implementar un segundo nivel de cuantización (residuo) almacenado como ARN regulador.
+*   [ ] **Dual-Core ADC**: Modificar el kernel de Rust para sumar `Base + Residuo` al vuelo mediante SIMD.
+*   [ ] **Search-Aware IQAT**: Optimización de centroides dirigida a la separabilidad de vecinos cercanos.
+*   [ ] **Triplet Frontier**: Uso de tripletes (6-bit) en las capas superiores de HNSW para navegación de alta precisión.
+
+---
+
 ## 📈 Resumen de Objetivos 2026
 | Hito | Métrica Clave | Meta | Estado |
 | :--- | :--- | :--- | :--- |

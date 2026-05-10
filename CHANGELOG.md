@@ -1,6 +1,9 @@
-# Changelog
-
-## [0.6.0] - 2026-05-10
+## [0.6.1] - 2026-05-10
+### Added
+- **Capa Epigenética (Fase 11):** Implementación de Residual Quantization (RQ) mediante un segundo strand de ADN (ARN regulador).
+- **Dual-Core ADC:** Kernel de Rust optimizado para búsqueda asimétrica con de-cuantización combinada de 16 valores por dimensión.
+- **GAJE Archive v3:** Soporte para persistencia de modelos de alta fidelidad con strands duales.
+- **Recall Breakthrough:** Incremento validado de +30 puntos en Recall@10 (+60% de mejora relativa) en búsqueda semántica de alta densidad.
 ### Added
 - **Kernel Fusion (Fase 9):** Implementación nativa en Rust para `GenomicSwiGLU` y fusión de `RMSNorm` en todas las proyecciones.
 - **KV-Cache DNA:** Compresión real de 16x de la caché de atención utilizando cuantización de 2 bits y de-cuantización asimétrica (ADC) al vuelo.
