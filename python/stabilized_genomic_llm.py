@@ -61,15 +61,14 @@ class GenomicLayer:
         res_stds = np.std(residuals, axis=1, keepdims=True)
         res_means = np.mean(residuals, axis=1, keepdims=True)
         
-        # Max-Lloyd inspired centroids for residuals: 
-        # Focus more on the "tails" to capture outliers that cause PPL explosion
-        # Optimized for Lapalacian-like residual distribution
-        base_res_centroids = np.array([-2.15, -0.65, 0.65, 2.15], dtype=np.float32)
+        # Laplacian-Tailored Centroids: 
+        # Focus on extreme outliers (±3.0 std) to recover semantic precision
+        base_res_centroids = np.array([-3.0, -0.8, 0.8, 3.0], dtype=np.float32)
         res_centroids = (res_means + base_res_centroids * res_stds).astype(np.float32)
         
         epi_batch = []
-        # Quantization thresholds for residuals (optimized for Laplacian)
-        base_res_thresholds = np.array([-1.2, 0.0, 1.2])
+        # Quantization thresholds for residuals (optimized for extreme outliers)
+        base_res_thresholds = np.array([-1.5, 0.0, 1.5])
         
         for i in range(len(residuals)):
             block_mean = res_means[i][0]

@@ -13,7 +13,7 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
     # Des-permutación para Llama 3 (GGUF)
     # Llama.cpp permuta Q y K para que el RoPE split sea contiguo en memoria.
     # Para usar RoPE interleaved, debemos des-permutar.
-    if is_q_or_k and n_head is not None and head_dim is not None:
+    if False and is_q_or_k and n_head is not None and head_dim is not None:
         w_new = np.zeros_like(w)
         for h in range(n_head):
             for i in range(head_dim // 2):

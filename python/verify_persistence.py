@@ -17,11 +17,11 @@ def verify_persistence(gaje_dir):
     print(f"[*] Número de bloques detectados: {len(model.blocks)}")
     
     # 2. Realizar inferencia
-    prompt = "El protocolo GAJE es"
-    print(f"\n🚀 Probando generación desde el modelo cargado:")
-    model.generate(prompt, max_new_tokens=20)
+    prompt = "El protocolo GAJE es un sistema"
+    print(f"\n🚀 Probando generación desde el modelo completo (24 bloques):")
+    model.generate(prompt, max_new_tokens=100, temperature=0.7)
     print("\n" + "-" * 60)
     print("✅ Verificación completada.")
 
 if __name__ == "__main__":
-    verify_persistence("gaje_v2_premium")
+    verify_persistence("gaje_qwen2_full_v1")

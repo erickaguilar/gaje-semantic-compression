@@ -9,8 +9,8 @@ def diagnose():
     model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
     model = GenomicLLM(model_path)
     
-    text = "Once upon a"
-    tokens = [1] + model.tokenizer.encode(text, add_special_tokens=False)
+    text = "The capital of France is Paris. The capital of Germany is"
+    tokens = model.tokenizer.encode(text, add_special_tokens=False)
     print(f"[*] Tokens: {tokens} ({[model.tokenizer.decode([t]) for t in tokens]})")
     
     logits = model.forward(tokens)

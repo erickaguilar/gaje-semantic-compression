@@ -9,8 +9,8 @@ sys.path.append(os.path.abspath("python"))
 from genomize_llm import GenomicLLM
 
 def calculate_ppl(model, text):
-    # BOS + Text
-    tokens = [1] + model.tokenizer.encode(text, add_special_tokens=False)
+    # Text only
+    tokens = model.tokenizer.encode(text, add_special_tokens=False)
     if len(tokens) < 2: return 0.0
     
     print(f"[*] Evaluando PPL para {len(tokens)} tokens...")
@@ -48,7 +48,7 @@ def run_smollm_test():
         print(f"❌ Modelo no encontrado.")
         return
 
-    test_text = "The Protocol GAJE is efficient."
+    test_text = "The capital of France is Paris."
 
     print("="*60)
     print("🔍 TEST DE FASE SINCRONIZADA SMOL-LM2 (30 BLOQUES)")
