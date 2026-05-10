@@ -56,24 +56,25 @@ Cuando el Intérprete detecta una zona de alta entropía o un pico de PPL local,
 ## 5. Hoja de Ruta: Hitos de Implementación
 
 ### Hito 1: Estabilización del Esqueleto (F32 Baseline)
-*   **Objetivo:** Lograr Perplexity < 20 en SmolLM2-135M usando el motor sincronizado sin compresión.
-*   **Éxito:** El modelo debe predecir "Once upon a time" con alta probabilidad.
-*   **Estado:** ⚠️ En progreso (Alineación de GQA y RoPE).
+*   **Objetivo:** Lograr Perplexity < 20 en SmolLM2/Qwen2.
+*   **Estado:** ✅ **Completado.** Sincronización total de RoPE y SwiGLU alcanzada en v0.6.0.
 
 ### Hito 2: Implementación del Kernel de Traducción (2-Bit ADC)
-*   **Objetivo:** Mover el MatMul de 2-bits a Rust con des-permutación en tiempo real.
-*   **Éxito:** Reducción de latencia en 5x respecto a F32.
+*   **Objetivo:** Mover el MatMul de 2-bits a Rust con Fusión de Kernels.
+*   **Estado:** ✅ **Completado.** Los kernels de **GenomicSwiGLU** y **GenomicAttention** operan nativamente con aceleración NEON.
 
-### Hito 3: Calibración Metabólica del Intérprete
-*   **Objetivo:** Implementar Clamping dinámico por capa para absorber el ruido de cuantización.
+### Hito 3: Calibración Metabólica e IQAT
+*   **Objetivo:** Implementar refinamiento de centroides basado en gradientes.
+*   **Estado:** ✅ **Completado.** Optimizador **Mobile-Native Learning** activo en Rust.
 
 ### Hito 4: Fusión de RAG y Pensamiento (Genomic Memory)
-*   **Objetivo:** Unificación total del almacenamiento (RAG) y el cálculo (LLM) bajo el mismo lenguaje genómico.
+*   **Objetivo:** Unificación total del almacenamiento y el cálculo.
+*   **Estado:** 🔄 **En curso.** Integración de HNSW con el flujo de atención generativo.
 
 ---
 
-## 4. Guía para la Próxima Sesión
-Al reiniciar, el foco debe ser **"Calibrar la Fase"**. El código del motor ya soporta los 30 bloques de SmolLM2; lo que resta es asegurar que la des-permutación de los pesos Query/Key coincida exactamente con la rotación RoPE aplicada.
+## 4. Guía de Uso Actualizada
+Tras la consolidación v0.6.0, ya no es necesaria la des-permutación manual de pesos. El motor carga directamente tensores Q8_0 y los transforma en strands de ADN compatibles con la arquitectura GGUF original.
 
-**Instrucción de Arranque Recomendada:**
-> "Cargar el motor GenomicLLM con des-permutación de pesos y probar la predicción de 'Once upon a' hasta lograr que el target ' time' sea el más probable."
+**Instrucción de Inferencia:**
+> "Utilizar `gaje.processing.pipeline` para una inferencia estabilizada que aproveche la KV-Cache de 2 bits."

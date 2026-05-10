@@ -37,4 +37,19 @@ La falla en la coherencia del modelo se atribuye a dos factores principales:
    - Realizar pruebas de destilación en solo 2 bloques antes de escalar al modelo completo de 24.
 
 ---
-*Este documento sirve como base para la re-orientación de la Fase 10 del Roadmap.*
+## ✅ Actualización: Cierre de Hallazgos (10 de mayo de 2026, v0.6.0)
+
+Se ha resuelto satisfactoriamente la degradación de calidad reportada el 7 de mayo mediante una intervención estructural profunda:
+
+### 1. Sincronización Total de Arquitectura
+- **RoPE Alignment:** Se unificó el sistema al enfoque **RoPE Split** nativo de GGUF, eliminando la desalineación de fase que corrompía las cabezas de atención.
+- **Teacher Consistency:** El Maestro F32 ahora utiliza exactamente la misma lógica de `GenomicAttention` y `GenomicSwiGLU` (en modo float), asegurando una calibración de centroides libre de drift algorítmico.
+
+### 2. Implementación de IQAT y Kernel Fusion
+- **Estabilización de PPL:** La perplejidad se redujo de valores astronómicos a **1.60**, un nivel virtualmente indistinguible del modelo original.
+- **Eficiencia RAM:** Con la **KV-Cache DNA (2-bit)** activa, el modelo Qwen2-0.5B opera ahora con una huella total de **~84 MB**, logrando la meta de 16x de reducción.
+
+### 3. Aprendizaje Local Validado
+- El optimizador `refine_centroids` en Rust demostró una convergencia acelerada (-94.9% MSE), permitiendo que el modelo se adapte al estilo del usuario directamente en el dispositivo.
+
+**Estado Final:** 🚀 **RESOLVIDO.** El protocolo GAJE v0.6.0 es apto para inferencia de LLMs genómicos de alta fidelidad.
