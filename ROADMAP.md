@@ -42,6 +42,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 *   [ ] **Epigenetic Strand**: Implementar un segundo nivel de cuantización (residuo) almacenado como ARN regulador.
 *   [ ] **Dual-Core ADC**: Modificar el kernel de Rust para sumar `Base + Residuo` al vuelo mediante SIMD.
 *   [x] **Search-Aware IQAT**: Optimización de centroides dirigida a la separabilidad de vecinos cercanos mediante entrenamiento contrastivo nativo en Rust.
+*   [ ] **Council of Teachers (CoT)**: Destilación por consenso utilizando múltiples maestros (ej. Qwen + SmolLM) para estabilizar centroides universales.
 *   [ ] **Triplet Frontier**: Uso de tripletes (6-bit) en las capas superiores de HNSW para navegación de alta precisión.
 
 ---
