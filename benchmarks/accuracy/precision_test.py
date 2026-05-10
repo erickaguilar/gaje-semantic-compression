@@ -6,7 +6,7 @@ import time
 # Añadir el directorio python al path
 sys.path.append(os.path.abspath("python"))
 
-from genomize_llm import GenomicLLM
+from gaje.nn.genomize import GenomicLLM
 
 def calculate_ppl_and_show_predictions(model, phrases):
     print(f"\n{'='*20} Evaluando Coherencia Base {'='*20}")

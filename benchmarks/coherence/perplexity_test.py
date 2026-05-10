@@ -6,13 +6,7 @@ import time
 from transformers import AutoTokenizer
 
 # Re-usamos la lógica estabilizada del pipeline completo
-try:
-    from python.full_genomic_pipeline import GenomicLLM
-except ImportError:
-    # Fallback si no está en el path
-    import sys
-    sys.path.append(os.path.abspath("python"))
-    from full_genomic_pipeline import GenomicLLM
+from gaje.processing.pipeline import GenomicLLM
 
 class PerplexityValidator:
     def __init__(self, model_path, num_blocks=4):
