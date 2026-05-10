@@ -22,18 +22,21 @@ class GenomicLayer:
             tensor = weights_f32_or_tensor
             self.out_features, self.in_features = tensor.shape[::-1] if len(tensor.shape) == 2 else (tensor.shape[0], 1)
             
+            # Dynamic Anchor Threshold based on experiments
+            a_threshold = 0.15 # Absolute error threshold for anchors
+            
             if tensor.tensor_type == gguf.GGMLQuantizationType.F16:
-                # Streaming Conversion: F16 -> 2-bit DNA directly in Rust
-                dna, centroids = dna_semantic_compression.genomize_f16_native(tensor.data.tobytes(), block_size)
+                # Streaming Conversion: F16 -> 2-bit DNA directly in Rust (with Anchor extraction)
+                dna, centroids, anchors = dna_semantic_compression.genomize_f16_native(tensor.data.tobytes(), block_size, a_threshold)
                 self.dna_database = dna
                 self.dna_centroids = centroids
-                self.anchors = [0.0] * (self.out_features * self.in_features) # No anchors in DGI (Native F16)
+                self.anchors = anchors
             elif tensor.tensor_type == gguf.GGMLQuantizationType.F32:
-                # Streaming Conversion: F32 -> 2-bit DNA directly in Rust
-                dna, centroids = dna_semantic_compression.genomize_f32_native(tensor.data.tobytes(), block_size)
+                # Streaming Conversion: F32 -> 2-bit DNA directly in Rust (with Anchor extraction)
+                dna, centroids, anchors = dna_semantic_compression.genomize_f32_native(tensor.data.tobytes(), block_size, a_threshold)
                 self.dna_database = dna
                 self.dna_centroids = centroids
-                self.anchors = [0.0] * (self.out_features * self.in_features)
+                self.anchors = anchors
             else:
                 # Fallback to standard dequantization (Q8_0, Q4_K, etc.)
                 weights_f32 = dequantize_q8_0(tensor)

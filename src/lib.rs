@@ -944,7 +944,7 @@ pub fn apply_repetition_penalty(mut logits: Vec<f32>, history: Vec<usize>, penal
 }
 
 #[pyfunction]
-pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec<u8>, Vec<f32>)> {
+pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize, anchor_threshold: f32) -> PyResult<(Vec<u8>, Vec<f32>, Vec<f32>)> {
     let f32_data: &[f32] = unsafe {
         std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4)
     };
@@ -953,6 +953,7 @@ pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
     let n_blocks = n_elements / block_size;
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
+    let mut anchors = vec![0.0f32; n_elements];
 
     let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
 
@@ -974,6 +975,8 @@ pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
 
         let t = [mean - std, mean, mean + std];
+        let c = [mean + base_c[0]*std, mean + base_c[1]*std, mean + base_c[2]*std, mean + base_c[3]*std];
+        
         let mut packed_block = Vec::with_capacity(block_size / 4);
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
@@ -983,22 +986,32 @@ pub fn genomize_f32_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
                           else if val < t[1] { 0b01 } 
                           else if val < t[2] { 0b11 } 
                           else { 0b10 };
+                
+                // Extraction of Anchors (High-Fidelity outliers)
+                let c_val = match bits {
+                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                };
+                let residual = val - c_val;
+                if residual.abs() > anchor_threshold {
+                    anchors[start + k * 4 + s] = residual;
+                }
+
                 byte = (byte << 2) | bits;
             }
             packed_block.push(byte);
         }
         dna_database.extend(packed_block);
 
-        for &bc in &base_c {
-            all_centroids.push(mean + bc * std);
+        for &cv in &c {
+            all_centroids.push(cv);
         }
     }
 
-    Ok((dna_database, all_centroids))
+    Ok((dna_database, all_centroids, anchors))
 }
 
 #[pyfunction]
-pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec<u8>, Vec<f32>)> {
+pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize, anchor_threshold: f32) -> PyResult<(Vec<u8>, Vec<f32>, Vec<f32>)> {
     let f16_data: &[f16] = unsafe {
         std::slice::from_raw_parts(data_u8.as_ptr() as *const f16, data_u8.len() / 2)
     };
@@ -1007,6 +1020,7 @@ pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
     let n_blocks = n_elements / block_size;
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
+    let mut anchors = vec![0.0f32; n_elements];
 
     let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
 
@@ -1031,6 +1045,8 @@ pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
 
         let t = [mean - std, mean, mean + std];
+        let c = [mean + base_c[0]*std, mean + base_c[1]*std, mean + base_c[2]*std, mean + base_c[3]*std];
+
         let mut packed_block = Vec::with_capacity(block_size / 4);
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
@@ -1040,18 +1056,27 @@ pub fn genomize_f16_native(data_u8: Vec<u8>, block_size: usize) -> PyResult<(Vec
                           else if val < t[1] { 0b01 } 
                           else if val < t[2] { 0b11 } 
                           else { 0b10 };
+                
+                let c_val = match bits {
+                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0
+                };
+                let residual = val - c_val;
+                if residual.abs() > anchor_threshold {
+                    anchors[start + k * 4 + s] = residual;
+                }
+
                 byte = (byte << 2) | bits;
             }
             packed_block.push(byte);
         }
         dna_database.extend(packed_block);
 
-        for &bc in &base_c {
-            all_centroids.push(mean + bc * std);
+        for &cv in &c {
+            all_centroids.push(cv);
         }
     }
 
-    Ok((dna_database, all_centroids))
+    Ok((dna_database, all_centroids, anchors))
 }
 
 #[pyfunction]
