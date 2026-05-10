@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0] - 2026-05-10
+### Added
+- **Kernel Fusion (Fase 9):** Implementación nativa en Rust para `GenomicSwiGLU` y fusión de `RMSNorm` en todas las proyecciones.
+- **KV-Cache DNA:** Compresión real de 16x de la caché de atención utilizando cuantización de 2 bits y de-cuantización asimétrica (ADC) al vuelo.
+- **Sincronización Total del Maestro (Fase 10):** Unificación de arquitecturas (RoPE split, SwiGLU) para eliminar discrepancias algorítmicas.
+- **IQAT (Iterative Quantization-Aware Training):** Motor de refinamiento de centroides basado en el Activation Drift del Maestro F32.
+- **Mobile-Native Learning:** Optimizador ligero `refine_centroids` en Rust para aprendizaje local sin sobrecarga de frameworks externos.
+- **Persistencia Avanzada:** Soporte para guardar organismos genómicos refinados mediante `save_genomic_model`.
+
 ## [0.5.0] - 2026-05-10
 ### Added
 - **Validación Integral del Sistema:** Verificación completa de métricas en Termux (Recall@10: 85.3%, Throughput: 172k ops/s).
