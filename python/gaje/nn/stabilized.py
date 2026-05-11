@@ -5,20 +5,30 @@ import gguf
 import time
 from transformers import AutoTokenizer
 
-def dequantize_q8_0(tensor):
+def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
     in_features, out_features = tensor.shape
     data = tensor.data.tobytes()
     flat_weights = dna_semantic_compression.dequantize_q8_0_native(data, out_features, in_features)
     w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
+    
+    # Des-permutación para Llama 3 / Qwen2 (GGUF)
+    if is_q_or_k and n_head is not None and head_dim is not None:
+        w_new = np.zeros_like(w)
+        for h in range(n_head):
+            for i in range(head_dim // 2):
+                w_new[h * head_dim + i] = w[h * head_dim + 2 * i]
+                w_new[h * head_dim + head_dim // 2 + i] = w[h * head_dim + 2 * i + 1]
+        return w_new
     return w
 
 from gaje.processing.balancer import SignalToNoiseBalancer
 
 class GenomicLayer:
-    def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6, balancer=None):
+    def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6, balancer=None, n_head=None, head_dim=None):
         self.name = name
         self.block_size = block_size
         self.balancer = balancer or SignalToNoiseBalancer()
+        is_q_or_k = "attn_q" in name or "attn_k" in name
         
         # 1. DIRECT GENOMIC INGESTION (DGI) - Bypass Q8 loss
         if hasattr(weights_f32_or_tensor, 'tensor_type'):
@@ -28,21 +38,21 @@ class GenomicLayer:
             # Use balancer to decide initial threshold
             a_threshold = self.balancer.current_threshold
             
-            if tensor.tensor_type == gguf.GGMLQuantizationType.F16:
-                # Streaming Conversion: F16 -> 2-bit DNA directly in Rust (with Anchor extraction)
-                dna, centroids, anchors = dna_semantic_compression.genomize_f16_native(tensor.data.tobytes(), block_size, a_threshold)
-                self.dna_database = dna
-                self.dna_centroids = centroids
-                self.anchors = anchors
-            elif tensor.tensor_type == gguf.GGMLQuantizationType.F32:
-                # Streaming Conversion: F32 -> 2-bit DNA directly in Rust (with Anchor extraction)
-                dna, centroids, anchors = dna_semantic_compression.genomize_f32_native(tensor.data.tobytes(), block_size, a_threshold)
-                self.dna_database = dna
-                self.dna_centroids = centroids
-                self.anchors = anchors
+            if tensor.tensor_type in [gguf.GGMLQuantizationType.F16, gguf.GGMLQuantizationType.F32]:
+                # De-permute F16/F32 if needed before genomizing
+                weights_f32 = tensor.data.astype(np.float32)
+                if is_q_or_k and n_head is not None and head_dim is not None:
+                    w_new = np.zeros_like(weights_f32)
+                    for h in range(n_head):
+                        for i in range(head_dim // 2):
+                            w_new[h * head_dim + i] = weights_f32[h * head_dim + 2 * i]
+                            w_new[h * head_dim + head_dim // 2 + i] = weights_f32[h * head_dim + 2 * i + 1]
+                    weights_f32 = w_new
+                
+                self._init_from_f32(weights_f32, block_size, anchor_threshold)
             else:
                 # Fallback to standard dequantization (Q8_0, Q4_K, etc.)
-                weights_f32 = dequantize_q8_0(tensor)
+                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k)
                 self._init_from_f32(weights_f32, block_size, anchor_threshold)
         else:
             weights_f32 = weights_f32_or_tensor
@@ -130,9 +140,9 @@ class GenomicAttentionLayer:
         t_o = next(t for t in reader.tensors if t.name == p + "attn_output.weight")
         
         # DGI initialization for Q, K, V
-        q_gen = GenomicLayer(p + "q", t_q)
-        k_gen = GenomicLayer(p + "k", t_k)
-        v_gen = GenomicLayer(p + "v", t_v)
+        q_gen = GenomicLayer(p + "attn_q", t_q, n_head=n_head, head_dim=head_dim)
+        k_gen = GenomicLayer(p + "attn_k", t_k, n_head=n_head_kv, head_dim=head_dim)
+        v_gen = GenomicLayer(p + "attn_v", t_v)
         
         # Combine all centroids into a flat list
         all_centroids = q_gen.dna_centroids + k_gen.dna_centroids + v_gen.dna_centroids
