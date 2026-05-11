@@ -12,18 +12,21 @@ def dequantize_q8_0(tensor):
     w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
     return w
 
+from gaje.processing.balancer import SignalToNoiseBalancer
+
 class GenomicLayer:
-    def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6):
+    def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6, balancer=None):
         self.name = name
         self.block_size = block_size
+        self.balancer = balancer or SignalToNoiseBalancer()
         
         # 1. DIRECT GENOMIC INGESTION (DGI) - Bypass Q8 loss
         if hasattr(weights_f32_or_tensor, 'tensor_type'):
             tensor = weights_f32_or_tensor
             self.out_features, self.in_features = tensor.shape[::-1] if len(tensor.shape) == 2 else (tensor.shape[0], 1)
             
-            # Dynamic Anchor Threshold based on experiments
-            a_threshold = 0.15 # Absolute error threshold for anchors
+            # Use balancer to decide initial threshold
+            a_threshold = self.balancer.current_threshold
             
             if tensor.tensor_type == gguf.GGMLQuantizationType.F16:
                 # Streaming Conversion: F16 -> 2-bit DNA directly in Rust (with Anchor extraction)
@@ -78,6 +81,9 @@ class GenomicLayer:
             
             dequantized = np.array(dna_semantic_compression.dequantize_embedding(dna, block_size, c.tolist()))
             residual = block - dequantized
+            
+            # Use balancer threshold if applicable, otherwise use quantile
+            current_t = self.balancer.current_threshold if self.balancer else 0.15
             
             err_threshold = np.quantile(np.abs(residual), anchor_threshold)
             anchor_mask = np.abs(residual) >= err_threshold
@@ -203,6 +209,7 @@ class GenomicLLM:
     def __init__(self, model_path, num_blocks=None):
         print(f"🧬 Sincronizando Organismo Genómico (2-bit): {os.path.basename(model_path)}")
         self.reader = gguf.GGUFReader(model_path)
+        self.balancer = SignalToNoiseBalancer()
         arch = "llama"
         if f"{arch}.embedding_length" not in self.reader.fields:
             arch = "qwen2"
@@ -216,7 +223,7 @@ class GenomicLLM:
         self.eps = float(self.reader.fields[f"{arch}.attention.layer_norm_rms_epsilon"].parts[-1][0])
         
         w_embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
-        self.embeddings = GenomicLayer("token_embd", w_embd_tensor)
+        self.embeddings = GenomicLayer("token_embd", w_embd_tensor, balancer=self.balancer)
         
         self.output_norm = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
         
@@ -225,7 +232,7 @@ class GenomicLLM:
         except StopIteration:
             w_head_tensor = w_embd_tensor
             
-        self.lm_head = GenomicLayer("lm_head", w_head_tensor)
+        self.lm_head = GenomicLayer("lm_head", w_head_tensor, balancer=self.balancer)
 
         self.blocks = []
         for i in range(self.n_blocks):

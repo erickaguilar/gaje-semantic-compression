@@ -2,14 +2,19 @@ use pyo3::prelude::*;
 use rayon::prelude::*;
 use crate::kernels::*;
 use crate::utils::*;
+
 #[pyclass]
 pub struct GenomicLinear {
     #[pyo3(get)]
     pub database: Vec<u8>,
+    pub epigenetic_database: Vec<u8>,
+    pub triplet_database: Vec<u8>,
     #[pyo3(get)]
     pub anchors: Vec<f32>,
     #[pyo3(get, set)]
     pub centroids: Vec<f32>,
+    pub epigenetic_centroids: Vec<f32>,
+    pub triplet_centroids: Vec<f32>,
     #[pyo3(get)]
     pub out_features: usize,
     #[pyo3(get)]
@@ -20,15 +25,17 @@ pub struct GenomicLinear {
     pub rmsnorm_weight: Vec<f32>,
     #[pyo3(get, set)]
     pub eps: f32,
+    pub precision_mask: Vec<u8>,
     pub stride: usize,
 }
+
 #[pymethods]
 impl GenomicLinear {
     #[new]
-    #[pyo3(signature = (database, anchors, centroids, out_features, in_features, block_size, rmsnorm_weight=Vec::new(), eps=1e-6))]
-    pub fn new(database: Vec<u8>, anchors: Vec<f32>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize, rmsnorm_weight: Vec<f32>, eps: f32) -> Self {
+    #[pyo3(signature = (database, anchors, centroids, out_features, in_features, block_size, rmsnorm_weight=Vec::new(), eps=1e-6, precision_mask=Vec::new(), epigenetic_database=Vec::new(), epigenetic_centroids=Vec::new(), triplet_database=Vec::new(), triplet_centroids=Vec::new()))]
+    pub fn new(database: Vec<u8>, anchors: Vec<f32>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize, rmsnorm_weight: Vec<f32>, eps: f32, precision_mask: Vec<u8>, epigenetic_database: Vec<u8>, epigenetic_centroids: Vec<f32>, triplet_database: Vec<u8>, triplet_centroids: Vec<f32>) -> Self {
         let stride = block_size / 4;
-        GenomicLinear { database, anchors, centroids, out_features, in_features, block_size, rmsnorm_weight, eps, stride }
+        GenomicLinear { database, epigenetic_database, triplet_database, anchors, centroids, epigenetic_centroids, triplet_centroids, out_features, in_features, block_size, rmsnorm_weight, eps, precision_mask, stride }
     }
     pub fn forward(&self, mut input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         if !self.rmsnorm_weight.is_empty() { input_vector = unsafe { rms_norm_neon(&input_vector, &self.rmsnorm_weight, self.eps) }; }
@@ -94,17 +101,21 @@ impl GenomicLinear {
         Ok(())
     }
 }
+
 #[pyclass]
 pub struct GenomicAttention {
     pub q_database: Vec<u8>, pub k_database: Vec<u8>, pub v_database: Vec<u8>,
     pub centroids: Vec<f32>, pub stride: usize, pub n_head: usize, pub n_head_kv: usize,
     pub head_dim: usize, pub k_cache: Vec<Vec<u8>>, pub v_cache: Vec<Vec<u8>>,
+    pub precision_mask: Vec<u8>,
 }
+
 #[pymethods]
 impl GenomicAttention {
     #[new]
-    pub fn new(q: Vec<u8>, k: Vec<u8>, v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_head: usize, n_head_kv: usize) -> Self {
-        GenomicAttention { q_database: q, k_database: k, v_database: v, centroids, stride, n_head, n_head_kv, head_dim: stride * 4, k_cache: Vec::new(), v_cache: Vec::new() }
+    #[pyo3(signature = (q, k, v, centroids, stride, n_head, n_head_kv, rmsnorm_weight=Vec::new(), eps=1e-6))]
+    pub fn new(q: Vec<u8>, k: Vec<u8>, v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_head: usize, n_head_kv: usize, rmsnorm_weight: Vec<f32>, eps: f32) -> Self {
+        GenomicAttention { q_database: q, k_database: k, v_database: v, centroids, stride, n_head, n_head_kv, head_dim: stride * 4, k_cache: Vec::new(), v_cache: Vec::new(), precision_mask: Vec::new() }
     }
     pub fn forward(&mut self, input_vector: Vec<f32>, _pos: usize) -> PyResult<Vec<f32>> {
         let n_embd = input_vector.len();
@@ -129,16 +140,19 @@ impl GenomicAttention {
         Ok(query)
     }
 }
+
 #[pyclass]
 pub struct GenomicSwiGLU {
     pub w_gate: Vec<u8>, pub w_up: Vec<u8>, pub centroids: Vec<f32>,
     pub out_features: usize, pub in_features: usize, pub block_size: usize, pub stride: usize,
+    pub precision_mask: Vec<u8>,
 }
+
 #[pymethods]
 impl GenomicSwiGLU {
     #[new]
     pub fn new(w_gate: Vec<u8>, w_up: Vec<u8>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize) -> Self {
-        GenomicSwiGLU { w_gate, w_up, centroids, out_features, in_features, block_size, stride: block_size / 4 }
+        GenomicSwiGLU { w_gate, w_up, centroids, out_features, in_features, block_size, stride: block_size / 4, precision_mask: Vec::new() }
     }
     pub fn forward(&self, input_vector: Vec<f32>) -> PyResult<Vec<f32>> {
         let n_blocks_per_row = self.in_features / self.block_size;

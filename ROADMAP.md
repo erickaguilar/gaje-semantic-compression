@@ -51,7 +51,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 **El Objetivo:** Optimizar el consumo de recursos aplicando alta precisión (6-bit) solo donde la señal semántica es frágil, manteniendo la eficiencia de 2-bit en el resto.
 *   [x] **Entropy Analyzer**: Implementar un módulo en Rust para calcular la entropía de Shannon por dimensión durante la cuantización.
 *   [x] **Masked Genomic Kernel**: Modificar los kernels SIMD para operar con precisión mixta (2/4/6-bit) dentro de un mismo vector basándose en una máscara de importancia.
-*   [ ] **Signal-to-Noise Balancer**: Ajuste automático del umbral de "Anclas" basado en la perplejidad local detectada por el Intérprete.
+*   [x] **Signal-to-Noise Balancer**: Ajuste automático del umbral de "Anclas" basado en la perplejidad local detectada por el Intérprete.
 *   [ ] **Neural Pruning DNA**: Eliminar dimensiones redundantes (entropía cercana a cero) directamente en el espacio genómico para reducir el ancho de banda de memoria.
 
 ---
