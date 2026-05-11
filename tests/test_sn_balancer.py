@@ -49,7 +49,40 @@ def test_precision_mask_generation():
     assert count_2bit > count_6bit, "La mayoría de las dimensiones deberían seguir en 2-bit para eficiencia."
     assert mask[0] == 2, "La dimensión 0 (alta entropía) debería tener precisión máxima (6-bit)."
 
+def test_neural_pruning():
+    print("\n🔬 Testeando Neural Pruning DNA (Fase 12)...")
+    from gaje.core import _impl as dna_core
+    from gaje.processing.balancer import SignalToNoiseBalancer
+    
+    balancer = SignalToNoiseBalancer()
+    
+    # 1. Crear una base de datos de 2 vectores, 32 dims
+    # Hacemos que las últimas 4 dims sean 0 (baja entropía)
+    data = np.random.randn(2, 32).astype(np.float32)
+    data[:, 28:] = 0.0
+    
+    # Cuantizar
+    t = [-0.1, 0.0, 0.1]
+    packed = b"".join([dna_core.quantize_embedding(row.tolist(), t) for row in data])
+    stride = 8 # 32 / 4
+    
+    # Calcular entropía (simulada o real)
+    # Para el test usaremos una entropía que marque las últimas dims para poda
+    entropy = np.ones(32)
+    entropy[28:] = 0.0
+    
+    # Podar
+    new_db, active_dims = balancer.prune_dimensions(packed, stride, entropy, threshold=0.1)
+    
+    print(f"[*] Dims originales: 32 | Dims tras poda: {len(active_dims)}")
+    print(f"[*] Tamaño DB original: {len(packed)} bytes | Nuevo tamaño: {len(new_db)} bytes")
+    
+    assert len(active_dims) == 28, "Deberían quedar 28 dimensiones activas."
+    assert len(new_db) == 14, "El nuevo tamaño debería ser 14 bytes (28 dims * 2 vectores / 4 per byte)."
+    assert 31 not in active_dims, "La dimensión 31 debería haber sido podada."
+
 if __name__ == '__main__':
     test_sn_balancer_logic()
     test_precision_mask_generation()
+    test_neural_pruning()
     print("\n✅ TESTS DE SN BALANCER COMPLETADOS.")

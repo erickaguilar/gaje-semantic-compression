@@ -53,6 +53,22 @@ class SignalToNoiseBalancer:
         
         return mask
 
+    def prune_dimensions(self, database, stride, entropy_per_dim, threshold=0.01):
+        """
+        Elimina dimensiones redundantes (Neural Pruning DNA - Fase 12).
+        Retorna la nueva base de datos y los índices de las dimensiones activas.
+        """
+        from gaje.core import _impl as dna_core
+        
+        active_dims = np.where(entropy_per_dim > threshold)[0].tolist()
+        if len(active_dims) == len(entropy_per_dim):
+            return database, active_dims
+            
+        print(f"✂️ Neural Pruning: Eliminando {len(entropy_per_dim) - len(active_dims)} dimensiones redundantes.")
+        new_db, new_stride = dna_core.prune_genomic_database(database, stride, active_dims)
+        
+        return new_db, active_dims
+
     def report(self):
         if not self.drift_history:
             return "No data collected."

@@ -52,7 +52,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 *   [x] **Entropy Analyzer**: Implementar un módulo en Rust para calcular la entropía de Shannon por dimensión durante la cuantización.
 *   [x] **Masked Genomic Kernel**: Modificar los kernels SIMD para operar con precisión mixta (2/4/6-bit) dentro de un mismo vector basándose en una máscara de importancia.
 *   [x] **Signal-to-Noise Balancer**: Ajuste automático del umbral de "Anclas" basado en la perplejidad local detectada por el Intérprete.
-*   [ ] **Neural Pruning DNA**: Eliminar dimensiones redundantes (entropía cercana a cero) directamente en el espacio genómico para reducir el ancho de banda de memoria.
+*   [x] **Neural Pruning DNA**: Eliminar dimensiones redundantes (entropía cercana a cero) directamente en el espacio genómico para reducir el ancho de banda de memoria.
 
 ---
 

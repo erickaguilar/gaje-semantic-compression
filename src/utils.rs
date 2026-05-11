@@ -271,3 +271,30 @@ pub fn dna_similarity_search(query: PyObject, database: Vec<Vec<u8>>, centroids:
     }
     Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>("Query error"))
 }
+
+#[pyfunction]
+#[pyo3(signature = (database, stride, active_dims))]
+pub fn prune_genomic_database(database: Vec<u8>, stride: usize, active_dims: Vec<usize>) -> PyResult<(Vec<u8>, usize)> {
+    let n_strands = if stride == 0 { 0 } else { database.len() / stride };
+    let new_dims = active_dims.len();
+    let new_stride = (new_dims + 3) / 4;
+    let mut new_database = Vec::with_capacity(n_strands * new_stride);
+
+    for s_idx in 0..n_strands {
+        let strand = &database[s_idx * stride .. (s_idx + 1) * stride];
+        let mut new_strand = vec![0u8; new_stride];
+        
+        for (new_d_idx, &old_d_idx) in active_dims.iter().enumerate() {
+            let old_byte_idx = old_d_idx / 4;
+            let old_bit_pos = (3 - (old_d_idx % 4)) * 2;
+            let bits = (strand[old_byte_idx] >> old_bit_pos) & 0b11;
+            
+            let new_byte_idx = new_d_idx / 4;
+            let new_bit_pos = (3 - (new_d_idx % 4)) * 2;
+            new_strand[new_byte_idx] |= bits << new_bit_pos;
+        }
+        new_database.extend(new_strand);
+    }
+    
+    Ok((new_database, new_stride))
+}
