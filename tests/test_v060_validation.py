@@ -52,7 +52,7 @@ def test_kv_cache_integrity():
     centroids = [-1.0, -0.3, 0.3, 1.0] * total_rows
     
     attn = dna_core.GenomicAttention(
-        packed_w, packed_w, packed_w, centroids, dim // 4, n_head, n_head
+        packed_w, packed_w, packed_w, centroids, head_dim // 4, n_head, n_head
     )
     
     x = np.random.randn(dim).astype(np.float32)
