@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import dna_semantic_compression
+from gaje.core import _impl as dna_semantic_compression
 
 def test_hnsw_index_creation():
     db_dna = [os.urandom(192) for _ in range(10)] # 768 / 4 = 192 bytes

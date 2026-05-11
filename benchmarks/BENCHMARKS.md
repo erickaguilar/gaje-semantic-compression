@@ -9,7 +9,7 @@ Este documento registra el rendimiento técnico del Protocolo GAJE y su posicion
 | Método | Recall@10 (Precisión) | Bits por Dimensión | Relación Calidad/Espacio |
 | :--- | :---: | :---: | :--- |
 | **Scalar Quant (SQ8)** | 99.40% | 8.00 | 12.4x (Base) |
-| **GAJE Protocol (DNA)** | **84.20%** | **2.00** | **42.1x (Ganador)** |
+| **GAJE Protocol (DNA)** | **85.30%** | **2.00** | **42.6x (Ganador)** |
 | **Binary Flat (1-bit)** | 62.60% | 1.00 | 62.6x |
 | **IVF-PQ (8x8 bits)** | 60.60% | 0.08 | 757x |
 
@@ -22,7 +22,7 @@ Este documento registra el rendimiento técnico del Protocolo GAJE y su posicion
 ### Escenario A: Vectores de Alta Densidad (SBERT 768d)
 - **Dataset**: 2,000 sentencias reales de TinyShakespeare.
 - **Modelo**: `all-mpnet-base-v2` (SBERT).
-- **Resultado GAJE**: 85.40% Recall@10.
+- **Resultado GAJE**: 85.30% Recall@10 (Verificado Mayo 2026).
 - **Observación**: Supera el umbral de grado industrial para aplicaciones de búsqueda semántica.
 
 ### Escenario B: Comparación contra Estándares (Simulación FAISS)
@@ -47,6 +47,7 @@ Resultados obtenidos en entorno Termux (Android) con vectores SBERT de 768 dimen
 
 | Escala | N (Embeddings) | Latencia (Flat ADC) | Rendimiento (Throughput) | Memoria DNA |
 | :--- | :---: | :---: | :---: | :---: |
+| **Standard** | 10,000 | 58 ms | 172,162 ops/s | 1.8 MB |
 | **Serious** | 100,000 | 432 ms | 231,228 ops/s | 18.3 MB |
 | **Very Serious** | 1,000,000 | **3.56 s** | **280,767 ops/s** | **183.1 MB** |
 | **Paper-grade** | 10,000,000 | ~35 s (est) | ~280k ops/s | ~1.8 GB |
@@ -57,4 +58,4 @@ Resultados obtenidos en entorno Termux (Android) con vectores SBERT de 768 dimen
 3. **Paralelismo**: El motor en Rust aprovecha todos los núcleos disponibles (via Rayon), manteniendo el throughput constante incluso al escalar a millones de registros.
 
 ---
-*Última actualización: 2026-05-07 (Tras Benchmark de 1M).*
+*Última actualización: 2026-05-10 (Tras Validación Integral).*

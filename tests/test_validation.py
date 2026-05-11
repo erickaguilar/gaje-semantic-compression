@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-import dna_semantic_compression
+from gaje.core import _impl as dna_semantic_compression
 
 
 class TestDNASemantic(unittest.TestCase):
