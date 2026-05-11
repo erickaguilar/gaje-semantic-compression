@@ -3,7 +3,6 @@ import sys
 import os
 sys.path.append(os.path.abspath("python"))
 from gaje.nn.stabilized import GenomicLayer
-from gaje.core import _impl as dna_semantic_compression
 
 def test_kernel_consistency():
     print("🧪 Testing Rust Kernel Consistency vs np.dot")

@@ -1,5 +1,4 @@
 import numpy as np
-import os
 import time
 
 def calculate_perplexity(logits):
@@ -54,12 +53,12 @@ def run_ppl_benchmark():
     
     # Cálculo de Ganancia
     ppl_reduction = (ppl_2bit - ppl_cloned) / ppl_2bit * 100
-    print(f"\n💡 RESULTADO CRÍTICO:")
+    print("\n💡 RESULTADO CRÍTICO:")
     print(f"La 'Clonación de Anclas' ha reducido la Perplejidad en un {ppl_reduction:.2f}%.")
     print(f"Esto significa que el modelo es {ppl_reduction/10:.1f}x más 'coherente'.")
     
     print(f"\n⚡ LATENCIA DE ENLACE: {latency:.2f} ms")
-    print(f"📦 RAM ESTIMADA: 86 MB (Mismo espacio, más cerebro)")
+    print("📦 RAM ESTIMADA: 86 MB (Mismo espacio, más cerebro)")
     print("="*65)
 
 if __name__ == "__main__":

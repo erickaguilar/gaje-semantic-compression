@@ -1,6 +1,5 @@
 import numpy as np
 from gaje.nn.stabilized import GenomicLayer
-import time
 
 def test_native_learning_convergence():
     print("🔬 Validando Convergencia de Aprendizaje Local (Mobile-Native Learning)...")

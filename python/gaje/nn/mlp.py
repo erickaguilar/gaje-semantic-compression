@@ -90,7 +90,7 @@ def run_mlp_demo():
     
     print(f"\n📉 RAM del Modelo (Float32): {ram_f32:.2f} MB")
     print(f"📉 RAM del Modelo (Genomic): {ram_gen:.2f} MB")
-    print(f"🔥 Factor de Compresión:     16x")
+    print("🔥 Factor de Compresión:     16x")
     print("="*60)
 
 if __name__ == "__main__":

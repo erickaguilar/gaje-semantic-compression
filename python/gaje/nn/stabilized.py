@@ -2,7 +2,6 @@ import os
 import numpy as np
 from gaje.core import _impl as dna_semantic_compression
 import gguf
-import time
 from transformers import AutoTokenizer
 
 def dequantize_q8_0(tensor):
@@ -274,7 +273,6 @@ class GenomicLLM:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
             
-        from gaje.core.archive import GAJEArchive
         
         print(f"📦 Guardando Organismo Genómico en {output_dir}...")
         
@@ -293,4 +291,4 @@ class GenomicLLM:
             import json
             json.dump(metadata, f)
             
-        print(f"✅ Modelo guardado exitosamente.")
+        print("✅ Modelo guardado exitosamente.")

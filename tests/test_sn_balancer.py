@@ -1,6 +1,5 @@
 import numpy as np
 from gaje.processing.balancer import SignalToNoiseBalancer
-from gaje.nn.stabilized import GenomicLayer
 
 def test_sn_balancer_logic():
     print("🔬 Testeando Lógica del Signal-to-Noise Balancer...")

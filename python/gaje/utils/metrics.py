@@ -1,5 +1,5 @@
 import numpy as np
-from typing import List, Set
+from typing import List
 
 def calculate_top_k_overlap(logits_a: np.ndarray, logits_b: np.ndarray, k: int = 10) -> float:
     """

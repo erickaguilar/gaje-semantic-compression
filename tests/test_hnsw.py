@@ -1,4 +1,3 @@
-import pytest
 import numpy as np
 from gaje.core import _impl as dna_semantic_compression
 
