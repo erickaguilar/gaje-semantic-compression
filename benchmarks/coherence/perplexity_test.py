@@ -38,10 +38,10 @@ class PerplexityValidator:
             last_id = token_ids[-1]
             
             # 1. Recuperar ADN del Token
-            stride = self.llm.embeddings.engine.stride
+            stride = self.llm.embeddings.linear.stride
             start, end = last_id * stride, (last_id + 1) * stride
-            dna_strand = self.llm.embeddings.engine.database[start:end]
-            x = np.array(dna_semantic_compression.dequantize_embedding(list(dna_strand), self.llm.hidden_dim, self.llm.embeddings.centroids))
+            dna_strand = self.llm.embeddings.linear.database[start:end]
+            x = np.array(dna_semantic_compression.dequantize_embedding(list(dna_strand), self.llm.n_embd, self.llm.embeddings.linear.centroids))
             
             # 2. Inferencia Genómica
             for block in self.llm.blocks:

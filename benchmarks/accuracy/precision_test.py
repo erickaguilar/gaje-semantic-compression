@@ -6,7 +6,7 @@ import time
 # Añadir el directorio python al path
 sys.path.append(os.path.abspath("python"))
 
-from gaje.nn.genomize import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM
 
 def calculate_ppl_and_show_predictions(model, phrases):
     print(f"\n{'='*20} Evaluando Coherencia Base {'='*20}")
@@ -15,24 +15,8 @@ def calculate_ppl_and_show_predictions(model, phrases):
         tokens = model.tokenizer.encode(text, add_special_tokens=False)
         if len(tokens) < 1: continue
         
-        # Tomamos el último token para ver qué predice a continuación
-        last_id = tokens[-1]
-        
-        # Forward pass (Identity-like for single token to see next-token prediction)
-        x = model.embedding_matrix[last_id].copy()
-        for i, block in enumerate(model.blocks):
-            #Residual Connection
-            x_in = x.copy()
-            x_norm = block.rms_norm(x_in, block.layers.get('attn_norm'))
-            attn_out = block.attn.forward(x_norm.tolist(), len(tokens) - 1)
-            x = x_in + attn_out
-            
-            # FFN DESACTIVADO PARA ESTE TEST
-            # x_norm = block.rms_norm(x, block.layers.get('ffn_norm'))
-            # ...
-            
-        x = model.rms_norm(x, model.output_norm_weight)
-        logits = np.dot(model.embedding_matrix, x)
+        # Forward pass
+        logits = model.forward(tokens)[-1]
         
         # Softmax y Top-k
         probs = np.exp(logits - np.max(logits))
@@ -59,12 +43,12 @@ def run_precision_test():
     ]
 
     print("="*60)
-    print("🎯 TEST DE PRECISIÓN: BAJA ENTROPÍA (F32 TEACHER)")
+    print("🎯 TEST DE PRECISIÓN: BAJA ENTROPÍA (GAJE 2-BIT)")
     print("="*60)
 
-    # Probamos con el Maestro F32 para asegurar que la arquitectura base funciona
-    print("[*] Cargando Maestro F32 (24 bloques)...")
-    model = GenomicLLM(model_path, num_blocks=24, mode='f32')
+    # Cargamos el modelo genómico (limitamos bloques para velocidad si es necesario)
+    print("[*] Cargando Organismo Genómico (4 bloques)...")
+    model = GenomicLLM(model_path, num_blocks=4)
     
     calculate_ppl_and_show_predictions(model, low_entropy_phrases)
 

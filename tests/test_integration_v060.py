@@ -1,6 +1,6 @@
 import numpy as np
 from gaje.core import _impl as core
-from python.gaje.processing.balancer import SignalToNoiseBalancer
+from gaje.processing.balancer import SignalToNoiseBalancer
 
 def test_full_integration():
     print("🔬 Probando integración completa: Balancer -> Mask -> HNSW Search")

@@ -41,28 +41,53 @@ impl GenomicLinear {
         if !self.rmsnorm_weight.is_empty() { input_vector = unsafe { rms_norm_neon(&input_vector, &self.rmsnorm_weight, self.eps) }; }
         let n_blocks_per_row = self.in_features / self.block_size;
         let has_anchors = !self.anchors.is_empty();
+        let database_len = self.database.len();
+        let has_mask = !self.precision_mask.is_empty();
+        let has_epi = !self.epigenetic_database.is_empty();
+        let has_tri = !self.triplet_database.is_empty();
+
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let mut row_sum = 0.0f32;
             let row_offset = i * n_blocks_per_row * self.stride;
-            for j in 0..n_blocks_per_row {
-                let block_start = row_offset + j * self.stride;
-                let block_weights = &self.database[block_start..block_start + self.stride];
-                let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
-                let c_offset = (i * n_blocks_per_row + j) * 4;
-                let c = &self.centroids[c_offset..c_offset + 4];
-                let mut dims = 0;
-                for k in 0..self.stride {
-                    let byte = block_weights[k];
-                    for s in 0..4 {
-                        let shift = (3 - s) * 2;
-                        let bits = (byte >> shift) & 0b11;
-                        let val = match bits { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 };
-                        row_sum += input_block[dims] * val;
-                        dims += 1;
+            if row_offset + n_blocks_per_row * self.stride <= database_len {
+                for j in 0..n_blocks_per_row {
+                    let block_start = row_offset + j * self.stride;
+                    let block_weights = &self.database[block_start..block_start + self.stride];
+                    let input_block = &input_vector[j * self.block_size .. (j + 1) * self.block_size];
+                    let c_offset = (i * n_blocks_per_row + j) * 4;
+                    let c = &self.centroids[c_offset..c_offset + 4];
+                    
+                    let mut dims = 0;
+                    for k in 0..self.stride {
+                        let mode = if has_mask { self.precision_mask[j * self.stride + k] } else { 0 };
+                        let byte = block_weights[k];
+                        
+                        for s in 0..4 {
+                            let shift = (3 - s) * 2;
+                            let bits = (byte >> shift) & 0b11;
+                            let mut val = match bits { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 };
+                            
+                            if mode >= 1 && has_epi {
+                                let epi_byte = self.epigenetic_database[block_start + k];
+                                let eb_bits = (epi_byte >> shift) & 0b11;
+                                let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
+                                val += match eb_bits { 0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0 };
+                            }
+                            
+                            if mode >= 2 && has_tri {
+                                let tri_byte = self.triplet_database[block_start + k];
+                                let tb_bits = (tri_byte >> shift) & 0b11;
+                                let ct = &self.triplet_centroids[c_offset..c_offset + 4];
+                                val += match tb_bits { 0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0 };
+                            }
+
+                            row_sum += input_block[dims] * val;
+                            dims += 1;
+                        }
                     }
                 }
             }
-            if has_anchors {
+            if has_anchors && (i + 1) * self.in_features <= self.anchors.len() {
                 let anchor_row = &self.anchors[i * self.in_features .. (i + 1) * self.in_features];
                 row_sum += unsafe { dot_product_neon(anchor_row, &input_vector) };
             }
@@ -113,31 +138,51 @@ pub struct GenomicAttention {
 #[pymethods]
 impl GenomicAttention {
     #[new]
-    #[pyo3(signature = (q, k, v, centroids, stride, n_head, n_head_kv, rmsnorm_weight=Vec::new(), eps=1e-6))]
-    pub fn new(q: Vec<u8>, k: Vec<u8>, v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_head: usize, n_head_kv: usize, rmsnorm_weight: Vec<f32>, eps: f32) -> Self {
-        GenomicAttention { q_database: q, k_database: k, v_database: v, centroids, stride, n_head, n_head_kv, head_dim: stride * 4, k_cache: Vec::new(), v_cache: Vec::new(), precision_mask: Vec::new() }
+    #[pyo3(signature = (q, k, v, centroids, stride, n_head, n_head_kv, head_dim, rmsnorm_weight=Vec::new(), eps=1e-6))]
+    pub fn new(q: Vec<u8>, k: Vec<u8>, v: Vec<u8>, centroids: Vec<f32>, stride: usize, n_head: usize, n_head_kv: usize, head_dim: usize, rmsnorm_weight: Vec<f32>, eps: f32) -> Self {
+        GenomicAttention { q_database: q, k_database: k, v_database: v, centroids, stride, n_head, n_head_kv, head_dim, k_cache: Vec::new(), v_cache: Vec::new(), precision_mask: Vec::new() }
     }
     pub fn forward(&mut self, input_vector: Vec<f32>, _pos: usize) -> PyResult<Vec<f32>> {
         let n_embd = input_vector.len();
         let q_len = self.n_head * self.head_dim;
         let mut query = vec![0.0f32; q_len];
         let c_base = &self.centroids;
+        let n_blocks_per_row = n_embd / 32;
+
         for h in 0..self.n_head {
-            let q_dna = &self.q_database[h * self.stride .. (h + 1) * self.stride];
+            let row_offset = h * n_blocks_per_row * self.stride;
+            if row_offset + n_blocks_per_row * self.stride > self.q_database.len() { continue; }
+
             let q_start = h * self.head_dim;
-            let mut dims = 0;
-            for &byte in q_dna {
-                for s in 0..4 {
-                    let shift = (3 - s) * 2;
-                    let bits = (byte >> shift) & 0b11;
-                    let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 0 };
-                    let val = c_base[q_start * 4 + dims * 4 + c_idx];
-                    query[q_start + dims] = unsafe { dot_product_neon(&input_vector, &vec![val; n_embd]) };
-                    dims += 1;
+            for j in 0..n_blocks_per_row {
+                let block_start = row_offset + j * self.stride;
+                let q_dna = &self.q_database[block_start .. block_start + self.stride];
+                let input_block = &input_vector[j * 32 .. (j + 1) * 32];
+                let c_offset = (h * n_blocks_per_row + j) * 4;
+                
+                if c_offset + 4 <= c_base.len() {
+                    let c = &c_base[c_offset..c_offset + 4];
+                    let mut dims = 0;
+                    for &byte in q_dna {
+                        for s in 0..4 {
+                            let shift = (3 - s) * 2;
+                            let bits = (byte >> shift) & 0b11;
+                            let val = match bits { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 };
+                            if q_start + dims < q_len {
+                                query[q_start + dims] = unsafe { dot_product_neon(&input_vector, &vec![val; n_embd]) };
+                            }
+                            dims += 1;
+                        }
+                    }
                 }
             }
         }
         Ok(query)
+    }
+    pub fn clear_cache(&mut self) -> PyResult<()> {
+        self.k_cache.clear();
+        self.v_cache.clear();
+        Ok(())
     }
 }
 
