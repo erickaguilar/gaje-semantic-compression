@@ -9,18 +9,29 @@ sys.path.append(os.path.abspath("python"))
 from gaje.nn.stabilized import GenomicLLM
 
 def main():
-    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.0 (Phase 12 Stable)")
+    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Kernel Fixed)")
     print("=" * 60)
 
     model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
     
     if not os.path.exists(model_path):
-        print(f"❌ Error: El modelo GGUF no se encuentra en {model_path}")
-        print("Por favor, descarga el modelo SmolLM2 F16 primero.")
-        return
+        # Intentar buscar en rutas comunes
+        possible_paths = [
+            model_path,
+            "models/smollm2-135m-f16.gguf",
+            "smollm2-135m-f16.gguf"
+        ]
+        for p in possible_paths:
+            if os.path.exists(p):
+                model_path = p
+                break
+        else:
+            print(f"❌ Error: El modelo GGUF no se encuentra.")
+            print("Por favor, asegúrate de que el modelo SmolLM2 F16 esté disponible.")
+            return
 
     # Cargamos el motor estabilizado
-    # Nota: Usamos 8 bloques para un balance entre velocidad y coherencia en la demo
+    # Usamos 8 bloques para máxima velocidad en Termux
     print(f"[*] Sincronizando Organismo Genómico (8 bloques)...")
     llm = GenomicLLM(model_path, num_blocks=8)
     
@@ -36,30 +47,27 @@ def main():
             if not prompt.strip():
                 continue
 
-            print("\n🧬 Pensando (Genomic Inference)...")
-            
-            # Tokenización
-            tokens = llm.tokenizer.encode(prompt, add_special_tokens=False)
+            print("\n🤖 GAJE: ", end="", flush=True)
             
             start_time = time.time()
+            token_count = 0
             
-            # Inferencia Forward (V0.6.0 Nativa con DGI y Sparse Fidelity)
-            all_logits = llm.forward(tokens)
-            logits = all_logits[-1] # Tomamos el último token
+            # Inferencia Generativa (V0.6.1 con Kernel de Rust optimizado)
+            for token_text in llm.generate(prompt, max_new_tokens=50):
+                print(token_text, end="", flush=True)
+                token_count += 1
             
             duration = time.time() - start_time
+            tps = token_count / duration if duration > 0 else 0
             
-            # Decodificación Top-1 (Simple para la demo)
-            next_token_id = np.argmax(logits)
-            response = llm.tokenizer.decode([next_token_id])
-            
-            print(f"🤖 GAJE: {response}")
-            print(f"   [Métricas: {duration*1000:.2f}ms | Precision Mixta: 2/4/6-bit Activa]")
+            print(f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s | Precision Mixta: Activa]")
             
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"⚠️ Error durante la inferencia: {e}")
+            print(f"\n⚠️ Error durante la inferencia: {e}")
+            import traceback
+            traceback.print_exc()
 
     print("\n[!] Organismo Genómico hibernando. Adiós.")
 

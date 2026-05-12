@@ -32,7 +32,7 @@ def calculate_ppl_and_show_predictions(model, phrases):
             print(f"      {i+1}. '{top_tokens[i]}' ({top_probs[i]:.4f})")
 
 def run_precision_test():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
     
     # Frases de baja entropía
     low_entropy_phrases = [

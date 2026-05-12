@@ -8,6 +8,7 @@ use crate::nn::{GenomicLinear, GenomicAttention, GenomicSwiGLU};
 use crate::utils::*;
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    unsafe { crate::kernels::init_shuffle_table(); }
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;

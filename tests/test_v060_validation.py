@@ -21,8 +21,8 @@ def test_native_learning_convergence():
     print(f"[*] Error MSE Inicial: {initial_error:.6f}")
     
     # Ciclo de refinamiento nativo en Rust
-    lr = 0.05
-    iterations = 20
+    lr = 0.005
+    iterations = 50
     for i in range(iterations):
         layer.linear.refine_centroids(x.tolist(), target.tolist(), lr)
         
@@ -43,26 +43,23 @@ def test_kv_cache_integrity():
     
     dim = 128
     n_head = 4
+    n_head_kv = 4
     head_dim = dim // n_head
     
-    # Fake weights for Q, K, V (128x128 each)
-    packed_w = b"\x00" * ((dim * dim) // 4)
-    # Centroids for Q, K, V (3 matrices * 128 rows * 4 centroids)
-    total_rows = dim + dim + dim # Q + K + V
-    centroids = [-1.0, -0.3, 0.3, 1.0] * total_rows
+    # En la v0.6.0+, GenomicAttention no maneja pesos, solo la mecánica de atención
+    attn = dna_core.GenomicAttention(n_head, n_head_kv, head_dim)
     
-    attn = dna_core.GenomicAttention(
-        packed_w, packed_w, packed_w, centroids, head_dim // 4, n_head, n_head
-    )
-    
-    x = np.random.randn(dim).astype(np.float32)
+    # Simulamos Q, K, V ya proyectados
+    q = np.random.randn(dim).astype(np.float32)
+    k = np.random.randn(dim).astype(np.float32)
+    v = np.random.randn(dim).astype(np.float32)
     
     # Primera pasada (debería llenar caché)
-    out1 = attn.forward(x.tolist(), 0)
-    # Segunda pasada (debería usar caché de 2 bits)
-    out2 = attn.forward(x.tolist(), 1)
+    out1 = attn.forward_attention(q.tolist(), k.tolist(), v.tolist(), 0)
+    # Segunda pasada (usando caché)
+    out2 = attn.forward_attention(q.tolist(), k.tolist(), v.tolist(), 1)
     
-    print(f"[*] Forward con KV-Cache (2-bit) exitoso. Output dim: {len(out2)}")
+    print(f"[*] Forward con KV-Cache (DNA-optimized) exitoso. Output dim: {len(out2)}")
     assert len(out1) == len(out2) == dim
 
 if __name__ == "__main__":

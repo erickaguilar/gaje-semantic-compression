@@ -1,7 +1,8 @@
 use half::f16;
+use std::arch::aarch64::*;
+
 #[inline(always)]
 pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
-    use std::arch::aarch64::*;
     let n = a.len();
     let mut sum_v = vdupq_n_f32(0.0);
     let mut i = 0;
@@ -15,9 +16,9 @@ pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     while i < n { sum += a[i] * b[i]; i += 1; }
     sum
 }
+
 #[inline(always)]
 pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
-    use std::arch::aarch64::*;
     let n = x.len();
     let mut sum_v = vdupq_n_f32(0.0);
     let mut i = 0;
@@ -42,6 +43,55 @@ pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     }
     while i < n { out[i] = (x[i] * inv_rms) * weight[i]; i += 1; }
     out
+}
+
+// Precomputed shuffle masks for decoding 2-bit values to float indices
+// Each byte index (0-255) maps to 16 bytes (4 floats)
+static mut SHUFFLE_MASK_TABLE: [[u8; 16]; 256] = [[0; 16]; 256];
+static mut SHUFFLE_TABLE_INITIALIZED: bool = false;
+
+pub unsafe fn init_shuffle_table() {
+    if SHUFFLE_TABLE_INITIALIZED { return; }
+    for b in 0..256usize {
+        for i in 0..4 {
+            let shift = (3 - i) * 2;
+            let bits = (b >> shift) & 0b11;
+            // bits 00->0, 01->1, 11->2, 10->3
+            let idx = (bits ^ (bits >> 1)) as u8;
+            for j in 0..4 {
+                SHUFFLE_MASK_TABLE[b][(i * 4 + j) as usize] = idx * 4 + j as u8;
+            }
+        }
+    }
+    SHUFFLE_TABLE_INITIALIZED = true;
+}
+
+#[inline(always)]
+pub unsafe fn genomic_dot_product_neon(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride: usize,
+    n_blocks: usize,
+) -> f32 {
+    let mut sum_v = vdupq_n_f32(0.0);
+    let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
+
+    for j in 0..n_blocks {
+        let c_v = vld1q_u8(centroids.as_ptr().add(j * 4) as *const u8);
+        let input_block_ptr = input.as_ptr().add(j * stride * 4);
+        let weights_block_ptr = weights.as_ptr().add(j * stride);
+
+        for k in 0..stride {
+            let byte = *weights_block_ptr.add(k);
+            let mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
+            let v_vals = vqtbl1q_u8(c_v, mask);
+            let v_vals_f = vreinterpretq_f32_u8(v_vals);
+            let v_in = vld1q_f32(input_block_ptr.add(k * 4));
+            sum_v = vfmaq_f32(sum_v, v_vals_f, v_in);
+        }
+    }
+    vaddvq_f32(sum_v)
 }
 #[cfg(target_arch = "aarch64")]
 #[inline(always)]
