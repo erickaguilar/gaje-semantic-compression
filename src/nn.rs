@@ -45,11 +45,12 @@ impl GenomicLinear {
         let has_anchors = !self.anchors.is_empty();
         let has_mask = !self.precision_mask.is_empty();
         let has_epi = !self.epigenetic_database.is_empty();
+        let has_tri = !self.triplet_database.is_empty();
 
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let row_offset = i * n_blocks * self.stride;
             
-            let mut row_sum = if !has_mask && !has_epi {
+            let mut row_sum = if !has_mask && !has_epi && !has_tri {
                 let row_weights = &self.database[row_offset .. row_offset + n_blocks * self.stride];
                 let row_centroids = &self.centroids[i * n_blocks * 4 .. (i + 1) * n_blocks * 4];
                 unsafe { genomic_dot_product_neon(row_weights, &input, row_centroids, self.stride, n_blocks) }
@@ -81,6 +82,12 @@ impl GenomicLinear {
                                 val += match eb { 0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0 };
                             }
                             
+                            if mode >= 2 && has_tri {
+                                let ct = &self.triplet_centroids[c_offset..c_offset + 4];
+                                let tb = (self.triplet_database[block_start + k] >> shift) & 0b11;
+                                val += match tb { 0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0 };
+                            }
+                            
                             sum += input_block[dims] * val;
                             dims += 1;
                         }
@@ -107,6 +114,7 @@ impl GenomicLinear {
         let has_anchors = !self.anchors.is_empty();
         let has_mask = !self.precision_mask.is_empty();
         let has_epi = !self.epigenetic_database.is_empty();
+        let has_tri = !self.triplet_database.is_empty();
 
         for i in 0..self.out_features {
             let mut row_sum = 0.0f32;
@@ -130,6 +138,11 @@ impl GenomicLinear {
                             let eb = (self.epigenetic_database[block_start + k] >> shift) & 0b11;
                             val += match eb { 0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0 };
                         }
+                        if mode >= 2 && has_tri {
+                            let ct = &self.triplet_centroids[c_offset..c_offset + 4];
+                            let tb = (self.triplet_database[block_start + k] >> shift) & 0b11;
+                            val += match tb { 0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0 };
+                        }
                         row_sum += input_block[dims] * val;
                         dims += 1;
                     }
@@ -149,11 +162,20 @@ impl GenomicLinear {
                 let mut dims = 0;
                 for k in 0..self.stride {
                     let byte = weights[k];
+                    let mode = if has_mask { self.precision_mask[j * self.stride + k] } else { 0 };
                     for s in 0..4 {
                         let shift = (3 - s) * 2;
                         let bits = (byte >> shift) & 0b11;
                         let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4 };
-                        if c_idx < 4 { self.centroids[c_offset + c_idx] -= grad_scale * input_block[dims]; }
+                        if c_idx < 4 { 
+                            self.centroids[c_offset + c_idx] -= grad_scale * input_block[dims]; 
+                            if mode >= 1 && has_epi {
+                                self.epigenetic_centroids[c_offset + c_idx] -= grad_scale * 0.5 * input_block[dims];
+                            }
+                            if mode >= 2 && has_tri {
+                                self.triplet_centroids[c_offset + c_idx] -= grad_scale * 0.25 * input_block[dims];
+                            }
+                        }
                         dims += 1;
                     }
                 }
@@ -203,55 +225,57 @@ impl GenomicAttention {
         let n_head = self.n_head;
         let n_head_kv = self.n_head_kv;
         let n_groups = n_head / n_head_kv;
+        let scale = 1.0 / (head_dim as f32).sqrt();
 
         let mut q_rope = q.clone();
         let mut k_rope = k.clone();
         
-        // RoPE Fix: Correct scaling and sin_cos usage
-        for h in 0..n_head {
+        // Parallel RoPE applying with correct theta
+        q_rope.par_chunks_exact_mut(head_dim).for_each(|h_q| {
             for i in 0..(head_dim / 2) {
-                let theta = pos as f32 / (10000.0f32.powf(2.0 * i as f32 / head_dim as f32));
+                let freq = 1.0 / 10000.0f32.powf((2 * i) as f32 / head_dim as f32);
+                let theta = pos as f32 * freq;
                 let cos = theta.cos();
                 let sin = theta.sin();
-                let idx0 = h * head_dim + i;
-                let idx1 = h * head_dim + i + head_dim / 2;
-                let q0 = q[idx0];
-                let q1 = q[idx1];
-                q_rope[idx0] = q0 * cos - q1 * sin;
-                q_rope[idx1] = q0 * sin + q1 * cos;
+                let v0 = h_q[i];
+                let v1 = h_q[i + head_dim / 2];
+                h_q[i] = (v0 * cos - v1 * sin) * scale;
+                h_q[i + head_dim / 2] = (v0 * sin + v1 * cos) * scale;
             }
-        }
-        for h in 0..n_head_kv {
+        });
+
+        k_rope.par_chunks_exact_mut(head_dim).for_each(|h_k| {
             for i in 0..(head_dim / 2) {
-                let theta = pos as f32 / (10000.0f32.powf(2.0 * i as f32 / head_dim as f32));
+                let freq = 1.0 / 10000.0f32.powf((2 * i) as f32 / head_dim as f32);
+                let theta = pos as f32 * freq;
                 let cos = theta.cos();
                 let sin = theta.sin();
-                let idx0 = h * head_dim + i;
-                let idx1 = h * head_dim + i + head_dim / 2;
-                let k0 = k[idx0];
-                let k1 = k[idx1];
-                k_rope[idx0] = k0 * cos - k1 * sin;
-                k_rope[idx1] = k0 * sin + k1 * cos;
+                let v0 = h_k[i];
+                let v1 = h_k[i + head_dim / 2];
+                h_k[i] = v0 * cos - v1 * sin;
+                h_k[i + head_dim / 2] = v0 * sin + v1 * cos;
             }
-        }
+        });
 
         self.k_cache.push(k_rope);
         self.v_cache.push(v);
 
-        let mut attn_out = vec![0.0f32; n_head * head_dim];
-        let scale = 1.0 / (head_dim as f32).sqrt();
+        let k_cache = &self.k_cache;
+        let v_cache = &self.v_cache;
 
-        for h in 0..n_head {
+        let attn_out: Vec<f32> = (0..n_head).into_par_iter().flat_map(|h| {
             let kv_h = h / n_groups;
-            let mut scores = vec![0.0f32; self.k_cache.len()];
+            let q_slice = &q_rope[h * head_dim .. (h + 1) * head_dim];
+            
+            let mut scores = vec![0.0f32; k_cache.len()];
             let mut max_score = -f32::INFINITY;
 
-            for t in 0..self.k_cache.len() {
+            for t in 0..k_cache.len() {
+                let k_slice = &k_cache[t][kv_h * head_dim .. (kv_h + 1) * head_dim];
                 let mut score = 0.0f32;
                 for i in 0..head_dim {
-                    score += q_rope[h * head_dim + i] * self.k_cache[t][kv_h * head_dim + i];
+                    score += q_slice[i] * k_slice[i];
                 }
-                score *= scale;
                 scores[t] = score;
                 if score > max_score { max_score = score; }
             }
@@ -263,13 +287,16 @@ impl GenomicAttention {
             }
             let inv_sum = 1.0 / (sum_exp + 1e-9);
             
+            let mut head_out = vec![0.0f32; head_dim];
             for t in 0..scores.len() {
                 let weight = scores[t] * inv_sum;
+                let v_slice = &v_cache[t][kv_h * head_dim .. (kv_h + 1) * head_dim];
                 for i in 0..head_dim {
-                    attn_out[h * head_dim + i] += weight * self.v_cache[t][kv_h * head_dim + i];
+                    head_out[i] += weight * v_slice[i];
                 }
             }
-        }
+            head_out
+        }).collect();
 
         Ok(attn_out)
     }

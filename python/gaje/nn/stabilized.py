@@ -8,6 +8,18 @@ from transformers import AutoTokenizer
 from gaje.utils.quantization import dequantize_q8_0
 from gaje.processing.balancer import SignalToNoiseBalancer
 
+class TensorLoader:
+    """Utility class to index and retrieve tensors from a GGUF reader efficiently."""
+    def __init__(self, reader):
+        self.tensors = {t.name: t for t in reader.tensors}
+        
+    def get(self, name, required=True):
+        if name in self.tensors:
+            return self.tensors[name]
+        if required:
+            raise KeyError(f"Required tensor '{name}' not found in GGUF file.")
+        return None
+
 class GenomicLayer:
     def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6, balancer=None, n_head=None, head_dim=None):
         self.name = name
@@ -108,11 +120,11 @@ class GenomicLayer:
         return res + np.array(self.linear.anchors[idx * self.in_features : (idx + 1) * self.in_features])
 
 class GenomicAttentionLayer:
-    def __init__(self, reader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=None, eps=1e-6):
-        self.q_gen = GenomicLayer(p + "attn_q", next(t for t in reader.tensors if t.name == p + "attn_q.weight"), n_head=n_head, head_dim=head_dim)
-        self.k_gen = GenomicLayer(p + "attn_k", next(t for t in reader.tensors if t.name == p + "attn_k.weight"), n_head=n_head_kv, head_dim=head_dim)
-        self.v_gen = GenomicLayer(p + "attn_v", next(t for t in reader.tensors if t.name == p + "attn_v.weight"))
-        self.w_o = GenomicLayer(p + "attn_output", next(t for t in reader.tensors if t.name == p + "attn_output.weight"))
+    def __init__(self, loader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=None, eps=1e-6):
+        self.q_gen = GenomicLayer(p + "attn_q", loader.get(p + "attn_q.weight"), n_head=n_head, head_dim=head_dim)
+        self.k_gen = GenomicLayer(p + "attn_k", loader.get(p + "attn_k.weight"), n_head=n_head_kv, head_dim=head_dim)
+        self.v_gen = GenomicLayer(p + "attn_v", loader.get(p + "attn_v.weight"))
+        self.w_o = GenomicLayer(p + "attn_output", loader.get(p + "attn_output.weight"))
         self.attn = dna_semantic_compression.GenomicAttention(n_head, n_head_kv, head_dim, rmsnorm_weight.tolist() if rmsnorm_weight is not None else [], eps)
 
     def forward(self, x, pos):
@@ -121,14 +133,14 @@ class GenomicAttentionLayer:
         return self.w_o.forward(np.array(self.attn.forward_attention(q.tolist(), k.tolist(), v.tolist(), pos)))
 
 class GenomicTransformerBlock:
-    def __init__(self, reader, idx, n_head, n_head_kv, head_dim, rope_base, eps):
+    def __init__(self, loader, idx, n_head, n_head_kv, head_dim, rope_base, eps):
         p = f"blk.{idx}."
-        self.attn = GenomicAttentionLayer(reader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=next(t for t in reader.tensors if t.name == p + "attn_norm.weight").data.astype(np.float32), eps=eps)
-        g, u = next(t for t in reader.tensors if t.name == p + "ffn_gate.weight"), next(t for t in reader.tensors if t.name == p + "ffn_up.weight")
+        self.attn = GenomicAttentionLayer(loader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=loader.get(p + "attn_norm.weight").data.astype(np.float32), eps=eps)
+        g, u = loader.get(p + "ffn_gate.weight"), loader.get(p + "ffn_up.weight")
         gate_gen, up_gen = GenomicLayer(p + "gate", g), GenomicLayer(p + "up", u)
         self.swiglu = dna_semantic_compression.GenomicSwiGLU(gate_gen.dna_database, up_gen.dna_database, gate_gen.dna_centroids, gate_gen.out_features, gate_gen.in_features, gate_gen.block_size)
-        self.w_down = GenomicLayer(p + "ffn_down", next(t for t in reader.tensors if t.name == p + "ffn_down.weight"))
-        self.ffn_norm, self.eps = next(t for t in reader.tensors if t.name == p + "ffn_norm.weight").data.astype(np.float32), eps
+        self.w_down = GenomicLayer(p + "ffn_down", loader.get(p + "ffn_down.weight"))
+        self.ffn_norm, self.eps = loader.get(p + "ffn_norm.weight").data.astype(np.float32), eps
 
     def forward(self, x, pos):
         x = x + self.attn.forward(x, pos)
@@ -139,17 +151,23 @@ class GenomicLLM:
     def __init__(self, model_path, num_blocks=None):
         print(f"🧬 Sincronizando Organismo Genómico (2-bit): {os.path.basename(model_path)}")
         self.reader = gguf.GGUFReader(model_path)
+        loader = TensorLoader(self.reader)
+        
         arch = self.reader.fields["general.architecture"].parts[-1]
         if hasattr(arch, 'tolist'): arch = arch.tolist()
         arch = ("".join([chr(x) for x in arch]) if isinstance(arch, list) and isinstance(arch[0], int) else str(arch[0] if isinstance(arch, list) else arch)).strip().replace("\x00", "")
         self.n_embd, self.n_head, self.n_head_kv = int(self.reader.fields[f"{arch}.embedding_length"].parts[-1][0]), int(self.reader.fields[f"{arch}.attention.head_count"].parts[-1][0]), int(self.reader.fields[f"{arch}.attention.head_count_kv"].parts[-1][0])
         self.head_dim, self.n_blocks, self.eps = self.n_embd // self.n_head, int(self.reader.fields[f"{arch}.block_count"].parts[-1][0]) if num_blocks is None else num_blocks, float(self.reader.fields[f"{arch}.attention.layer_norm_rms_epsilon"].parts[-1][0])
-        self.embeddings = GenomicLayer("token_embd", next(t for t in self.reader.tensors if t.name == "token_embd.weight"), balancer=SignalToNoiseBalancer())
-        self.output_norm = next(t for t in self.reader.tensors if t.name == "output_norm.weight").data.astype(np.float32)
-        try: w_head = next(t for t in self.reader.tensors if t.name == "output.weight")
-        except StopIteration: w_head = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
+        
+        self.embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=SignalToNoiseBalancer())
+        self.output_norm = loader.get("output_norm.weight").data.astype(np.float32)
+        
+        w_head = loader.get("output.weight", required=False)
+        if w_head is None:
+             w_head = loader.get("token_embd.weight")
+             
         self.lm_head = GenomicLayer("lm_head", w_head, balancer=SignalToNoiseBalancer())
-        self.blocks = [GenomicTransformerBlock(self.reader, i, self.n_head, self.n_head_kv, self.head_dim, 0, self.eps) for i in range(self.n_blocks)]
+        self.blocks = [GenomicTransformerBlock(loader, i, self.n_head, self.n_head_kv, self.head_dim, 0, self.eps) for i in range(self.n_blocks)]
         self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct")
 
     def forward(self, tokens, clear_cache=True):
