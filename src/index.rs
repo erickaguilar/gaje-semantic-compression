@@ -1,5 +1,4 @@
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 use rayon::prelude::*;
 use std::collections::BinaryHeap;
 use rand::Rng;
@@ -82,6 +81,7 @@ impl GajeIndex {
             let t_s = if tri_strand_actual.is_empty() { dummy_t = vec![0u8; self.stride]; &dummy_t } else { tri_strand_actual };
             return unsafe { calculate_distance_lut_neon(lut_base, lut_epi, lut_tri, strand, e_s, t_s, mask, n_dims) };
         }
+        #[allow(unreachable_code)]
         let mut dist_sq = 0.0f32;
         let mut dims = 0;
         for i in 0..self.stride {
@@ -157,8 +157,8 @@ impl GajeIndex {
         let mut lut_epi = Vec::new();
         if !self.epigenetic_centroids.is_empty() {
             lut_epi.reserve(q.len() * 16);
-            let c_base = &self.centroids;
-            let c_epi = &self.epigenetic_centroids;
+            let _c_base = &self.centroids;
+            let _c_epi = &self.epigenetic_centroids;
             for (d_idx, &val) in q.iter().enumerate() { let cb = if is_multi { &self.centroids[d_idx*4..(d_idx+1)*4] } else { &self.centroids[0..4] }; let ce = if self.epigenetic_centroids.len() == q.len() * 4 { &self.epigenetic_centroids[d_idx*4..(d_idx+1)*4] } else { &self.epigenetic_centroids[0..4] }; for &b_val in cb { for &e_val in ce { let diff = val - (b_val + e_val); lut_epi.push(diff * diff); } } }
         }
         let mut lut_tri = Vec::new();
@@ -250,7 +250,7 @@ impl GajeIndex {
         let mut lut_epi = Vec::new();
         if !self.epigenetic_centroids.is_empty() {
             lut_epi.reserve(query_vector.len() * 16);
-            let c_epi = &self.epigenetic_centroids;
+            let _c_epi = &self.epigenetic_centroids;
             for (d_idx, &val) in query_vector.iter().enumerate() { let cb = if is_multi { &self.centroids[d_idx*4..(d_idx+1)*4] } else { &self.centroids[0..4] }; let ce = if self.epigenetic_centroids.len() == query_vector.len() * 4 { &self.epigenetic_centroids[d_idx*4..(d_idx+1)*4] } else { &self.epigenetic_centroids[0..4] }; for &b_val in cb { for &e_val in ce { let diff = val - (b_val + e_val); lut_epi.push(diff * diff); } } }
         }
         let mut lut_tri = Vec::new();
@@ -273,3 +273,4 @@ impl GajeIndex {
         Ok(results)
     }
 }
+

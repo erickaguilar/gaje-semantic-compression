@@ -1,4 +1,3 @@
-use half::f16;
 use std::arch::aarch64::*;
 
 #[inline(always)]
@@ -75,6 +74,7 @@ pub unsafe fn genomic_dot_product_neon(
     n_blocks: usize,
 ) -> f32 {
     let mut sum_v = vdupq_n_f32(0.0);
+    #[allow(static_mut_refs)]
     let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
 
     for j in 0..n_blocks {

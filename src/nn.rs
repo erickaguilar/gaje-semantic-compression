@@ -1,7 +1,6 @@
 use pyo3::prelude::*;
 use rayon::prelude::*;
 use crate::kernels::*;
-use crate::utils::*;
 use half::f16;
 
 #[pyclass]

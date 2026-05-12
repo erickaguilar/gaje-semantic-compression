@@ -21,6 +21,9 @@ gaje = "gaje.utils.cli:main"
 module-name = "gaje.core._impl"
 python-source = "python"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.bumpversion]
 current_version = "0.6.0"
 commit = true
