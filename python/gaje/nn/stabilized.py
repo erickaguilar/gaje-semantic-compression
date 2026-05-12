@@ -56,57 +56,31 @@ class GenomicLayer:
             rmsnorm_weight.tolist() if rmsnorm_weight is not None else [], eps, self.precision_mask,
             self.epigenetic_database, self.epigenetic_centroids, self.triplet_database, self.triplet_centroids
         )
-        print(f"    [+] Layer {name}: {self.out_features}x{self.in_features}, DB: {len(self.dna_database)} bytes")
 
     def _init_from_f32(self, weights_f32, block_size, anchor_threshold):
-        reshaped = weights_f32.reshape(-1, block_size)
-        base_centroids = np.array([-1.510, -0.4528, 0.4528, 1.510], dtype=np.float32)
         w_matrix = weights_f32.reshape(self.out_features, self.in_features)
         entropies = np.array(dna_semantic_compression.calculate_shannon_entropy(w_matrix.tolist()))
         full_mask = self.balancer.generate_precision_mask(entropies)
-        self.precision_mask = [int(np.max(full_mask[i:i+4])) for i in range(0, self.in_features, 4)]
-        dna_batch, epi_batch, tri_batch = [], [], []
-        all_dna_centroids, all_epi_centroids, all_tri_centroids = [], [], []
-        anchors_f32 = np.zeros_like(weights_f32).reshape(-1)
-        for i in range(len(reshaped)):
-            block_idx_in_row = i % (self.in_features // block_size)
-            block = reshaped[i]
-            block_mean, block_std = np.mean(block), np.std(block) + 1e-6
-            t_base = [block_mean - 1.0 * block_std, block_mean, block_mean + 1.0 * block_std]
-            dna = dna_semantic_compression.quantize_embedding(block.tolist(), t_base)
-            dna_batch.append(dna)
-            c_base = (block_mean + base_centroids * block_std).astype(np.float32)
-            all_dna_centroids.extend(c_base.tolist())
-            residual = block - np.array(dna_semantic_compression.dequantize_embedding(dna, block_size, c_base.tolist()))
-            mode = np.max(full_mask[block_idx_in_row * block_size : (block_idx_in_row + 1) * block_size])
-            if mode >= 1:
-                e_mean, e_std = np.mean(residual), np.std(residual) + 1e-6
-                epi = dna_semantic_compression.quantize_embedding(residual.tolist(), [e_mean - 1.0 * e_std, e_mean, e_mean + 1.0 * e_std])
-                epi_batch.append(epi)
-                c_epi = (e_mean + base_centroids * e_std).astype(np.float32)
-                all_epi_centroids.extend(c_epi.tolist())
-                residual = residual - np.array(dna_semantic_compression.dequantize_embedding(epi, block_size, c_epi.tolist()))
-            else:
-                epi_batch.append(b"\x00" * (block_size // 4))
-                all_epi_centroids.extend([0.0] * 4)
-            if mode >= 2:
-                t_mean, t_std = np.mean(residual), np.std(residual) + 1e-6
-                tri = dna_semantic_compression.quantize_embedding(residual.tolist(), [t_mean - 1.0 * t_std, t_mean, t_mean + 1.0 * t_std])
-                tri_batch.append(tri)
-                c_tri = (t_mean + base_centroids * t_std).astype(np.float32)
-                all_tri_centroids.extend(c_tri.tolist())
-                residual = residual - np.array(dna_semantic_compression.dequantize_embedding(tri, block_size, c_tri.tolist()))
-            else:
-                tri_batch.append(b"\x00" * (block_size // 4))
-                all_tri_centroids.extend([0.0] * 4)
-            err_threshold = np.quantile(np.abs(residual), anchor_threshold)
-            anchor_mask = np.abs(residual) >= err_threshold
-            anchors_f32[i * block_size : (i + 1) * block_size][anchor_mask] = residual[anchor_mask]
-        self.dna_database, self.epigenetic_database, self.triplet_database = b"".join(dna_batch), b"".join(epi_batch), b"".join(tri_batch)
-        self.dna_centroids, self.epigenetic_centroids, self.triplet_centroids = all_dna_centroids, all_epi_centroids, all_tri_centroids
-        self.anchors = anchors_f32.tolist()
+        
+        dna_db, dna_centroids, anchors = dna_semantic_compression.genomize_f32_native(
+            weights_f32.tobytes(), 
+            block_size, 
+            anchor_threshold
+        )
+        
+        self.dna_database = dna_db
+        self.dna_centroids = dna_centroids
+        self.anchors = anchors
+        
+        self.epigenetic_database = b"\x00" * (len(dna_db))
+        self.epigenetic_centroids = [0.0] * (len(dna_centroids))
+        self.triplet_database = b"\x00" * (len(dna_db))
+        self.triplet_centroids = [0.0] * (len(dna_centroids))
+        
         stride = block_size // 4
-        self.precision_mask = [int(np.max(full_mask[b*block_size+k*4 : b*block_size+(k+1)*4])) for b in range(self.in_features // block_size) for k in range(stride)] * self.out_features
+        self.precision_mask = [int(np.max(full_mask[b*block_size+k*4 : b*block_size+(k+1)*4])) 
+                               for b in range(self.in_features // block_size) 
+                               for k in range(stride)] * self.out_features
 
     def forward(self, x):
         return np.array(self.linear.forward(x.tolist()), dtype=np.float32)
@@ -149,7 +123,7 @@ class GenomicTransformerBlock:
 
 class GenomicLLM:
     def __init__(self, model_path, num_blocks=None):
-        print(f"🧬 Sincronizando Organismo Genómico (2-bit): {os.path.basename(model_path)}")
+        start_total = time.time()
         self.reader = gguf.GGUFReader(model_path)
         loader = TensorLoader(self.reader)
         
@@ -168,6 +142,9 @@ class GenomicLLM:
              
         self.lm_head = GenomicLayer("lm_head", w_head, balancer=SignalToNoiseBalancer())
         self.blocks = [GenomicTransformerBlock(loader, i, self.n_head, self.n_head_kv, self.head_dim, 0, self.eps) for i in range(self.n_blocks)]
+        
+        end_total = time.time()
+        print(f"[*] Sincronización Genómica (v0.6.1 | Carga Completa) finalizada en {end_total - start_total:.2f}s")
         self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct")
 
     def forward(self, tokens, clear_cache=True):

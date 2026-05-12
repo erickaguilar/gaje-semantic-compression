@@ -30,10 +30,8 @@ def main():
             print("Por favor, asegúrate de que el modelo SmolLM2 F16 esté disponible.")
             return
 
-    # Cargamos el motor estabilizado
-    # Usamos 8 bloques para máxima velocidad en Termux
-    print(f"[*] Sincronizando Organismo Genómico (8 bloques)...")
-    llm = GenomicLLM(model_path, num_blocks=8)
+    # Cargamos el motor estabilizado con Carga Completa
+    llm = GenomicLLM(model_path, num_blocks=None)
     
     print("\n" + "✨ SISTEMA LISTO. Escribe '/exit' para salir.")
     print("-" * 60)

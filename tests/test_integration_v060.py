@@ -13,7 +13,9 @@ def test_full_integration():
     
     # 1. Balancer
     balancer = SignalToNoiseBalancer()
-    mask, _ = balancer.calculate_precision_mask(data)
+    # Generamos entropía aleatoria para el test
+    entropies = np.random.rand(dim).astype(np.float32)
+    mask = balancer.generate_precision_mask(entropies)
     
     # 2. Index con Mask
     # Firma: database, centroids, epi_db, epi_c, tri_db, tri_c, mask
