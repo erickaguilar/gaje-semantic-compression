@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import time
+import argparse
 
 # Ensure we use the local package
 sys.path.append(os.path.abspath("python"))
@@ -9,51 +10,77 @@ sys.path.append(os.path.abspath("python"))
 from gaje.nn.stabilized import GenomicLLM
 
 def main():
-    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Kernel Fixed)")
+    parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: GENOMIC CHAT")
+    parser.add_argument("--model", type=str, default="/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf", help="Path to the GGUF model")
+    parser.add_argument("--blocks", type=int, default=None, help="Number of transformer blocks to load")
+    parser.add_argument("--tokens", type=int, default=50, help="Max new tokens to generate")
+    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    args = parser.parse_args()
+
+    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Modernizado)")
     print("=" * 60)
 
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+    model_path = args.model
     
     if not os.path.exists(model_path):
-        # Intentar buscar en rutas comunes
         possible_paths = [
             model_path,
-            "models/smollm2-135m-f16.gguf",
-            "smollm2-135m-f16.gguf"
+            f"models/{os.path.basename(model_path)}",
+            os.path.basename(model_path)
         ]
         for p in possible_paths:
             if os.path.exists(p):
                 model_path = p
                 break
         else:
-            print(f"❌ Error: El modelo GGUF no se encuentra.")
-            print("Por favor, asegúrate de que el modelo SmolLM2 F16 esté disponible.")
+            print(f"❌ Error: El modelo GGUF no se encuentra en {model_path}.")
+            print("Por favor, proporciona una ruta válida usando --model.")
             return
 
-    # Cargamos el motor estabilizado con Carga Completa
-    llm = GenomicLLM(model_path, num_blocks=None)
+    # Cargamos el motor estabilizado
+    print(f"[*] Inicializando GenomicLLM con {model_path}...")
+    llm = GenomicLLM(model_path, num_blocks=args.blocks)
     
-    print("\n" + "✨ SISTEMA LISTO. Escribe '/exit' para salir.")
+    print("\n✨ SISTEMA LISTO. Escribe '/exit' para salir.")
     print("-" * 60)
+
+    # Initialize chat history for templating
+    chat_history = []
 
     while True:
         try:
-            prompt = input("\n👤 Usuario: ")
-            if prompt.lower() in ['/exit', 'quit', 'exit']:
+            user_input = input("\n👤 Usuario: ")
+            if user_input.lower() in ['/exit', 'quit', 'exit']:
                 break
             
-            if not prompt.strip():
+            if not user_input.strip():
                 continue
+                
+            chat_history.append({"role": "user", "content": user_input})
+            
+            # Apply chat template
+            try:
+                prompt = llm.tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
+            except Exception:
+                # Fallback template if apply_chat_template fails
+                prompt = ""
+                for msg in chat_history:
+                    prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
+                prompt += "<|im_start|>assistant\n"
 
             print("\n🤖 GAJE: ", end="", flush=True)
             
             start_time = time.time()
             token_count = 0
+            full_response = ""
             
-            # Inferencia Generativa (V0.6.1 con Kernel de Rust optimizado)
-            for token_text in llm.generate(prompt, max_new_tokens=50):
+            # Inferencia Generativa
+            for token_text in llm.generate(prompt, max_new_tokens=args.tokens, temperature=args.temperature):
                 print(token_text, end="", flush=True)
+                full_response += token_text
                 token_count += 1
+            
+            chat_history.append({"role": "assistant", "content": full_response.strip()})
             
             duration = time.time() - start_time
             tps = token_count / duration if duration > 0 else 0

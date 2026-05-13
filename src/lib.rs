@@ -1,10 +1,11 @@
 mod kernels;
 mod utils;
 mod index;
-mod nn;
+pub mod nn;
+
 use pyo3::prelude::*;
 use crate::index::GajeIndex;
-use crate::nn::{GenomicLinear, GenomicAttention, GenomicSwiGLU};
+use crate::nn::{GenomicLinear, GenomicAttention, RustGenomicBlock, RustGenomicLLM};
 use crate::utils::*;
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -12,7 +13,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;
-    m.add_class::<GenomicSwiGLU>()?;
+    m.add_class::<RustGenomicBlock>()?;
+    m.add_class::<RustGenomicLLM>()?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

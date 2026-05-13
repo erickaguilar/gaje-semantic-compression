@@ -1,3 +1,13 @@
+## [0.6.2] - 2026-05-12
+### Added
+- **Evolución 4 (Inferencia Nativa en Rust):** Migración completa del bucle `forward` del Transformer a Rust (`RustGenomicLLM`), eliminando el overhead de serialización PyO3 y reduciendo la latencia masivamente a ~0.24s por token (hasta 2.18 t/s en entorno móvil).
+- **Soporte Dinámico de RoPE:** Lectura dinámica de la frecuencia base (`rope.freq_base`) desde el GGUF para modelos modernos (Qwen2, Llama 3).
+- **Refactorización Modular del Core:** División arquitectónica de `src/nn.rs` en subcomponentes limpios (`linear.rs`, `attention.rs`, `block.rs`, `llm.rs`).
+
+### Fixed
+- **Fuga de Precisión por De-permutación:** Eliminado un doble proceso de permutación erróneo sobre los pesos Q/K en GGUF (Llama/Qwen format) que provocaba que el motor arrojara texto "basura".
+- **Crash por Desbordamiento OOM:** Prevención de colisiones por dimensionamiento de embeddings al usar `out_features` nativo como límite seguro.
+
 ## [0.6.1] - 2026-05-10
 ### Added
 - **Direct Genomic Ingestion (DGI):** Puente de alta fidelidad que carga tensores F16/F32 directamente desde GGUF a ADN de 2 bits, eliminando la pérdida de calidad del paso intermedio Q8_0.
