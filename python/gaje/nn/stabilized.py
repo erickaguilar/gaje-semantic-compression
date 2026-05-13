@@ -24,29 +24,25 @@ class GenomicLayer:
     def __init__(self, name, weights_f32_or_tensor, block_size=32, anchor_threshold=0.98, rmsnorm_weight=None, eps=1e-6, balancer=None, n_head=None, head_dim=None):
         self.name = name
         self.block_size = block_size
-        self.balancer = balancer or SignalToNoiseBalancer()
+        self.balancer = balancer
         is_q_or_k = "attn_q" in name or "attn_k" in name
         
         if hasattr(weights_f32_or_tensor, 'tensor_type'):
             tensor = weights_f32_or_tensor
             self.out_features, self.in_features = tensor.shape[::-1] if len(tensor.shape) == 2 else (tensor.shape[0], 1)
+            
+            # Determinamos si el tensor necesita des-permutación (Llama/Qwen style)
+            # Solo se aplica a las proyecciones Q y K.
             if tensor.tensor_type in [gguf.GGMLQuantizationType.F16, gguf.GGMLQuantizationType.F32]:
                 if tensor.tensor_type == gguf.GGMLQuantizationType.F16:
                     weights_f32 = np.frombuffer(tensor.data, dtype=np.float16).astype(np.float32)
                 else:
                     weights_f32 = np.frombuffer(tensor.data, dtype=np.float32)
-                if is_q_or_k and n_head is not None and head_dim is not None:
-                    w_matrix = weights_f32.reshape(self.out_features, self.in_features)
-                    w_new = np.zeros_like(w_matrix)
-                    actual_heads = min(n_head, self.out_features // head_dim)
-                    for h in range(actual_heads):
-                        for i in range(head_dim // 2):
-                            if h * head_dim + head_dim // 2 + i < self.out_features:
-                                w_new[h * head_dim + i] = w_matrix[h * head_dim + 2 * i]
-                                w_new[h * head_dim + head_dim // 2 + i] = w_matrix[h * head_dim + 2 * i + 1]
-                    weights_f32 = w_new.flatten()
+                
+                # Para F16/F32 NO aplicamos des-permutación, ya que suelen venir alineados
                 self._init_from_f32(weights_f32, block_size, anchor_threshold)
             else:
+                # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k)
                 self._init_from_f32(weights_f32, block_size, anchor_threshold)
         else:
@@ -62,8 +58,6 @@ class GenomicLayer:
 
     def _init_from_f32(self, weights_f32, block_size, anchor_threshold):
         w_matrix = weights_f32.reshape(self.out_features, self.in_features)
-        entropies = np.array(dna_semantic_compression.calculate_shannon_entropy(w_matrix.tolist()))
-        full_mask = self.balancer.generate_precision_mask(entropies)
         
         dna_db, dna_centroids, anchors = dna_semantic_compression.genomize_f32_native(
             weights_f32.tobytes(), 
@@ -75,15 +69,25 @@ class GenomicLayer:
         self.dna_centroids = dna_centroids
         self.anchors = anchors
         
-        self.epigenetic_database = b"\x00" * (len(dna_db))
-        self.epigenetic_centroids = [0.0] * (len(dna_centroids))
-        self.triplet_database = b"\x00" * (len(dna_db))
-        self.triplet_centroids = [0.0] * (len(dna_centroids))
+        self.epigenetic_database = b""
+        self.epigenetic_centroids = []
+        self.triplet_database = b""
+        self.triplet_centroids = []
         
-        stride = block_size // 4
-        self.precision_mask = [int(np.max(full_mask[b*block_size+k*4 : b*block_size+(k+1)*4])) 
-                               for b in range(self.in_features // block_size) 
-                               for k in range(stride)] * self.out_features
+        if self.balancer:
+            stride = block_size // 4
+            entropies = np.array(dna_semantic_compression.calculate_shannon_entropy(w_matrix.tolist()))
+            full_mask = self.balancer.generate_precision_mask(entropies)
+            self.precision_mask = [int(np.max(full_mask[b*block_size+k*4 : b*block_size+(k+1)*4])) 
+                                   for b in range(self.in_features // block_size) 
+                                   for k in range(stride)] * self.out_features
+            
+            self.epigenetic_database = b"\x00" * (len(dna_db))
+            self.epigenetic_centroids = [0.0] * (len(dna_centroids))
+            self.triplet_database = b"\x00" * (len(dna_db))
+            self.triplet_centroids = [0.0] * (len(dna_centroids))
+        else:
+            self.precision_mask = []
 
     def forward(self, x):
         return np.array(self.linear.forward(x.tolist()), dtype=np.float32)
@@ -142,28 +146,31 @@ class GenomicLLM:
         rope_base_field = f"{arch}.rope.freq_base"
         self.rope_base = float(self.reader.fields[rope_base_field].parts[-1][0]) if rope_base_field in self.reader.fields else 10000.0
         
-        embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=SignalToNoiseBalancer())
+        # Forzamos anclas totales (-1.0 threshold) para las capas más frágiles
+        embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=None, anchor_threshold=-1.0)
         output_norm = loader.get("output_norm.weight").data.astype(np.float32).tolist()
         
         w_head = loader.get("output.weight", required=False)
         if w_head is None:
              w_head = loader.get("token_embd.weight")
              
-        lm_head = GenomicLayer("lm_head", w_head, balancer=SignalToNoiseBalancer())
+        lm_head = GenomicLayer("lm_head", w_head, balancer=None, anchor_threshold=-1.0)
         
         rust_blocks = []
         for i in range(self.n_blocks):
             p = f"blk.{i}."
-            q_gen = GenomicLayer(p + "attn_q", loader.get(p + "attn_q.weight"), n_head=self.n_head, head_dim=self.head_dim)
-            k_gen = GenomicLayer(p + "attn_k", loader.get(p + "attn_k.weight"), n_head=self.n_head_kv, head_dim=self.head_dim)
-            v_gen = GenomicLayer(p + "attn_v", loader.get(p + "attn_v.weight"))
-            w_o = GenomicLayer(p + "attn_output", loader.get(p + "attn_output.weight"))
+            # Protegemos Q, K, V, O con anclas totales (-1.0) para asegurar coherencia en la atención
+            q_gen = GenomicLayer(p + "attn_q", loader.get(p + "attn_q.weight"), n_head=self.n_head, head_dim=self.head_dim, balancer=None, anchor_threshold=-1.0)
+            k_gen = GenomicLayer(p + "attn_k", loader.get(p + "attn_k.weight"), n_head=self.n_head_kv, head_dim=self.head_dim, balancer=None, anchor_threshold=-1.0)
+            v_gen = GenomicLayer(p + "attn_v", loader.get(p + "attn_v.weight"), balancer=None, anchor_threshold=-1.0)
+            w_o = GenomicLayer(p + "attn_output", loader.get(p + "attn_output.weight"), balancer=None, anchor_threshold=-1.0)
             attn_norm = loader.get(p + "attn_norm.weight").data.astype(np.float32).tolist()
             attn = dna_semantic_compression.GenomicAttention(self.n_head, self.n_head_kv, self.head_dim, attn_norm, self.eps, self.rope_base)
             
+            # Las capas FFN siguen en 2-bit, pero con mayor densidad de anclas (threshold 0.75) para evitar degradación de señal
             g, u = loader.get(p + "ffn_gate.weight"), loader.get(p + "ffn_up.weight")
-            gate_gen, up_gen = GenomicLayer(p + "gate", g), GenomicLayer(p + "up", u)
-            w_down = GenomicLayer(p + "ffn_down", loader.get(p + "ffn_down.weight"))
+            gate_gen, up_gen = GenomicLayer(p + "gate", g, balancer=None, anchor_threshold=0.75), GenomicLayer(p + "up", u, balancer=None, anchor_threshold=0.75)
+            w_down = GenomicLayer(p + "ffn_down", loader.get(p + "ffn_down.weight"), balancer=None, anchor_threshold=0.75)
             ffn_norm = loader.get(p + "ffn_norm.weight").data.astype(np.float32).tolist()
             
             rust_block = dna_semantic_compression.RustGenomicBlock(
@@ -189,11 +196,33 @@ class GenomicLLM:
             clear_cache = False # Only clear on first token of prompt
         return np.stack(all_logits)
 
-    def generate(self, prompt, max_new_tokens=20, temperature=0.7):
+    def generate(self, prompt, max_new_tokens=20, temperature=0.7, top_p=0.9, repetition_penalty=1.2):
         tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
+        generated_tokens = tokens.copy()
+        
+        # Inferencia inicial (prompt)
         next_token_logits = self.forward(tokens, clear_cache=True)[-1]
+        
         for _ in range(max_new_tokens):
-            next_id = int(np.argmax(next_token_logits / max(temperature, 1e-6)))
-            if next_id == self.tokenizer.eos_token_id: break
-            next_token_logits = self.forward([next_id], clear_cache=False)[-1]
+            # Aplicar penalización de repetición nativa en Rust
+            penalized_logits = dna_semantic_compression.apply_repetition_penalty(
+                next_token_logits.tolist(), 
+                repetition_penalty, 
+                generated_tokens[-20:] # Mirar últimos 20 tokens
+            )
+            
+            # Muestreo Top-P nativo en Rust
+            next_id = dna_semantic_compression.sample_top_p(
+                penalized_logits, 
+                temperature, 
+                top_p
+            )
+            
+            if next_id == self.tokenizer.eos_token_id: 
+                break
+                
+            generated_tokens.append(next_id)
             yield self.tokenizer.decode([next_id])
+            
+            # Siguiente paso de inferencia (incremental)
+            next_token_logits = self.forward([next_id], clear_cache=False)[-1]

@@ -8,21 +8,30 @@ use half::f16;
 pub struct GenomicLinear {
     #[pyo3(get)]
     pub database: Vec<u8>,
+    #[pyo3(get)]
     pub epigenetic_database: Vec<u8>,
+    #[pyo3(get)]
     pub triplet_database: Vec<u8>,
     pub anchors: Vec<f16>,
-    pub centroids: Vec<f16>,
-    pub epigenetic_centroids: Vec<f16>,
-    pub triplet_centroids: Vec<f16>,
+    #[pyo3(get)]
+    pub centroids: Vec<f32>,
+    #[pyo3(get)]
+    pub epigenetic_centroids: Vec<f32>,
+    #[pyo3(get)]
+    pub triplet_centroids: Vec<f32>,
     #[pyo3(get)]
     pub out_features: usize,
     #[pyo3(get)]
     pub in_features: usize,
     #[pyo3(get)]
     pub block_size: usize,
+    #[pyo3(get)]
     pub rmsnorm_weight: Vec<f32>,
+    #[pyo3(get)]
     pub eps: f32,
+    #[pyo3(get)]
     pub precision_mask: Vec<u8>,
+    #[pyo3(get)]
     pub stride: usize,
 }
 
@@ -33,20 +42,12 @@ impl GenomicLinear {
     pub fn new(database: Vec<u8>, anchors: Vec<f32>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize, rmsnorm_weight: Vec<f32>, eps: f32, precision_mask: Vec<u8>, epigenetic_database: Vec<u8>, epigenetic_centroids: Vec<f32>, triplet_database: Vec<u8>, triplet_centroids: Vec<f32>) -> Self {
         let stride = block_size / 4;
         let anchors = anchors.into_iter().map(f16::from_f32).collect();
-        let centroids = centroids.into_iter().map(f16::from_f32).collect();
-        let epigenetic_centroids = epigenetic_centroids.into_iter().map(f16::from_f32).collect();
-        let triplet_centroids = triplet_centroids.into_iter().map(f16::from_f32).collect();
         GenomicLinear { database, epigenetic_database, triplet_database, anchors, centroids, epigenetic_centroids, triplet_centroids, out_features, in_features, block_size, rmsnorm_weight, eps, precision_mask, stride }
     }
 
     #[getter]
     pub fn anchors(&self) -> Vec<f32> {
         self.anchors.iter().map(|&x| x.to_f32()).collect()
-    }
-
-    #[getter]
-    pub fn centroids(&self) -> Vec<f32> {
-        self.centroids.iter().map(|&x| x.to_f32()).collect()
     }
 
     pub fn forward(&self, mut input: Vec<f32>) -> PyResult<Vec<f32>> {
@@ -66,9 +67,7 @@ impl GenomicLinear {
             let mut row_sum = if !has_mask && !has_epi && !has_tri {
                 let row_weights = &self.database[row_offset .. row_offset + n_blocks * self.stride];
                 let row_centroids = &self.centroids[i * n_blocks * 4 .. (i + 1) * n_blocks * 4];
-                // Convert f16 centroids to f32 for NEON (SIMD optimization)
-                let c32: Vec<f32> = row_centroids.iter().map(|&c| c.to_f32()).collect();
-                unsafe { genomic_dot_product_neon(row_weights, &input, &c32, self.stride, n_blocks) }
+                unsafe { genomic_dot_product_neon(row_weights, &input, row_centroids, self.stride, n_blocks) }
             } else {
                 let mut sum = 0.0f32;
                 for j in 0..n_blocks {
@@ -87,20 +86,20 @@ impl GenomicLinear {
                             let shift = (3 - s) * 2;
                             let bits = (byte >> shift) & 0b11;
                             let mut val = match bits {
-                                0b00 => c[0].to_f32(), 0b01 => c[1].to_f32(), 0b11 => c[2].to_f32(), 0b10 => c[3].to_f32(),
+                                0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3],
                                 _ => 0.0
                             };
 
                             if mode >= 1 && has_epi {
                                 let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
                                 let eb = (self.epigenetic_database[block_start + k] >> shift) & 0b11;
-                                val += match eb { 0b00 => ce[0].to_f32(), 0b01 => ce[1].to_f32(), 0b11 => ce[2].to_f32(), 0b10 => ce[3].to_f32(), _ => 0.0 };
+                                val += match eb { 0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0 };
                             }
 
                             if mode >= 2 && has_tri {
                                 let ct = &self.triplet_centroids[c_offset..c_offset + 4];
                                 let tb = (self.triplet_database[block_start + k] >> shift) & 0b11;
-                                val += match tb { 0b00 => ct[0].to_f32(), 0b01 => ct[1].to_f32(), 0b11 => ct[2].to_f32(), 0b10 => ct[3].to_f32(), _ => 0.0 };
+                                val += match tb { 0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0 };
                             }
 
                             sum += input_block[dims] * val;
@@ -113,10 +112,11 @@ impl GenomicLinear {
 
             if has_anchors {
                 let anchor_row = &self.anchors[i * self.in_features .. (i + 1) * self.in_features];
+                // Convert f16 anchors to f32 temporarily to use NEON
                 let a32: Vec<f32> = anchor_row.iter().map(|&a| a.to_f32()).collect();
                 row_sum += unsafe { dot_product_neon(&a32, &input) };
             }
-            row_sum.clamp(-64.0, 64.0)
+            row_sum.clamp(-128.0, 128.0)
         }).collect();
 
         Ok(results)
@@ -135,10 +135,9 @@ impl GenomicLinear {
         for b in 0..n_blocks {
             let block_dna = &row_dna[b * self.stride .. (b + 1) * self.stride];
             let c_offset = (idx * n_blocks + b) * 4;
-            let centroids_f16 = &self.centroids[c_offset .. c_offset + 4];
-            let centroids_f32: Vec<f32> = centroids_f16.iter().map(|&c| c.to_f32()).collect();
+            let centroids_f32 = &self.centroids[c_offset .. c_offset + 4];
             
-            let decoded = crate::utils::dequantize_embedding(block_dna.to_vec(), self.block_size, Some(centroids_f32))?;
+            let decoded = crate::utils::dequantize_embedding(block_dna.to_vec(), self.block_size, Some(centroids_f32.to_vec()))?;
             for i in 0..self.block_size {
                 res[b * self.block_size + i] = decoded[i];
             }
@@ -181,18 +180,18 @@ impl GenomicLinear {
                         let shift = (3 - s) * 2;
                         let bits = (byte >> shift) & 0b11;
                         let mut val = match bits {
-                            0b00 => c[0].to_f32(), 0b01 => c[1].to_f32(), 0b11 => c[2].to_f32(), 0b10 => c[3].to_f32(),
+                            0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3],
                             _ => 0.0
                         };
                         if mode >= 1 && has_epi {
                             let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
                             let eb = (self.epigenetic_database[block_start + k] >> shift) & 0b11;
-                            val += match eb { 0b00 => ce[0].to_f32(), 0b01 => ce[1].to_f32(), 0b11 => ce[2].to_f32(), 0b10 => ce[3].to_f32(), _ => 0.0 };
+                            val += match eb { 0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0 };
                         }
                         if mode >= 2 && has_tri {
                             let ct = &self.triplet_centroids[c_offset..c_offset + 4];
                             let tb = (self.triplet_database[block_start + k] >> shift) & 0b11;
-                            val += match tb { 0b00 => ct[0].to_f32(), 0b01 => ct[1].to_f32(), 0b11 => ct[2].to_f32(), 0b10 => ct[3].to_f32(), _ => 0.0 };
+                            val += match tb { 0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0 };
                         }
                         row_sum += input_block[dims] * val;
                         dims += 1;
@@ -219,15 +218,15 @@ impl GenomicLinear {
                         let bits = (byte >> shift) & 0b11;
                         let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4 };
                         if c_idx < 4 { 
-                            let current = self.centroids[c_offset + c_idx].to_f32();
-                            self.centroids[c_offset + c_idx] = f16::from_f32(current - grad_scale * input_block[dims]); 
+                            let current = self.centroids[c_offset + c_idx];
+                            self.centroids[c_offset + c_idx] = current - grad_scale * input_block[dims]; 
                             if mode >= 1 && has_epi {
-                                let current_e = self.epigenetic_centroids[c_offset + c_idx].to_f32();
-                                self.epigenetic_centroids[c_offset + c_idx] = f16::from_f32(current_e - grad_scale * 0.5 * input_block[dims]);
+                                let current_e = self.epigenetic_centroids[c_offset + c_idx];
+                                self.epigenetic_centroids[c_offset + c_idx] = current_e - grad_scale * 0.5 * input_block[dims];
                             }
                             if mode >= 2 && has_tri {
-                                let current_t = self.triplet_centroids[c_offset + c_idx].to_f32();
-                                self.triplet_centroids[c_offset + c_idx] = f16::from_f32(current_t - grad_scale * 0.25 * input_block[dims]);
+                                let current_t = self.triplet_centroids[c_offset + c_idx];
+                                self.triplet_centroids[c_offset + c_idx] = current_t - grad_scale * 0.25 * input_block[dims];
                             }
                         }
                         dims += 1;

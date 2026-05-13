@@ -14,7 +14,9 @@ def main():
     parser.add_argument("--model", type=str, default="/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf", help="Path to the GGUF model")
     parser.add_argument("--blocks", type=int, default=None, help="Number of transformer blocks to load")
     parser.add_argument("--tokens", type=int, default=50, help="Max new tokens to generate")
-    parser.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
+    parser.add_argument("--temperature", type=float, default=0.8, help="Sampling temperature")
+    parser.add_argument("--top-p", type=float, default=0.9, help="Top-P sampling")
+    parser.add_argument("--penalty", type=float, default=1.5, help="Repetition penalty")
     args = parser.parse_args()
 
     print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Modernizado)")
@@ -85,7 +87,10 @@ def main():
             duration = time.time() - start_time
             tps = token_count / duration if duration > 0 else 0
             
-            print(f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s | Precision Mixta: Activa]")
+            # Detect if mixed precision was actually used (experimental)
+            pm_status = "Activa" if any(b.q_gen.precision_mask for b in llm.rust_llm.blocks) else "Inactiva"
+
+            print(f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s | Precision Mixta: {pm_status}]")
             
         except KeyboardInterrupt:
             break
