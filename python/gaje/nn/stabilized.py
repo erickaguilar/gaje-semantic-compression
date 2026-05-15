@@ -251,16 +251,16 @@ class GenomicLLM:
         
         # Initialization logic
         if loader:
-            embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=None, anchor_threshold=-1.0, config=self.config)
+            self.embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=None, anchor_threshold=-1.0, config=self.config)
             output_norm = loader.get("output_norm.weight").data.astype(np.float32).tolist()
             w_head = loader.get("output.weight", required=False) or loader.get("token_embd.weight")
-            lm_head = GenomicLayer("lm_head", w_head, balancer=None, anchor_threshold=0.1, config=self.config)
+            self.lm_head = GenomicLayer("lm_head", w_head, balancer=None, anchor_threshold=0.1, config=self.config)
         else:
             emb_w = np.random.normal(0, 0.02, (50257, self.n_embd)).astype(np.float32) 
-            embeddings = GenomicLayer("token_embd", emb_w, balancer=None, anchor_threshold=-1.0, config=self.config)
+            self.embeddings = GenomicLayer("token_embd", emb_w, balancer=None, anchor_threshold=-1.0, config=self.config)
             output_norm = np.ones(self.n_embd).astype(np.float32).tolist()
             lm_head_w = np.random.normal(0, 0.02, (50257, self.n_embd)).astype(np.float32)
-            lm_head = GenomicLayer("lm_head", lm_head_w, balancer=None, anchor_threshold=0.1, config=self.config)
+            self.lm_head = GenomicLayer("lm_head", lm_head_w, balancer=None, anchor_threshold=0.1, config=self.config)
         
         rust_blocks = []
         self.blocks = []
@@ -275,7 +275,7 @@ class GenomicLLM:
             if (i+1) % 10 == 0: print(f"    [~] Bloque {i+1}/{self.n_blocks} sincronizado...")
             
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
-            embeddings.linear, rust_blocks, output_norm, lm_head.linear, self.eps
+            self.embeddings.linear, rust_blocks, output_norm, self.lm_head.linear, self.eps
         )
         
         end_total = time.time()
@@ -344,16 +344,19 @@ class GenomicLLM:
             # Siguiente paso de inferencia (incremental)
             next_token_logits = self.forward([next_id], clear_cache=False)[-1]
 
-    def save(self, output_dir):
-        """Saves the entire genomic organism to a directory."""
+    def save(self, output_path):
+        """Saves the entire genomic organism to a single .gaje database."""
+        import json
         import os
-        from gaje.core.archive import GAJEArchive
         
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if not output_path.endswith('.gaje'):
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            output_path = os.path.join(output_path, "model.gaje")
+            
+        db_writer = dna_semantic_compression.GajeDatabaseWriter(output_path)
             
         # Save metadata
-        import json
         metadata = {
             "config": {
                 "name": self.config.name,
@@ -368,24 +371,24 @@ class GenomicLLM:
             "n_blocks": self.n_blocks,
             "eps": self.eps
         }
-        with open(os.path.join(output_dir, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=4)
+        db_writer.write_metadata("config", json.dumps(metadata))
             
         def save_layer(layer, name):
-            archive = GAJEArchive(
-                codebook={"centroids": layer.linear.centroids, "block_size": layer.block_size}
-            )
-            # Store anchors as epigenetic strand for now in the archive format or extend format
-            # For now, we'll use a simple numpy save for everything in the folder for speed
-            np.save(os.path.join(output_dir, f"{name}.dna.npy"), np.frombuffer(layer.linear.database, dtype=np.uint8))
-            np.save(os.path.join(output_dir, f"{name}.centroids.npy"), np.array(layer.linear.centroids, dtype=np.float32))
-            np.save(os.path.join(output_dir, f"{name}.anchors.npy"), np.array(layer.linear.anchors(), dtype=np.float16))
+            db_writer.write_tensor(f"{name}.dna", np.frombuffer(layer.linear.database, dtype=np.uint8).tobytes())
+            db_writer.write_tensor(f"{name}.centroids", np.array(layer.linear.centroids, dtype=np.float32).tobytes())
+            db_writer.write_tensor(f"{name}.anchors", np.array(layer.linear.anchors, dtype=np.float16).tobytes())
             if hasattr(layer.linear, 'bias') and len(layer.linear.bias) > 0:
-                np.save(os.path.join(output_dir, f"{name}.bias.npy"), np.array(layer.linear.bias, dtype=np.float32))
+                db_writer.write_tensor(f"{name}.bias", np.array(layer.linear.bias, dtype=np.float32).tobytes())
+                
+            if hasattr(layer.linear, 'precision_mask') and len(layer.linear.precision_mask) > 0:
+                db_writer.write_tensor(f"{name}.precision_mask", np.frombuffer(layer.linear.precision_mask, dtype=np.uint8).tobytes())
+                db_writer.write_tensor(f"{name}.epi_dna", np.frombuffer(layer.linear.epigenetic_database, dtype=np.uint8).tobytes())
+                db_writer.write_tensor(f"{name}.epi_centroids", np.array(layer.linear.epigenetic_centroids, dtype=np.float32).tobytes())
+                db_writer.write_tensor(f"{name}.tri_dna", np.frombuffer(layer.linear.triplet_database, dtype=np.uint8).tobytes())
+                db_writer.write_tensor(f"{name}.tri_centroids", np.array(layer.linear.triplet_centroids, dtype=np.float32).tobytes())
 
         # Save Embeddings
         save_layer(self.embeddings, "token_embd")
-        
         # Save LM Head
         save_layer(self.lm_head, "lm_head")
         
@@ -400,40 +403,130 @@ class GenomicLLM:
             save_layer(block.up_gen, p + "ffn_up")
             save_layer(block.w_down, p + "ffn_down")
             
-        print(f"📦 Organismo genómico guardado en: {output_dir}")
+        print(f"📦 Organismo genómico guardado en: {output_path}")
 
     @classmethod
-    def load_genomic(cls, input_dir):
-        """Loads a previously saved genomic organism."""
-        import os
+    def load_genomic(cls, input_path):
+        """Loads a previously saved genomic organism from a .gaje database."""
         import json
+        import os
+        import time
         from gaje.nn.configs import ArchitectureConfig
         
-        with open(os.path.join(input_dir, "metadata.json"), "r") as f:
-            meta = json.load(f)
+        if not input_path.endswith('.gaje'):
+            input_path = os.path.join(input_path, "model.gaje")
+            
+        db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
+        meta_str = db_reader.read_metadata("config")
+        meta = json.loads(meta_str)
             
         config = ArchitectureConfig(**meta["config"])
-        # Initialize an empty model with the right config
-        model = cls(config=config, num_blocks=meta["n_blocks"])
+        
+        # Instantiate model directly without `__init__` calling random generation
+        model = cls.__new__(cls)
+        model.config = config
         model.n_embd = meta["n_embd"]
         model.n_head = meta["n_head"]
         model.n_head_kv = meta["n_head_kv"]
+        model.head_dim = model.n_embd // model.n_head
+        model.n_blocks = meta["n_blocks"]
         model.eps = meta["eps"]
         model.rope_base = meta["config"]["rope_base"]
+        
+        print(f"🧬 Despertando Organismo GAJE desde base de datos: {input_path}")
+        start_total = time.time()
 
         def load_linear(name, out_features, in_features):
-            dna = np.load(os.path.join(input_dir, f"{name}.dna.npy")).tobytes()
-            centroids = np.load(os.path.join(input_dir, f"{name}.centroids.npy")).tolist()
-            anchors = np.load(os.path.join(input_dir, f"{name}.anchors.npy")).astype(np.float32).tolist()
-            bias_path = os.path.join(input_dir, f"{name}.bias.npy")
-            bias = np.load(bias_path).tolist() if os.path.exists(bias_path) else []
+            dna = db_reader.read_tensor(f"{name}.dna")
+            centroids = np.frombuffer(db_reader.read_tensor(f"{name}.centroids"), dtype=np.float32).tolist()
+            anchors = np.frombuffer(db_reader.read_tensor(f"{name}.anchors"), dtype=np.float16).astype(np.float32).tolist()
             
-            return dna_semantic_compression.GenomicLinear(
-                dna, anchors, centroids, out_features, in_features, 32, bias=bias
+            bias = []
+            if db_reader.has_tensor(f"{name}.bias"):
+                bias = np.frombuffer(db_reader.read_tensor(f"{name}.bias"), dtype=np.float32).tolist()
+                
+            precision_mask = []
+            epi_dna = b""
+            epi_centroids = []
+            tri_dna = b""
+            tri_centroids = []
+            
+            if db_reader.has_tensor(f"{name}.precision_mask"):
+                precision_mask = list(db_reader.read_tensor(f"{name}.precision_mask"))
+                epi_dna = db_reader.read_tensor(f"{name}.epi_dna")
+                epi_centroids = np.frombuffer(db_reader.read_tensor(f"{name}.epi_centroids"), dtype=np.float32).tolist()
+                tri_dna = db_reader.read_tensor(f"{name}.tri_dna")
+                tri_centroids = np.frombuffer(db_reader.read_tensor(f"{name}.tri_centroids"), dtype=np.float32).tolist()
+            
+            linear = dna_semantic_compression.GenomicLinear(
+                dna, anchors, centroids, out_features, in_features, 32, 
+                bias=bias,
+                precision_mask=precision_mask,
+                epigenetic_database=epi_dna,
+                epigenetic_centroids=epi_centroids,
+                triplet_database=tri_dna,
+                triplet_centroids=tri_centroids
             )
-
-        # We would need to reconstruct all Rust objects.
-        # This is a bit complex for a quick fix, so for Phase 3
-        # we will focus on the training script first and refine the loader.
-        print("[!] Warning: load_genomic is a placeholder for full reconstruction.")
+            
+            # Create a mock wrapper for Python interface
+            class MockLayer:
+                def __init__(self, lin):
+                    self.linear = lin
+                    self.block_size = 32
+                def forward(self, x):
+                    return np.array(self.linear.forward(x.tolist() if hasattr(x, "tolist") else x), dtype=np.float32)
+            
+            return MockLayer(linear)
+            
+        model.embeddings = load_linear("token_embd", 50257, model.n_embd)
+        model.lm_head = load_linear("lm_head", 50257, model.n_embd)
+        output_norm = np.ones(model.n_embd).astype(np.float32).tolist() # TODO: save/load norm weights properly
+        
+        rust_blocks = []
+        model.blocks = []
+        for i in range(model.n_blocks):
+            p = f"blk.{i}."
+            q_gen = load_linear(p + "attn_q", model.n_head * model.head_dim, model.n_embd)
+            k_gen = load_linear(p + "attn_k", model.n_head_kv * model.head_dim, model.n_embd)
+            v_gen = load_linear(p + "attn_v", model.n_head_kv * model.head_dim, model.n_embd)
+            w_o = load_linear(p + "attn_output", model.n_embd, model.n_head * model.head_dim)
+            
+            gate_gen = load_linear(p + "ffn_gate", model.n_embd * 4, model.n_embd) # approx
+            up_gen = load_linear(p + "ffn_up", model.n_embd * 4, model.n_embd)
+            w_down = load_linear(p + "ffn_down", model.n_embd, model.n_embd * 4)
+            
+            attn_norm_data = np.ones(model.n_embd).astype(np.float32).tolist()
+            ffn_norm_data = np.ones(model.n_embd).astype(np.float32).tolist()
+            
+            attn = dna_semantic_compression.GenomicAttention(model.n_head, model.n_head_kv, model.head_dim, attn_norm_data, model.eps, model.rope_base)
+            
+            act_fn = model.config.ffn_act if model.config else "swiglu"
+            use_gen_norm = model.config.use_genomic_norm if model.config else False
+            
+            rust_block = dna_semantic_compression.RustGenomicBlock(
+                i, attn, q_gen.linear, k_gen.linear, v_gen.linear, w_o.linear,
+                gate_gen.linear, up_gen.linear, w_down.linear, ffn_norm_data, model.eps,
+                act_fn, use_gen_norm
+            )
+            
+            class MockBlock:
+                def __init__(self, rb, q, k, v, o, gate, up, down):
+                    self.rust_block = rb
+                    self.attn_layer = type('obj', (object,), {'q_gen': q, 'k_gen': k, 'v_gen': v, 'w_o': o})
+                    self.gate_gen = gate
+                    self.up_gen = up
+                    self.w_down = down
+            
+            model.blocks.append(MockBlock(rust_block, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down))
+            rust_blocks.append(rust_block)
+            
+        model.rust_llm = dna_semantic_compression.RustGenomicLLM(
+            model.embeddings.linear, rust_blocks, output_norm, model.lm_head.linear, model.eps
+        )
+        
+        from transformers import AutoTokenizer
+        model.tokenizer = AutoTokenizer.from_pretrained(model.config.tokenizer_id)
+        
+        end_total = time.time()
+        print(f"[*] Reconstrucción desde BD finalizada en {end_total - start_total:.2f}s")
         return model
