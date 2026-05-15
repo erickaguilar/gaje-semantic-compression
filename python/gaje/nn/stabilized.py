@@ -73,14 +73,16 @@ class GenomicLayer:
         # Manejo de Bias (Crucial para Qwen2)
         self.bias = []
         if bias_f32_or_tensor is not None:
-            if hasattr(bias_f32_or_tensor, 'data'):
+            if hasattr(bias_f32_or_tensor, 'tensor_type'):
                 b_data = bias_f32_or_tensor.data
                 if bias_f32_or_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
                     self.bias = np.frombuffer(b_data, dtype=np.float16).astype(np.float32).tolist()
                 else:
                     self.bias = np.frombuffer(b_data, dtype=np.float32).tolist()
+            elif hasattr(bias_f32_or_tensor, 'tolist'):
+                self.bias = bias_f32_or_tensor.tolist()
             else:
-                self.bias = bias_f32_or_tensor.tolist() if hasattr(bias_f32_or_tensor, "tolist") else list(bias_f32_or_tensor)
+                self.bias = list(bias_f32_or_tensor)
 
         self.linear = dna_semantic_compression.GenomicLinear(
             self.dna_database, self.anchors, self.dna_centroids, self.out_features, self.in_features, self.block_size,
@@ -282,10 +284,14 @@ class GenomicLLM:
             def __init__(self, n_embd):
                 self.n_embd = n_embd
             def get(self, name, required=True):
+                if not required and "bias" in name:
+                    return np.zeros(self.n_embd).astype(np.float32)
                 if "norm" in name:
-                    return type('obj', (object,), {'data': np.ones(self.n_embd).astype(np.float32)})
+                    # Simulation of GGUF tensor object
+                    return type('obj', (object,), {'data': np.ones(self.n_embd).astype(np.float32), 'tensor_type': 0}) 
                 return np.random.normal(0, 0.02, (self.n_embd, self.n_embd)).astype(np.float32)
-        return GenomicTransformerBlock(MockLoader(self.n_embd), idx, self.n_head, self.n_head_kv, self.head_dim, self.rope_base, self.eps)
+        return GenomicTransformerBlock(MockLoader(self.n_embd), idx, self.n_head, self.n_head_kv, self.head_dim, self.rope_base, self.eps, config=self.config)
+
 
     def forward(self, tokens, clear_cache=True):
         if clear_cache:

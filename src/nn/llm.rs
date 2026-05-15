@@ -82,6 +82,24 @@ impl RustGenomicLLM {
         self.embeddings.get_row(token_id)
     }
 
+    pub fn refine_lm_head(
+        &mut self,
+        input: Vec<f32>,
+        grads: Vec<f32>,
+        lr: f32,
+    ) -> PyResult<()> {
+        self.lm_head.refine_with_grads(input, grads, lr)
+    }
+
+    pub fn refine_embeddings(
+        &mut self,
+        input: Vec<f32>,
+        grads: Vec<f32>,
+        lr: f32,
+    ) -> PyResult<()> {
+        self.embeddings.refine_with_grads(input, grads, lr)
+    }
+
     pub fn clear_cache(&mut self) -> PyResult<()> {
         for block in &mut self.blocks {
             block.clear_cache()?;

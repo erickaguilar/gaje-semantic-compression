@@ -25,4 +25,5 @@ __pycache__/
 
 # Data
 /data/
+/training/
 maintenance/local_artifacts/
