@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     let mut model_path = String::new();
     let mut prompt_arg = None;
+    let mut rollback_target = None;
     
     let mut i = 1;
     while i < args.len() {
@@ -23,6 +24,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             i += 2;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--rollback" && i + 1 < args.len() {
+            rollback_target = Some(args[i+1].parse::<u64>().map_err(|e| e.to_string())?);
             i += 2;
         } else if model_path.is_empty() {
             model_path = args[i].clone();
@@ -33,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path.gaje> [--prompt \"your prompt\"]");
+        println!("Usage: gaje-cli <model_path.gaje> [--prompt \"your prompt\"] [--rollback <timestamp>]");
         return Ok(());
     }
 
@@ -48,6 +52,21 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let mut model = loader.load_llm()?;
     println!("[*] Model & Tokenizer loaded in {:?}", start.elapsed());
+
+    if let Some(target) = rollback_target {
+        println!("[*] Initiating rollback to timestamp: {}", target);
+        let mutations = loader.list_mutations().map_err(|e| e.to_string())?;
+        let mut count = 0;
+        // Mutations are stored with timestamp as key. We want to undo mutations newer than target.
+        for (ts, data) in mutations.into_iter().rev() {
+            if ts > target {
+                let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
+                model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
+                count += 1;
+            }
+        }
+        println!("[+] Rollback complete. Undone {} mutations.", count);
+    }
 
     if let Some(prompt) = prompt_arg {
         generate(&mut model, &tokenizer, &prompt, 50)?;

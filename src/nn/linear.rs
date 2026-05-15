@@ -416,12 +416,23 @@ impl GenomicLinear {
 }
 
 impl GenomicLinear {
-    fn apply_grad_to_row(
+    pub fn apply_grad_to_row(
         &mut self,
         i: usize,
         input: &[f32],
         grad_scale: f32,
         n_blocks: usize,
+    ) {
+        self.apply_grad_to_row_with_delta(i, input, grad_scale, n_blocks, &mut None)
+    }
+
+    fn apply_grad_to_row_with_delta(
+        &mut self,
+        i: usize,
+        input: &[f32],
+        grad_scale: f32,
+        n_blocks: usize,
+        delta_buffer: &mut Option<&mut [f32]>,
     ) {
         let row_offset = i * n_blocks * self.stride;
         for j in 0..n_blocks {
@@ -436,7 +447,7 @@ impl GenomicLinear {
                 if !self.precision_mask.is_empty() {
                     mode = self.precision_mask[j * self.stride + k];
                 }
-                
+
                 for s in 0..4 {
                     let shift = (3 - s) * 2;
                     let bits = (byte >> shift) & 0b11;
@@ -448,22 +459,42 @@ impl GenomicLinear {
                         _ => 4,
                     };
                     if c_idx < 4 {
+                        let delta = grad_scale * input_block[dims];
+                        if let Some(ref mut buf) = delta_buffer {
+                            buf[c_offset + c_idx] += delta;
+                        }
+
                         let current = self.centroids[c_offset + c_idx];
-                        self.centroids[c_offset + c_idx] = current - grad_scale * input_block[dims];
+                        self.centroids[c_offset + c_idx] = current - delta;
+
                         if mode >= 1 && !self.epi_strands.is_empty() {
                             let current_e = self.epigenetic_centroids[c_offset + c_idx];
                             self.epigenetic_centroids[c_offset + c_idx] =
-                                current_e - grad_scale * 0.5 * input_block[dims];
+                                current_e - delta * 0.5;
                         }
                         if mode >= 2 && !self.tri_strands.is_empty() {
                             let current_t = self.triplet_centroids[c_offset + c_idx];
                             self.triplet_centroids[c_offset + c_idx] =
-                                current_t - grad_scale * 0.25 * input_block[dims];
+                                current_t - delta * 0.25;
                         }
                     }
                     dims += 1;
                 }
             }
         }
+    }
+
+    pub fn apply_mutation(&mut self, delta_centroids: Vec<f32>, undo: bool) -> PyResult<()> {
+        if delta_centroids.len() != self.centroids.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("Mutation delta size mismatch"));
+        }
+        for (i, d) in self.centroids.iter_mut().zip(delta_centroids) {
+            if undo {
+                *i += d; // We subtract delta during refinement, so adding it back undoes it
+            } else {
+                *i -= d;
+            }
+        }
+        Ok(())
     }
 }

@@ -82,6 +82,51 @@ impl RustGenomicLLM {
         self.embeddings.get_row(token_id)
     }
 
+    pub fn apply_mutation(
+        &mut self,
+        layer_name: &str,
+        delta_centroids: Vec<f32>,
+        undo: bool,
+    ) -> PyResult<()> {
+        if layer_name == "token_embd" {
+            return self.embeddings.apply_mutation(delta_centroids, undo);
+        }
+        if layer_name == "lm_head" {
+            return self.lm_head.apply_mutation(delta_centroids, undo);
+        }
+        if layer_name.starts_with("blk.") {
+            let parts: Vec<&str> = layer_name.split('.').collect();
+            if parts.len() >= 3 {
+                let block_idx: usize = parts[1].parse().map_err(|e| {
+                    pyo3::exceptions::PyValueError::new_err(format!("Invalid block index: {}", e))
+                })?;
+                let field = parts[2];
+                if block_idx < self.blocks.len() {
+                    let block = &mut self.blocks[block_idx];
+                    match field {
+                        "attn_q" => return block.q_gen.apply_mutation(delta_centroids, undo),
+                        "attn_k" => return block.k_gen.apply_mutation(delta_centroids, undo),
+                        "attn_v" => return block.v_gen.apply_mutation(delta_centroids, undo),
+                        "attn_output" => return block.w_o.apply_mutation(delta_centroids, undo),
+                        "ffn_gate" => return block.gate_gen.apply_mutation(delta_centroids, undo),
+                        "ffn_up" => return block.up_gen.apply_mutation(delta_centroids, undo),
+                        "ffn_down" => return block.w_down.apply_mutation(delta_centroids, undo),
+                        _ => {
+                            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                                "Unknown field: {}",
+                                field
+                            )))
+                        }
+                    }
+                }
+            }
+        }
+        Err(pyo3::exceptions::PyValueError::new_err(format!(
+            "Layer not found: {}",
+            layer_name
+        )))
+    }
+
     pub fn refine_lm_head(
         &mut self,
         input: Vec<f32>,

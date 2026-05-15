@@ -2,6 +2,7 @@ use serde::Deserialize;
 use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
 use crate::db::{TENSOR_TABLE, METADATA_TABLE};
+use std::sync::Arc;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct ArchConfig {
@@ -35,13 +36,13 @@ pub struct ModelConfig {
 }
 
 pub struct NativeLoader {
-    db: Database,
+    db: Arc<Database>,
 }
 
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
         let db = Database::open(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        Ok(NativeLoader { db })
+        Ok(NativeLoader { db: Arc::new(db) })
     }
 
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
@@ -207,6 +208,21 @@ impl NativeLoader {
             lm_head,
             config.eps,
         ))
+    }
+
+    pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
+        let reader = crate::db::GajeDatabaseReader::new_from_db(self.db.clone());
+        reader.list_mutations().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+    }
+
+    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::db::Mutation) -> std::io::Result<()> {
+        let data = bincode::serialize(mutation).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let write_txn = self.db.begin_write().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        {
+            let mut table = write_txn.open_table(crate::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            table.insert(timestamp, data.as_slice()).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        }
+        write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
 }
 
