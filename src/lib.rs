@@ -1,15 +1,25 @@
-mod kernels;
-mod utils;
+#![allow(
+    dead_code,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::manual_checked_ops,
+    clippy::non_canonical_partial_ord_impl,
+    clippy::manual_div_ceil
+)]
 mod index;
+mod kernels;
 pub mod nn;
+mod utils;
 
-use pyo3::prelude::*;
 use crate::index::GajeIndex;
-use crate::nn::{GenomicLinear, GenomicAttention, RustGenomicBlock, RustGenomicLLM};
+use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
 use crate::utils::*;
+use pyo3::prelude::*;
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    unsafe { crate::kernels::init_shuffle_table(); }
+    unsafe {
+        crate::kernels::init_shuffle_table();
+    }
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;

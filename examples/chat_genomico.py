@@ -13,10 +13,10 @@ def main():
     parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: GENOMIC CHAT")
     parser.add_argument("--model", type=str, default="/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf", help="Path to the GGUF model")
     parser.add_argument("--blocks", type=int, default=None, help="Number of transformer blocks to load")
-    parser.add_argument("--tokens", type=int, default=50, help="Max new tokens to generate")
-    parser.add_argument("--temperature", type=float, default=0.8, help="Sampling temperature")
-    parser.add_argument("--top-p", type=float, default=0.9, help="Top-P sampling")
-    parser.add_argument("--penalty", type=float, default=1.5, help="Repetition penalty")
+    parser.add_argument("--tokens", type=int, default=100, help="Max new tokens to generate")
+    parser.add_argument("--temperature", type=float, default=0.3, help="Sampling temperature")
+    parser.add_argument("--top-p", type=float, default=0.8, help="Top-P sampling")
+    parser.add_argument("--penalty", type=float, default=1.15, help="Repetition penalty")
     args = parser.parse_args()
 
     print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Modernizado)")
@@ -60,15 +60,11 @@ def main():
                 
             chat_history.append({"role": "user", "content": user_input})
             
-            # Apply chat template
-            try:
-                prompt = llm.tokenizer.apply_chat_template(chat_history, tokenize=False, add_generation_prompt=True)
-            except Exception:
-                # Fallback template if apply_chat_template fails
-                prompt = ""
-                for msg in chat_history:
-                    prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
-                prompt += "<|im_start|>assistant\n"
+            # Apply chat template (ChatML format)
+            prompt = ""
+            for msg in chat_history:
+                prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
+            prompt += "<|im_start|>assistant\n"
 
             print("\n🤖 GAJE: ", end="", flush=True)
             
@@ -77,7 +73,7 @@ def main():
             full_response = ""
             
             # Inferencia Generativa
-            for token_text in llm.generate(prompt, max_new_tokens=args.tokens, temperature=args.temperature):
+            for token_text in llm.generate(prompt, max_new_tokens=args.tokens, temperature=args.temperature, top_p=args.top_p, repetition_penalty=args.penalty):
                 print(token_text, end="", flush=True)
                 full_response += token_text
                 token_count += 1

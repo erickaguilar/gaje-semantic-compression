@@ -7,7 +7,7 @@ Este documento define la estrategia para medir la degradación de la inteligenci
 | Métrica | Estado | Objetivo (GAJE 2-bit) | Método de Prueba |
 | :--- | :--- | :--- | :--- |
 | **Perplexity (PPL)** | ✅ **Logrado** | < 2.0 | Validado con **1.60** (May 10). |
-| **Fidelidad Logits** | ✅ **Logrado** | > 0.95 CosSim | Alcanzado **0.965** con v0.6.0. |
+| **Fidelidad Logits** | ✅ **Logrado** | > 0.95 CosSim | Alcanzado **0.965** con v0.6.1. |
 | **MSE Local Learning** | ✅ **Validado** | Reducción Error | **-94.93% MSE** en 20 iters (`test_v060`). |
 | **KV-Cache Integrity** | ✅ **Validado** | No Corrupción | 100% Coherencia en 2-bit ADC. |
 | **Anchor Survival Rate**| ✅ **Logrado** | > 99% | Protegido vía clonación selectiva. |
@@ -15,7 +15,7 @@ Este documento define la estrategia para medir la degradación de la inteligenci
 
 ---
 
-## 🛠️ Plan de Implementación de Pruebas (v0.6.0)
+## 🛠️ Plan de Implementación de Pruebas (v0.6.1)
 
 ### Fase 0: Validación de Núcleo (Completado)
 1. **Script:** `tests/test_v060_validation.py`.

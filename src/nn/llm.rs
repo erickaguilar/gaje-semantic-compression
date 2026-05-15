@@ -1,7 +1,7 @@
-use pyo3::prelude::*;
-use crate::nn::linear::GenomicLinear;
-use crate::nn::block::RustGenomicBlock;
 use crate::kernels::rms_norm_neon;
+use crate::nn::block::RustGenomicBlock;
+use crate::nn::linear::GenomicLinear;
+use pyo3::prelude::*;
 
 #[pyclass]
 pub struct RustGenomicLLM {
@@ -38,27 +38,27 @@ impl RustGenomicLLM {
 
     pub fn forward(&mut self, token_id: usize, clear_cache: bool) -> PyResult<Vec<f32>> {
         if clear_cache {
-            for block in &mut self.blocks {
-                block.clear_cache()?;
-            }
+            self.clear_cache()?;
         }
 
-        // The position is determined by the cache length of the first block's attention
-        let pos = if self.blocks.is_empty() { 0 } else { self.blocks[0].attn.k_cache_len() };
+        // The position is exactly the number of tokens already in the cache
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
 
-        // Ensure token_id is within bounds (out_features holds vocabulary size here)
         if token_id >= self.embeddings.out_features {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!("Token id {} out of bounds", token_id)));
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Token id {} out of bounds",
+                token_id
+            )));
         }
 
-        // 1. Fetch embedding manually (similar to get_row in Python)
-        let _n_blocks = self.embeddings.in_features / self.embeddings.block_size;
-        let mut h = vec![0.0f32; self.embeddings.in_features]; 
+        // 1. Fetch embedding
+        let mut h = self.embeddings.get_row(token_id)?;
 
-        // Correct Embedding Retrieval:
-        h = self.embeddings.get_row(token_id)?;
-
-        // 2. Pass through all blocks
+        // 2. Pass through all blocks (position is updated per token)
         for block in &mut self.blocks {
             h = block.forward(h, pos)?;
         }
@@ -70,5 +70,22 @@ impl RustGenomicLLM {
         let logits = self.lm_head.forward(h_norm)?;
 
         Ok(logits)
+    }
+
+    pub fn embeddings_forward(&self, token_id: usize) -> PyResult<Vec<f32>> {
+        if token_id >= self.embeddings.out_features {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Token id {} out of bounds",
+                token_id
+            )));
+        }
+        self.embeddings.get_row(token_id)
+    }
+
+    pub fn clear_cache(&mut self) -> PyResult<()> {
+        for block in &mut self.blocks {
+            block.clear_cache()?;
+        }
+        Ok(())
     }
 }

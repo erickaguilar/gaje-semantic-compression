@@ -13,8 +13,8 @@ def test_coherence():
     print("🧬 Starting Real Coherence Test (Native DGI Flow)")
     print("-" * 50)
     
-    # Using 1 block for minimal verification
-    llm = GenomicLLM(model_path, num_blocks=1)
+    # Using all blocks for full verification
+    llm = GenomicLLM(model_path, num_blocks=None)
     
     prompt = "The capital of France is"
     # Target: " Paris"
