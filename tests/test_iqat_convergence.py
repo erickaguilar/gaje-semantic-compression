@@ -50,7 +50,7 @@ def test_iqat_swiglu_convergence():
     lr = 0.005
     iterations = 50
     for i in range(iterations):
-        block.refine_swiglu(x.tolist(), swiglu_target.tolist(), lr)
+        block.refine_ffn(x.tolist(), swiglu_target.tolist(), lr)
         
     # 7. Error Final
     print(f"[*] Suma de centroides gate (final): {np.sum(block.gate_gen.centroids):.6f}")

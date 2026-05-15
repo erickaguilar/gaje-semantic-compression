@@ -87,7 +87,7 @@ class GenomicTrainer:
                 block_grad = grad_logits[:len(h)] # Crude approximation for Phase 1 demo
                 # last_block.refine_swiglu needs (input_norm, target)
                 # But we have grads. For now we call refine_with_grads if exposed.
-                # Actually, RustGenomicBlock has refine_swiglu(input_norm, target)
+                # Actually, RustGenomicBlock has refine_ffn(input_norm, target)
                 # We can construct a pseudo-target: target = current_output - lr * grad
                 
         return total_loss / len(input_ids)

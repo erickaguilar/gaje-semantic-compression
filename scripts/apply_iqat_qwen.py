@@ -71,7 +71,7 @@ def apply_iqat_calibration(model_path, calibration_prompts, lr=0.005):
                 
                 # 3. Refinamiento IQAT Nativo
                 # El estudiante ajusta sus centroides para minimizar la deriva (drift)
-                student.blocks[b_idx].refine_swiglu(x_norm, teacher_swiglu_target, lr)
+                student.blocks[b_idx].refine_ffn(x_norm, teacher_swiglu_target, lr)
 
         # Liberar memoria de los pesos del maestro del bloque actual
         del w_gate_f32
