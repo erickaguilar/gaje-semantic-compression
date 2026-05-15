@@ -30,6 +30,7 @@ pub struct ModelConfig {
     pub n_head: usize,
     pub n_head_kv: usize,
     pub n_blocks: usize,
+    pub vocab_size: Option<usize>,
     pub eps: f32,
 }
 
@@ -54,6 +55,17 @@ impl NativeLoader {
         Ok(config)
     }
 
+    pub fn load_tokenizer(&self) -> std::io::Result<tokenizers::Tokenizer> {
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        
+        let json_str = table.get("tokenizer").map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "tokenizer not found in database"))?;
+            
+        tokenizers::Tokenizer::from_bytes(json_str.value().as_bytes())
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+    }
+
     fn get_tensor(txn: &ReadTransaction, key: &str) -> Vec<u8> {
         if let Ok(table) = txn.open_table(TENSOR_TABLE) {
             if let Ok(Some(val)) = table.get(key) {
@@ -65,12 +77,11 @@ impl NativeLoader {
     
     fn get_tensor_f32(txn: &ReadTransaction, key: &str) -> Vec<f32> {
         let bytes = Self::get_tensor(txn, key);
+        if bytes.is_empty() { return Vec::new(); }
         let count = bytes.len() / 4;
         let mut res = vec![0.0f32; count];
-        for i in 0..count {
-            let mut buf = [0u8; 4];
-            buf.copy_from_slice(&bytes[i*4..(i+1)*4]);
-            res[i] = f32::from_le_bytes(buf);
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr() as *mut u8, bytes.len());
         }
         res
     }
@@ -79,7 +90,6 @@ impl NativeLoader {
         let dna = Self::get_tensor(txn, &format!("{}.dna", prefix));
         let centroids = Self::get_tensor_f32(txn, &format!("{}.centroids", prefix));
         
-        // Parse f16 anchors to f32
         let anchors_bytes = Self::get_tensor(txn, &format!("{}.anchors", prefix));
         let mut anchors = Vec::new();
         if !anchors_bytes.is_empty() {
@@ -93,7 +103,6 @@ impl NativeLoader {
         }
 
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", prefix));
-        
         let precision_mask = Self::get_tensor(txn, &format!("{}.precision_mask", prefix));
         let epi_dna = Self::get_tensor(txn, &format!("{}.epi_dna", prefix));
         let epi_centroids = Self::get_tensor_f32(txn, &format!("{}.epi_centroids", prefix));
@@ -107,7 +116,7 @@ impl NativeLoader {
             out_features,
             in_features,
             block_size,
-            Vec::new(), // rmsnorm_weight
+            Vec::new(),
             1e-6,
             precision_mask,
             epi_dna,
@@ -122,9 +131,11 @@ impl NativeLoader {
         let config = self.load_config()?;
         let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         
-        let token_embd_dna = Self::get_tensor(&read_txn, "token_embd.dna");
-        let vocab_size = token_embd_dna.len() * 4 / config.n_embd;
         let block_size = 32;
+        let vocab_size = config.vocab_size.unwrap_or_else(|| {
+            let token_embd_dna = Self::get_tensor(&read_txn, "token_embd.dna");
+            token_embd_dna.len() * 4 / config.n_embd
+        });
 
         let embeddings = Self::get_linear(&read_txn, "token_embd", config.n_embd, vocab_size, block_size);
         let lm_head = Self::get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size);

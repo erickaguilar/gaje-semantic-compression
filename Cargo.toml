@@ -11,8 +11,8 @@ crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
 
 [[bin]]
-name = "gaje-chat"
-path = "src/main.rs"
+name = "gaje-cli"
+path = "src/bin/gaje-cli.rs"
 
 [dependencies]
 # PyO3 para la interfaz con Python
@@ -37,10 +37,10 @@ redb = "2.1.1"
 bincode = "1.3.3"
 
 [profile.release]
-# Optimizaciones agresivas para rendimiento nativo en Android/ARM64
-lto = true
-codegen-units = 1
+# Optimizaciones balanceadas para Termux (evita OOM en el linker)
+lto = "thin"
+codegen-units = 16
 opt-level = 3
 panic = "abort"
-strip = true # Elimina símbolos de depuración para reducir el tamaño del binario
+strip = true
 debug = false

@@ -14,8 +14,11 @@ pub struct GenomicAttention {
     pub head_dim: usize,
     pub k_cache: Vec<Vec<f16>>,
     pub v_cache: Vec<Vec<f16>>,
+    #[pyo3(get)]
     pub rmsnorm_weight: Vec<f32>,
+    #[pyo3(get)]
     pub eps: f32,
+    #[pyo3(get)]
     pub rope_base: f32,
 }
 

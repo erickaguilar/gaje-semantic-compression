@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
-use crate::nn::GenomicLinear;
+use std::io::Read;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Codebook {
@@ -41,14 +40,14 @@ impl GAJEArchive {
         f.read_exact(&mut cb_json)?;
         let codebook: HashMap<String, Vec<f32>> = serde_json::from_slice(&cb_json)?;
 
-        let mut epi_codebook = None;
+        let mut epigenetic_codebook = None;
         if ver >= 3 {
             f.read_exact(&mut len_buf)?;
             let epi_cb_len = u32::from_le_bytes(len_buf) as usize;
             let mut epi_cb_json = vec![0u8; epi_cb_len];
             f.read_exact(&mut epi_cb_json)?;
             if epi_cb_len > 2 { // Not just "{}"
-                epi_codebook = Some(serde_json::from_slice(&epi_cb_json)?);
+                epigenetic_codebook = Some(serde_json::from_slice::<HashMap<String, Vec<f32>>>(&epi_cb_json)?);
             }
         }
 

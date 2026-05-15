@@ -6,19 +6,20 @@
     clippy::non_canonical_partial_ord_impl,
     clippy::manual_div_ceil
 )]
-mod index;
-mod kernels;
+pub mod index;
+pub mod kernels;
 pub mod nn;
-mod utils;
-mod archive;
-mod loader;
-mod db;
+pub mod utils;
+pub mod archive;
+pub mod loader;
+pub mod db;
 
 use crate::index::GajeIndex;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
 use crate::db::{GajeDatabaseWriter, GajeDatabaseReader};
 use crate::utils::*;
 use pyo3::prelude::*;
+
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     unsafe {

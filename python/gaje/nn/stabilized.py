@@ -249,6 +249,9 @@ class GenomicLLM:
 
         print(f"[*] RoPE Base: {self.rope_base}")
         
+        self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+        vocab_size = len(self.tokenizer)
+        
         # Initialization logic
         if loader:
             self.embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=None, anchor_threshold=-1.0, config=self.config)
@@ -256,10 +259,10 @@ class GenomicLLM:
             w_head = loader.get("output.weight", required=False) or loader.get("token_embd.weight")
             self.lm_head = GenomicLayer("lm_head", w_head, balancer=None, anchor_threshold=0.1, config=self.config)
         else:
-            emb_w = np.random.normal(0, 0.02, (50257, self.n_embd)).astype(np.float32) 
+            emb_w = np.random.normal(0, 0.02, (vocab_size, self.n_embd)).astype(np.float32) 
             self.embeddings = GenomicLayer("token_embd", emb_w, balancer=None, anchor_threshold=-1.0, config=self.config)
             output_norm = np.ones(self.n_embd).astype(np.float32).tolist()
-            lm_head_w = np.random.normal(0, 0.02, (50257, self.n_embd)).astype(np.float32)
+            lm_head_w = np.random.normal(0, 0.02, (vocab_size, self.n_embd)).astype(np.float32)
             self.lm_head = GenomicLayer("lm_head", lm_head_w, balancer=None, anchor_threshold=0.1, config=self.config)
         
         rust_blocks = []
@@ -348,6 +351,7 @@ class GenomicLLM:
         """Saves the entire genomic organism to a single .gaje database."""
         import json
         import os
+        import tempfile
         
         if not output_path.endswith('.gaje'):
             if not os.path.exists(output_path):
@@ -369,9 +373,23 @@ class GenomicLLM:
             "n_head": self.n_head,
             "n_head_kv": self.n_head_kv,
             "n_blocks": self.n_blocks,
+            "vocab_size": len(self.tokenizer) if hasattr(self, 'tokenizer') else 50257,
             "eps": self.eps
         }
         db_writer.write_metadata("config", json.dumps(metadata))
+        
+        # Save Tokenizer
+        if hasattr(self, 'tokenizer') and self.tokenizer is not None:
+            if hasattr(self.tokenizer, 'is_fast') and self.tokenizer.is_fast and hasattr(self.tokenizer, 'backend_tokenizer'):
+                tokenizer_str = self.tokenizer.backend_tokenizer.to_str()
+                db_writer.write_metadata("tokenizer", tokenizer_str)
+            else:
+                with tempfile.TemporaryDirectory() as tmpdirname:
+                    self.tokenizer.save_pretrained(tmpdirname)
+                    tok_path = os.path.join(tmpdirname, "tokenizer.json")
+                    if os.path.exists(tok_path):
+                        with open(tok_path, "r", encoding="utf-8") as f:
+                            db_writer.write_metadata("tokenizer", f.read())
             
         def save_layer(layer, name):
             db_writer.write_tensor(f"{name}.dna", np.frombuffer(layer.linear.database, dtype=np.uint8).tobytes())
@@ -392,6 +410,10 @@ class GenomicLLM:
         # Save LM Head
         save_layer(self.lm_head, "lm_head")
         
+        # Save Global Output Norm
+        if hasattr(self.rust_llm, 'output_norm'):
+            db_writer.write_tensor("output_norm", np.array(self.rust_llm.output_norm, dtype=np.float32).tobytes())
+        
         # Save blocks
         for i, block in enumerate(self.blocks):
             p = f"blk.{i}."
@@ -402,6 +424,12 @@ class GenomicLLM:
             save_layer(block.gate_gen, p + "ffn_gate")
             save_layer(block.up_gen, p + "ffn_up")
             save_layer(block.w_down, p + "ffn_down")
+            
+            # Save Block Norms
+            if hasattr(block.rust_block, 'ffn_norm'):
+                db_writer.write_tensor(p + "ffn_norm", np.array(block.rust_block.ffn_norm, dtype=np.float32).tobytes())
+            if hasattr(block.rust_block, 'attn') and hasattr(block.rust_block.attn, 'rmsnorm_weight'):
+                db_writer.write_tensor(p + "attn_norm", np.array(block.rust_block.attn.rmsnorm_weight, dtype=np.float32).tobytes())
             
         print(f"📦 Organismo genómico guardado en: {output_path}")
 
@@ -478,9 +506,12 @@ class GenomicLLM:
             
             return MockLayer(linear)
             
-        model.embeddings = load_linear("token_embd", 50257, model.n_embd)
-        model.lm_head = load_linear("lm_head", 50257, model.n_embd)
-        output_norm = np.ones(model.n_embd).astype(np.float32).tolist() # TODO: save/load norm weights properly
+        model.embeddings = load_linear("token_embd", meta.get("vocab_size", 50257), model.n_embd)
+        model.lm_head = load_linear("lm_head", meta.get("vocab_size", 50257), model.n_embd)
+        
+        output_norm = np.ones(model.n_embd).astype(np.float32).tolist() 
+        if db_reader.has_tensor("output_norm"):
+            output_norm = np.frombuffer(db_reader.read_tensor("output_norm"), dtype=np.float32).tolist()
         
         rust_blocks = []
         model.blocks = []
@@ -491,12 +522,29 @@ class GenomicLLM:
             v_gen = load_linear(p + "attn_v", model.n_head_kv * model.head_dim, model.n_embd)
             w_o = load_linear(p + "attn_output", model.n_embd, model.n_head * model.head_dim)
             
-            gate_gen = load_linear(p + "ffn_gate", model.n_embd * 4, model.n_embd) # approx
-            up_gen = load_linear(p + "ffn_up", model.n_embd * 4, model.n_embd)
-            w_down = load_linear(p + "ffn_down", model.n_embd, model.n_embd * 4)
+            # Use metadata or heuristics to determine FFN size
+            # For Qwen/SmolLM, FFN is usually hidden_dim * (8/3) or similar
+            # We check the centroids size to be sure
+            def get_out_features(name, in_features):
+                if not db_reader.has_tensor(f"{name}.centroids"): return model.n_embd * 4
+                c_bytes = db_reader.read_tensor(f"{name}.centroids")
+                c_count = len(c_bytes) // 4
+                # Genomic linear: centroids count = out_features * (in_features // block_size) * 4
+                return c_count // (in_features // 32 * 4)
+
+            ffn_hidden = get_out_features(p + "ffn_gate", model.n_embd)
+            
+            gate_gen = load_linear(p + "ffn_gate", ffn_hidden, model.n_embd)
+            up_gen = load_linear(p + "ffn_up", ffn_hidden, model.n_embd)
+            w_down = load_linear(p + "ffn_down", model.n_embd, ffn_hidden)
             
             attn_norm_data = np.ones(model.n_embd).astype(np.float32).tolist()
+            if db_reader.has_tensor(p + "attn_norm"):
+                attn_norm_data = np.frombuffer(db_reader.read_tensor(p + "attn_norm"), dtype=np.float32).tolist()
+                
             ffn_norm_data = np.ones(model.n_embd).astype(np.float32).tolist()
+            if db_reader.has_tensor(p + "ffn_norm"):
+                ffn_norm_data = np.frombuffer(db_reader.read_tensor(p + "ffn_norm"), dtype=np.float32).tolist()
             
             attn = dna_semantic_compression.GenomicAttention(model.n_head, model.n_head_kv, model.head_dim, attn_norm_data, model.eps, model.rope_base)
             
