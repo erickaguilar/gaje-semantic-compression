@@ -118,7 +118,10 @@ impl GajeDatabaseReader {
 
     pub fn list_mutations(&self) -> PyResult<Vec<(u64, Vec<u8>)>> {
         let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(MUTATIONS_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = match read_txn.open_table(MUTATIONS_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Ok(Vec::new()), // Table doesn't exist yet, so no mutations
+        };
         let mut results = Vec::new();
         let iter = table.iter().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         for res in iter {
