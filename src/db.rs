@@ -1,4 +1,4 @@
-use redb::{Database, ReadTransaction, TableDefinition, ReadableTable};
+use redb::{Database, TableDefinition, ReadableTable};
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
