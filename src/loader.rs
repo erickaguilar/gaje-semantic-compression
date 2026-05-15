@@ -1,55 +1,104 @@
-use crate::archive::GAJEArchive;
-use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
-use std::collections::HashMap;
 use serde::Deserialize;
+use redb::{Database, ReadTransaction};
+use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
+use crate::db::{TENSOR_TABLE, METADATA_TABLE};
 
-#[derive(Deserialize, Debug)]
-pub struct ModelConfig {
+#[derive(Deserialize, Debug, Clone)]
+pub struct ArchConfig {
+    #[serde(default = "default_name")]
     pub name: String,
+    #[serde(default = "default_tokenizer")]
+    pub tokenizer_id: String,
+    #[serde(default = "default_rope_base")]
+    pub rope_base: f32,
+    #[serde(default = "default_ffn_act")]
+    pub ffn_act: String,
+    #[serde(default = "default_false")]
+    pub use_genomic_norm: bool,
+}
+
+fn default_name() -> String { "GAJE-Model".to_string() }
+fn default_tokenizer() -> String { "gpt2".to_string() }
+fn default_rope_base() -> f32 { 10000.0 }
+fn default_ffn_act() -> String { "swiglu".to_string() }
+fn default_false() -> bool { false }
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ModelConfig {
+    pub config: ArchConfig,
     pub n_embd: usize,
     pub n_head: usize,
     pub n_head_kv: usize,
     pub n_blocks: usize,
     pub eps: f32,
-    pub rope_base: f32,
-    pub vocab_size: usize,
-    pub block_size: usize,
 }
 
 pub struct NativeLoader {
-    pub archive: GAJEArchive,
+    db: Database,
 }
 
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
-        let archive = GAJEArchive::load(path)?;
-        Ok(NativeLoader { archive })
+        let db = Database::open(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        Ok(NativeLoader { db })
     }
 
-    pub fn get_linear(&self, prefix: &str, in_features: usize, out_features: usize, block_size: usize) -> GenomicLinear {
-        let dna = self.archive.entries.get(&format!("{}.dna", prefix))
-            .map(|e| e.dna.clone())
-            .unwrap_or_else(Vec::new);
+    pub fn load_config(&self) -> std::io::Result<ModelConfig> {
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         
-        let centroids = self.archive.codebook.get("centroids")
-            .cloned()
-            .unwrap_or_else(Vec::new);
+        let json_str = table.get("config").map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "config not found"))?;
+        
+        let config: ModelConfig = serde_json::from_str(json_str.value())?;
+        Ok(config)
+    }
 
-        let bias = self.archive.entries.get(&format!("{}.bias", prefix))
-            .map(|e| {
-                let mut b = vec![0.0f32; out_features];
-                if e.dna.len() == out_features * 4 {
-                    for i in 0..out_features {
-                        let mut buf = [0u8; 4];
-                        buf.copy_from_slice(&e.dna[i*4..(i+1)*4]);
-                        b[i] = f32::from_le_bytes(buf);
-                    }
-                }
-                b
-            })
-            .unwrap_or_else(Vec::new);
+    fn get_tensor(txn: &ReadTransaction, key: &str) -> Vec<u8> {
+        if let Ok(table) = txn.open_table(TENSOR_TABLE) {
+            if let Ok(Some(val)) = table.get(key) {
+                return val.value().to_vec();
+            }
+        }
+        Vec::new()
+    }
+    
+    fn get_tensor_f32(txn: &ReadTransaction, key: &str) -> Vec<f32> {
+        let bytes = Self::get_tensor(txn, key);
+        let count = bytes.len() / 4;
+        let mut res = vec![0.0f32; count];
+        for i in 0..count {
+            let mut buf = [0u8; 4];
+            buf.copy_from_slice(&bytes[i*4..(i+1)*4]);
+            res[i] = f32::from_le_bytes(buf);
+        }
+        res
+    }
 
-        let anchors = Vec::new(); // TODO: Load from archive if exists
+    fn get_linear(txn: &ReadTransaction, prefix: &str, in_features: usize, out_features: usize, block_size: usize) -> GenomicLinear {
+        let dna = Self::get_tensor(txn, &format!("{}.dna", prefix));
+        let centroids = Self::get_tensor_f32(txn, &format!("{}.centroids", prefix));
+        
+        // Parse f16 anchors to f32
+        let anchors_bytes = Self::get_tensor(txn, &format!("{}.anchors", prefix));
+        let mut anchors = Vec::new();
+        if !anchors_bytes.is_empty() {
+            let count = anchors_bytes.len() / 2;
+            anchors = vec![0.0f32; count];
+            for i in 0..count {
+                let mut buf = [0u8; 2];
+                buf.copy_from_slice(&anchors_bytes[i*2..(i+1)*2]);
+                anchors[i] = half::f16::from_le_bytes(buf).to_f32();
+            }
+        }
+
+        let bias = Self::get_tensor_f32(txn, &format!("{}.bias", prefix));
+        
+        let precision_mask = Self::get_tensor(txn, &format!("{}.precision_mask", prefix));
+        let epi_dna = Self::get_tensor(txn, &format!("{}.epi_dna", prefix));
+        let epi_centroids = Self::get_tensor_f32(txn, &format!("{}.epi_centroids", prefix));
+        let tri_dna = Self::get_tensor(txn, &format!("{}.tri_dna", prefix));
+        let tri_centroids = Self::get_tensor_f32(txn, &format!("{}.tri_centroids", prefix));
 
         GenomicLinear::new(
             dna,
@@ -59,58 +108,68 @@ impl NativeLoader {
             in_features,
             block_size,
             Vec::new(), // rmsnorm_weight
-            1e-6,      // eps
-            Vec::new(), // precision_mask
-            Vec::new(), // epi_dna
-            Vec::new(), // epi_centroids
-            Vec::new(), // tri_dna
-            Vec::new(), // tri_centroids
+            1e-6,
+            precision_mask,
+            epi_dna,
+            epi_centroids,
+            tri_dna,
+            tri_centroids,
             bias,
         )
     }
 
-    fn get_vec_f32(&self, label: &str) -> Vec<f32> {
-        self.archive.entries.get(label)
-            .map(|e| {
-                let count = e.dna.len() / 4;
-                let mut res = vec![0.0f32; count];
-                for i in 0..count {
-                    let mut buf = [0u8; 4];
-                    buf.copy_from_slice(&e.dna[i*4..(i+1)*4]);
-                    res[i] = f32::from_le_bytes(buf);
-                }
-                res
-            })
-            .unwrap_or_else(Vec::new)
-    }
+    pub fn load_llm(&self) -> std::io::Result<RustGenomicLLM> {
+        let config = self.load_config()?;
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        
+        let token_embd_dna = Self::get_tensor(&read_txn, "token_embd.dna");
+        let vocab_size = token_embd_dna.len() * 4 / config.n_embd;
+        let block_size = 32;
 
-    pub fn load_llm(&self, config: &ModelConfig) -> RustGenomicLLM {
-        let embeddings = self.get_linear("token_embd", config.n_embd, config.vocab_size, config.block_size);
-        let lm_head = self.get_linear("lm_head", config.n_embd, config.vocab_size, config.block_size);
-        let output_norm = self.get_vec_f32("output_norm");
+        let embeddings = Self::get_linear(&read_txn, "token_embd", config.n_embd, vocab_size, block_size);
+        let lm_head = Self::get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size);
+        
+        let mut output_norm = Self::get_tensor_f32(&read_txn, "output_norm");
+        if output_norm.is_empty() {
+            output_norm = vec![1.0f32; config.n_embd];
+        }
         
         let mut blocks = Vec::new();
+        let head_dim = config.n_embd / config.n_head;
+        
         for i in 0..config.n_blocks {
-            let prefix = format!("blk.{}.", i);
-            let q_gen = self.get_linear(&format!("{}attn_q", prefix), config.n_embd, config.n_embd, config.block_size);
-            let k_gen = self.get_linear(&format!("{}attn_k", prefix), config.n_embd, (config.n_head_kv * config.n_embd) / config.n_head, config.block_size);
-            let v_gen = self.get_linear(&format!("{}attn_v", prefix), config.n_embd, (config.n_head_kv * config.n_embd) / config.n_head, config.block_size);
-            let w_o = self.get_linear(&format!("{}attn_output", prefix), config.n_embd, config.n_embd, config.block_size);
+            let p = format!("blk.{}.", i);
+            let q_gen = Self::get_linear(&read_txn, &format!("{}attn_q", p), config.n_embd, config.n_head * head_dim, block_size);
+            let k_gen = Self::get_linear(&read_txn, &format!("{}attn_k", p), config.n_embd, config.n_head_kv * head_dim, block_size);
+            let v_gen = Self::get_linear(&read_txn, &format!("{}attn_v", p), config.n_embd, config.n_head_kv * head_dim, block_size);
+            let w_o = Self::get_linear(&read_txn, &format!("{}attn_output", p), config.n_head * head_dim, config.n_embd, block_size);
             
-            let gate_gen = self.get_linear(&format!("{}ffn_gate", prefix), config.n_embd, (config.n_embd * 8 / 3), config.block_size);
-            let up_gen = self.get_linear(&format!("{}ffn_up", prefix), config.n_embd, (config.n_embd * 8 / 3), config.block_size);
-            let w_down = self.get_linear(&format!("{}ffn_down", prefix), (config.n_embd * 8 / 3), config.n_embd, config.block_size);
+            let get_out_features = |prefix: &str, in_features: usize| -> usize {
+                let centroids = Self::get_tensor_f32(&read_txn, &format!("{}.centroids", prefix));
+                if centroids.is_empty() { return config.n_embd; }
+                if in_features == 0 || block_size == 0 { return config.n_embd; }
+                centroids.len() / (in_features / block_size * 4)
+            };
+            
+            let ffn_hidden = get_out_features(&format!("{}ffn_gate", p), config.n_embd);
+            
+            let gate_gen = Self::get_linear(&read_txn, &format!("{}ffn_gate", p), config.n_embd, ffn_hidden, block_size);
+            let up_gen = Self::get_linear(&read_txn, &format!("{}ffn_up", p), config.n_embd, ffn_hidden, block_size);
+            let w_down = Self::get_linear(&read_txn, &format!("{}ffn_down", p), ffn_hidden, config.n_embd, block_size);
 
-            let attn_norm = self.get_vec_f32(&format!("{}attn_norm", prefix));
-            let ffn_norm = self.get_vec_f32(&format!("{}ffn_norm", prefix));
+            let mut attn_norm = Self::get_tensor_f32(&read_txn, &format!("{}attn_norm", p));
+            if attn_norm.is_empty() { attn_norm = vec![1.0f32; config.n_embd]; }
+            
+            let mut ffn_norm = Self::get_tensor_f32(&read_txn, &format!("{}ffn_norm", p));
+            if ffn_norm.is_empty() { ffn_norm = vec![1.0f32; config.n_embd]; }
 
             let attn = GenomicAttention::new(
                 config.n_head,
                 config.n_head_kv,
-                config.n_embd / config.n_head,
+                head_dim,
                 attn_norm,
                 config.eps,
-                config.rope_base,
+                config.config.rope_base,
             );
 
             blocks.push(RustGenomicBlock::new(
@@ -125,17 +184,41 @@ impl NativeLoader {
                 w_down,
                 ffn_norm,
                 config.eps,
-                "swiglu".to_string(),
-                false,
+                config.config.ffn_act.clone(),
+                config.config.use_genomic_norm,
             ));
         }
 
-        RustGenomicLLM::new(
+        Ok(RustGenomicLLM::new(
             embeddings,
             blocks,
             output_norm,
             lm_head,
             config.eps,
-        )
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_native_loader_reads_gaje_db() {
+        let test_db_path = "test_model.gaje";
+        if !Path::new(test_db_path).exists() {
+            println!("Skipping test since {} does not exist.", test_db_path);
+            return;
+        }
+
+        let loader = NativeLoader::new(test_db_path).expect("Failed to open database");
+        let config = loader.load_config().expect("Failed to load config");
+        assert_eq!(config.n_embd, 768);
+        assert_eq!(config.n_blocks, 2);
+
+        let llm = loader.load_llm().expect("Failed to load LLM");
+        assert_eq!(llm.blocks.len(), 2);
+        println!("Successfully loaded LLM from NativeLoader! Vocab size: {}", llm.lm_head.out_features);
     }
 }

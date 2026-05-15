@@ -1,8 +1,8 @@
 use redb::{Database, TableDefinition};
 use pyo3::prelude::*;
 
-const TENSOR_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("tensors");
-const METADATA_TABLE: TableDefinition<&str, &str> = TableDefinition::new("metadata");
+pub const TENSOR_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("tensors");
+pub const METADATA_TABLE: TableDefinition<&str, &str> = TableDefinition::new("metadata");
 
 #[pyclass]
 pub struct GajeDatabaseWriter {
