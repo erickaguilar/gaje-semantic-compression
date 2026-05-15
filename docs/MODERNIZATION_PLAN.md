@@ -1,4 +1,4 @@
-# Plan de Modernización de Ejemplos (GAJE v0.6.0+)
+# Plan de Modernización de Ejemplos (GAJE v0.6.1+)
 
 ## 🎯 Objetivo
 Alinear todos los ejemplos demostrativos con el núcleo científico de la **Fase 12** y eliminar dependencias frágiles.

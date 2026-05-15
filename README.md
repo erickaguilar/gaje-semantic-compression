@@ -1,12 +1,12 @@
 # 🧬 Protocolo GAJE: Compresión Semántica Genómica
 
-[![Version](https://img.shields.io/badge/version-0.6.0-purple)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.1-purple)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) y búsqueda vectorial utilizando el alfabeto del ADN (A, C, G, T) con solo **2 bits por dimensión**.
 
 ## 🚀 Avance Crítico: Inferencia Genómica Nativa
-GAJE v0.6.0 trasciende la simple compresión, habilitando un motor de ejecución completo en el dispositivo:
+GAJE v0.6.1 trasciende la simple compresión, habilitando un motor de ejecución completo en el dispositivo:
 
 | Característica | Impacto | Estado |
 | :--- | :---: | :--- |
@@ -21,7 +21,7 @@ GAJE v0.6.0 trasciende la simple compresión, habilitando un motor de ejecución
 - **Aprendizaje en Dispositivo**: Optimizador ligero integrado que permite al modelo aprender de las correcciones del usuario localmente.
 
 ## 📈 Benchmarks de Nueva Generación (Qwen2-0.5B)
-| Métrica | Original (Float32) | GAJE v0.6.0 (2-bit) | Ganancia |
+| Métrica | Original (Float32) | GAJE v0.6.1 (2-bit) | Ganancia |
 | :--- | :--- | :--- | :--- |
 | **Uso de RAM** | ~1,345 MB | **~84 MB** | **16.0x menos** |
 | **Perplejidad (PPL)**| 1.58 | **1.60** | **98.7% Estabilidad** |
@@ -39,6 +39,12 @@ dna-semantic-compression/
 ├── benchmarks/             # Suite de Perplejidad y Precisión
 └── tests/                  # Pruebas de integración nativa
 ```
+
+## 📚 Documentación Adicional
+- [Manifiesto del Proyecto](docs/meta/MANIFESTO.md)
+- [Resumen Ejecutivo](docs/meta/EXECUTIVE_SUMMARY.md)
+- [Autoría y Créditos](docs/meta/AUTHORSHIP.md)
+- [Hoja de Ruta (Roadmap)](docs/meta/ROADMAP.md)
 
 ## 🚀 Instalación y Uso
 ```bash

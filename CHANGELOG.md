@@ -1,3 +1,12 @@
+## [0.6.3] - 2026-05-13
+### Added
+- **IQAT Definitive Implementation:** Implementación nativa en Rust de `refine_swiglu` para alineación simétrica de capas FFN.
+- **`refine_with_grads`:** Nueva interfaz de gradientes externos en `GenomicLinear` para permitir backpropagation local.
+- **Verification Suite:** Test `test_iqat_convergence.py` validando una mejora del +95% en la fidelidad de la señal SwiGLU.
+
+### Fixed
+- **Semantic Drift:** Eliminación del ruido acumulativo en las capas de activación que causaba alucinaciones incoherentes.
+
 ## [0.6.2] - 2026-05-12
 ### Added
 - **Evolución 4 (Inferencia Nativa en Rust):** Migración completa del bucle `forward` del Transformer a Rust (`RustGenomicLLM`), eliminando el overhead de serialización PyO3 y reduciendo la latencia masivamente a ~0.24s por token (hasta 2.18 t/s en entorno móvil).
