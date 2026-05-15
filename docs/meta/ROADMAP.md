@@ -57,6 +57,14 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 
 ---
 
+## 🚀 Iniciativa Prioritaria: SmolLM-135M (MVNO)
+**El Objetivo:** Desplegar el modelo más eficiente del mundo en el Edge utilizando GAJE.
+*   [ ] **Smol-DGI**: Ingestión directa de SmolLM-135M a 2-bit (<40MB RAM).
+*   [ ] **Zero-Python Runtime**: Ejecución 100% nativa en Rust para máxima velocidad en Termux.
+*   [ ] **GSD Integration**: Uso de SmolLM como modelo de borrador (Draft) para acelerar modelos de 7B+.
+
+---
+
 ## 🌌 Fase 13: Evolución Contextual y Multimodal en el Edge
 **El Objetivo:** Extender la biología computacional del Protocolo GAJE para ingerir estímulos visuales y auditivos, manteniendo latencia submilisegundo en dispositivos móviles.
 *   [ ] **Multimodal Genomization**: Motores de transducción (Vision-to-DNA / Audio-to-DNA) para convertir embeddings sensoriales en hebras genómicas alineadas.

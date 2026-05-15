@@ -10,6 +10,8 @@ mod index;
 mod kernels;
 pub mod nn;
 mod utils;
+mod archive;
+mod loader;
 
 use crate::index::GajeIndex;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};

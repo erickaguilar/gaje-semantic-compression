@@ -7,8 +7,12 @@ description = "Motor de compresión semántica genómica de alto rendimiento par
 
 [lib]
 name = "_impl"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 path = "src/lib.rs"
+
+[[bin]]
+name = "gaje-chat"
+path = "src/main.rs"
 
 [dependencies]
 # PyO3 para la interfaz con Python
@@ -25,6 +29,10 @@ rand = "0.8.5"
 
 # Manejo de precisión f16 (Half) para compatibilidad con pesos GGUF
 half = { version = "2.4.1", features = ["num-traits", "zerocopy"] }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokenizers = "0.21.0"
 
 [profile.release]
 # Optimizaciones agresivas para rendimiento nativo en Android/ARM64

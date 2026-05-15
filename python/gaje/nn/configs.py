@@ -10,6 +10,7 @@ class ArchitectureConfig:
     rope_style: str = "split"  # "split" (Llama/Qwen) or "interleaved"
     unpermute_weights: bool = True
     ffn_act: str = "swiglu"
+    use_genomic_norm: bool = False
     tensor_name_mapping: Dict[str, str] = field(default_factory=dict)
     
     # Custom patches or fixes
@@ -48,7 +49,9 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         rope_base=10000.0,
         has_bias=False,
         rope_style="split",
-        unpermute_weights=False, # Born genomic doesn't need unpermuting if designed right
+        unpermute_weights=False, 
+        ffn_act="relu",
+        use_genomic_norm=True
     )
 }
 

@@ -179,20 +179,23 @@ class GenomicTransformerBlock:
         self.eps = eps
         
         # Reference to the Rust block
+        act_fn = config.ffn_act if config else "swiglu"
+        use_gen_norm = config.use_genomic_norm if config else False
         self.rust_block = dna_semantic_compression.RustGenomicBlock(
             idx, self.attn_layer.attn, self.attn_layer.q_gen.linear, self.attn_layer.k_gen.linear, 
             self.attn_layer.v_gen.linear, self.attn_layer.w_o.linear, 
-            self.gate_gen.linear, self.up_gen.linear, self.w_down.linear, self.ffn_norm, self.eps
+            self.gate_gen.linear, self.up_gen.linear, self.w_down.linear, self.ffn_norm, self.eps,
+            act_fn, use_gen_norm
         )
 
     def forward(self, x, pos):
         return np.array(self.rust_block.forward(x.tolist() if hasattr(x, "tolist") else x, pos), dtype=np.float32)
 
-    def refine_swiglu(self, x_norm, target, lr=0.01):
-        """Native SwiGLU refinement."""
-        self.rust_block.refine_swiglu(x_norm.tolist() if hasattr(x_norm, "tolist") else x_norm, 
-                                      target.tolist() if hasattr(target, "tolist") else target, 
-                                      lr)
+    def refine_ffn(self, x_norm, target, lr=0.01):
+        """Native FFN refinement (SwiGLU, GeGLU, ReLU)."""
+        self.rust_block.refine_ffn(x_norm.tolist() if hasattr(x_norm, "tolist") else x_norm, 
+                                   target.tolist() if hasattr(target, "tolist") else target, 
+                                   lr)
 
     def refine_attention(self, x_norm, target, pos, lr=0.01):
         """Native attention projection refinement."""
@@ -340,3 +343,97 @@ class GenomicLLM:
             
             # Siguiente paso de inferencia (incremental)
             next_token_logits = self.forward([next_id], clear_cache=False)[-1]
+
+    def save(self, output_dir):
+        """Saves the entire genomic organism to a directory."""
+        import os
+        from gaje.core.archive import GAJEArchive
+        
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            
+        # Save metadata
+        import json
+        metadata = {
+            "config": {
+                "name": self.config.name,
+                "tokenizer_id": self.config.tokenizer_id,
+                "rope_base": self.rope_base,
+                "ffn_act": self.config.ffn_act,
+                "use_genomic_norm": self.config.use_genomic_norm
+            },
+            "n_embd": self.n_embd,
+            "n_head": self.n_head,
+            "n_head_kv": self.n_head_kv,
+            "n_blocks": self.n_blocks,
+            "eps": self.eps
+        }
+        with open(os.path.join(output_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=4)
+            
+        def save_layer(layer, name):
+            archive = GAJEArchive(
+                codebook={"centroids": layer.linear.centroids, "block_size": layer.block_size}
+            )
+            # Store anchors as epigenetic strand for now in the archive format or extend format
+            # For now, we'll use a simple numpy save for everything in the folder for speed
+            np.save(os.path.join(output_dir, f"{name}.dna.npy"), np.frombuffer(layer.linear.database, dtype=np.uint8))
+            np.save(os.path.join(output_dir, f"{name}.centroids.npy"), np.array(layer.linear.centroids, dtype=np.float32))
+            np.save(os.path.join(output_dir, f"{name}.anchors.npy"), np.array(layer.linear.anchors(), dtype=np.float16))
+            if hasattr(layer.linear, 'bias') and len(layer.linear.bias) > 0:
+                np.save(os.path.join(output_dir, f"{name}.bias.npy"), np.array(layer.linear.bias, dtype=np.float32))
+
+        # Save Embeddings
+        save_layer(self.embeddings, "token_embd")
+        
+        # Save LM Head
+        save_layer(self.lm_head, "lm_head")
+        
+        # Save blocks
+        for i, block in enumerate(self.blocks):
+            p = f"blk.{i}."
+            save_layer(block.attn_layer.q_gen, p + "attn_q")
+            save_layer(block.attn_layer.k_gen, p + "attn_k")
+            save_layer(block.attn_layer.v_gen, p + "attn_v")
+            save_layer(block.attn_layer.w_o, p + "attn_output")
+            save_layer(block.gate_gen, p + "ffn_gate")
+            save_layer(block.up_gen, p + "ffn_up")
+            save_layer(block.w_down, p + "ffn_down")
+            
+        print(f"📦 Organismo genómico guardado en: {output_dir}")
+
+    @classmethod
+    def load_genomic(cls, input_dir):
+        """Loads a previously saved genomic organism."""
+        import os
+        import json
+        from gaje.nn.configs import ArchitectureConfig
+        
+        with open(os.path.join(input_dir, "metadata.json"), "r") as f:
+            meta = json.load(f)
+            
+        config = ArchitectureConfig(**meta["config"])
+        # Initialize an empty model with the right config
+        model = cls(config=config, num_blocks=meta["n_blocks"])
+        model.n_embd = meta["n_embd"]
+        model.n_head = meta["n_head"]
+        model.n_head_kv = meta["n_head_kv"]
+        model.eps = meta["eps"]
+        model.rope_base = meta["config"]["rope_base"]
+
+        def load_linear(name, out_features, in_features):
+            dna = np.load(os.path.join(input_dir, f"{name}.dna.npy")).tobytes()
+            centroids = np.load(os.path.join(input_dir, f"{name}.centroids.npy")).tolist()
+            anchors = np.load(os.path.join(input_dir, f"{name}.anchors.npy")).astype(np.float32).tolist()
+            bias_path = os.path.join(input_dir, f"{name}.bias.npy")
+            bias = np.load(bias_path).tolist() if os.path.exists(bias_path) else []
+            
+            return dna_semantic_compression.GenomicLinear(
+                dna, anchors, centroids, out_features, in_features, 32, bias=bias
+            )
+
+        # We would need to reconstruct all Rust objects.
+        # This is a bit complex for a quick fix, so for Phase 3
+        # we will focus on the training script first and refine the loader.
+        print("[!] Warning: load_genomic is a placeholder for full reconstruction.")
+        return model
