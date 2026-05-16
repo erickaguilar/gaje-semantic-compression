@@ -57,21 +57,25 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 ---
 *Estado: Fase 12 Finalizada - Organismo Computacional Autoregulado y Modular.*
 
-## 🧬 Fase 13: Evolución por Monte Carlo y Nacimiento de Micro-Organismos
-**El Objetivo:** Superar la barrera del gradiente mediante selección natural digital y lograr modelos coherentes de <10MB.
-*   [x] **Monte Carlo Mutation Engine**: Implementación nativa en Rust de mutaciones aleatorias controladas para optimización de pesos discretos.
-*   [x] **Sequential Memory Breakthrough**: Primera validación de memoria recurrente genómica ("Hola Mundo" en 18ms).
-*   [ ] **10MB Synthetic Organism**: "Crianza" de un modelo de lenguaje de 10MB capaz de razonamiento básico y gramática coherente.
-*   [ ] **Evolutionary Fitness Scoring**: Implementar funciones de aptitud basadas en perplejidad y coherencia semántica para guiar la evolución.
-*   [ ] **Genomic MCTS**: Integración de Monte Carlo Tree Search para permitir que el organismo explore múltiples ramas de pensamiento antes de emitir una respuesta.
+## 🚀 Iniciativa Prioritaria 1: Independencia Total (Rust-Native)
+**El Objetivo:** Eliminar la fricción y cuellos de botella de memoria migrando el ciclo de vida del modelo al 100% a Rust.
+*   [ ] **GGUF-Native-Ingestor:** Implementar un lector binario nativo en `src/loader.rs` para cargar tensores GGUF directamente desde el disco a memoria Rust.
+*   [ ] **Genomic-Evolution-Runner:** Convertir el script `hola-mundo-evolution` en un framework general CLI capaz de "criar" modelos a partir de cualquier tarea de texto objetivo.
 
----
+## 🧬 Iniciativa Prioritaria 2: Escalabilidad del Algoritmo (Monte Carlo)
+**El Objetivo:** Ampliar el poder del motor evolutivo para pasar de secuencias cortas a gramática real.
+*   [ ] **Paralelismo de Mutaciones (Island Model):** Usar `Rayon` para mutar múltiples poblaciones de genomas en paralelo y permitir cruces (migración) entre las mejores mutaciones.
+*   [ ] **Fitness por Perplejidad:** Implementar una función de aptitud basada en la reducción de perplejidad sobre un pequeño dataset, entrenando al organismo no solo a repetir frases, sino a entender la probabilidad de secuencias de tokens.
 
-## 🚀 Iniciativa Prioritaria: Independencia Total (Rust-Native)
-**El Objetivo:** Eliminar por completo la dependencia de Python para el ciclo de vida del modelo.
-*   [ ] **Rust GGUF Parser**: Lector binario nativo de tensores GGUF.
-*   [ ] **Evolutionary CLI**: Interfaz de línea de comandos para entrenar y ejecutar organismos genómicos directamente en Termux.
+## 🧠 Iniciativa Prioritaria 3: La Meta de los 10 MB (Arquitectura)
+**El Objetivo:** "Criar" el primer LLM genómico coherente que ocupe menos de 10 MB en disco (2-bit puro).
+*   [ ] **Micro-Configuración:** Diseñar la arquitectura base (ej. 4,000 tokens de vocabulario, 4 capas `GenomicAttention`, Dimensión Oculta de 512).
+*   [ ] **Anclas Evolutivas:** Permitir que el motor de Monte Carlo decida autónomamente qué pesos críticos merecen ser promovidos a alta precisión (f16) como "Anclas" y cuáles se mantienen como ADN (2-bit).
 
+## 🌌 Iniciativa Prioritaria 4: Colaboración Multi-Agente
+**El Objetivo:** Aprovechar el conocimiento de modelos de frontera (Anthropic Mythos, Gemini) para romper los límites teóricos del aprendizaje en espacios discretos.
+*   [ ] **Consulta Teórica:** Someter a revisión externa la "Estrategia de Fitness para Optimización Evolutiva en 2-bits".
+*   [ ] **Simulación Estructural:** Usar LLMs externos para verificar matemáticamente si la arquitectura de 10 MB propuesta es capaz de sostener las lógicas de atención y predicción antes de iniciar la evolución masiva.
 
 ---
 
@@ -81,7 +85,7 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 | **Escalabilidad** | Registros procesables | 100M+ | ✅ En camino |
 | **Coherencia (PPL)**| Perplejidad | < 2.0 | ✅ 1.60 (Logrado) |
 | **Precisión Genómica**| Similitud Coseno | > 95% | ✅ 96.0% (Logrado) |
-| **Eficiencia** | Reducción de RAM | 16.0x | ✅ 18.0x+ (Fase 12) |
+| **Memoria Evolutiva** | Latencia de Crianza | < 50ms | ✅ 18ms (Logrado) |
 
 ---
-*Estado: Fase 12 Finalizada - Organismo Computacional Autoregulado y Modular.*
+*Estado: Pivotando hacia Independencia Nativa y Evolución de Micro-Organismos.*
