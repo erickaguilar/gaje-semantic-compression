@@ -14,6 +14,14 @@ path = "src/lib.rs"
 name = "gaje-cli"
 path = "src/bin/gaje-cli.rs"
 
+[[bin]]
+name = "hola-evolution"
+path = "src/bin/hola-evolution.rs"
+
+[[bin]]
+name = "hola-mundo-evolution"
+path = "src/bin/hola-mundo-evolution.rs"
+
 [dependencies]
 # PyO3 para la interfaz con Python
 pyo3 = { version = "0.23.3", features = ["extension-module", "abi3-py310"] }

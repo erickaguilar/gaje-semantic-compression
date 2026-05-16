@@ -1,3 +1,13 @@
+## [0.6.5] - 2026-05-15
+### Added
+- **Genomic Sequential Memory:** Implementación de una RNN genómica de 2 bits capaz de aprender secuencias textuales ("Hola Mundo").
+- **Monte Carlo Evolution Engine:** Motor de optimización basado en mutaciones aleatorias y selección natural en Rust, superando las limitaciones del gradiente en espacios discretos.
+- **Evolución Acelerada:** Validación de aprendizaje secuencial en <20ms en dispositivos móviles.
+
+### Changed
+- **Roadmap Pivot:** Re-priorización hacia el "Nacimiento de Micro-Organismos" (10MB) y la independencia total de Python.
+- **Project Manifesto:** Publicación del `MANIFESTO.md` detallando la visión de largo plazo del protocolo.
+
 ## [0.6.3] - 2026-05-13
 ### Added
 - **IQAT Definitive Implementation:** Implementación nativa en Rust de `refine_swiglu` para alineación simétrica de capas FFN.
