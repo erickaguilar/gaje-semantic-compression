@@ -4,6 +4,7 @@ use std::time::Instant;
 /// Representa una base de ADN digital (2 bits)
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
+#[allow(dead_code)]
 enum Base {
     A = 0b00,
     C = 0b01,
@@ -11,6 +12,7 @@ enum Base {
     T = 0b11,
 }
 
+#[allow(dead_code)]
 impl Base {
     fn from_u8(v: u8) -> Self {
         match v % 4 {

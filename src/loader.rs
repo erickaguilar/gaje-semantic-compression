@@ -1,10 +1,10 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
 use crate::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
     #[serde(default = "default_name")]
     pub name: String,
@@ -24,7 +24,7 @@ fn default_rope_base() -> f32 { 10000.0 }
 fn default_ffn_act() -> String { "swiglu".to_string() }
 fn default_false() -> bool { false }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModelConfig {
     pub config: ArchConfig,
     pub n_embd: usize,
@@ -281,6 +281,65 @@ impl GGUFLoader {
 
 pub struct NativeLoader {
     db: Arc<Database>,
+}
+
+pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConfig, tokenizer: Option<&tokenizers::Tokenizer>) -> std::io::Result<()> {
+    let writer = crate::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    
+    // 1. Metadata & Config
+    writer.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    
+    if let Some(tok) = tokenizer {
+        let tok_json = tok.to_string(true).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        writer.write_metadata("tokenizer", &tok_json).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    }
+
+    let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
+        let mut res = vec![0u8; data.len() * 4];
+        unsafe {
+            std::ptr::copy_nonoverlapping(data.as_ptr() as *const u8, res.as_mut_ptr(), res.len());
+        }
+        res
+    };
+
+    let save_linear = |prefix: &str, layer: &GenomicLinear| {
+        writer.write_tensor(&format!("{}.dna", prefix), &layer.database).unwrap();
+        writer.write_tensor(&format!("{}.centroids", prefix), &f32_to_u8(&layer.centroids)).unwrap();
+        
+        let anchors_u8 = unsafe {
+            std::slice::from_raw_parts(layer.anchors.as_ptr() as *const u8, layer.anchors.len() * 2)
+        };
+        writer.write_tensor(&format!("{}.anchors", prefix), anchors_u8).unwrap();
+
+        if !layer.bias.is_empty() {
+            writer.write_tensor(&format!("{}.bias", prefix), &f32_to_u8(&layer.bias)).unwrap();
+        }
+    };
+
+    // 2. Tensors - Embeddings
+    save_linear("token_embd", &model.embeddings);
+
+    // 3. Tensors - Blocks
+    for (i, block) in model.blocks.iter().enumerate() {
+        let p = format!("blk.{}.", i);
+        save_linear(&format!("{}attn_q", p), &block.q_gen);
+        save_linear(&format!("{}attn_k", p), &block.k_gen);
+        save_linear(&format!("{}attn_v", p), &block.v_gen);
+        save_linear(&format!("{}attn_output", p), &block.w_o);
+        save_linear(&format!("{}ffn_gate", p), &block.gate_gen);
+        save_linear(&format!("{}ffn_up", p), &block.up_gen);
+        save_linear(&format!("{}ffn_down", p), &block.w_down);
+
+        writer.write_tensor(&format!("{}attn_norm", p), &f32_to_u8(&block.attn.rmsnorm_weight)).unwrap();
+        writer.write_tensor(&format!("{}ffn_norm", p), &f32_to_u8(&block.ffn_norm)).unwrap();
+    }
+
+    // 4. Output
+    save_linear("lm_head", &model.lm_head);
+    writer.write_tensor("output_norm", &f32_to_u8(&model.output_norm)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    Ok(())
 }
 
 impl NativeLoader {

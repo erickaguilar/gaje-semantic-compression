@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut evolve_target = None;
     let mut generations = 2000;
     let mut scale = 0.02;
+    let mut save_path = None;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
@@ -38,6 +39,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         } else if args[i] == "--scale" && i + 1 < args.len() {
             scale = args[i+1].parse().unwrap_or(0.02);
             i += 2;
+        } else if args[i] == "--save" && i + 1 < args.len() {
+            save_path = Some(args[i+1].clone());
+            i += 2;
         } else if args[i] == "--rollback" && i + 1 < args.len() {
             rollback_target = Some(args[i+1].parse::<u64>().map_err(|e| e.to_string())?);
             i += 2;
@@ -52,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--gens 2000] [--scale 0.02]");
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--gens 2000] [--save output.gaje]");
         return Ok(());
     }
 
@@ -60,27 +64,28 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     let mut gaje_loader_opt = None;
     
-    let (mut model, tokenizer) = if model_path.ends_with(".gguf") {
+    let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
         let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
         let config = loader.infer_config()?;
         println!("[+] GGUF Config Inferred: {} layers, {} dim", config.n_blocks, config.n_embd);
         
-        let model = loader.load_genomic_llm(config, -1.0)?;
+        let model = loader.load_genomic_llm(config.clone(), -1.0)?;
         let tokenizer_path = Path::new(&model_path).parent().unwrap().join("tokenizer.json");
         let tokenizer = if tokenizer_path.exists() {
              tokenizers::Tokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?
         } else {
              return Err(format!("tokenizer.json not found in {}", Path::new(&model_path).parent().unwrap().display()).into());
         };
-        (model, tokenizer)
+        (model, tokenizer, config)
     } else {
         let loader = NativeLoader::new(&model_path)?;
         println!("[*] Extracting tokenizer from GAJE DB...");
         let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
+        let config = loader.load_config()?;
         let model = loader.load_llm()?;
         let l = NativeLoader::new(&model_path)?;
         gaje_loader_opt = Some(l);
-        (model, tokenizer)
+        (model, tokenizer, config)
     };
 
     println!("[*] Model & Tokenizer loaded.");
@@ -128,54 +133,48 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             layers.push(format!("blk.{}.ffn_up", last));
         }
 
-        let population_size = 8; // Número de 'caminos' simultáneos
+        let population_size = 8;
 
         for gen in 1..=generations {
             let layer_name = layers.choose(&mut rng).unwrap();
             let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
-            
             let mut paths = Vec::new();
             
-            // 1. Muestreo de Caminos (Monte Carlo masivo)
             for _ in 0..population_size {
                 let delta = model.mutate_layer(layer_name, current_scale).unwrap();
                 let fitness = evaluate(&mut model, tokens);
-                
                 if fitness > best_fitness {
                     paths.push((delta.clone(), fitness));
                 }
-                
-                // Limpiar mutación para la siguiente muestra de la población
                 model.undo_layer_mutation(layer_name, delta).unwrap();
             }
             
-            // 2. Integración de Caminos (Merge de historias exitosas)
             if !paths.is_empty() {
-                // Ordenar por fitness descendente
                 paths.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-                
-                // Solo integramos los 3 mejores caminos (Elite integration)
                 let n_integrate = paths.len().min(3);
                 let weight = 1.0 / (n_integrate as f32);
-                
                 for k in 0..n_integrate {
                     model.apply_weighted_layer_mutation(layer_name, paths[k].0.clone(), weight).unwrap();
                 }
-                
-                // Re-evaluar el modelo combinado
                 best_fitness = evaluate(&mut model, tokens);
-                
                 if gen % 10 == 0 || best_fitness > -10.0 {
                     println!("[Gen {}] Camino Integrado en {}: Fitness = {:.4} ({} caminos)", gen, layer_name, best_fitness, n_integrate);
                 }
             }
 
             if best_fitness > -0.05 {
-                println!("🔥 ¡Propagador de Inteligencia Alcanzado (Path Integral Coherence)!");
+                println!("🔥 ¡Propagador de Inteligencia Alcanzado!");
                 break;
             }
         }
         println!("[+] Crianza completada. Log-Fitness Final: {:.4}", best_fitness);
+    }
+
+    if let Some(ref path) = save_path {
+        println!("[*] Guardando organismo genómico en: {}", path);
+        let start_save = Instant::now();
+        _impl::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?;
+        println!("[+] Modelo guardado exitosamente en {:?}", start_save.elapsed());
     }
 
     if let Some(target) = rollback_target {

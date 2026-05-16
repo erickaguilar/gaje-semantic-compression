@@ -19,7 +19,7 @@ def main():
     parser.add_argument("--penalty", type=float, default=1.15, help="Repetition penalty")
     args = parser.parse_args()
 
-    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.1 (Modernizado)")
+    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.5 (Modernizado)")
     print("=" * 60)
 
     model_path = args.model
