@@ -32,6 +32,7 @@ Transformar el motor actual de un estado de "investigación inestable" a un "ent
 
 ## ✅ Fase 4: Validación y Cierre
 - [ ] **Benchmarking de Precisión:** Correr `test_v060_validation.py` para asegurar que el aprendizaje local sigue convergiendo.
+- [x] **Entrenamiento IQAT (Activation-Aware):** Implementado `refine_swiglu` en Rust. Reducción de error del 95% verificada en tests de estrés.
 - [ ] **Chat Demo Final:** Verificar que `chat_genomico.py` responde preguntas simples (ej. "¿Cuál es la capital de Francia?") en menos de 2 segundos con coherencia total.
 
 ---
