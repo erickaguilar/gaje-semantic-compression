@@ -501,10 +501,42 @@ impl GenomicLinear {
         }
         for (i, d) in self.centroids.iter_mut().zip(delta_centroids) {
             if undo {
-                *i += d; // We subtract delta during refinement, so adding it back undoes it
+                *i += d; 
             } else {
                 *i -= d;
             }
+        }
+        Ok(())
+    }
+
+    pub fn mutate_random(&mut self, scale: f32) -> PyResult<Vec<f32>> {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let mut delta = Vec::with_capacity(self.centroids.len());
+        for c in &mut self.centroids {
+            let mutation = rng.gen_range(-scale..scale);
+            *c += mutation;
+            delta.push(mutation);
+        }
+        Ok(delta)
+    }
+
+    pub fn undo_delta(&mut self, delta: Vec<f32>) -> PyResult<()> {
+        if delta.len() != self.centroids.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("Delta size mismatch"));
+        }
+        for (c, d) in self.centroids.iter_mut().zip(delta) {
+            *c -= d;
+        }
+        Ok(())
+    }
+
+    pub fn apply_weighted_mutation(&mut self, delta: Vec<f32>, weight: f32) -> PyResult<()> {
+        if delta.len() != self.centroids.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("Delta size mismatch"));
+        }
+        for (c, d) in self.centroids.iter_mut().zip(delta) {
+            *c += d * weight;
         }
         Ok(())
     }

@@ -110,7 +110,7 @@ class GenomicLayer:
             
             for i in range(0, self.out_features, chunk_rows):
                 end = min(i + chunk_rows, self.out_features)
-                w_chunk = weights_f32[i:end].copy() # Copia pequeña
+                w_chunk = weights_f32[i:end].copy()
                 
                 d_db, d_c, a_bin = dna_semantic_compression.genomize_f32_native(
                     w_chunk.tobytes(), 
@@ -119,7 +119,8 @@ class GenomicLayer:
                 )
                 dna_db_list.append(d_db)
                 centroids_list.extend(d_c)
-                anchors_list.append(a_bin)
+                # a_bin llega como lista de ints (bytes) o bytes directamente
+                anchors_list.append(bytes(a_bin) if isinstance(a_bin, list) else a_bin)
                 del w_chunk
             
             self.dna_database = b"".join(dna_db_list)
@@ -127,14 +128,14 @@ class GenomicLayer:
             self.anchors_f16_bytes = b"".join(anchors_list)
         else:
             # Procedimiento estándar para capas pequeñas
-            dna_db, dna_centroids, anchors_f16_bytes = dna_semantic_compression.genomize_f32_native(
+            dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
                 weights_f32.tobytes(), 
                 block_size, 
                 anchor_threshold
             )
             self.dna_database = dna_db
             self.dna_centroids = dna_centroids
-            self.anchors_f16_bytes = anchors_f16_bytes
+            self.anchors_f16_bytes = bytes(a_bin) if isinstance(a_bin, list) else a_bin
         
         self.epigenetic_database = b""
         self.epigenetic_centroids = []

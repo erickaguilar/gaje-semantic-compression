@@ -69,34 +69,43 @@ impl GGUFLoader {
     }
 
     pub fn infer_config(&self) -> std::io::Result<ModelConfig> {
-        let n_embd = self.get_metadata_u32("llama.embedding_length")
-            .or_else(|| self.get_metadata_u32("qwen2.embedding_length"))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "n_embd not found"))? as usize;
+        let arch = self.get_metadata_string("general.architecture").unwrap_or_else(|| "llama".to_string());
+        let p = format!("{}.", arch);
+        
+        println!("[*] Detectada arquitectura GGUF: {}", arch);
+
+        let n_embd = self.get_metadata_u32(&format!("{}embedding_length", p))
+            .or_else(|| self.get_metadata_u32("llama.embedding_length"))
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("embedding_length not found for {}", arch)))? as usize;
             
-        let n_head = self.get_metadata_u32("llama.head_count")
-            .or_else(|| self.get_metadata_u32("qwen2.head_count"))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "n_head not found"))? as usize;
+        let n_head = self.get_metadata_u32(&format!("{}attention.head_count", p))
+            .or_else(|| self.get_metadata_u32(&format!("{}head_count", p)))
+            .or_else(|| self.get_metadata_u32("llama.attention.head_count"))
+            .or_else(|| self.get_metadata_u32("llama.head_count"))
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("head_count not found for {}", arch)))? as usize;
             
-        let n_head_kv = self.get_metadata_u32("llama.head_count_kv")
-            .or_else(|| self.get_metadata_u32("qwen2.head_count_kv"))
+        let n_head_kv = self.get_metadata_u32(&format!("{}attention.head_count_kv", p))
+            .or_else(|| self.get_metadata_u32(&format!("{}head_count_kv", p)))
+            .or_else(|| self.get_metadata_u32("llama.attention.head_count_kv"))
+            .or_else(|| self.get_metadata_u32("llama.head_count_kv"))
             .unwrap_or(n_head as u32) as usize;
             
-        let n_blocks = self.get_metadata_u32("llama.block_count")
-            .or_else(|| self.get_metadata_u32("qwen2.block_count"))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "n_blocks not found"))? as usize;
+        let n_blocks = self.get_metadata_u32(&format!("{}block_count", p))
+            .or_else(|| self.get_metadata_u32("llama.block_count"))
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("block_count not found for {}", arch)))? as usize;
             
-        let eps = self.get_metadata_f32("llama.attention.layer_norm_rms_epsilon")
-            .or_else(|| self.get_metadata_f32("qwen2.attention.layer_norm_rms_epsilon"))
+        let eps = self.get_metadata_f32(&format!("{}attention.layer_norm_rms_epsilon", p))
+            .or_else(|| self.get_metadata_f32("llama.attention.layer_norm_rms_epsilon"))
             .unwrap_or(1e-6);
 
-        let rope_base = self.get_metadata_f32("llama.rope.freq_base")
-            .or_else(|| self.get_metadata_f32("qwen2.rope.freq_base"))
+        let rope_base = self.get_metadata_f32(&format!("{}rope.freq_base", p))
+            .or_else(|| self.get_metadata_f32("llama.rope.freq_base"))
             .unwrap_or(10000.0);
 
         Ok(ModelConfig {
             config: ArchConfig {
                 name: self.get_metadata_string("general.name").unwrap_or_else(|| "GGUF-Model".to_string()),
-                tokenizer_id: "tokenizer".to_string(), // GGUF usually has its own tokenizer info
+                tokenizer_id: "tokenizer".to_string(),
                 rope_base,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
@@ -105,7 +114,7 @@ impl GGUFLoader {
             n_head,
             n_head_kv,
             n_blocks,
-            vocab_size: None, // Will be inferred later
+            vocab_size: None,
             eps,
         })
     }
@@ -115,7 +124,7 @@ impl GGUFLoader {
         
         // 1. Embeddings
         let embd_name = "token_embd.weight";
-        let embd_dna = self.genomize_tensor(embd_name, block_size, -1.0)?; // Anchors -1.0 for embeddings usually
+        let embd_dna = self.genomize_tensor(embd_name, block_size, -1.0)?; 
 
         // 2. Blocks
         let mut blocks = Vec::new();
@@ -135,7 +144,7 @@ impl GGUFLoader {
             let up_gen = self.genomize_tensor(&format!("{}ffn_up.weight", p), block_size, anchor_threshold)?;
             let down_gen = self.genomize_tensor(&format!("{}ffn_down.weight", p), block_size, anchor_threshold)?;
 
-            // Norms (usually F32/F16, not genomic)
+            // Norms
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;
 
@@ -167,7 +176,17 @@ impl GGUFLoader {
 
         // 3. Output
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
-        let lm_head = self.genomize_tensor("output.weight", block_size, anchor_threshold)?;
+        
+        let lm_head_name = if self.reader.tensors.contains_key("output.weight") {
+            "output.weight"
+        } else {
+            println!("[*] output.weight no encontrado, rehusando token_embd.weight para LM Head (Tied Embeddings)");
+            "token_embd.weight"
+        };
+        
+        let lm_head = self.genomize_tensor(lm_head_name, block_size, anchor_threshold)?;
+
+        println!("[+] Organismo Genómico ensamblado exitosamente.");
 
         Ok(RustGenomicLLM::new(
             embd_dna,
@@ -179,6 +198,7 @@ impl GGUFLoader {
     }
 
     fn load_f32_tensor(&mut self, name: &str) -> std::io::Result<Vec<f32>> {
+        println!("    [~] Cargando tensor de precisión: {}...", name);
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
         
@@ -207,13 +227,13 @@ impl GGUFLoader {
     }
 
     fn genomize_tensor(&mut self, name: &str, block_size: usize, anchor_threshold: f32) -> std::io::Result<GenomicLinear> {
+        println!("    [~] Genomizando tensor: {}...", name);
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
         
         let out_features = info.shape[info.n_dims as usize - 1] as usize;
         let in_features = info.shape[0] as usize;
 
-        // Convert data to F32 for genomization if it's F16 or Q8_0
         let f32_data = match info.tensor_type {
             GGMLType::F32 => data,
             GGMLType::F16 => {
@@ -230,7 +250,6 @@ impl GGUFLoader {
                 }
             }
             GGMLType::Q8_0 => {
-                // Dequantize Q8_0 to F32
                 crate::utils::dequantize_q8_0_native(data, out_features, in_features)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
                     .into_iter().flat_map(|v| v.to_le_bytes()).collect()
@@ -315,9 +334,7 @@ impl NativeLoader {
     fn get_linear(txn: &ReadTransaction, prefix: &str, in_features: usize, out_features: usize, block_size: usize) -> GenomicLinear {
         let dna = Self::get_tensor(txn, &format!("{}.dna", prefix));
         let centroids = Self::get_tensor_f32(txn, &format!("{}.centroids", prefix));
-        
         let anchors_u8 = Self::get_tensor(txn, &format!("{}.anchors", prefix));
-
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", prefix));
         let precision_mask = Self::get_tensor(txn, &format!("{}.precision_mask", prefix));
         let epi_dna = Self::get_tensor(txn, &format!("{}.epi_dna", prefix));

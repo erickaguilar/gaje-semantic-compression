@@ -269,14 +269,14 @@ pub fn genomize_f16_native(
     data_u8: Vec<u8>,
     block_size: usize,
     anchor_threshold: f32,
-) -> PyResult<(Vec<u8>, Vec<f32>, Vec<f32>)> {
+) -> PyResult<(Vec<u8>, Vec<f32>, Vec<u8>)> {
     let f16_data: &[f16] =
         unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f16, data_u8.len() / 2) };
     let n_elements = f16_data.len();
     let n_blocks = n_elements / block_size;
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    let mut anchors = vec![0.0f32; n_elements];
+    let mut anchors = vec![half::f16::ZERO; n_elements];
     let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
     for i in 0..n_blocks {
         let start = i * block_size;
@@ -302,7 +302,7 @@ pub fn genomize_f16_native(
             mean + base_c[2] * std,
             mean + base_c[3] * std,
         ];
-        let mut packed_block = Vec::with_capacity(block_size / 4);
+        
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
             for s in 0..4 {
@@ -325,18 +325,22 @@ pub fn genomize_f16_native(
                 };
                 let residual = val - c_val;
                 if residual.abs() > anchor_threshold {
-                    anchors[start + k * 4 + s] = residual;
+                    anchors[start + k * 4 + s] = half::f16::from_f32(residual);
                 }
                 byte = (byte << 2) | bits;
             }
-            packed_block.push(byte);
+            dna_database.push(byte);
         }
-        dna_database.extend(packed_block);
         for &cv in &c {
             all_centroids.push(cv);
         }
     }
-    Ok((dna_database, all_centroids, anchors))
+    // Devolvemos anchors como bytes f16 para máxima eficiencia en Python
+    let anchors_u8 = unsafe {
+        std::slice::from_raw_parts(anchors.as_ptr() as *const u8, anchors.len() * 2).to_vec()
+    };
+
+    Ok((dna_database, all_centroids, anchors_u8))
 }
 #[pyfunction]
 #[pyo3(signature = (data_u8, out_features, in_features))]
