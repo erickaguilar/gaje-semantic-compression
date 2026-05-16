@@ -2,6 +2,7 @@ use _impl::loader::NativeLoader;
 use _impl::nn::RustGenomicLLM;
 use _impl::kernels;
 use std::env;
+use std::path::Path;
 use std::time::Instant;
 use std::io::{self, Write};
 
@@ -45,27 +46,52 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     
     println!("[*] Loading model from: {}", model_path);
     let start = Instant::now();
-    let loader = NativeLoader::new(&model_path)?;
     
-    println!("[*] Extracting tokenizer...");
-    let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
+    let mut gaje_loader = None;
+    
+    let (mut model, tokenizer) = if model_path.ends_with(".gguf") {
+        let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
+        let config = loader.infer_config()?;
+        println!("[+] GGUF Config Inferred: {} layers, {} dim", config.n_blocks, config.n_embd);
+        
+        let model = loader.load_genomic_llm(config, -1.0)?; // Default anchor threshold
+        // For GGUF, we still need a way to get the tokenizer. 
+        // For now, look for a tokenizer.json in the same directory.
+        let tokenizer_path = Path::new(&model_path).parent().unwrap().join("tokenizer.json");
+        let tokenizer = if tokenizer_path.exists() {
+             tokenizers::Tokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?
+        } else {
+             return Err(format!("tokenizer.json not found in {}", Path::new(&model_path).parent().unwrap().display()).into());
+        };
+        (model, tokenizer)
+    } else {
+        let loader = NativeLoader::new(&model_path)?;
+        println!("[*] Extracting tokenizer from GAJE DB...");
+        let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
+        let model = loader.load_llm()?;
+        gaje_loader = Some(loader);
+        (model, tokenizer)
+    };
 
-    let mut model = loader.load_llm()?;
     println!("[*] Model & Tokenizer loaded in {:?}", start.elapsed());
 
     if let Some(target) = rollback_target {
-        println!("[*] Initiating rollback to timestamp: {}", target);
-        let mutations = loader.list_mutations().map_err(|e| e.to_string())?;
-        let mut count = 0;
-        // Mutations are stored with timestamp as key. We want to undo mutations newer than target.
-        for (ts, data) in mutations.into_iter().rev() {
-            if ts > target {
-                let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
-                model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
-                count += 1;
+        if let Some(loader) = gaje_loader {
+            println!("[*] Initiating rollback to timestamp: {}", target);
+            let mutations = loader.list_mutations().map_err(|e| e.to_string())?;
+            let mut count = 0;
+            // Mutations are stored with timestamp as key. We want to undo mutations newer than target.
+            for (ts, data) in mutations.into_iter().rev() {
+                if ts > target {
+                    let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
+                    model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
+                    count += 1;
+                }
             }
+            println!("[+] Rollback complete. Undone {} mutations.", count);
+        } else {
+            println!("[-] Rollback is only supported for .gaje models.");
         }
-        println!("[+] Rollback complete. Undone {} mutations.", count);
     }
 
     if let Some(prompt) = prompt_arg {

@@ -13,6 +13,7 @@ pub mod utils;
 pub mod archive;
 pub mod loader;
 pub mod db;
+pub mod gguf;
 
 use crate::index::GajeIndex;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
