@@ -25,4 +25,5 @@ __pycache__/
 
 # Data
 /data/
+/models/
 maintenance/local_artifacts/

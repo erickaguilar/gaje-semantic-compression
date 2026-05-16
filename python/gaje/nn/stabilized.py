@@ -178,7 +178,7 @@ class GenomicLLM:
         
         end_total = time.time()
         print(f"[*] Evolución 4: Sincronización Genómica Nativa finalizada en {end_total - start_total:.2f}s")
-        self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct")
+        self.tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct" if arch == "qwen2" else "HuggingFaceTB/SmolLM2-135M-Instruct")
 
     def forward(self, tokens, clear_cache=True):
         all_logits = []
