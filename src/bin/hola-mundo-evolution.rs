@@ -1,5 +1,6 @@
 use rand::Rng;
 use std::time::Instant;
+use rayon::prelude::*;
 
 /// Representa una base de ADN digital (2 bits)
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -12,6 +13,7 @@ enum Base {
     T = 0b11,
 }
 
+#[derive(Clone)]
 struct RecurrentMicroOrganism {
     dna_ih: Vec<u8>, // Pesos Entrada -> Oculto (2-bit)
     dna_hh: Vec<u8>, // Pesos Oculto -> Oculto (2-bit)
@@ -122,39 +124,51 @@ fn main() {
     let mut best_total_fitness = 0.0f32;
     let iterations = 100_000;
     let start_time = Instant::now();
+    let population_size = 100; // Tamaño de la población (Path Integral Breeding)
 
     for gen in 0..iterations {
-        let old_ih = organism.dna_ih.clone();
-        let old_hh = organism.dna_hh.clone();
-        let old_ho = organism.dna_ho.clone();
-
-        organism.mutate(3);
-
-        let mut total_prob = 1.0f32;
-        let mut current_hidden = vec![0.0f32; hidden_dim];
-        
-        // Simular secuencia
-        for i in 0..chars.len() - 1 {
-            let mut input = vec![0.0f32; in_dim];
-            input[char_to_idx(chars[i])] = 1.0;
-            
-            let (output, next_hidden) = organism.step(&input, &current_hidden);
-            let probs = softmax(&output);
-            
-            let target_char = chars[i+1];
-            total_prob *= probs[char_to_idx(target_char)];
-            current_hidden = next_hidden;
+        // Generar múltiples "caminos" posibles
+        let mut paths: Vec<RecurrentMicroOrganism> = vec![];
+        for _ in 0..population_size {
+            let mut clone = organism.clone();
+            clone.mutate(3);
+            paths.push(clone);
         }
 
-        if total_prob > best_total_fitness {
-            best_total_fitness = total_prob;
-            if gen % 10000 == 0 || best_total_fitness > 0.5 {
-                println!("[Gen {}] Probabilidad de Secuencia: {:.6}", gen, best_total_fitness);
+        // Evaluar la población en paralelo usando todos los núcleos (AVX2 implícito)
+        let results: Vec<(f32, RecurrentMicroOrganism)> = paths.into_par_iter().map(|path| {
+            let mut total_prob = 1.0f32;
+            let mut current_hidden = vec![0.0f32; hidden_dim];
+            
+            for i in 0..chars.len() - 1 {
+                let mut input = vec![0.0f32; in_dim];
+                input[char_to_idx(chars[i])] = 1.0;
+                
+                let (output, next_hidden) = path.step(&input, &current_hidden);
+                let probs = softmax(&output);
+                
+                let target_char = chars[i+1];
+                total_prob *= probs[char_to_idx(target_char)];
+                current_hidden = next_hidden;
             }
-        } else {
-            organism.dna_ih = old_ih;
-            organism.dna_hh = old_hh;
-            organism.dna_ho = old_ho;
+            (total_prob, path)
+        }).collect();
+
+        // Encontrar el camino más exitoso (Selección Natural)
+        let mut best_path_prob = 0.0f32;
+        let mut best_path_organism = None;
+        for (prob, org) in results {
+            if prob > best_path_prob {
+                best_path_prob = prob;
+                best_path_organism = Some(org);
+            }
+        }
+
+        // Si el mejor mutante supera al ancestro, evoluciona
+        if best_path_prob > best_total_fitness {
+            best_total_fitness = best_path_prob;
+            organism = best_path_organism.unwrap();
+            println!("[Gen {}] Mejor Probabilidad de Secuencia: {:.6}", gen, best_total_fitness);
         }
 
         if best_total_fitness > 0.95 {

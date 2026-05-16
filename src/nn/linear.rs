@@ -3,16 +3,17 @@ use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
+use std::sync::Arc;
+
 #[pyclass]
 #[derive(Clone)]
 pub struct GenomicLinear {
-    #[pyo3(get)]
-    pub database: Vec<u8>,
-    pub epi_strands: Vec<u8>,
-    pub tri_strands: Vec<u8>,
-    pub epi_cols: Vec<(usize, usize)>, // (j, k) block and stride offsets
-    pub tri_cols: Vec<(usize, usize)>,
-    pub anchors: Vec<f16>,
+    pub database: Arc<Vec<u8>>,
+    pub epi_strands: Arc<Vec<u8>>,
+    pub tri_strands: Arc<Vec<u8>>,
+    pub epi_cols: Arc<Vec<(usize, usize)>>, // (j, k) block and stride offsets
+    pub tri_cols: Arc<Vec<(usize, usize)>>,
+    pub anchors: Arc<Vec<f16>>,
     #[pyo3(get)]
     pub centroids: Vec<f32>,
     pub epigenetic_centroids: Vec<f32>,
@@ -33,12 +34,9 @@ pub struct GenomicLinear {
     pub stride: usize,
     
     // Kept to not break Python compatibility on legacy scripts
-    #[pyo3(get)]
-    pub epigenetic_database: Vec<u8>,
-    #[pyo3(get)]
-    pub triplet_database: Vec<u8>,
-    #[pyo3(get)]
-    pub precision_mask: Vec<u8>,
+    pub epigenetic_database: Arc<Vec<u8>>,
+    pub triplet_database: Arc<Vec<u8>>,
+    pub precision_mask: Arc<Vec<u8>>,
 }
 
 #[pymethods]
@@ -117,12 +115,12 @@ impl GenomicLinear {
         }
 
         GenomicLinear {
-            database,
-            epi_strands,
-            tri_strands,
-            epi_cols,
-            tri_cols,
-            anchors,
+            database: Arc::new(database),
+            epi_strands: Arc::new(epi_strands),
+            tri_strands: Arc::new(tri_strands),
+            epi_cols: Arc::new(epi_cols),
+            tri_cols: Arc::new(tri_cols),
+            anchors: Arc::new(anchors),
             centroids,
             epigenetic_centroids,
             triplet_centroids,
@@ -133,10 +131,30 @@ impl GenomicLinear {
             eps,
             bias,
             stride,
-            epigenetic_database,
-            triplet_database,
-            precision_mask,
+            epigenetic_database: Arc::new(epigenetic_database),
+            triplet_database: Arc::new(triplet_database),
+            precision_mask: Arc::new(precision_mask),
         }
+    }
+
+    #[getter]
+    pub fn database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+        Ok(pyo3::types::PyBytes::new(py, &self.database))
+    }
+
+    #[getter]
+    pub fn epigenetic_database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+        Ok(pyo3::types::PyBytes::new(py, &self.epigenetic_database))
+    }
+
+    #[getter]
+    pub fn triplet_database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+        Ok(pyo3::types::PyBytes::new(py, &self.triplet_database))
+    }
+
+    #[getter]
+    pub fn precision_mask<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+        Ok(pyo3::types::PyBytes::new(py, &self.precision_mask))
     }
 
     #[getter]

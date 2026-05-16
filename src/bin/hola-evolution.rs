@@ -1,5 +1,6 @@
 use rand::Rng;
 use std::time::Instant;
+use rayon::prelude::*;
 
 /// Representa una base de ADN digital (2 bits)
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -24,6 +25,7 @@ impl Base {
     }
 }
 
+#[derive(Clone)]
 struct MicroOrganism {
     dna: Vec<u8>, // Cada u8 guarda 4 bases (2 bits c/u)
     centroids: [f32; 4],
@@ -110,27 +112,40 @@ fn main() {
     let iterations = 20000;
     let mut best_fitness = f32::NEG_INFINITY;
     let start_time = Instant::now();
+    let population_size = 100;
 
     for gen in 0..iterations {
-        // Guardar estado actual
-        let old_dna = organism.dna.clone();
-        
-        // Mutar
-        organism.mutate(2); // 2 mutaciones por generación
-        
-        // Evaluar
-        let logits = organism.forward(&input);
-        let probs = softmax(&logits);
-        let fitness = probs[target_idx]; // Nuestra función de aptitud es la probabilidad del objetivo
-        
-        if fitness > best_fitness {
-            best_fitness = fitness;
-            if gen % 2000 == 0 || fitness > 0.9 {
-                println!("[Gen {}] Fitness (Probabilidad): {:.4}", gen, fitness);
+        // Generar múltiples "caminos" paralelos
+        let mut paths: Vec<MicroOrganism> = vec![];
+        for _ in 0..population_size {
+            let mut clone = organism.clone();
+            clone.mutate(2); // 2 mutaciones por generación
+            paths.push(clone);
+        }
+
+        // Evaluar la población en paralelo usando todos los núcleos (AVX2 implícito)
+        let results: Vec<(f32, MicroOrganism)> = paths.into_par_iter().map(|path| {
+            let logits = path.forward(&input);
+            let probs = softmax(&logits);
+            let fitness = probs[target_idx]; // Nuestra función de aptitud es la probabilidad del objetivo
+            (fitness, path)
+        }).collect();
+
+        // Encontrar el camino más exitoso (Selección Natural)
+        let mut best_path_fitness = f32::NEG_INFINITY;
+        let mut best_path_organism = None;
+        for (fitness, org) in results {
+            if fitness > best_path_fitness {
+                best_path_fitness = fitness;
+                best_path_organism = Some(org);
             }
-        } else {
-            // Selección Natural: Si no mejoró, revertimos la mutación
-            organism.dna = old_dna;
+        }
+
+        // Si el mejor mutante supera al ancestro, evoluciona
+        if best_path_fitness > best_fitness {
+            best_fitness = best_path_fitness;
+            organism = best_path_organism.unwrap();
+            println!("[Gen {}] Mejor Fitness (Probabilidad): {:.4}", gen, best_fitness);
         }
 
         if best_fitness > 0.99 {

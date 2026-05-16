@@ -4,6 +4,7 @@ use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;
 
 #[pyclass]
+#[derive(Clone)]
 pub struct RustGenomicLLM {
     #[pyo3(get)]
     pub embeddings: GenomicLinear,

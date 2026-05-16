@@ -5,7 +5,8 @@ use std::env;
 use std::path::Path;
 use std::time::Instant;
 use std::io::{self, Write};
-
+use rand::distributions::{Distribution, WeightedIndex};
+use rayon::prelude::*;
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe {
         kernels::init_shuffle_table();
@@ -138,16 +139,25 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         for gen in 1..=generations {
             let layer_name = layers.choose(&mut rng).unwrap();
             let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
-            let mut paths = Vec::new();
             
+            // Generar clones mutantes (costo cero en RAM gracias a Arc<Vec<u8>>)
+            let mut population = Vec::new();
             for _ in 0..population_size {
-                let delta = model.mutate_layer(layer_name, current_scale).unwrap();
-                let fitness = evaluate(&mut model, tokens);
-                if fitness > best_fitness {
-                    paths.push((delta.clone(), fitness));
-                }
-                model.undo_layer_mutation(layer_name, delta).unwrap();
+                population.push(model.clone());
             }
+
+            // Evaluar los caminos evolutivos en todos los núcleos de CPU (AVX2/Rayon)
+            let results: Vec<Option<(Vec<f32>, f32)>> = population.into_par_iter().map(|mut p_model| {
+                if let Ok(delta) = p_model.mutate_layer(layer_name, current_scale) {
+                    let fitness = evaluate(&mut p_model, tokens);
+                    if fitness > best_fitness {
+                        return Some((delta, fitness));
+                    }
+                }
+                None
+            }).collect();
+
+            let mut paths: Vec<(Vec<f32>, f32)> = results.into_iter().flatten().collect();
             
             if !paths.is_empty() {
                 paths.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -214,6 +224,56 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
+fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> usize {
+    if temperature == 0.0 {
+        return logits.iter().enumerate().filter(|(_, &a)| !a.is_nan())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(i, _)| i).unwrap_or(0);
+    }
+
+    let mut indexed_logits: Vec<(usize, f32)> = logits.iter().enumerate()
+        .filter(|(_, &l)| !l.is_nan())
+        .map(|(i, &l)| (i, l / temperature))
+        .collect();
+
+    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    if top_k > 0 && top_k < indexed_logits.len() {
+        indexed_logits.truncate(top_k);
+    }
+
+    let max_logit = indexed_logits.first().map(|&(_, l)| l).unwrap_or(0.0);
+    let mut probs: Vec<(usize, f32)> = indexed_logits.iter()
+        .map(|&(i, l)| (i, (l - max_logit).exp()))
+        .collect();
+
+    let sum_probs: f32 = probs.iter().map(|&(_, p)| p).sum();
+    for item in &mut probs {
+        item.1 /= sum_probs;
+    }
+
+    if top_p < 1.0 {
+        let mut cumulative = 0.0;
+        let mut cutoff = probs.len();
+        for (idx, &(_, p)) in probs.iter().enumerate() {
+            cumulative += p;
+            if cumulative > top_p {
+                cutoff = idx + 1;
+                break;
+            }
+        }
+        probs.truncate(cutoff);
+    }
+
+    let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
+    if let Ok(dist) = WeightedIndex::new(&weights) {
+        let mut rng = rand::thread_rng();
+        probs[dist.sample(&mut rng)].0
+    } else {
+        probs[0].0
+    }
+}
+
 fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let encoding = tokenizer.encode(prompt, false).map_err(|e| e.to_string())?;
     let tokens = encoding.get_ids();
@@ -224,11 +284,13 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
     for &tid in &current_tokens {
         logits = model.forward(tid as usize, false).unwrap();
     }
+    
+    let temperature = 0.7;
+    let top_k = 40;
+    let top_p = 0.9;
+    
     for _ in 0..max_tokens {
-        let next_token = logits.iter().enumerate().filter(|(_, &a)| !a.is_nan())
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(i, _)| i);
-        let next_token = match next_token { Some(t) => t, None => break };
+        let next_token = sample_logits(&logits, temperature, top_k, top_p);
         if next_token == 0 { break; }
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
         print!("{}", decoded);
