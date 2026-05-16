@@ -2,7 +2,7 @@ import gaje.core._impl as dna
 print(f"Module file: {dna.__file__}")
 from gaje.nn.stabilized import GenomicLLM
 
-model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+model_path = "models/Qwen2-0.5B-Instruct-Q8_0.gguf"
 llm = GenomicLLM(model_path, num_blocks=5)
 
 print("\n--- TEST GENERATION ---")

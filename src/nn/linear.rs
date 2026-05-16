@@ -138,22 +138,22 @@ impl GenomicLinear {
     }
 
     #[getter]
-    pub fn database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    pub fn database<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.database))
     }
 
     #[getter]
-    pub fn epigenetic_database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    pub fn epigenetic_database<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.epigenetic_database))
     }
 
     #[getter]
-    pub fn triplet_database<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    pub fn triplet_database<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.triplet_database))
     }
 
     #[getter]
-    pub fn precision_mask<'py>(&self, py: Python<'py>) -> PyResult<&'py pyo3::types::PyBytes> {
+    pub fn precision_mask<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.precision_mask))
     }
 

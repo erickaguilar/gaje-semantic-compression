@@ -5,7 +5,7 @@ import sys
 from gaje.nn.stabilized import GenomicLLM
 
 def test_coherence():
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+    model_path = "models/SmolLM2-135M-Instruct-Q8_0.gguf"
     if not os.path.exists(model_path):
         print(f"❌ Model not found at {model_path}")
         return

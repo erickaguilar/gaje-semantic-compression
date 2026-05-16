@@ -1,6 +1,6 @@
 [package]
 name = "dna-semantic-compression"
-version = "0.6.5"
+version = "0.7.0"
 edition = "2021"
 authors = ["Erick Aguilar"]
 description = "Motor de compresión semántica genómica de alto rendimiento para LLMs en dispositivos móviles."

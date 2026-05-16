@@ -92,8 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
         let config = loader.load_config()?;
         let model = loader.load_llm()?;
-        let l = NativeLoader::new(&model_path)?;
-        gaje_loader_opt = Some(l);
+        gaje_loader_opt = Some(loader);
         (model, tokenizer, config)
     };
 
