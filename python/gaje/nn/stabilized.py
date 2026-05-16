@@ -85,7 +85,7 @@ class GenomicLayer:
                 self.bias = list(bias_f32_or_tensor)
 
         self.linear = dna_semantic_compression.GenomicLinear(
-            self.dna_database, self.anchors, self.dna_centroids, self.out_features, self.in_features, self.block_size,
+            self.dna_database, self.anchors_f16_bytes, self.dna_centroids, self.out_features, self.in_features, self.block_size,
             rmsnorm_weight=rmsnorm_weight.tolist() if rmsnorm_weight is not None else [], 
             eps=eps, 
             precision_mask=self.precision_mask,
@@ -97,17 +97,44 @@ class GenomicLayer:
         )
 
     def _init_from_f32(self, weights_f32, block_size, anchor_threshold):
-        w_matrix = weights_f32.reshape(self.out_features, self.in_features)
+        # Para evitar picos de memoria masivos (copias de matrices f32), procesamos por bloques
+        # si la matriz es muy grande (> 100MB)
+        matrix_size_mb = (weights_f32.nbytes) / (1024 * 1024)
         
-        dna_db, dna_centroids, anchors = dna_semantic_compression.genomize_f32_native(
-            weights_f32.tobytes(), 
-            block_size, 
-            anchor_threshold
-        )
-        
-        self.dna_database = dna_db
-        self.dna_centroids = dna_centroids
-        self.anchors = anchors
+        if matrix_size_mb > 100:
+            print(f"    [~] Optimizando carga de capa pesada ({matrix_size_mb:.1f} MB)...")
+            chunk_rows = 10000
+            dna_db_list = []
+            centroids_list = []
+            anchors_list = []
+            
+            for i in range(0, self.out_features, chunk_rows):
+                end = min(i + chunk_rows, self.out_features)
+                w_chunk = weights_f32[i:end].copy() # Copia pequeña
+                
+                d_db, d_c, a_bin = dna_semantic_compression.genomize_f32_native(
+                    w_chunk.tobytes(), 
+                    block_size, 
+                    anchor_threshold
+                )
+                dna_db_list.append(d_db)
+                centroids_list.extend(d_c)
+                anchors_list.append(a_bin)
+                del w_chunk
+            
+            self.dna_database = b"".join(dna_db_list)
+            self.dna_centroids = centroids_list
+            self.anchors_f16_bytes = b"".join(anchors_list)
+        else:
+            # Procedimiento estándar para capas pequeñas
+            dna_db, dna_centroids, anchors_f16_bytes = dna_semantic_compression.genomize_f32_native(
+                weights_f32.tobytes(), 
+                block_size, 
+                anchor_threshold
+            )
+            self.dna_database = dna_db
+            self.dna_centroids = dna_centroids
+            self.anchors_f16_bytes = anchors_f16_bytes
         
         self.epigenetic_database = b""
         self.epigenetic_centroids = []
@@ -115,17 +142,21 @@ class GenomicLayer:
         self.triplet_centroids = []
         
         if self.balancer:
+            # El balancer también debería ser chunked si es necesario, 
+            # pero por ahora lo dejamos así ya que suele usarse en capas internas
             stride = block_size // 4
-            entropies = np.array(dna_semantic_compression.calculate_shannon_entropy(w_matrix.tolist()))
+            entropies = np.array(dna_semantic_compression.calculate_shannon_entropy(
+                weights_f32.tobytes(), self.out_features, self.in_features
+            ))
             full_mask = self.balancer.generate_precision_mask(entropies)
             self.precision_mask = [int(np.max(full_mask[b*block_size+k*4 : b*block_size+(k+1)*4])) 
                                    for b in range(self.in_features // block_size) 
                                    for k in range(stride)] * self.out_features
             
-            self.epigenetic_database = b"\x00" * (len(dna_db))
-            self.epigenetic_centroids = [0.0] * (len(dna_centroids))
-            self.triplet_database = b"\x00" * (len(dna_db))
-            self.triplet_centroids = [0.0] * (len(dna_centroids))
+            self.epigenetic_database = b"\x00" * (len(self.dna_database))
+            self.epigenetic_centroids = [0.0] * (len(self.dna_centroids))
+            self.triplet_database = b"\x00" * (len(self.dna_database))
+            self.triplet_centroids = [0.0] * (len(self.dna_centroids))
         else:
             self.precision_mask = []
 
@@ -150,7 +181,10 @@ class GenomicLayer:
         res = np.zeros(self.in_features, dtype=np.float32)
         for b in range(n_blocks):
             res[b*self.block_size : (b+1)*self.block_size] = np.array(dna_semantic_compression.dequantize_embedding(dna_row[b*stride : (b+1)*stride], self.block_size, self.dna_centroids[(idx * n_blocks + b) * 4 : (idx * n_blocks + b) * 4 + 4]))
-        return res + np.array(self.anchors[idx * self.in_features : (idx + 1) * self.in_features], dtype=np.float32)
+        
+        # De-cuantizar anclas on-the-fly si es necesario para inspección
+        anchors = np.frombuffer(self.anchors_f16_bytes, dtype=np.float16).astype(np.float32)
+        return res + anchors[idx * self.in_features : (idx + 1) * self.in_features]
 
 class GenomicAttentionLayer:
     def __init__(self, loader, p, n_head, n_head_kv, head_dim, rope_base, rmsnorm_weight=None, eps=1e-6, config=None):
@@ -254,10 +288,19 @@ class GenomicLLM:
         
         # Initialization logic
         if loader:
-            self.embeddings = GenomicLayer("token_embd", loader.get("token_embd.weight"), balancer=None, anchor_threshold=-1.0, config=self.config)
+            embd_tensor = loader.get("token_embd.weight")
+            self.embeddings = GenomicLayer("token_embd", embd_tensor, balancer=None, anchor_threshold=-1.0, config=self.config)
             output_norm = loader.get("output_norm.weight").data.astype(np.float32).tolist()
-            w_head = loader.get("output.weight", required=False) or loader.get("token_embd.weight")
-            self.lm_head = GenomicLayer("lm_head", w_head, balancer=None, anchor_threshold=0.1, config=self.config)
+            
+            head_tensor = loader.get("output.weight", required=False)
+            if head_tensor is None or head_tensor.name == embd_tensor.name:
+                print("    [*] Compartiendo pesos entre Embeddings y LM Head...")
+                # Si comparten pesos, podemos reutilizar la lógica pero con distinto threshold?
+                # En realidad, si comparten, solemos querer el mismo threshold o simplemente
+                # re-genomizar pero sin cargar el tensor original dos veces.
+                self.lm_head = GenomicLayer("lm_head", head_tensor or embd_tensor, balancer=None, anchor_threshold=0.1, config=self.config)
+            else:
+                self.lm_head = GenomicLayer("lm_head", head_tensor, balancer=None, anchor_threshold=0.1, config=self.config)
         else:
             emb_w = np.random.normal(0, 0.02, (vocab_size, self.n_embd)).astype(np.float32) 
             self.embeddings = GenomicLayer("token_embd", emb_w, balancer=None, anchor_threshold=-1.0, config=self.config)
@@ -394,7 +437,8 @@ class GenomicLLM:
         def save_layer(layer, name):
             db_writer.write_tensor(f"{name}.dna", np.frombuffer(layer.linear.database, dtype=np.uint8).tobytes())
             db_writer.write_tensor(f"{name}.centroids", np.array(layer.linear.centroids, dtype=np.float32).tobytes())
-            db_writer.write_tensor(f"{name}.anchors", np.array(layer.linear.anchors, dtype=np.float16).tobytes())
+            # Usamos el atributo guardado durante la inicialización para evitar la reconstrucción de la lista
+            db_writer.write_tensor(f"{name}.anchors", layer.anchors_f16_bytes)
             if hasattr(layer.linear, 'bias') and len(layer.linear.bias) > 0:
                 db_writer.write_tensor(f"{name}.bias", np.array(layer.linear.bias, dtype=np.float32).tobytes())
                 
@@ -467,7 +511,8 @@ class GenomicLLM:
         def load_linear(name, out_features, in_features):
             dna = db_reader.read_tensor(f"{name}.dna")
             centroids = np.frombuffer(db_reader.read_tensor(f"{name}.centroids"), dtype=np.float32).tolist()
-            anchors = np.frombuffer(db_reader.read_tensor(f"{name}.anchors"), dtype=np.float16).astype(np.float32).tolist()
+            # Pasamos bytes de anclas directamente
+            anchors_u8 = db_reader.read_tensor(f"{name}.anchors")
             
             bias = []
             if db_reader.has_tensor(f"{name}.bias"):
@@ -487,7 +532,7 @@ class GenomicLLM:
                 tri_centroids = np.frombuffer(db_reader.read_tensor(f"{name}.tri_centroids"), dtype=np.float32).tolist()
             
             linear = dna_semantic_compression.GenomicLinear(
-                dna, anchors, centroids, out_features, in_features, 32, 
+                dna, anchors_u8, centroids, out_features, in_features, 32, 
                 bias=bias,
                 precision_mask=precision_mask,
                 epigenetic_database=epi_dna,
@@ -498,13 +543,14 @@ class GenomicLLM:
             
             # Create a mock wrapper for Python interface
             class MockLayer:
-                def __init__(self, lin):
+                def __init__(self, lin, anchors_bin):
                     self.linear = lin
                     self.block_size = 32
+                    self.anchors_f16_bytes = anchors_bin
                 def forward(self, x):
                     return np.array(self.linear.forward(x.tolist() if hasattr(x, "tolist") else x), dtype=np.float32)
             
-            return MockLayer(linear)
+            return MockLayer(linear, anchors_u8)
             
         model.embeddings = load_linear("token_embd", meta.get("vocab_size", 50257), model.n_embd)
         model.lm_head = load_linear("lm_head", meta.get("vocab_size", 50257), model.n_embd)

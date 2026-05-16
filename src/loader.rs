@@ -91,17 +91,7 @@ impl NativeLoader {
         let dna = Self::get_tensor(txn, &format!("{}.dna", prefix));
         let centroids = Self::get_tensor_f32(txn, &format!("{}.centroids", prefix));
         
-        let anchors_bytes = Self::get_tensor(txn, &format!("{}.anchors", prefix));
-        let mut anchors = Vec::new();
-        if !anchors_bytes.is_empty() {
-            let count = anchors_bytes.len() / 2;
-            anchors = vec![0.0f32; count];
-            for i in 0..count {
-                let mut buf = [0u8; 2];
-                buf.copy_from_slice(&anchors_bytes[i*2..(i+1)*2]);
-                anchors[i] = half::f16::from_le_bytes(buf).to_f32();
-            }
-        }
+        let anchors_u8 = Self::get_tensor(txn, &format!("{}.anchors", prefix));
 
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", prefix));
         let precision_mask = Self::get_tensor(txn, &format!("{}.precision_mask", prefix));
@@ -112,7 +102,7 @@ impl NativeLoader {
 
         GenomicLinear::new(
             dna,
-            anchors,
+            anchors_u8,
             centroids,
             out_features,
             in_features,

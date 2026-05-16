@@ -44,10 +44,10 @@ pub struct GenomicLinear {
 #[pymethods]
 impl GenomicLinear {
     #[new]
-    #[pyo3(signature = (database, anchors, centroids, out_features, in_features, block_size, rmsnorm_weight=Vec::new(), eps=1e-6, precision_mask=Vec::new(), epigenetic_database=Vec::new(), epigenetic_centroids=Vec::new(), triplet_database=Vec::new(), triplet_centroids=Vec::new(), bias=Vec::new()))]
+    #[pyo3(signature = (database, anchors_u8, centroids, out_features, in_features, block_size, rmsnorm_weight=Vec::new(), eps=1e-6, precision_mask=Vec::new(), epigenetic_database=Vec::new(), epigenetic_centroids=Vec::new(), triplet_database=Vec::new(), triplet_centroids=Vec::new(), bias=Vec::new()))]
     pub fn new(
         database: Vec<u8>,
-        anchors: Vec<f32>,
+        anchors_u8: Vec<u8>,
         centroids: Vec<f32>,
         out_features: usize,
         in_features: usize,
@@ -62,7 +62,18 @@ impl GenomicLinear {
         bias: Vec<f32>,
     ) -> Self {
         let stride = block_size / 4;
-        let anchors = anchors.into_iter().map(f16::from_f32).collect();
+        
+        let anchors = if anchors_u8.is_empty() {
+            Vec::new()
+        } else {
+            unsafe {
+                std::slice::from_raw_parts(
+                    anchors_u8.as_ptr() as *const f16,
+                    anchors_u8.len() / 2
+                ).to_vec()
+            }
+        };
+
         let n_blocks = in_features / block_size;
 
         let mut epi_cols = Vec::new();
