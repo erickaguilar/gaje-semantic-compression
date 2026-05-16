@@ -37,6 +37,7 @@ pub enum GGUFValue {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(non_camel_case_types)]
 pub enum GGMLType {
     F32 = 0,
     F16 = 1,
