@@ -27,3 +27,11 @@ __pycache__/
 /data/
 /training/
 maintenance/local_artifacts/
+
+# Large Model Artifacts (GAJE/GGUF/Binaries)
+*.gaje
+*.gguf
+*.bin
+*.pth
+*.ckpt
+/experiments/smollm2_v065/smollm2-evolved.gaje

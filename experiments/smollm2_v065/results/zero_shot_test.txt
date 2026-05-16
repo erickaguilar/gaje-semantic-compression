@@ -1,0 +1,3 @@
+🧬 GAJE Native Runtime (v0.6.5)
+[*] Extracting tokenizer from GAJE DB...
+Error: Custom { kind: Other, error: "Database already open. Cannot acquire lock." }
