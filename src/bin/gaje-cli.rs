@@ -20,7 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut rollback_target = None;
     let mut i = 1;
     let mut evolve_target = None;
+    let mut train_target = None;
     let mut generations = 2000;
+    let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut save_path = None;
 
@@ -33,6 +35,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             i += 2;
         } else if args[i] == "--evolve" && i + 1 < args.len() {
             evolve_target = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--train" && i + 1 < args.len() {
+            train_target = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--epochs" && i + 1 < args.len() {
+            train_epochs = args[i+1].parse().unwrap_or(10);
             i += 2;
         } else if args[i] == "--gens" && i + 1 < args.len() {
             generations = args[i+1].parse().unwrap_or(2000);
@@ -57,7 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--gens 2000] [--save output.gaje]");
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje]");
         return Ok(());
     }
 
@@ -178,6 +186,42 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
         }
         println!("[+] Crianza completada. Log-Fitness Final: {:.4}", best_fitness);
+    }
+
+    if let Some(dataset_path) = train_target {
+        println!("[*] Iniciando Auto-Grad Nativo (Hybrid-Training) con texto: {}", dataset_path);
+        let start_train = Instant::now();
+        
+        // If the target is an existing file, read it. Otherwise treat it as a raw string.
+        let text = std::fs::read_to_string(&dataset_path).unwrap_or_else(|_| dataset_path.clone());
+        let encoding = tokenizer.encode(text, false).map_err(|e| e.to_string())?;
+        let tokens = encoding.get_ids();
+
+        if tokens.len() < 2 {
+            return Err("Dataset too short for training".into());
+        }
+
+        let mut current_lr = scale;
+        for epoch in 1..=train_epochs {
+            model.clear_cache().unwrap();
+            let mut total_loss = 0.0;
+            
+            for i in 0..tokens.len() - 1 {
+                let token_id = tokens[i] as usize;
+                let target_id = tokens[i+1] as usize;
+                
+                let loss = model.train_step(token_id, target_id, current_lr)?;
+                total_loss += loss;
+            }
+            
+            let avg_loss = total_loss / (tokens.len() - 1) as f32;
+            println!("[Epoch {}] Avg Loss: {:.4} (LR: {:.4})", epoch, avg_loss, current_lr);
+            
+            // Simple decay
+            current_lr *= 0.9;
+        }
+        
+        println!("[+] Entrenamiento completado en {:?}", start_train.elapsed());
     }
 
     if let Some(ref path) = save_path {

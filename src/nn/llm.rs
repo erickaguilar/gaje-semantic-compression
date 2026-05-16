@@ -73,6 +73,49 @@ impl RustGenomicLLM {
         Ok(logits)
     }
 
+    pub fn train_step(&mut self, token_id: usize, target_token: usize, lr: f32) -> PyResult<f32> {
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
+
+        if token_id >= self.embeddings.out_features {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!("Token id {} out of bounds", token_id)));
+        }
+
+        let mut h = self.embeddings.get_row(token_id)?;
+        for block in &mut self.blocks {
+            h = block.forward(h, pos)?;
+        }
+
+        let h_norm = unsafe { rms_norm_neon(&h, &self.output_norm, self.eps) };
+        let logits = self.lm_head.forward(h_norm.clone())?;
+
+        let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let mut exps = vec![0.0f32; logits.len()];
+        let mut sum_exp = 0.0f32;
+        for i in 0..logits.len() {
+            let e = (logits[i] - max_l).exp();
+            exps[i] = e;
+            sum_exp += e;
+        }
+
+        let mut probs = vec![0.0f32; logits.len()];
+        for i in 0..logits.len() {
+            probs[i] = exps[i] / sum_exp;
+        }
+
+        let loss = -(probs[target_token] + 1e-12).ln();
+
+        let mut d_logits = probs;
+        d_logits[target_token] -= 1.0;
+
+        self.lm_head.refine_with_grads(h_norm, d_logits, lr)?;
+
+        Ok(loss)
+    }
+
     pub fn embeddings_forward(&self, token_id: usize) -> PyResult<Vec<f32>> {
         if token_id >= self.embeddings.out_features {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
