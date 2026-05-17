@@ -453,3 +453,26 @@ pub fn apply_repetition_penalty(
     }
     Ok(out)
 }
+
+/// Genera un buffer de ADN aleatorio (2-bit packed) para una forma dada.
+pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let n_bytes = (n_elements + 3) / 4;
+    let mut dna = vec![0u8; n_bytes];
+    rng.fill(&mut dna[..]);
+    dna
+}
+
+/// Inicializa centroides heurísticos basados en una distribución normal estándar.
+pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
+    let mut centroids = Vec::with_capacity(n_blocks * 4);
+    // Valores típicos para 4 centroides en una normal(0,1)
+    for _ in 0..n_blocks {
+        centroids.push(-1.51);
+        centroids.push(-0.45);
+        centroids.push(0.45);
+        centroids.push(1.51);
+    }
+    centroids
+}

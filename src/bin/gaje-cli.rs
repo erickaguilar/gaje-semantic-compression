@@ -25,10 +25,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut save_path = None;
+    let mut init_path = None;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i+1].clone();
+            i += 2;
+        } else if args[i] == "--init" && i + 1 < args.len() {
+            init_path = Some(args[i+1].clone());
             i += 2;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
@@ -64,8 +68,38 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
+    if let Some(path) = init_path {
+        println!("[*] Creando nuevo organismo genómico 100% nativo en: {}", path);
+        let config = _impl::loader::ModelConfig {
+            config: _impl::loader::ArchConfig {
+                name: "GAJE-Pure-Organism".to_string(),
+                tokenizer_id: "tokenizer".to_string(),
+                rope_base: 1000000.0,
+                ffn_act: "swiglu".to_string(),
+                use_genomic_norm: false,
+            },
+            n_embd: 768,
+            n_head: 12,
+            n_head_kv: 12,
+            n_blocks: 6,
+            vocab_size: Some(49152),
+            eps: 1e-6,
+        };
+        let model = _impl::loader::init_born_genomic_model(&path, config.clone(), 49152)?;
+        
+        // Intentar guardar un tokenizador si existe
+        if Path::new("tokenizer.json").exists() {
+            let tok = tokenizers::Tokenizer::from_file("tokenizer.json").map_err(|e| e.to_string())?;
+            _impl::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            println!("[+] Tokenizador 'tokenizer.json' integrado en el organismo.");
+        }
+
+        println!("[+] Nuevo organismo inicializado exitosamente.");
+        return Ok(());
+    }
+
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje]");
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje]");
         return Ok(());
     }
 

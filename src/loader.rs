@@ -302,17 +302,25 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
         res
     };
 
+    let compress = |data: &[u8]| -> Vec<u8> {
+        lz4_flex::compress_prepend_size(data)
+    };
+
     let save_linear = |prefix: &str, layer: &GenomicLinear| {
-        writer.write_tensor(&format!("{}.dna", prefix), &layer.database).unwrap();
-        writer.write_tensor(&format!("{}.centroids", prefix), &f32_to_u8(&layer.centroids)).unwrap();
+        writer.write_tensor(&format!("{}.dna", prefix), &compress(&layer.database)).unwrap();
+        writer.write_tensor(&format!("{}.centroids", prefix), &compress(&f32_to_u8(&layer.centroids))).unwrap();
         
         let anchors_u8 = unsafe {
             std::slice::from_raw_parts(layer.anchors.as_ptr() as *const u8, layer.anchors.len() * 2)
         };
-        writer.write_tensor(&format!("{}.anchors", prefix), anchors_u8).unwrap();
+        writer.write_tensor(&format!("{}.anchors", prefix), &compress(anchors_u8)).unwrap();
 
         if !layer.bias.is_empty() {
-            writer.write_tensor(&format!("{}.bias", prefix), &f32_to_u8(&layer.bias)).unwrap();
+            writer.write_tensor(&format!("{}.bias", prefix), &compress(&f32_to_u8(&layer.bias))).unwrap();
+        }
+
+        if !layer.precision_mask.is_empty() {
+            writer.write_tensor(&format!("{}.precision_mask", prefix), &compress(&layer.precision_mask)).unwrap();
         }
     };
 
@@ -330,16 +338,16 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
         save_linear(&format!("{}ffn_up", p), &block.up_gen);
         save_linear(&format!("{}ffn_down", p), &block.w_down);
 
-        writer.write_tensor(&format!("{}attn_norm", p), &f32_to_u8(&block.attn.rmsnorm_weight)).unwrap();
-        writer.write_tensor(&format!("{}ffn_norm", p), &f32_to_u8(&block.ffn_norm)).unwrap();
+        writer.write_tensor(&format!("{}attn_norm", p), &compress(&f32_to_u8(&block.attn.rmsnorm_weight))).unwrap();
+        writer.write_tensor(&format!("{}ffn_norm", p), &compress(&f32_to_u8(&block.ffn_norm))).unwrap();
     }
 
     // 4. Output
     save_linear("lm_head", &model.lm_head);
-    writer.write_tensor("output_norm", &f32_to_u8(&model.output_norm)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    writer.write_tensor("output_norm", &compress(&f32_to_u8(&model.output_norm))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     // 5. Compact database to minimize disk space
-    println!("[*] Compactando base de datos genómica...");
+    println!("[*] Compactando base de datos genómica con compresión LZ4...");
     let _ = writer.compact();
 
     Ok(())
@@ -376,7 +384,9 @@ impl NativeLoader {
     fn get_tensor(txn: &ReadTransaction, key: &str) -> Vec<u8> {
         if let Ok(table) = txn.open_table(TENSOR_TABLE) {
             if let Ok(Some(val)) = table.get(key) {
-                return val.value().to_vec();
+                let data = val.value();
+                // Decompress if it looks like LZ4
+                return lz4_flex::decompress_size_prepended(data).unwrap_or_else(|_| data.to_vec());
             }
         }
         Vec::new()
@@ -518,6 +528,96 @@ impl NativeLoader {
         }
         write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
+}
+
+pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usize) -> std::io::Result<RustGenomicLLM> {
+    let block_size = 32;
+    
+    let init_linear = |in_features: usize, out_features: usize| -> GenomicLinear {
+        let n_elements = in_features * out_features;
+        let n_blocks = n_elements / block_size;
+        let dna = crate::utils::generate_random_dna(n_elements);
+        let centroids = crate::utils::generate_default_centroids(n_blocks);
+        
+        GenomicLinear::new(
+            dna,
+            Vec::new(),
+            centroids,
+            out_features,
+            in_features,
+            block_size,
+            Vec::new(),
+            1e-6,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+    };
+
+    // 1. Embeddings
+    let embeddings = init_linear(config.n_embd, vocab_size);
+
+    // 2. Blocks
+    let mut blocks = Vec::new();
+    let head_dim = config.n_embd / config.n_head;
+    let ffn_hidden = config.n_embd * 4; 
+
+    for i in 0..config.n_blocks {
+        let q_gen = init_linear(config.n_embd, config.n_head * head_dim);
+        let k_gen = init_linear(config.n_embd, config.n_head_kv * head_dim);
+        let v_gen = init_linear(config.n_embd, config.n_head_kv * head_dim);
+        let w_o = init_linear(config.n_head * head_dim, config.n_embd);
+        
+        let gate_gen = init_linear(config.n_embd, ffn_hidden);
+        let up_gen = init_linear(config.n_embd, ffn_hidden);
+        let w_down = init_linear(ffn_hidden, config.n_embd);
+
+        let attn_norm = vec![1.0f32; config.n_embd];
+        let ffn_norm = vec![1.0f32; config.n_embd];
+
+        let attn = GenomicAttention::new(
+            config.n_head,
+            config.n_head_kv,
+            head_dim,
+            attn_norm,
+            config.eps,
+            config.config.rope_base,
+        );
+
+        blocks.push(RustGenomicBlock::new(
+            i,
+            attn,
+            q_gen,
+            k_gen,
+            v_gen,
+            w_o,
+            gate_gen,
+            up_gen,
+            w_down,
+            ffn_norm,
+            config.eps,
+            config.config.ffn_act.clone(),
+            config.config.use_genomic_norm,
+        ));
+    }
+
+    // 3. Output
+    let output_norm = vec![1.0f32; config.n_embd];
+    let lm_head = init_linear(config.n_embd, vocab_size);
+
+    let model = RustGenomicLLM::new(
+        embeddings,
+        blocks,
+        output_norm,
+        lm_head,
+        config.eps,
+    );
+
+    save_genomic_model(path, &model, &config, None)?;
+    Ok(model)
 }
 
 #[cfg(test)]
