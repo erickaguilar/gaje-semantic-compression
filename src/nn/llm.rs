@@ -1,4 +1,4 @@
-use crate::kernels::rms_norm_neon;
+use crate::kernels::rms_norm;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;
@@ -65,7 +65,7 @@ impl RustGenomicLLM {
         }
 
         // 3. Final RMSNorm
-        let h_norm = unsafe { rms_norm_neon(&h, &self.output_norm, self.eps) };
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
 
         // 4. LM Head Projection
         let logits = self.lm_head.forward(h_norm)?;
@@ -89,7 +89,7 @@ impl RustGenomicLLM {
             h = block.forward(h, pos)?;
         }
 
-        let h_norm = unsafe { rms_norm_neon(&h, &self.output_norm, self.eps) };
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
         let logits = self.lm_head.forward(h_norm.clone())?;
 
         let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));

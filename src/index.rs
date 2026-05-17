@@ -1,3 +1,4 @@
+use crate::kernels::*;
 use crate::utils::*;
 use pyo3::prelude::*;
 use rand::Rng;
@@ -118,7 +119,7 @@ impl GajeIndex {
                 tri_strand_actual
             };
             return unsafe {
-                calculate_distance_lut_neon(
+                calculate_distance_lut(
                     lut_base, lut_epi, lut_tri, strand, e_s, t_s, mask, n_dims,
                 )
             };

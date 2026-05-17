@@ -36,6 +36,15 @@ impl GajeDatabaseWriter {
         Ok(Self { db: db_arc })
     }
 
+    pub fn compact(&self) -> PyResult<bool> {
+        // Redb needs exclusive access for compaction.
+        if let Some(db_mut) = Arc::get_mut(&mut Arc::clone(&self.db)) {
+             db_mut.compact().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+        } else {
+            Err(pyo3::exceptions::PyRuntimeError::new_err("Cannot compact database: multiple references exist"))
+        }
+    }
+
     pub fn write_mutation(&self, timestamp: u64, data: &[u8]) -> PyResult<()> {
         let write_txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {

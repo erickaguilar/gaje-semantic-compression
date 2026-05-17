@@ -1,4 +1,4 @@
-use crate::kernels::rms_norm_neon;
+use crate::kernels::rms_norm;
 use crate::nn::attention::GenomicAttention;
 use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;
@@ -89,7 +89,7 @@ impl RustGenomicBlock {
         }
 
         // --- 2. FeedForward Block ---
-        let x_ffn_norm = unsafe { rms_norm_neon(&x_post_attn, &self.ffn_norm, self.eps) };
+        let x_ffn_norm = unsafe { rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
 
         let gate = self.gate_gen.forward(x_ffn_norm.clone())?;
         let up = self.up_gen.forward(x_ffn_norm)?;
@@ -127,7 +127,7 @@ impl RustGenomicBlock {
         // Optional GenomicNorm to stabilize variance before the final down projection
         if self.use_genomic_norm {
             let unit_weights = vec![1.0f32; ffn_out.len()];
-            ffn_out = unsafe { rms_norm_neon(&ffn_out, &unit_weights, self.eps) };
+            ffn_out = unsafe { rms_norm(&ffn_out, &unit_weights, self.eps) };
         }
 
         let projected_ffn = self.w_down.forward(ffn_out)?;

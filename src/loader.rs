@@ -3,6 +3,7 @@ use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
 use crate::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
+use half::f16;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
@@ -234,31 +235,29 @@ impl GGUFLoader {
         let out_features = info.shape[info.n_dims as usize - 1] as usize;
         let in_features = info.shape[0] as usize;
 
-        let f32_data = match info.tensor_type {
-            GGMLType::F32 => data,
+        let f32_data: Vec<f32> = match info.tensor_type {
+            GGMLType::F32 => {
+                data.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+            }
             GGMLType::F16 => {
                 let count = data.len() / 2;
                 let mut res = vec![0.0f32; count];
                 let f16_ptr = data.as_ptr() as *const half::f16;
                 for i in 0..count {
-                    unsafe {
-                        res[i] = (*f16_ptr.add(i)).to_f32();
-                    }
+                    unsafe { res[i] = (*f16_ptr.add(i)).to_f32(); }
                 }
-                unsafe {
-                    std::slice::from_raw_parts(res.as_ptr() as *const u8, res.len() * 4).to_vec()
-                }
+                res
             }
             GGMLType::Q8_0 => {
-                crate::utils::dequantize_q8_0_native(data, out_features, in_features)
+                crate::utils::dequantize_q8_0_native(data.to_vec(), out_features, in_features)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
-                    .into_iter().flat_map(|v| v.to_le_bytes()).collect()
             }
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported tensor type for genomization: {:?}", info.tensor_type))),
         };
 
-        let (dna, centroids, anchors_u8) = crate::utils::genomize_f32_native(f32_data, block_size, anchor_threshold)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let (dna, centroids, anchors_u8) = crate::utils::genomize_f32_core(&f32_data, block_size, anchor_threshold);
+        let rmsnorm_weight = Vec::new();
+        let eps = 1e-6;
 
         Ok(GenomicLinear::new(
             dna,
@@ -267,8 +266,8 @@ impl GGUFLoader {
             out_features,
             in_features,
             block_size,
-            Vec::new(),
-            1e-6,
+            rmsnorm_weight,
+            eps,
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -276,6 +275,7 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
         ))
+
     }
 }
 
@@ -338,6 +338,10 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
     // 4. Output
     save_linear("lm_head", &model.lm_head);
     writer.write_tensor("output_norm", &f32_to_u8(&model.output_norm)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    // 5. Compact database to minimize disk space
+    println!("[*] Compactando base de datos genómica...");
+    let _ = writer.compact();
 
     Ok(())
 }

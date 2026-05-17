@@ -164,7 +164,7 @@ impl GenomicLinear {
 
     pub fn forward(&self, mut input: Vec<f32>) -> PyResult<Vec<f32>> {
         if !self.rmsnorm_weight.is_empty() {
-            input = unsafe { rms_norm_neon(&input, &self.rmsnorm_weight, self.eps) };
+            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
         }
 
         let n_blocks = self.in_features / self.block_size;
@@ -183,7 +183,7 @@ impl GenomicLinear {
                 let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
                 let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
                 let mut row_sum = unsafe {
-                    genomic_dot_product_neon(
+                    genomic_dot_product(
                         row_weights,
                         &input,
                         row_centroids,
@@ -354,7 +354,7 @@ impl GenomicLinear {
         lr: f32,
     ) -> PyResult<()> {
         if !self.rmsnorm_weight.is_empty() {
-            input = unsafe { rms_norm_neon(&input, &self.rmsnorm_weight, self.eps) };
+            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
         }
         let n_blocks = self.in_features / self.block_size;
         let has_anchors = !self.anchors.is_empty();
@@ -367,7 +367,7 @@ impl GenomicLinear {
             let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
             let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
             row_sum += unsafe {
-                genomic_dot_product_neon(row_weights, &input, row_centroids, self.stride, n_blocks)
+                genomic_dot_product(row_weights, &input, row_centroids, self.stride, n_blocks)
             };
             
             // Phase 2
@@ -431,7 +431,7 @@ impl GenomicLinear {
         lr: f32,
     ) -> PyResult<()> {
         if !self.rmsnorm_weight.is_empty() {
-            input = unsafe { rms_norm_neon(&input, &self.rmsnorm_weight, self.eps) };
+            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
         }
         let n_blocks = self.in_features / self.block_size;
 
