@@ -5,7 +5,7 @@ import numpy as np
 # Añadir el directorio python al path
 sys.path.append(os.path.abspath("python"))
 
-from gaje.nn.genomize import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM
 
 
 def calculate_ppl_and_show_predictions(model, phrases):
@@ -13,6 +13,7 @@ def calculate_ppl_and_show_predictions(model, phrases):
 
     for text in phrases:
         tokens = model.tokenizer.encode(text, add_special_tokens=False)
+<<<<<<< HEAD
         if len(tokens) < 1:
             continue
 
@@ -35,6 +36,13 @@ def calculate_ppl_and_show_predictions(model, phrases):
         x = model.rms_norm(x, model.output_norm_weight)
         logits = np.dot(model.embedding_matrix, x)
 
+=======
+        if len(tokens) < 1: continue
+        
+        # Forward pass
+        logits = model.forward(tokens)[-1]
+        
+>>>>>>> origin/develop
         # Softmax y Top-k
         probs = np.exp(logits - np.max(logits))
         probs /= probs.sum()
@@ -50,8 +58,13 @@ def calculate_ppl_and_show_predictions(model, phrases):
 
 
 def run_precision_test():
+<<<<<<< HEAD
     model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
 
+=======
+    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+    
+>>>>>>> origin/develop
     # Frases de baja entropía
     low_entropy_phrases = [
         "2 + 2 =",
@@ -66,8 +79,16 @@ def run_precision_test():
 
     # Probamos con el Maestro F32 para asegurar que la arquitectura base funciona
     print("[*] Cargando Maestro F32 (24 bloques)...")
-    model = GenomicLLM(model_path)
+    model = GenomicLLM(model_path, num_blocks=24)
+    calculate_ppl_and_show_predictions(model, low_entropy_phrases)
 
+
+if __name__ == "__main__":
+    run_precision_test()
+..")
+    model = GenomicLLM(model_path, num_blocks=4)
+    
+>>>>>>> origin/develop
     calculate_ppl_and_show_predictions(model, low_entropy_phrases)
 
 

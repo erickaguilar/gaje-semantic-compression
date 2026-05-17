@@ -1,21 +1,29 @@
 import numpy as np
 import time
 import os
+<<<<<<< HEAD
 from gaje.nn.genomize import GenomicLLM
+=======
+import sys
+from gaje.nn.stabilized import GenomicLLM
+>>>>>>> origin/develop
 
 
 def test_coherence():
+<<<<<<< HEAD
     model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+=======
+    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+>>>>>>> origin/develop
     if not os.path.exists(model_path):
         print(f"❌ Model not found at {model_path}")
         return
 
-    print("🧬 Starting Real Coherence Test (RoPE Aligned)")
+    print("🧬 Starting Real Coherence Test (Native DGI Flow)")
     print("-" * 50)
 
-    # We only load 2 blocks for a quick test of the first few layers logic
-    # though full model is better for PPL, 2 blocks should show if it's broken
-    llm = GenomicLLM(model_path)
+    # Using all blocks for full verification
+    llm = GenomicLLM(model_path, num_blocks=None)
 
     prompt = "The capital of France is"
     # Target: " Paris"
@@ -25,7 +33,8 @@ def test_coherence():
     print(f"[*] Tokens: {tokens} ({llm.tokenizer.convert_ids_to_tokens(tokens)})")
 
     start_time = time.time()
-    logits = llm.forward(tokens)
+    all_logits = llm.forward(tokens)
+    logits = all_logits[-1] # Get logits for the last token
     end_time = time.time()
 
     next_token_id = np.argmax(logits)
@@ -51,4 +60,11 @@ def test_coherence():
 
 
 if __name__ == "__main__":
+    test_coherence()
+   print("⚠️ WARNING: Coherence still low. Further calibration needed.")
+
+
+if __name__ == "__main__":
+    test_coherence()
+me__ == "__main__":
     test_coherence()

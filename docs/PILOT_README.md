@@ -1,4 +1,4 @@
-# 👨‍✈️ Guía de Piloto: Protocolo GAJE v0.6.0
+# 👨‍✈️ Guía de Piloto: Protocolo GAJE v0.6.1
 
 Bienvenido a la frontera de la IA genómica. Esta versión habilita la ejecución y el aprendizaje de modelos masivos en dispositivos móviles.
 
@@ -31,4 +31,4 @@ python -m gaje.nn.distiller
 - **Fidelity:** > 0.96 CosSim.
 
 ---
-*GAJE v0.6.0: IA que no solo comprime, sino que evoluciona localmente.*
+*GAJE v0.6.1: IA que no solo comprime, sino que evoluciona localmente.*

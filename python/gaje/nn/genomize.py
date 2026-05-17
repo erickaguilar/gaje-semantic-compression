@@ -4,16 +4,7 @@ from gaje.core import _impl as dna_semantic_compression
 import os
 from transformers import AutoTokenizer
 
-
-def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
-    in_features, out_features = tensor.shape
-    data = tensor.data.tobytes()
-    # Always use Rust for Q8 dequantization
-    flat_weights = dna_semantic_compression.dequantize_q8_0_native(
-        data, out_features, in_features
-    )
-    w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
-    return w
+from gaje.utils.quantization import dequantize_q8_0
 
 
 class GenomicLLM:

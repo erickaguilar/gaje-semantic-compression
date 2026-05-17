@@ -55,7 +55,7 @@ pub fn quantize_embedding(
 ) -> PyResult<PyObject> {
     let t = thresholds.unwrap_or_else(|| vec![-0.43, 0.0, 0.43]);
     let n = vector.len();
-    let mut packed = Vec::with_capacity(n.div_ceil(4));
+    let mut packed = Vec::with_capacity((n + 3) / 4);
     for i in (0..n).step_by(4) {
         let mut byte = 0u8;
         for j in 0..4 {
@@ -110,10 +110,14 @@ pub fn apply_repetition_penalty(
 #[pyfunction]
 #[pyo3(signature = (logits, temperature=1.0, top_p=0.9))]
 pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+    if logits.is_empty() {
+        return Ok(0);
+    }
+    let max_logit = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
     let mut probs: Vec<(usize, f32)> = logits
         .iter()
         .enumerate()
-        .map(|(i, &l)| (i, (l / temperature).exp()))
+        .map(|(i, &l)| (i, ((l - max_logit) / temperature).exp()))
         .collect();
     let sum_exp: f32 = probs.iter().map(|(_, p)| p).sum();
     for p in &mut probs {
@@ -143,18 +147,20 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
     Ok(probs[0].0)
 }
 #[pyfunction]
-pub fn calculate_shannon_entropy(data: Vec<Vec<f32>>) -> PyResult<Vec<f32>> {
-    if data.is_empty() {
+pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> PyResult<Vec<f32>> {
+    if data_u8.is_empty() || rows == 0 || cols == 0 {
         return Ok(vec![]);
     }
-    let n_vectors = data.len();
-    let dim = data[0].len();
-    let entropies: Vec<f32> = (0..dim)
+    let f32_data: &[f32] = unsafe {
+        std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4)
+    };
+
+    let entropies: Vec<f32> = (0..cols)
         .into_par_iter()
         .map(|d_idx| {
-            let mut values = Vec::with_capacity(n_vectors);
-            for v in &data {
-                values.push(v[d_idx]);
+            let mut values = Vec::with_capacity(rows);
+            for r in 0..rows {
+                values.push(f32_data[r * cols + d_idx]);
             }
             let min = values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
             let max = values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -171,7 +177,7 @@ pub fn calculate_shannon_entropy(data: Vec<Vec<f32>>) -> PyResult<Vec<f32>> {
             let mut entropy = 0.0f32;
             for &count in &bins {
                 if count > 0 {
-                    let p = count as f32 / n_vectors as f32;
+                    let p = count as f32 / rows as f32;
                     entropy -= p * (p.ln() / 2.0f32.ln());
                 }
             }
@@ -180,34 +186,39 @@ pub fn calculate_shannon_entropy(data: Vec<Vec<f32>>) -> PyResult<Vec<f32>> {
         .collect();
     Ok(entropies)
 }
+
 #[pyfunction]
 pub fn genomize_f32_native(
     data_u8: Vec<u8>,
     block_size: usize,
     anchor_threshold: f32,
-) -> PyResult<(Vec<u8>, Vec<f32>, Vec<f32>)> {
+) -> PyResult<(Vec<u8>, Vec<f32>, Vec<u8>)> {
     let f32_data: &[f32] =
         unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
     let n_elements = f32_data.len();
     let n_blocks = n_elements / block_size;
+
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    let mut anchors = vec![0.0f32; n_elements];
+    let mut anchors = vec![half::f16::ZERO; n_elements];
+
     let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
+
     for i in 0..n_blocks {
         let start = i * block_size;
         let block_f32 = &f32_data[start..start + block_size];
+
         let mut sum = 0.0f32;
-        for &val in block_f32 {
-            sum += val;
-        }
+        for &val in block_f32 { sum += val; }
         let mean = sum / block_size as f32;
+
         let mut var_sum = 0.0f32;
         for &val in block_f32 {
             let diff = val - mean;
             var_sum += diff * diff;
         }
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
+
         let t = [mean - std, mean, mean + std];
         let c = [
             mean + base_c[0] * std,
@@ -215,20 +226,16 @@ pub fn genomize_f32_native(
             mean + base_c[2] * std,
             mean + base_c[3] * std,
         ];
-        let mut packed_block = Vec::with_capacity(block_size / 4);
+
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
             for s in 0..4 {
                 let val = block_f32[k * 4 + s];
-                let bits = if val < t[0] {
-                    0b00
-                } else if val < t[1] {
-                    0b01
-                } else if val < t[2] {
-                    0b11
-                } else {
-                    0b10
-                };
+                let bits = if val < t[0] { 0b00 } 
+                          else if val < t[1] { 0b01 } 
+                          else if val < t[2] { 0b11 } 
+                          else { 0b10 };
+
                 let c_val = match bits {
                     0b00 => c[0],
                     0b01 => c[1],
@@ -236,34 +243,40 @@ pub fn genomize_f32_native(
                     0b10 => c[3],
                     _ => 0.0,
                 };
+
                 let residual = val - c_val;
                 if residual.abs() > anchor_threshold {
-                    anchors[start + k * 4 + s] = residual;
+                    anchors[start + k * 4 + s] = half::f16::from_f32(residual);
                 }
                 byte = (byte << 2) | bits;
             }
-            packed_block.push(byte);
+            dna_database.push(byte);
         }
-        dna_database.extend(packed_block);
         for &cv in &c {
             all_centroids.push(cv);
         }
     }
-    Ok((dna_database, all_centroids, anchors))
+
+    // Devolvemos anchors como bytes f16 para máxima eficiencia en Python
+    let anchors_u8 = unsafe {
+        std::slice::from_raw_parts(anchors.as_ptr() as *const u8, anchors.len() * 2).to_vec()
+    };
+
+    Ok((dna_database, all_centroids, anchors_u8))
 }
 #[pyfunction]
 pub fn genomize_f16_native(
     data_u8: Vec<u8>,
     block_size: usize,
     anchor_threshold: f32,
-) -> PyResult<(Vec<u8>, Vec<f32>, Vec<f32>)> {
+) -> PyResult<(Vec<u8>, Vec<f32>, Vec<u8>)> {
     let f16_data: &[f16] =
         unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f16, data_u8.len() / 2) };
     let n_elements = f16_data.len();
     let n_blocks = n_elements / block_size;
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    let mut anchors = vec![0.0f32; n_elements];
+    let mut anchors = vec![half::f16::ZERO; n_elements];
     let base_c = [-1.510f32, -0.4528, 0.4528, 1.510];
     for i in 0..n_blocks {
         let start = i * block_size;
@@ -289,7 +302,7 @@ pub fn genomize_f16_native(
             mean + base_c[2] * std,
             mean + base_c[3] * std,
         ];
-        let mut packed_block = Vec::with_capacity(block_size / 4);
+        
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
             for s in 0..4 {
@@ -312,18 +325,22 @@ pub fn genomize_f16_native(
                 };
                 let residual = val - c_val;
                 if residual.abs() > anchor_threshold {
-                    anchors[start + k * 4 + s] = residual;
+                    anchors[start + k * 4 + s] = half::f16::from_f32(residual);
                 }
                 byte = (byte << 2) | bits;
             }
-            packed_block.push(byte);
+            dna_database.push(byte);
         }
-        dna_database.extend(packed_block);
         for &cv in &c {
             all_centroids.push(cv);
         }
     }
-    Ok((dna_database, all_centroids, anchors))
+    // Devolvemos anchors como bytes f16 para máxima eficiencia en Python
+    let anchors_u8 = unsafe {
+        std::slice::from_raw_parts(anchors.as_ptr() as *const u8, anchors.len() * 2).to_vec()
+    };
+
+    Ok((dna_database, all_centroids, anchors_u8))
 }
 #[pyfunction]
 #[pyo3(signature = (data_u8, out_features, in_features))]
@@ -477,9 +494,13 @@ pub fn prune_genomic_database(
     stride: usize,
     active_dims: Vec<usize>,
 ) -> PyResult<(Vec<u8>, usize)> {
-    let n_strands = database.len().checked_div(stride).unwrap_or(0);
+    let n_strands = if stride == 0 {
+        0
+    } else {
+        database.len() / stride
+    };
     let new_dims = active_dims.len();
-    let new_stride = new_dims.div_ceil(4);
+    let new_stride = (new_dims + 3) / 4;
     let mut new_database = Vec::with_capacity(n_strands * new_stride);
 
     for s_idx in 0..n_strands {

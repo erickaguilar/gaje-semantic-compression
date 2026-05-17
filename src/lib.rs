@@ -1,22 +1,38 @@
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::manual_checked_ops)]
-#![allow(clippy::manual_div_ceil)]
-mod index;
-mod kernels;
-mod nn;
-mod utils;
+#![allow(
+    dead_code,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::manual_checked_ops,
+    clippy::non_canonical_partial_ord_impl,
+    clippy::manual_div_ceil
+)]
+pub mod index;
+pub mod kernels;
+pub mod nn;
+pub mod utils;
+pub mod archive;
+pub mod loader;
+pub mod db;
+pub mod gguf;
+
 use crate::index::GajeIndex;
-use crate::nn::{GenomicAttention, GenomicLinear, GenomicSwiGLU};
+use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
+use crate::db::{GajeDatabaseWriter, GajeDatabaseReader};
 use crate::utils::*;
 use pyo3::prelude::*;
 
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    unsafe {
+        crate::kernels::init_shuffle_table();
+    }
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;
-    m.add_class::<GenomicSwiGLU>()?;
+    m.add_class::<RustGenomicBlock>()?;
+    m.add_class::<RustGenomicLLM>()?;
+    m.add_class::<GajeDatabaseWriter>()?;
+    m.add_class::<GajeDatabaseReader>()?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

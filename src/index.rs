@@ -1,3 +1,4 @@
+use crate::kernels::*;
 use crate::utils::*;
 use pyo3::prelude::*;
 use rand::Rng;
@@ -12,15 +13,12 @@ pub struct Neighbor {
 impl Eq for Neighbor {}
 impl PartialOrd for Neighbor {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        other.distance.partial_cmp(&self.distance)
     }
 }
 impl Ord for Neighbor {
     fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .distance
-            .partial_cmp(&self.distance)
-            .unwrap_or(Ordering::Equal)
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
     }
 }
 #[pyclass]
@@ -126,6 +124,7 @@ impl GajeIndex {
                 )
             };
         }
+        #[allow(unreachable_code)]
         let mut dist_sq = 0.0f32;
         let mut dims = 0;
         for i in 0..self.stride {
@@ -221,7 +220,11 @@ impl GajeIndex {
     fn insert_node(&mut self, idx: usize) {
         let mut rng = rand::thread_rng();
         let level = (-rng.gen::<f64>().ln() * self.level_mult) as i32;
-        let n = self.database.len().checked_div(self.stride).unwrap_or(0);
+        let n = if self.stride == 0 {
+            0
+        } else {
+            self.database.len() / self.stride
+        };
         if self.entry_point.is_none() {
             self.max_level = level;
             self.entry_point = Some(idx);
@@ -346,7 +349,6 @@ impl GajeIndex {
 #[pymethods]
 impl GajeIndex {
     #[new]
-    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (database, centroids, epigenetic_database=Vec::new(), epigenetic_centroids=Vec::new(), triplet_database=Vec::new(), triplet_centroids=Vec::new(), precision_mask=Vec::new(), m=32, ef_construction=200))]
     pub fn new(
         database: Vec<Vec<u8>>,
@@ -394,7 +396,11 @@ impl GajeIndex {
         }
     }
     pub fn build(&mut self) -> PyResult<()> {
-        let n = self.database.len().checked_div(self.stride).unwrap_or(0);
+        let n = if self.stride == 0 {
+            0
+        } else {
+            self.database.len() / self.stride
+        };
         println!(
             "[*] Building Optimized DNA Graph (N={}, M={}, ef_c={})...",
             n, self.m, self.ef_construction
@@ -417,7 +423,11 @@ impl GajeIndex {
     pub fn flat_search(&self, query_vector: Vec<f32>, k: usize) -> PyResult<Vec<(usize, f32)>> {
         let c = &self.centroids;
         let q_len = query_vector.len();
-        let n = self.database.len().checked_div(self.stride).unwrap_or(0);
+        let n = if self.stride == 0 {
+            0
+        } else {
+            self.database.len() / self.stride
+        };
         let mut results: Vec<(usize, f32)> = (0..n)
             .into_par_iter()
             .map(|idx| {
@@ -473,8 +483,8 @@ impl GajeIndex {
             } else {
                 &c_base[0..4]
             };
-            for &centroid in cd.iter().take(4) {
-                let diff = val - centroid;
+            for b in 0..4 {
+                let diff = val - cd[b];
                 lut_base.push(diff * diff);
             }
         }

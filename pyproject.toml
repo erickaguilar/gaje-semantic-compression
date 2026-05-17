@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "dna-semantic-compression"
-version = "0.6.0"
+version = "0.6.5"
 description = "Genomic Semantic Compression Protocol (GAJE) for high-density vector storage."
 authors = [{name = "Erick Aguilar"}]
 license = {text = "MIT"}
@@ -14,6 +14,24 @@ dependencies = [
     "numpy>=1.20.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pre-commit",
+    "bumpversion",
+    "gradio",
+    "maturin",
+    "sentence-transformers",
+    "gguf",
+    "tokenizers",
+    "transformers",
+    "scikit-learn",
+    "scipy",
+    "tqdm",
+    "pyyaml",
+    "requests"
+]
+
 [project.scripts]
 gaje = "gaje.utils.cli:main"
 
@@ -21,8 +39,11 @@ gaje = "gaje.utils.cli:main"
 module-name = "gaje.core._impl"
 python-source = "python"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.bumpversion]
-current_version = "0.6.0"
+current_version = "0.6.5"
 commit = true
 commit_args = ""
 tag = true

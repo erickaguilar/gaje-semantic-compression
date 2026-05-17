@@ -37,7 +37,7 @@ La falla en la coherencia del modelo se atribuye a dos factores principales:
    - Realizar pruebas de destilación en solo 2 bloques antes de escalar al modelo completo de 24.
 
 ---
-## ✅ Actualización: Cierre de Hallazgos (10 de mayo de 2026, v0.6.0)
+## ✅ Actualización: Cierre de Hallazgos (10 de mayo de 2026, v0.6.1)
 
 Se ha resuelto satisfactoriamente la degradación de calidad reportada el 7 de mayo mediante una intervención estructural profunda:
 
@@ -52,4 +52,4 @@ Se ha resuelto satisfactoriamente la degradación de calidad reportada el 7 de m
 ### 3. Aprendizaje Local Validado
 - El optimizador `refine_centroids` en Rust demostró una convergencia acelerada (-94.9% MSE), permitiendo que el modelo se adapte al estilo del usuario directamente en el dispositivo.
 
-**Estado Final:** 🚀 **RESOLVIDO.** El protocolo GAJE v0.6.0 es apto para inferencia de LLMs genómicos de alta fidelidad.
+**Estado Final:** 🚀 **RESOLVIDO.** El protocolo GAJE v0.6.1 es apto para inferencia de LLMs genómicos de alta fidelidad.

@@ -58,7 +58,7 @@ Cuando el Intérprete detecta una zona de alta entropía o un pico de PPL local,
 
 ### Hito 1: Estabilización del Esqueleto (F32 Baseline)
 *   **Objetivo:** Lograr Perplexity < 20 en SmolLM2/Qwen2.
-*   **Estado:** ✅ **Completado.** Sincronización total de RoPE y SwiGLU alcanzada en v0.6.0.
+*   **Estado:** ✅ **Completado.** Sincronización total de RoPE y SwiGLU alcanzada en v0.6.1.
 
 ### Hito 2: Implementación del Kernel de Traducción (2-Bit ADC)
 *   **Objetivo:** Mover el MatMul de 2-bits a Rust con Fusión de Kernels.
@@ -75,7 +75,7 @@ Cuando el Intérprete detecta una zona de alta entropía o un pico de PPL local,
 ---
 
 ## 4. Guía de Uso Actualizada
-Tras la consolidación v0.6.0, ya no es necesaria la des-permutación manual de pesos. El motor carga directamente tensores Q8_0 y los transforma en strands de ADN compatibles con la arquitectura GGUF original.
+Tras la consolidación v0.6.1, ya no es necesaria la des-permutación manual de pesos. El motor carga directamente tensores Q8_0 y los transforma en strands de ADN compatibles con la arquitectura GGUF original.
 
 **Instrucción de Inferencia:**
 > "Utilizar `gaje.processing.pipeline` para una inferencia estabilizada que aproveche la KV-Cache de 2 bits."
