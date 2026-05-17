@@ -5,7 +5,7 @@ import time
 import argparse
 
 # Asegurar que se usa el paquete local
-sys.path.append(os.path.abspath("python"))
+sys.path.insert(0, os.path.abspath("python"))
 
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config
