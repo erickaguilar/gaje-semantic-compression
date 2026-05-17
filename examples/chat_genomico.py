@@ -1,6 +1,6 @@
 import os
 import sys
-from python.gaje.processing.pipeline import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM
 
 
 def main():

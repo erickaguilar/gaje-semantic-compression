@@ -32,9 +32,13 @@ class GAJEArchive:
             cb_json = json.dumps(self.codebook).encode("utf-8")
             f.write(struct.pack("I", len(cb_json)))
             f.write(cb_json)
-            
+
             # Epigenetic Codebook
-            epi_cb_json = json.dumps(self.epigenetic_codebook).encode("utf-8") if self.epigenetic_codebook else b"{}"
+            epi_cb_json = (
+                json.dumps(self.epigenetic_codebook).encode("utf-8")
+                if self.epigenetic_codebook
+                else b"{}"
+            )
             f.write(struct.pack("I", len(epi_cb_json)))
             f.write(epi_cb_json)
 
@@ -44,10 +48,10 @@ class GAJEArchive:
                 label_b = label.encode("utf-8")
                 f.write(struct.pack("I", len(label_b)))
                 f.write(label_b)
-                
+
                 f.write(struct.pack("I", len(dna)))
                 f.write(dna)
-                
+
                 epi_dna_b = epi_dna if epi_dna else b""
                 f.write(struct.pack("I", len(epi_dna_b)))
                 f.write(epi_dna_b)
@@ -61,11 +65,11 @@ class GAJEArchive:
                 raise ValueError("Not a valid GAJE file")
 
             ver = struct.unpack("H", f.read(2))[0]
-            
+
             # Base Codebook
             cb_len = struct.unpack("I", f.read(4))[0]
             codebook = json.loads(f.read(cb_len).decode("utf-8"))
-            
+
             epi_codebook = None
             if ver >= 3:
                 epi_cb_len = struct.unpack("I", f.read(4))[0]
@@ -76,15 +80,16 @@ class GAJEArchive:
             for _ in range(count):
                 l_len = struct.unpack("I", f.read(4))[0]
                 label = f.read(l_len).decode("utf-8")
-                
+
                 d_len = struct.unpack("I", f.read(4))[0]
                 dna = f.read(d_len)
-                
+
                 epi_dna = None
                 if ver >= 3:
                     e_len = struct.unpack("I", f.read(4))[0]
                     epi_dna = f.read(e_len)
-                    if not epi_dna: epi_dna = None
-                
+                    if not epi_dna:
+                        epi_dna = None
+
                 archive.add(label, dna, epi_dna)
             return archive

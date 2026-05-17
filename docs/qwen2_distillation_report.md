@@ -1,7 +1,7 @@
 # 🧬 Reporte de Hallazgos: Destilación Genómica Qwen2 (GAJE 2-bit)
 
-**Fecha:** 7 de mayo de 2026  
-**Estado:** Fase 10 (Investigación Crítica)  
+**Fecha:** 7 de mayo de 2026
+**Estado:** Fase 10 (Investigación Crítica)
 **Modelo Evaluado:** `gaje_qwen2_full_v1` (Basado en Qwen2-0.5B)
 
 ## 📊 Resumen Ejecutivo

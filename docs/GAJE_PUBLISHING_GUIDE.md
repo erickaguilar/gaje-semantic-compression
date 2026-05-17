@@ -1,7 +1,7 @@
 # 🧬 Protocolo GAJE: Destilación Genómica y Despliegue GGUF
 
 ## 📖 Visión General
-El **Protocolo GAJE (Genomic Artificial Junction Engine)** es una arquitectura de compresión y destilación semántica que reduce los modelos de lenguaje a una densidad de **2 bits por parámetro** utilizando un enfoque inspirado en la genética molecular. 
+El **Protocolo GAJE (Genomic Artificial Junction Engine)** es una arquitectura de compresión y destilación semántica que reduce los modelos de lenguaje a una densidad de **2 bits por parámetro** utilizando un enfoque inspirado en la genética molecular.
 
 A diferencia de la cuantización tradicional, GAJE trata los pesos del modelo como hebras de ADN, dividiéndolos en una **Hebra Primaria (ADN)** para la señal base y una **Hebra Epigenética** para la corrección de errores semánticos, protegida por un sistema de **Clonación de Anclas**.
 

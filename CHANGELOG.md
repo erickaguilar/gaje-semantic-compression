@@ -65,7 +65,7 @@
 - **Recall@10 Metric**: Integrated structured accuracy reporting for Phase 4, reaching **85.40%** precision.
 
 ### Fixed
-- **Termux/Android Compatibility**: 
+- **Termux/Android Compatibility**:
     - Implemented a `scipy` monkeypatch/bypass to resolve `dlopen` symbol errors (`__emutls_get_address`) specific to Python 3.13 on Termux.
     - Switched Ground Truth calculation to `torch`-based cosine similarity to bypass broken `scipy` extension modules.
 - **SSL/Connectivity Resilience**: Updated data fetchers to handle network timeouts and certificate issues by allowing fallback patterns and model introspection bypass.

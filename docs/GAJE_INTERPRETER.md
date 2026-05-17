@@ -27,7 +27,7 @@ El Intérprete mantiene una "memoria de error". Sabe que el almacenamiento GAJE 
 Para asegurar que el modelo no se desvíe en el "espacio de ADN", el Intérprete implementa tres mecanismos de defensa avanzados:
 
 ### I. Residual Quantization (RQ): La Capa Epigenética
-En lugar de un mapeo rígido a un solo centroide, el Intérprete gestiona un segundo nivel de "error" (el residuo). 
+En lugar de un mapeo rígido a un solo centroide, el Intérprete gestiona un segundo nivel de "error" (el residuo).
 *   **Visión:** El ADN da la instrucción base, y el residuo (ARN) ajusta los detalles finos. Esto permite estabilizar la PPL y, en búsqueda semántica, permite que el Recall suba al capturar variaciones sutiles entre vectores muy cercanos.
 *   **Mecanismo:** `ADN_Final = Centroide_Base + Centroide_Residuo`.
 
@@ -44,7 +44,7 @@ Uso de codones de 3 nucleótidos para las capas críticas de navegación en HNSW
 El Protocolo GAJE evoluciona de una compresión estática a un metabolismo dinámico basado en la complejidad de la información:
 
 ### I. Segmentación por Entropía de Shannon
-Se implementará un sensor de entropía en el Intérprete para clasificar los flujos de datos. 
+Se implementará un sensor de entropía en el Intérprete para clasificar los flujos de datos.
 *   **Baja Entropía (Datos Redundantes):** Se procesan estrictamente en 2 bits.
 *   **Alta Entropía (Datos Complejos):** Se identifican como "Zonas de Estrés Semántico" que pueden romper el indicador de PPL.
 

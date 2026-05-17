@@ -3,6 +3,7 @@ import numpy as np
 from gaje.core.archive import GAJEArchive
 from gaje.core import _impl as engine
 
+
 def main():
     parser = argparse.ArgumentParser(description="GAJE Protocol CLI Tool")
     subparsers = parser.add_subparsers(dest="command")
