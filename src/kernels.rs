@@ -361,6 +361,176 @@ pub unsafe fn genomic_dot_product_scalar(
 }
 
 // =============================================================================
+// genomic_dot_product_mixed — Producto punto genómico con precisión mixta
+// =============================================================================
+
+#[cfg(target_arch = "aarch64")]
+#[inline(always)]
+pub unsafe fn genomic_dot_product_mixed_neon(
+    weights: &[u8],
+    epi_weights: &[u8],
+    tri_weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    epi_centroids: &[f32],
+    tri_centroids: &[f32],
+    mask: &[u8],
+    stride: usize,
+    n_blocks: usize,
+) -> f32 {
+    let mut sum_v = vdupq_n_f32(0.0);
+    #[allow(static_mut_refs)]
+    let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
+
+    let mut epi_ptr_idx = 0;
+    let mut tri_ptr_idx = 0;
+
+    for j in 0..n_blocks {
+        let c_v = vld1q_u8(centroids.as_ptr().add(j * 4) as *const u8);
+        let ce_v = if !epi_centroids.is_empty() {
+             vld1q_u8(epi_centroids.as_ptr().add(j * 4) as *const u8)
+        } else {
+             vdupq_n_u8(0)
+        };
+        let ct_v = if !tri_centroids.is_empty() {
+             vld1q_u8(triplet_centroids.as_ptr().add(j * 4) as *const u8)
+        } else {
+             vdupq_n_u8(0)
+        };
+
+        let input_block_ptr = input.as_ptr().add(j * stride * 4);
+        let weights_block_ptr = weights.as_ptr().add(j * stride);
+
+        for k in 0..stride {
+            let mode = *mask.get(j * stride + k).unwrap_or(&0);
+            let byte = *weights_block_ptr.add(k);
+            let shuffle_mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
+            
+            let mut v_vals_u8 = vqtbl1q_u8(c_v, shuffle_mask);
+            
+            if mode >= 1 && !epi_weights.is_empty() {
+                let e_byte = epi_weights[epi_ptr_idx];
+                epi_ptr_idx += 1;
+                let e_shuffle = vld1q_u8(table_ptr.add(e_byte as usize) as *const u8);
+                let e_vals = vqtbl1q_u8(ce_v, e_shuffle);
+                v_vals_u8 = vreinterpretq_u8_f32(vaddq_f32(vreinterpretq_f32_u8(v_vals_u8), vreinterpretq_f32_u8(e_vals)));
+            }
+            
+            if mode >= 2 && !tri_weights.is_empty() {
+                let t_byte = tri_weights[tri_ptr_idx];
+                tri_ptr_idx += 1;
+                let t_shuffle = vld1q_u8(table_ptr.add(t_byte as usize) as *const u8);
+                let t_vals = vqtbl1q_u8(ct_v, t_shuffle);
+                v_vals_u8 = vreinterpretq_u8_f32(vaddq_f32(vreinterpretq_f32_u8(v_vals_u8), vreinterpretq_f32_u8(t_vals)));
+            }
+
+            let v_vals_f = vreinterpretq_f32_u8(v_vals_u8);
+            let v_in = vld1q_f32(input_block_ptr.add(k * 4));
+            sum_v = vfmaq_f32(sum_v, v_vals_f, v_in);
+        }
+    }
+    vaddvq_f32(sum_v)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub unsafe fn genomic_dot_product_mixed_neon(
+    weights: &[u8],
+    epi_weights: &[u8],
+    tri_weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    epi_centroids: &[f32],
+    tri_centroids: &[f32],
+    mask: &[u8],
+    stride: usize,
+    n_blocks: usize,
+) -> f32 {
+    if is_x86_feature_detected!("ssse3") {
+        #[allow(static_mut_refs)]
+        let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
+        let mut acc = _mm_setzero_ps();
+
+        let mut epi_ptr_idx = 0;
+        let mut tri_ptr_idx = 0;
+
+        for j in 0..n_blocks {
+            let c_v = _mm_loadu_si128(centroids.as_ptr().add(j * 4) as *const __m128i);
+            let ce_v = if !epi_centroids.is_empty() {
+                 _mm_loadu_si128(epi_centroids.as_ptr().add(j * 4) as *const __m128i)
+            } else {
+                 _mm_setzero_si128()
+            };
+            let ct_v = if !tri_centroids.is_empty() {
+                 _mm_loadu_si128(tri_centroids.as_ptr().add(j * 4) as *const __m128i)
+            } else {
+                 _mm_setzero_si128()
+            };
+
+            let input_block_ptr = input.as_ptr().add(j * stride * 4);
+            let weights_block_ptr = weights.as_ptr().add(j * stride);
+
+            for k in 0..stride {
+                let mode = *mask.get(j * stride + k).unwrap_or(&0);
+                let byte = *weights_block_ptr.add(k);
+                let shuffle_mask = _mm_loadu_si128(table_ptr.add(byte as usize) as *const __m128i);
+                
+                let mut v_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(c_v, shuffle_mask));
+                
+                if mode >= 1 && !epi_weights.is_empty() {
+                    let e_byte = epi_weights[epi_ptr_idx];
+                    epi_ptr_idx += 1;
+                    let e_shuffle = _mm_loadu_si128(table_ptr.add(e_byte as usize) as *const __m128i);
+                    let e_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(ce_v, e_shuffle));
+                    v_vals_f = _mm_add_ps(v_vals_f, e_vals_f);
+                }
+                
+                if mode >= 2 && !tri_weights.is_empty() {
+                    let t_byte = tri_weights[tri_ptr_idx];
+                    tri_ptr_idx += 1;
+                    let t_shuffle = _mm_loadu_si128(table_ptr.add(t_byte as usize) as *const __m128i);
+                    let t_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(ct_v, t_shuffle));
+                    v_vals_f = _mm_add_ps(v_vals_f, t_vals_f);
+                }
+
+                let v_in = _mm_loadu_ps(input_block_ptr.add(k * 4));
+
+                if is_x86_feature_detected!("fma") {
+                    acc = _mm_fmadd_ps(v_vals_f, v_in, acc);
+                } else {
+                    acc = _mm_add_ps(acc, _mm_mul_ps(v_vals_f, v_in));
+                }
+            }
+        }
+        let shuf = _mm_movehdup_ps(acc);
+        let sums = _mm_add_ps(acc, shuf);
+        let shuf2 = _mm_movehl_ps(sums, sums);
+        let result = _mm_add_ss(sums, shuf2);
+        _mm_cvtss_f32(result)
+    } else {
+        // Fallback escalar (puedes añadir lógica mixta aquí si es necesario)
+        genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks)
+    }
+}
+
+#[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+#[inline(always)]
+pub unsafe fn genomic_dot_product_mixed_neon(
+    weights: &[u8],
+    epi_weights: &[u8],
+    tri_weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    epi_centroids: &[f32],
+    tri_centroids: &[f32],
+    mask: &[u8],
+    stride: usize,
+    n_blocks: usize,
+) -> f32 {
+    genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks)
+}
+
+// =============================================================================
 // calculate_distance_lut — Distancia LUT para búsqueda HNSW (solo aarch64)
 // =============================================================================
 

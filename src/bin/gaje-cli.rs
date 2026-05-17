@@ -25,11 +25,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut save_path = None;
+    let mut analyze_entropy = false;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i+1].clone();
             i += 2;
+        } else if args[i] == "--analyze" {
+            analyze_entropy = true;
+            i += 1;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
             i += 2;
@@ -65,7 +69,60 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje]");
+        println!("Usage: gaje-cli <model_path> [--analyze] [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje]");
+        return Ok(());
+    }
+
+    if analyze_entropy {
+        println!("📊 Iniciando Entropy Analyzer (Fase 12) sobre: {}", model_path);
+        let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
+        let reader = &mut loader.reader;
+        
+        let mut target_tensors = vec![];
+        for (name, info) in &reader.tensors {
+            if name.contains("weight") && info.n_dims == 2 {
+                target_tensors.push(name.clone());
+            }
+        }
+        target_tensors.sort();
+
+        println!("| Tensor Name | Shape | Entropy | Recomendación |");
+        println!("| :--- | :--- | :--- | :--- |");
+
+        for name in target_tensors {
+            let data = reader.get_tensor_data(&name)?;
+            let info = reader.tensors.get(&name).unwrap();
+            let rows = info.shape[1] as usize;
+            let cols = info.shape[0] as usize;
+
+            // Convertir a F32 para análisis si es Q8_0
+            let f32_data = if info.tensor_type == _impl::gguf::GGMLType::Q8_0 {
+                _impl::utils::dequantize_q8_0_native(data, cols, rows).map_err(|e| e.to_string())?
+            } else if info.tensor_type == _impl::gguf::GGMLType::F32 {
+                unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4).to_vec() }
+            } else {
+                continue;
+            };
+
+            // Re-empaquetar en bytes para la función de entropía existente
+            let bytes: Vec<u8> = unsafe {
+                std::slice::from_raw_parts(f32_data.as_ptr() as *const u8, f32_data.len() * 4).to_vec()
+            };
+
+            if let Ok(entropies) = _impl::utils::calculate_shannon_entropy(bytes, rows, cols) {
+                let avg_entropy = entropies.iter().sum::<f32>() / entropies.len() as f32;
+                let rec = if avg_entropy < 0.2 {
+                    "✂️ Neural Pruning"
+                } else if avg_entropy < 0.7 {
+                    "🧬 2-bit DNA"
+                } else if avg_entropy < 1.2 {
+                    "⚡ 4-bit Epigenetic"
+                } else {
+                    "💎 6-bit Triplet"
+                };
+                println!("| {} | {}x{} | {:.4} | {} |", name, rows, cols, avg_entropy, rec);
+            }
+        }
         return Ok(());
     }
 

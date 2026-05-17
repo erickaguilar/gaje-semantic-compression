@@ -257,20 +257,48 @@ impl GGUFLoader {
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported tensor type for genomization: {:?}", info.tensor_type))),
         };
 
-        let (dna, centroids, anchors_u8) = crate::utils::genomize_f32_native(f32_data, block_size, anchor_threshold)
+        // Phase 12: Calculate entropy for the first row to determine precision mask
+        let entropies = crate::utils::calculate_shannon_entropy(f32_data[0..in_features*4].to_vec(), 1, in_features)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            
+        let stride = block_size / 4;
+        let n_blocks = in_features / block_size;
+        let mut precision_mask = vec![0u8; n_blocks * stride];
+
+        // 1 = 4-bit Epigenetic, 2 = 6-bit Triplet, 0 = 2-bit DNA
+        for j in 0..n_blocks {
+            for k in 0..stride {
+                let mut block_entropy = 0.0;
+                for s in 0..4 {
+                    block_entropy += entropies[j * block_size + k * 4 + s];
+                }
+                block_entropy /= 4.0;
+
+                if block_entropy > 1.2 {
+                    precision_mask[j * stride + k] = 2;
+                } else if block_entropy > 0.7 {
+                    precision_mask[j * stride + k] = 1;
+                } else {
+                    precision_mask[j * stride + k] = 0;
+                }
+            }
+        }
+
+        // Use the default anchor_threshold since we are focusing on mixed precision now
+        let (dna, centroids, _) = crate::utils::genomize_f32_native(f32_data, block_size, anchor_threshold)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         Ok(GenomicLinear::new(
             dna,
-            anchors_u8,
+            Vec::new(), // No Float32 anchors (Phase 12 goal)
             centroids,
             out_features,
             in_features,
             block_size,
             Vec::new(),
             1e-6,
-            Vec::new(),
-            Vec::new(),
+            precision_mask,
+            Vec::new(), // epi_database will be populated later if needed
             Vec::new(),
             Vec::new(),
             Vec::new(),

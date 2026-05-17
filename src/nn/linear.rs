@@ -178,71 +178,50 @@ impl GenomicLinear {
             .into_par_iter()
             .map(|i| {
                 let row_offset = i * n_blocks * self.stride;
-
-                // Phase 1: Pure SIMD MatMul for Base 2-bit Strands (Always runs, no branching)
                 let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
                 let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
+                
+                let row_epi_weights = if has_epi {
+                    let start = i * self.epi_cols.len();
+                    &self.epi_strands[start..start + self.epi_cols.len()]
+                } else {
+                    &[]
+                };
+                
+                let row_tri_weights = if has_tri {
+                    let start = i * self.tri_cols.len();
+                    &self.tri_strands[start..start + self.tri_cols.len()]
+                } else {
+                    &[]
+                };
+                
+                let row_epi_centroids = if has_epi {
+                    &self.epigenetic_centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4]
+                } else {
+                    &[]
+                };
+                
+                let row_tri_centroids = if has_tri {
+                    &self.triplet_centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4]
+                } else {
+                    &[]
+                };
+
+                // Phase 1-3: Unified SIMD Mixed Precision Kernel
                 let mut row_sum = unsafe {
-                    genomic_dot_product_neon(
+                    genomic_dot_product_mixed_neon(
                         row_weights,
+                        row_epi_weights,
+                        row_tri_weights,
                         &input,
                         row_centroids,
+                        row_epi_centroids,
+                        row_tri_centroids,
+                        &self.precision_mask,
                         self.stride,
                         n_blocks,
                     )
                 };
-
-                // Phase 2: Epigenetic Correction (4-bit) Scatter-Add
-                if has_epi {
-                    let mut epi_sum = 0.0f32;
-                    let row_epi_offset = i * self.epi_cols.len();
-                    for (idx, &(j, k)) in self.epi_cols.iter().enumerate() {
-                        let c_offset = (i * n_blocks + j) * 4;
-                        let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
-                        let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                        
-                        let byte = self.epi_strands[row_epi_offset + idx];
-                        for s in 0..4 {
-                            let shift = (3 - s) * 2;
-                            let eb = (byte >> shift) & 0b11;
-                            let val = match eb {
-                                0b00 => ce[0],
-                                0b01 => ce[1],
-                                0b11 => ce[2],
-                                0b10 => ce[3],
-                                _ => 0.0,
-                            };
-                            epi_sum += input_block[k * 4 + s] * val;
-                        }
-                    }
-                    row_sum += epi_sum;
-                }
-
-                // Phase 3: Triplet Refinement (6-bit) Scatter-Add
-                if has_tri {
-                    let mut tri_sum = 0.0f32;
-                    let row_tri_offset = i * self.tri_cols.len();
-                    for (idx, &(j, k)) in self.tri_cols.iter().enumerate() {
-                        let c_offset = (i * n_blocks + j) * 4;
-                        let ct = &self.triplet_centroids[c_offset..c_offset + 4];
-                        let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                        
-                        let byte = self.tri_strands[row_tri_offset + idx];
-                        for s in 0..4 {
-                            let shift = (3 - s) * 2;
-                            let tb = (byte >> shift) & 0b11;
-                            let val = match tb {
-                                0b00 => ct[0],
-                                0b01 => ct[1],
-                                0b11 => ct[2],
-                                0b10 => ct[3],
-                                _ => 0.0,
-                            };
-                            tri_sum += input_block[k * 4 + s] * val;
-                        }
-                    }
-                    row_sum += tri_sum;
-                }
 
                 if has_anchors {
                     let anchor_row = &self.anchors[i * self.in_features..(i + 1) * self.in_features];
@@ -360,55 +339,53 @@ impl GenomicLinear {
         let has_anchors = !self.anchors.is_empty();
 
         for i in 0..self.out_features {
-            let mut row_sum = 0.0f32;
             let row_offset = i * n_blocks * self.stride;
-            
-            // Phase 1
             let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
             let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
-            row_sum += unsafe {
-                genomic_dot_product_neon(row_weights, &input, row_centroids, self.stride, n_blocks)
+            
+            let has_epi = !self.epi_strands.is_empty();
+            let has_tri = !self.tri_strands.is_empty();
+
+            let row_epi_weights = if has_epi {
+                let start = i * self.epi_cols.len();
+                &self.epi_strands[start..start + self.epi_cols.len()]
+            } else {
+                &[]
             };
             
-            // Phase 2
-            if !self.epi_strands.is_empty() {
-                let mut epi_sum = 0.0f32;
-                let row_epi_offset = i * self.epi_cols.len();
-                for (idx, &(j, k)) in self.epi_cols.iter().enumerate() {
-                    let c_offset = (i * n_blocks + j) * 4;
-                    let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
-                    let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                    let byte = self.epi_strands[row_epi_offset + idx];
-                    for s in 0..4 {
-                        let shift = (3 - s) * 2;
-                        let val = match (byte >> shift) & 0b11 {
-                            0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0,
-                        };
-                        epi_sum += input_block[k * 4 + s] * val;
-                    }
-                }
-                row_sum += epi_sum;
-            }
+            let row_tri_weights = if has_tri {
+                let start = i * self.tri_cols.len();
+                &self.tri_strands[start..start + self.tri_cols.len()]
+            } else {
+                &[]
+            };
             
-            // Phase 3
-            if !self.tri_strands.is_empty() {
-                let mut tri_sum = 0.0f32;
-                let row_tri_offset = i * self.tri_cols.len();
-                for (idx, &(j, k)) in self.tri_cols.iter().enumerate() {
-                    let c_offset = (i * n_blocks + j) * 4;
-                    let ct = &self.triplet_centroids[c_offset..c_offset + 4];
-                    let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                    let byte = self.tri_strands[row_tri_offset + idx];
-                    for s in 0..4 {
-                        let shift = (3 - s) * 2;
-                        let val = match (byte >> shift) & 0b11 {
-                            0b00 => ct[0], 0b01 => ct[1], 0b11 => ct[2], 0b10 => ct[3], _ => 0.0,
-                        };
-                        tri_sum += input_block[k * 4 + s] * val;
-                    }
-                }
-                row_sum += tri_sum;
-            }
+            let row_epi_centroids = if has_epi {
+                &self.epigenetic_centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4]
+            } else {
+                &[]
+            };
+            
+            let row_tri_centroids = if has_tri {
+                &self.triplet_centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4]
+            } else {
+                &[]
+            };
+
+            let mut row_sum = unsafe {
+                genomic_dot_product_mixed_neon(
+                    row_weights,
+                    row_epi_weights,
+                    row_tri_weights,
+                    &input,
+                    row_centroids,
+                    row_epi_centroids,
+                    row_tri_centroids,
+                    &self.precision_mask,
+                    self.stride,
+                    n_blocks,
+                )
+            };
 
             if has_anchors {
                 let anchor_row = &self.anchors[i * self.in_features..(i + 1) * self.in_features];
