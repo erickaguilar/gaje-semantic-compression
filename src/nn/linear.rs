@@ -16,7 +16,9 @@ pub struct GenomicLinear {
     pub anchors: Arc<Vec<f16>>,
     #[pyo3(get)]
     pub centroids: Vec<f32>,
+    #[pyo3(get)]
     pub epigenetic_centroids: Vec<f32>,
+    #[pyo3(get)]
     pub triplet_centroids: Vec<f32>,
     #[pyo3(get)]
     pub out_features: usize,

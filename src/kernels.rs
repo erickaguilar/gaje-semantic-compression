@@ -82,6 +82,12 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     }
 }
 
+// Alias para compatibilidad con rama windows
+#[inline(always)]
+pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
+    dot_product(a, b)
+}
+
 // =============================================================================
 // rms_norm — Normalización RMS vectorizada universal
 // =============================================================================
@@ -182,6 +188,12 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     out
 }
 
+// Alias para compatibilidad con rama windows
+#[inline(always)]
+pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
+    rms_norm(x, weight, eps)
+}
+
 // =============================================================================
 // Tabla de shuffle para decodificación de bases genómicas (2-bit → índice)
 // =============================================================================
@@ -267,6 +279,18 @@ pub unsafe fn genomic_dot_product(
     {
         genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks)
     }
+}
+
+// Alias para compatibilidad con rama windows
+#[inline(always)]
+pub unsafe fn genomic_dot_product_neon(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride: usize,
+    n_blocks: usize,
+) -> f32 {
+    genomic_dot_product(weights, input, centroids, stride, n_blocks)
 }
 
 #[inline(always)]
@@ -377,4 +401,19 @@ pub unsafe fn calculate_distance_lut(
         }
         total.sqrt()
     }
+}
+
+// Alias para compatibilidad con rama windows
+#[inline(always)]
+pub unsafe fn calculate_distance_lut_neon(
+    lut_base: &[f32],
+    lut_epi: &[f32],
+    lut_tri: &[f32],
+    strand: &[u8],
+    epi_strand: &[u8],
+    tri_strand: &[u8],
+    mask: &[u8],
+    n_dims: usize,
+) -> f32 {
+    calculate_distance_lut(lut_base, lut_epi, lut_tri, strand, epi_strand, tri_strand, mask, n_dims)
 }

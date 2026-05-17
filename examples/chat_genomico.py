@@ -4,8 +4,8 @@ import numpy as np
 import time
 import argparse
 
-# Ensure we use the local package
-sys.path.append(os.path.abspath("python"))
+# Asegurar que usamos el código local de 'python/'
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
 
 from gaje.nn.stabilized import GenomicLLM
 
@@ -17,13 +17,14 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.3, help="Sampling temperature")
     parser.add_argument("--top-p", type=float, default=0.8, help="Top-P sampling")
     parser.add_argument("--penalty", type=float, default=1.15, help="Repetition penalty")
+    parser.add_argument("--prompt", type=str, default=None, help="Prompt inicial (activa modo no interactivo)")
     args = parser.parse_args()
 
     print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.5 (Modernizado)")
     print("=" * 60)
 
     model_path = args.model
-    
+
     if not os.path.exists(model_path):
         possible_paths = [
             model_path,
@@ -42,10 +43,22 @@ def main():
     # Cargamos el motor estabilizado
     print(f"[*] Inicializando GenomicLLM con {model_path}...")
     llm = GenomicLLM(model_path, num_blocks=args.blocks)
-    
+
+    # Modo No-Interactivo (para automatización/Gemini CLI)
+    if args.prompt or not sys.stdin.isatty():
+        user_input = args.prompt or "Hola, preséntate brevemente."
+        print(f"\n👤 Usuario (No-Interactivo): {user_input}")
+
+        prompt = f"<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n"
+        print("\n🤖 GAJE: ", end="", flush=True)
+
+        for token_text in llm.generate(prompt, max_new_tokens=args.tokens, temperature=args.temperature, top_p=args.top_p, repetition_penalty=args.penalty):
+            print(token_text, end="", flush=True)
+        print("\n\n[!] Proceso finalizado (Modo No-Interactivo).")
+        return
+
     print("\n✨ SISTEMA LISTO. Escribe '/exit' para salir.")
     print("-" * 60)
-
     # Initialize chat history for templating
     chat_history = []
 

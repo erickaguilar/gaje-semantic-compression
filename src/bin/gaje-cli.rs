@@ -187,7 +187,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[+] Crianza completada. Log-Fitness Final: {:.4}", best_fitness);
     }
 
-    if let Some(dataset_path) = train_target {
+    if let Some(ref dataset_path) = train_target {
         println!("[*] Iniciando Auto-Grad Nativo (Hybrid-Training) con texto: {}", dataset_path);
         let start_train = Instant::now();
         
@@ -248,7 +248,13 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(prompt) = prompt_arg {
         generate(&mut model, &tokenizer, &prompt, 50)?;
-    } else if evolve_target.is_none() {
+    } else if evolve_target.is_none() && train_target.is_none() {
+        use std::io::IsTerminal;
+        if !io::stdin().is_terminal() {
+            println!("[!] No-TTY detected and no prompt provided. Exiting.");
+            return Ok(());
+        }
+
         loop {
             print!("\n👤 User: ");
             io::stdout().flush()?;

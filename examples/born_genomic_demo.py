@@ -1,8 +1,8 @@
 import os
 import sys
 
-# Añadir el path del directorio 'python' para importar gaje correctamente
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
+# Asegurar que usamos el código local de 'python/'
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
 
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config

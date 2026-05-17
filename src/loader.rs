@@ -3,7 +3,6 @@ use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
 use crate::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
-use half::f16;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
