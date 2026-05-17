@@ -1,4 +1,4 @@
-use crate::kernels::rms_norm_neon;
+use crate::compute::kernels::rms_norm_neon;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;
@@ -313,6 +313,31 @@ impl RustGenomicLLM {
         for block in &mut self.blocks {
             block.clear_cache()?;
         }
+        Ok(())
+    }
+
+    pub fn prune(&mut self, threshold: f32) -> PyResult<()> {
+        println!("✂️ Iniciando Poda Neuronal Nativa (Rust-Sovereignty)...");
+        
+        // En esta fase, podamos las capas FFN intermediate (up y gate)
+        // ya que no rompen las conexiones residuales.
+        for (i, block) in self.blocks.iter_mut().enumerate() {
+            println!("  [~] Optimizando Bloque {}:", i);
+            
+            // 1. Podar Gate y Up (Poda de Entradas)
+            let active_gate = block.gate_gen.prune(threshold)?;
+            let _active_up = block.up_gen.prune(threshold)?;
+            
+            println!("    - FFN Gate/Up: {}/{} dimensiones activas.", active_gate.len(), block.gate_gen.in_features);
+            
+            // 2. Sincronizar Down (Poda de Columnas/Entradas basada en Gate/Up)
+            // Como Gate/Up alimentan a Down, sus salidas (que son nuestras nuevas filas podadas)
+            // deben coincidir con las entradas de Down.
+            block.w_down.prune_columns_explicit(active_gate)?;
+            println!("    - FFN Down:    Sincronizado con Gate/Up.");
+        }
+        
+        println!("✅ Poda completada con éxito.");
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
-use crate::db::{TENSOR_TABLE, METADATA_TABLE};
+use crate::core::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -35,7 +35,7 @@ pub struct ModelConfig {
     pub eps: f32,
 }
 
-use crate::gguf::{GGUFReader, GGMLType, GGUFValue};
+use crate::io::gguf::{GGUFReader, GGMLType, GGUFValue};
 
 pub struct GGUFLoader {
     pub reader: GGUFReader,
@@ -250,7 +250,7 @@ impl GGUFLoader {
                 }
             }
             GGMLType::Q8_0 => {
-                crate::utils::dequantize_q8_0_native(data, out_features, in_features)
+                crate::compute::math::dequantize_q8_0_native(data, out_features, in_features)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
                     .into_iter().flat_map(|v| v.to_le_bytes()).collect()
             }
@@ -258,7 +258,7 @@ impl GGUFLoader {
         };
 
         // Phase 12: Calculate entropy for the first row to determine precision mask
-        let entropies = crate::utils::calculate_shannon_entropy(f32_data[0..in_features*4].to_vec(), 1, in_features)
+        let entropies = crate::compute::math::calculate_shannon_entropy(f32_data[0..in_features*4].to_vec(), 1, in_features)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             
         let stride = block_size / 4;
@@ -285,7 +285,7 @@ impl GGUFLoader {
         }
 
         // Use the default anchor_threshold since we are focusing on mixed precision now
-        let (dna, centroids, _) = crate::utils::genomize_f32_native(f32_data, block_size, anchor_threshold)
+        let (dna, centroids, _) = crate::compute::math::genomize_f32_native(f32_data, block_size, anchor_threshold)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         Ok(GenomicLinear::new(
@@ -312,7 +312,7 @@ pub struct NativeLoader {
 }
 
 pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConfig, tokenizer: Option<&tokenizers::Tokenizer>) -> std::io::Result<()> {
-    let writer = crate::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     
     // 1. Metadata & Config
     writer.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
@@ -530,15 +530,15 @@ impl NativeLoader {
     }
 
     pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
-        let reader = crate::db::GajeDatabaseReader::new_from_db(self.db.clone());
+        let reader = crate::core::db::GajeDatabaseReader::new_from_db(self.db.clone());
         reader.list_mutations().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
 
-    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::db::Mutation) -> std::io::Result<()> {
+    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::core::db::Mutation) -> std::io::Result<()> {
         let data = bincode::serialize(mutation).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         let write_txn = self.db.begin_write().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         {
-            let mut table = write_txn.open_table(crate::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            let mut table = write_txn.open_table(crate::core::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             table.insert(timestamp, data.as_slice()).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
         write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))

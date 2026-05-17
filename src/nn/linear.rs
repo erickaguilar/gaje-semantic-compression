@@ -1,4 +1,4 @@
-use crate::kernels::*;
+use crate::compute::kernels::*;
 use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -261,7 +261,7 @@ impl GenomicLinear {
             let c_offset = (idx * n_blocks + b) * 4;
             let centroids_f32 = &self.centroids[c_offset..c_offset + 4];
 
-            let decoded = crate::utils::dequantize_embedding(
+            let decoded = crate::compute::math::dequantize_embedding(
                 block_dna.to_vec(),
                 self.block_size,
                 Some(centroids_f32.to_vec()),
@@ -416,6 +416,78 @@ impl GenomicLinear {
             let grad_scale = grads[i] * lr;
             self.apply_grad_to_row(i, &input, grad_scale, n_blocks);
         }
+
+        Ok(())
+    }
+
+    pub fn prune(&mut self, threshold: f32) -> PyResult<Vec<usize>> {
+        // 1. Calcular entropía por dimensión
+        let rows = self.out_features;
+        let cols = self.in_features;
+
+        // Obtenemos los pesos en F32 para el análisis
+        let mut sample_weights = Vec::with_capacity(rows * cols);
+        for i in 0..rows {
+            sample_weights.extend(self.get_row(i)?);
+        }
+
+        let bytes: Vec<u8> = unsafe {
+            std::slice::from_raw_parts(sample_weights.as_ptr() as *const u8, sample_weights.len() * 4).to_vec()
+        };
+
+        let entropies = crate::compute::math::calculate_shannon_entropy(bytes, rows, cols)?;
+
+        // 2. Identificar dimensiones activas
+        let mut active_dims = Vec::new();
+        for (i, &e) in entropies.iter().enumerate() {
+            if e >= threshold {
+                active_dims.push(i);
+            }
+        }
+
+        if active_dims.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 3. Repaquetar base de datos genómica (2-bit)
+        let (new_db, new_stride) = crate::compute::math::prune_genomic_database(
+            self.database.as_ref().clone(),
+            self.stride,
+            active_dims.clone()
+        )?;
+
+        // 4. Actualizar estado interno
+        self.database = Arc::new(new_db);
+        self.stride = new_stride;
+        self.in_features = active_dims.len();
+        self.block_size = self.in_features; 
+
+        let n_blocks = 1; 
+        self.centroids.truncate(self.out_features * n_blocks * 4);
+
+        Ok(active_dims)
+    }
+
+    pub fn prune_columns_explicit(&mut self, active_dims: Vec<usize>) -> PyResult<()> {
+        if active_dims.is_empty() {
+            return Ok(());
+        }
+
+        // Repaquetar base de datos genómica (2-bit)
+        let (new_db, new_stride) = crate::compute::math::prune_genomic_database(
+            self.database.as_ref().clone(),
+            self.stride,
+            active_dims.clone()
+        )?;
+
+        // Actualizar estado interno
+        self.database = Arc::new(new_db);
+        self.stride = new_stride;
+        self.in_features = active_dims.len();
+        self.block_size = self.in_features;
+
+        let n_blocks = 1;
+        self.centroids.truncate(self.out_features * n_blocks * 4);
 
         Ok(())
     }

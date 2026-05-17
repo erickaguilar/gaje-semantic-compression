@@ -1,4 +1,4 @@
-use crate::kernels::*;
+use crate::compute::kernels::*;
 use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;

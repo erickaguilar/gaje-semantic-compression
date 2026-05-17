@@ -6,25 +6,21 @@
     clippy::non_canonical_partial_ord_impl,
     clippy::manual_div_ceil
 )]
-pub mod index;
-pub mod kernels;
+pub mod core;
+pub mod compute;
+pub mod io;
 pub mod nn;
-pub mod utils;
-pub mod archive;
-pub mod loader;
-pub mod db;
-pub mod gguf;
 
-use crate::index::GajeIndex;
+use crate::core::index::GajeIndex;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
-use crate::db::{GajeDatabaseWriter, GajeDatabaseReader};
-use crate::utils::*;
+use crate::core::db::{GajeDatabaseWriter, GajeDatabaseReader};
+use crate::compute::math::*;
 use pyo3::prelude::*;
 
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     unsafe {
-        crate::kernels::init_shuffle_table();
+        crate::compute::kernels::init_shuffle_table();
     }
     m.add_class::<GajeIndex>()?;
     m.add_class::<GenomicAttention>()?;

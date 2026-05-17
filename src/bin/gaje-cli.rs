@@ -1,6 +1,6 @@
-use _impl::loader::NativeLoader;
+use _impl::io::loader::NativeLoader;
 use _impl::nn::RustGenomicLLM;
-use _impl::kernels;
+use _impl::compute::kernels;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut scale = 0.02;
     let mut save_path = None;
     let mut analyze_entropy = false;
+    let mut prune_threshold = None;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
@@ -34,6 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         } else if args[i] == "--analyze" {
             analyze_entropy = true;
             i += 1;
+        } else if args[i] == "--prune" && i + 1 < args.len() {
+            prune_threshold = Some(args[i+1].parse::<f32>().map_err(|e| e.to_string())?);
+            i += 2;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
             i += 2;
@@ -75,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if analyze_entropy {
         println!("📊 Iniciando Entropy Analyzer (Fase 12) sobre: {}", model_path);
-        let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
+        let mut loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
         let reader = &mut loader.reader;
         
         let mut target_tensors = vec![];
@@ -96,9 +100,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let cols = info.shape[0] as usize;
 
             // Convertir a F32 para análisis si es Q8_0
-            let f32_data = if info.tensor_type == _impl::gguf::GGMLType::Q8_0 {
-                _impl::utils::dequantize_q8_0_native(data, cols, rows).map_err(|e| e.to_string())?
-            } else if info.tensor_type == _impl::gguf::GGMLType::F32 {
+            let f32_data = if info.tensor_type == _impl::io::gguf::GGMLType::Q8_0 {
+                _impl::compute::math::dequantize_q8_0_native(data, cols, rows).map_err(|e| e.to_string())?
+            } else if info.tensor_type == _impl::io::gguf::GGMLType::F32 {
                 unsafe { std::slice::from_raw_parts(data.as_ptr() as *const f32, data.len() / 4).to_vec() }
             } else {
                 continue;
@@ -109,9 +113,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 std::slice::from_raw_parts(f32_data.as_ptr() as *const u8, f32_data.len() * 4).to_vec()
             };
 
-            if let Ok(entropies) = _impl::utils::calculate_shannon_entropy(bytes, rows, cols) {
+            if let Ok(entropies) = _impl::compute::math::calculate_shannon_entropy(bytes, rows, cols) {
                 let avg_entropy = entropies.iter().sum::<f32>() / entropies.len() as f32;
-                let rec = if avg_entropy < 0.2 {
+                
+                let mut rec = if avg_entropy < 0.2 {
                     "✂️ Neural Pruning"
                 } else if avg_entropy < 0.7 {
                     "🧬 2-bit DNA"
@@ -119,7 +124,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                     "⚡ 4-bit Epigenetic"
                 } else {
                     "💎 6-bit Triplet"
-                };
+                }.to_string();
+
+                // Aplicar lógica de poda si el threshold está presente
+                if let Some(t) = prune_threshold {
+                    if avg_entropy < t {
+                        rec = format!("✂️ PRUNED (Threshold: {:.2})", t);
+                    }
+                }
+
                 println!("| {} | {}x{} | {:.4} | {} |", name, rows, cols, avg_entropy, rec);
             }
         }
@@ -131,7 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut gaje_loader_opt = None;
     
     let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
-        let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
+        let mut loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
         let config = loader.infer_config()?;
         println!("[+] GGUF Config Inferred: {} layers, {} dim", config.n_blocks, config.n_embd);
         
@@ -283,7 +296,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(ref path) = save_path {
         println!("[*] Guardando organismo genómico en: {}", path);
         let start_save = Instant::now();
-        _impl::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?;
+        _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?;
         println!("[+] Modelo guardado exitosamente en {:?}", start_save.elapsed());
     }
 
@@ -294,7 +307,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let mut count = 0;
             for (ts, data) in mutations.into_iter().rev() {
                 if ts > target {
-                    let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
+                    let mutation: _impl::core::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
                     model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
                     count += 1;
                 }
