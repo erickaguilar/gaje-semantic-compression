@@ -123,9 +123,14 @@ class GenomicLayer:
                 anchors_list.append(a_bin)
                 del w_chunk
             
-            self.dna_database = b"".join(dna_db_list)
-            self.dna_centroids = centroids_list
-            self.anchors_f16_bytes = b"".join(anchors_list)
+            if not dna_db_list:
+                self.dna_database = b""
+                self.dna_centroids = []
+                self.anchors_f16_bytes = b""
+            else:
+                self.dna_database = b"".join(dna_db_list)
+                self.dna_centroids = centroids_list
+                self.anchors_f16_bytes = b"".join(anchors_list)
         else:
             # Procedimiento estándar para capas pequeñas
             dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
@@ -241,7 +246,7 @@ class GenomicTransformerBlock:
 from gaje.nn.configs import get_config, detect_arch, ArchitectureConfig, ARCHITECTURES
 
 class GenomicLLM:
-    def __init__(self, model_path=None, num_blocks=None, config=None):
+    def __init__(self, model_path=None, num_blocks=None, config=None, n_embd=None, n_head=None):
         start_total = time.time()
         
         if model_path:
@@ -272,9 +277,9 @@ class GenomicLLM:
             if config is None:
                 raise ValueError("Must provide config for born-genomic initialization")
             self.config = config
-            self.n_embd = 768 
-            self.n_head = 12
-            self.n_head_kv = 12
+            self.n_embd = n_embd or 768 
+            self.n_head = n_head or 12
+            self.n_head_kv = self.n_head # Default to matching n_head for born models
             self.head_dim = self.n_embd // self.n_head
             self.n_blocks = num_blocks or 12
             self.eps = 1e-6

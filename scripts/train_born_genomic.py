@@ -3,8 +3,8 @@ import sys
 import argparse
 import time
 
-# Ensure we use the local package
-sys.path.append(os.path.abspath("python"))
+# Ensure we use the local package first
+sys.path.insert(0, os.path.abspath("python"))
 
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config

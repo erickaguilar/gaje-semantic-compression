@@ -39,11 +39,17 @@ pub struct GajeIndex {
     pub precision_mask: Vec<u8>,
     #[pyo3(get)]
     pub stride: usize,
+    #[pyo3(get)]
     pub layers: Vec<Vec<Vec<usize>>>,
+    #[pyo3(get)]
     pub max_level: i32,
+    #[pyo3(get)]
     pub entry_point: Option<usize>,
+    #[pyo3(get)]
     pub ef_construction: usize,
+    #[pyo3(get)]
     pub m: usize,
+    #[pyo3(get)]
     pub level_mult: f64,
 }
 impl GajeIndex {

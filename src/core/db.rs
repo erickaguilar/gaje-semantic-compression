@@ -19,15 +19,17 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
     }
     let registry = registry_lock.as_mut().unwrap();
 
-    let abs_path = if let Ok(p) = Path::new(path).canonicalize() {
+    // Normalizar la ruta de forma robusta
+    let path_obj = Path::new(path);
+    let abs_path = if let Ok(p) = path_obj.canonicalize() {
         p.to_string_lossy().to_string()
     } else {
-        let p = Path::new(path);
-        if p.is_absolute() {
-            p.to_string_lossy().to_string()
+        // Si no existe, usamos la ruta absoluta basada en CWD
+        if path_obj.is_absolute() {
+            path_obj.to_string_lossy().to_string()
         } else {
             std::env::current_dir()
-                .map(|cwd| cwd.join(p).to_string_lossy().to_string())
+                .map(|cwd| cwd.join(path_obj).to_string_lossy().to_string())
                 .unwrap_or_else(|_| path.to_string())
         }
     };
@@ -38,15 +40,33 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
         }
     }
 
-    let db = if create {
-        Database::create(path).map_err(|e| e.to_string())?
-    } else {
-        Database::open(path).map_err(|e| e.to_string())?
-    };
+    // Intentar abrir o crear con reintentos mínimos en caso de bloqueos temporales del OS
+    let mut last_err = String::new();
+    for _ in 0..3 {
+        let result = if create {
+            Database::create(path)
+        } else {
+            Database::open(path)
+        };
 
-    let arc_db = Arc::new(db);
-    registry.insert(abs_path, Arc::downgrade(&arc_db));
-    Ok(arc_db)
+        match result {
+            Ok(db) => {
+                let arc_db = Arc::new(db);
+                registry.insert(abs_path, Arc::downgrade(&arc_db));
+                return Ok(arc_db);
+            }
+            Err(e) => {
+                last_err = e.to_string();
+                if last_err.contains("already open") || last_err.contains("lock") {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    continue;
+                }
+                return Err(last_err);
+            }
+        }
+    }
+
+    Err(format!("Failed to open database after retries: {}", last_err))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -110,13 +130,13 @@ impl GajeDatabaseWriter {
     #[new]
     pub fn new(path: &str) -> PyResult<Self> {
         let db_arc = get_or_create_db(path, true).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
-        let write_txn = db_arc.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {
+            let write_txn = db_arc.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             write_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             write_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             write_txn.open_table(MUTATIONS_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(Self { db: db_arc })
     }
 

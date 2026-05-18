@@ -148,14 +148,17 @@ class GenomicTrainer:
         print(f"[*] Iniciando entrenamiento GAJE Nativo ({epochs} épocas)")
         for epoch in range(epochs):
             total_loss = 0
+            count = 0
             for text in dataset:
                 tokens = self.model.tokenizer.encode(text, add_special_tokens=False)
                 if len(tokens) < 2: continue
                 
-                input_ids = tokens[:-1]
-                target_ids = tokens[1:]
-                
-                loss = self.train_step(input_ids, target_ids)
+                # Usar el método nativo para un rendimiento óptimo
+                loss = self.model.rust_llm.train_on_sequence(tokens, self.lr)
                 total_loss += loss
+                count += 1
                 
-            print(f"    - Época {epoch+1}/{epochs} | Loss: {total_loss/len(dataset):.4f}")
+            if count > 0:
+                print(f"    - Época {epoch+1}/{epochs} | Loss: {total_loss/count:.4f}")
+            else:
+                print(f"    - Época {epoch+1}/{epochs} | Sin datos válidos")
