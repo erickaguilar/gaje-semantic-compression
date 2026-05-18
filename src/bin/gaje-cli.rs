@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut scale = 0.02;
     let mut save_path = None;
     let mut init_path = None;
+    let mut tokenize_text = None;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
@@ -34,6 +35,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             i += 2;
         } else if args[i] == "--init" && i + 1 < args.len() {
             init_path = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--tokenize" && i + 1 < args.len() {
+            tokenize_text = Some(args[i+1].clone());
             i += 2;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
@@ -131,6 +135,19 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     };
 
     println!("[*] Model & Tokenizer loaded.");
+
+    if let Some(text) = tokenize_text {
+        println!("[*] Tokenizando texto de forma nativa: \"{}\"", text);
+        let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+        let ids = encoding.get_ids();
+        println!("    IDs de Tokens: {:?}", ids);
+        println!("    Fragmentación:");
+        for &id in ids {
+            let piece = tokenizer.decode(&[id], true).map_err(|e| e.to_string())?;
+            println!("      [{:>6}] -> \"{}\"", id, piece);
+        }
+        return Ok(());
+    }
 
     if let Some(ref target_text) = evolve_target {
         println!("[*] Iniciando Crianza por Integración de Caminos (Poblacional) para: '{}'", target_text);
@@ -342,7 +359,14 @@ fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> 
 }
 
 fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let encoding = tokenizer.encode(prompt, false).map_err(|e| e.to_string())?;
+    // Implementación básica de ChatML si detectamos un prompt que no sea crudo
+    let formatted_prompt = if !prompt.contains("<|im_start|>") && prompt.len() < 200 {
+        format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt)
+    } else {
+        prompt.to_string()
+    };
+
+    let encoding = tokenizer.encode(formatted_prompt, false).map_err(|e| e.to_string())?;
     let tokens = encoding.get_ids();
     model.clear_cache().unwrap();
     let mut current_tokens = tokens.to_vec();
@@ -358,7 +382,7 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
     
     for _ in 0..max_tokens {
         let next_token = sample_logits(&logits, temperature, top_k, top_p);
-        if next_token == 0 { break; }
+        if next_token == 0 || next_token == 151643 || next_token == 151645 { break; } // Qwen2 end tokens
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
         print!("{}", decoded);
         io::stdout().flush()?;
