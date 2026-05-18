@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate (default: 0.01)")
     args = parser.parse_args()
 
-    print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING v0.6.5")
+    print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING v0.7.0")
     print("=" * 60)
 
     # 1. Configuración de Arquitectura

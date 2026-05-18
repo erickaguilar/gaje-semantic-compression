@@ -145,6 +145,34 @@ impl GenomicLinear {
     }
 
     #[getter]
+    pub fn epi_strands<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
+        Ok(pyo3::types::PyBytes::new(py, &self.epi_strands))
+    }
+
+    #[getter]
+    pub fn tri_strands<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
+        Ok(pyo3::types::PyBytes::new(py, &self.tri_strands))
+    }
+
+    #[getter]
+    pub fn epi_cols(&self) -> Vec<(usize, usize)> {
+        self.epi_cols.to_vec()
+    }
+
+    #[getter]
+    pub fn tri_cols(&self) -> Vec<(usize, usize)> {
+        self.tri_cols.to_vec()
+    }
+
+    #[getter]
+    pub fn anchors_raw<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
+        let bytes = unsafe {
+            std::slice::from_raw_parts(self.anchors.as_ptr() as *const u8, self.anchors.len() * 2)
+        };
+        Ok(pyo3::types::PyBytes::new(py, bytes))
+    }
+
+    #[getter]
     pub fn epigenetic_database<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.epigenetic_database))
     }

@@ -1,4 +1,4 @@
-## [0.7.0] - 2026-05-16
+## [0.7.0] - 2026-05-18
 ### Added
 - **Soberanía Nativa (Rust 100%):** Independencia absoluta del runtime de Python. El ecosistema GAJE ahora puede cargar, ejecutar, muestrear, evolucionar y entrenar LLMs directamente desde un entorno nativo seguro.
 - **Inmortalidad RAM (Zero-Copy Cloning):** Migración de matrices pesadas de ADN (2-bit) a punteros atómicos compartidos (`Arc<Vec<u8>>`). Permite clonar LLMs masivos en memoria a costo computacional de ~0 bytes.

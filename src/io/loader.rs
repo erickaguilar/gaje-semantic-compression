@@ -390,8 +390,9 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
 
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
-        let db = Database::open(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        Ok(NativeLoader { db: Arc::new(db) })
+        let db = crate::core::db::get_or_create_db(path, false)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(NativeLoader { db })
     }
 
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {

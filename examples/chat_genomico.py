@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--prompt", type=str, default=None, help="Prompt inicial (activa modo no interactivo)")
     args = parser.parse_args()
 
-    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.6.5 (Modernizado)")
+    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.7.0 (Modernizado)")
     print("=" * 60)
 
     model_path = args.model

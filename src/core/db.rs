@@ -1,11 +1,53 @@
 use redb::{Database, TableDefinition, ReadableTable};
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, Weak};
+use std::collections::HashMap;
+use std::path::Path;
 
 pub const TENSOR_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("tensors");
 pub const METADATA_TABLE: TableDefinition<&str, &str> = TableDefinition::new("metadata");
 pub const MUTATIONS_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("mutations");
+
+// Registro global para evitar "Database already open"
+static DB_REGISTRY: Mutex<Option<HashMap<String, Weak<Database>>>> = Mutex::new(None);
+
+pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>, String> {
+    let mut registry_lock = DB_REGISTRY.lock().unwrap();
+    if registry_lock.is_none() {
+        *registry_lock = Some(HashMap::new());
+    }
+    let registry = registry_lock.as_mut().unwrap();
+
+    let abs_path = if let Ok(p) = Path::new(path).canonicalize() {
+        p.to_string_lossy().to_string()
+    } else {
+        let p = Path::new(path);
+        if p.is_absolute() {
+            p.to_string_lossy().to_string()
+        } else {
+            std::env::current_dir()
+                .map(|cwd| cwd.join(p).to_string_lossy().to_string())
+                .unwrap_or_else(|_| path.to_string())
+        }
+    };
+
+    if let Some(weak_db) = registry.get(&abs_path) {
+        if let Some(db) = weak_db.upgrade() {
+            return Ok(db);
+        }
+    }
+
+    let db = if create {
+        Database::create(path).map_err(|e| e.to_string())?
+    } else {
+        Database::open(path).map_err(|e| e.to_string())?
+    };
+
+    let arc_db = Arc::new(db);
+    registry.insert(abs_path, Arc::downgrade(&arc_db));
+    Ok(arc_db)
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Mutation {
@@ -24,8 +66,7 @@ pub struct GajeDatabaseWriter {
 impl GajeDatabaseWriter {
     #[new]
     pub fn new(path: &str) -> PyResult<Self> {
-        let db = Database::create(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let db_arc = Arc::new(db);
+        let db_arc = get_or_create_db(path, true).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
         let write_txn = db_arc.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {
             write_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
@@ -91,8 +132,8 @@ impl GajeDatabaseReader {
 impl GajeDatabaseReader {
     #[new]
     pub fn new(path: &str) -> PyResult<Self> {
-        let db = Database::open(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(Self { db: Arc::new(db) })
+        let db_arc = get_or_create_db(path, false).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
+        Ok(Self { db: db_arc })
     }
 
     pub fn read_tensor(&self, key: &str) -> PyResult<Vec<u8>> {

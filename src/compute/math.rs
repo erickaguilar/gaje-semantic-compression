@@ -506,13 +506,38 @@ pub fn get_active_dimensions_native(
     Ok(active_dims)
 }
 
-/// Genera un buffer de ADN aleatorio (2-bit packed) para una forma dada.
+/// Genera un buffer de ADN aleatorio (2-bit packed) con 'Pre-shaping' estadístico.
+/// En lugar de ruido uniforme puro, utiliza una distribución que favorece clústeres
+/// de información, imitando la estructura latente del lenguaje natural.
 pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
     use rand::Rng;
     let mut rng = rand::thread_rng();
     let n_bytes = (n_elements + 3) / 4;
     let mut dna = vec![0u8; n_bytes];
-    rng.fill(&mut dna[..]);
+    
+    // Parámetros de Pre-shaping (Evolución 4.0)
+    // Usamos una mezcla de osciladores y ruido acumulativo para crear correlación espacial
+    let mut state = rng.gen_range(-1.0..1.0f32);
+    let momentum = 0.85f32; // Factor de persistencia
+    
+    for i in 0..n_bytes {
+        let mut byte = 0u8;
+        for _ in 0..4 {
+            // Actualización del estado (Random Walk con Shapping)
+            let noise = rng.gen_range(-1.0..1.0f32);
+            state = state * momentum + noise * (1.0 - momentum);
+            
+            // Mapeo del estado a bases nitrogenadas digitales (2-bits)
+            // Esto crea clústeres de bases similares (persistencia semántica)
+            let bits = if state < -0.4 { 0b00 }      // A
+                      else if state < 0.0 { 0b01 }   // C
+                      else if state < 0.4 { 0b11 }   // G
+                      else { 0b10 };                 // T
+            
+            byte = (byte << 2) | bits;
+        }
+        dna[i] = byte;
+    }
     dna
 }
 
