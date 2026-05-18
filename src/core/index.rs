@@ -1,4 +1,5 @@
 use crate::compute::math::*;
+use crate::compute::kernels::*;
 use pyo3::prelude::*;
 use rand::Rng;
 use rayon::prelude::*;
