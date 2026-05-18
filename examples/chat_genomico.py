@@ -42,7 +42,10 @@ def main():
 
     # Cargamos el motor estabilizado
     print(f"[*] Inicializando GenomicLLM con {model_path}...")
-    llm = GenomicLLM(model_path, num_blocks=args.blocks)
+    if model_path.endswith(".gaje"):
+        llm = GenomicLLM.load_genomic(model_path)
+    else:
+        llm = GenomicLLM(model_path, num_blocks=args.blocks)
 
     # Modo No-Interactivo (para automatización/Gemini CLI)
     if args.prompt or not sys.stdin.isatty():

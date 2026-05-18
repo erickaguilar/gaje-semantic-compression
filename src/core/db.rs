@@ -99,7 +99,13 @@ impl GajeDatabaseReader {
         let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyKeyError::new_err(e.to_string()))?;
         if let Some(val) = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))? {
-            Ok(val.value().to_vec())
+            let data = val.value();
+            // Intentar descomprimir si parece LZ4 (primeros 4 bytes son el tamaño original)
+            // lz4_flex::decompress_size_prepended retornará error si no es un formato LZ4 válido con prefijo de tamaño
+            match lz4_flex::decompress_size_prepended(data) {
+                Ok(decompressed) => Ok(decompressed),
+                Err(_) => Ok(data.to_vec()),
+            }
         } else {
             Err(pyo3::exceptions::PyKeyError::new_err(format!("Key not found: {}", key)))
         }
@@ -108,6 +114,16 @@ impl GajeDatabaseReader {
     pub fn has_tensor(&self, key: &str) -> PyResult<bool> {
         let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         if let Ok(table) = read_txn.open_table(TENSOR_TABLE) {
+            if let Ok(Some(_)) = table.get(key) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        if let Ok(table) = read_txn.open_table(METADATA_TABLE) {
             if let Ok(Some(_)) = table.get(key) {
                 return Ok(true);
             }

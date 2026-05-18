@@ -618,8 +618,25 @@ class GenomicLLM:
             model.embeddings.linear, rust_blocks, output_norm, model.lm_head.linear, model.eps
         )
         
-        from transformers import AutoTokenizer
-        model.tokenizer = AutoTokenizer.from_pretrained(model.config.tokenizer_id)
+        # Carga de Tokenizador Soberana (desde la BD si es posible)
+        from transformers import AutoTokenizer, PreTrainedTokenizerFast
+        try:
+            if db_reader.has_metadata("tokenizer"):
+                import tempfile
+                import json
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tmp:
+                    tmp.write(db_reader.read_metadata("tokenizer"))
+                    tmp_path = tmp.name
+                
+                # Cargar como un tokenizador rápido directamente desde el archivo JSON
+                model.tokenizer = PreTrainedTokenizerFast(tokenizer_file=tmp_path)
+                os.unlink(tmp_path)
+                print("[*] Tokenizador cargado desde la base de datos genómica.")
+            else:
+                model.tokenizer = AutoTokenizer.from_pretrained(model.config.tokenizer_id)
+        except Exception as e:
+            print(f"[!] Aviso: Fallo al cargar tokenizador soberano, reintentando con ID: {e}")
+            model.tokenizer = AutoTokenizer.from_pretrained(model.config.tokenizer_id)
         
         end_total = time.time()
         print(f"[*] Reconstrucción desde BD finalizada en {end_total - start_total:.2f}s")
