@@ -247,9 +247,10 @@ pub unsafe fn genomic_dot_product(
                 
                 if has_anchors {
                     let a_ptr = anchors.as_ptr().add(j * stride * 4 + k * 4);
-                    let mut a_f32 = [0.0f32; 4];
-                    for s in 0..4 { a_f32[s] = (*a_ptr.add(s)).to_f32(); }
-                    v_weights = vaddq_f32(v_weights, vld1q_f32(a_f32.as_ptr()));
+                    // Optimized f16 -> f32 conversion using NEON
+                    let a_v16 = vld1_u16(a_ptr as *const u16);
+                    let v_anchors = vcvt_f32_f16(vreinterpret_f16_u16(a_v16));
+                    v_weights = vaddq_f32(v_weights, v_anchors);
                 }
 
                 sum_v = vfmaq_f32(sum_v, v_weights, vld1q_f32(input_block_ptr.add(k * 4)));
@@ -265,6 +266,8 @@ pub unsafe fn genomic_dot_product(
             let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
             let mut acc = _mm_setzero_ps();
             let has_anchors = !anchors.is_empty();
+            let has_f16c = is_x86_feature_detected!("f16c");
+
             for j in 0..n_blocks {
                 let c_v = _mm_loadu_si128(centroids.as_ptr().add(j * 4) as *const __m128i);
                 let input_block_ptr = input.as_ptr().add(j * stride * 4);
@@ -276,9 +279,15 @@ pub unsafe fn genomic_dot_product(
                     
                     if has_anchors {
                         let a_ptr = anchors.as_ptr().add(j * stride * 4 + k * 4);
-                        let mut a_f32 = [0.0f32; 4];
-                        for s in 0..4 { a_f32[s] = (*a_ptr.add(s)).to_f32(); }
-                        v_vals_f = _mm_add_ps(v_vals_f, _mm_loadu_ps(a_f32.as_ptr()));
+                        if has_f16c {
+                            // F16C optimization
+                            let v_anchors = _mm_cvtph_ps(_mm_loadl_epi64(a_ptr as *const __m128i));
+                            v_vals_f = _mm_add_ps(v_vals_f, v_anchors);
+                        } else {
+                            let mut a_f32 = [0.0f32; 4];
+                            for s in 0..4 { a_f32[s] = (*a_ptr.add(s)).to_f32(); }
+                            v_vals_f = _mm_add_ps(v_vals_f, _mm_loadu_ps(a_f32.as_ptr()));
+                        }
                     }
 
                     let v_in = _mm_loadu_ps(input_block_ptr.add(k * 4));

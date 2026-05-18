@@ -62,6 +62,49 @@ pub struct GajeDatabaseWriter {
     pub(crate) db: Arc<Database>,
 }
 
+#[pyclass]
+pub struct GajeBatchWriter {
+    pub(crate) txn: Option<redb::WriteTransaction>,
+    pub(crate) db: Arc<Database>,
+}
+
+#[pymethods]
+impl GajeBatchWriter {
+    pub fn commit(&mut self) -> PyResult<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    pub fn abort(&mut self) -> PyResult<()> {
+        if let Some(txn) = self.txn.take() {
+            txn.abort().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    pub fn write_tensor(&mut self, key: &str, data: &[u8]) -> PyResult<()> {
+        if let Some(ref txn) = self.txn {
+            let mut table = txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table.insert(key, data).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyRuntimeError::new_err("Transaction already closed"))
+        }
+    }
+
+    pub fn write_metadata(&mut self, key: &str, json_str: &str) -> PyResult<()> {
+        if let Some(ref txn) = self.txn {
+            let mut table = txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table.insert(key, json_str).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyRuntimeError::new_err("Transaction already closed"))
+        }
+    }
+}
+
 #[pymethods]
 impl GajeDatabaseWriter {
     #[new]
@@ -76,6 +119,21 @@ impl GajeDatabaseWriter {
         write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(Self { db: db_arc })
     }
+
+    pub fn begin_batch(&self) -> PyResult<GajeBatchWriter> {
+        let txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(GajeBatchWriter {
+            txn: Some(txn),
+            db: Arc::clone(&self.db),
+        })
+    }
+
+    pub fn create_checkpoint(&self) -> PyResult<()> {
+        // Redb native checkpoint/snapshot is essentially a commit that stays available.
+        // For our purposes, we'll implement a 'stable' metadata flag.
+        self.write_metadata("last_checkpoint", &chrono::Utc::now().to_rfc3339())
+    }
+
 
     pub fn compact(&self) -> PyResult<bool> {
         // Redb needs exclusive access for compaction.

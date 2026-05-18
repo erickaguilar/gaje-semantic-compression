@@ -318,14 +318,15 @@ pub struct NativeLoader {
 
 pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConfig, tokenizer: Option<&tokenizers::Tokenizer>) -> std::io::Result<()> {
     let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-    
+    let mut batch = writer.begin_batch().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
     // 1. Metadata & Config
-    writer.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
+    batch.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     
     if let Some(tok) = tokenizer {
         let tok_json = tok.to_string(true).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        writer.write_metadata("tokenizer", &tok_json).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        batch.write_metadata("tokenizer", &tok_json).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     }
 
     let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
@@ -340,46 +341,62 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
         lz4_flex::compress_prepend_size(data)
     };
 
-    let save_linear = |prefix: &str, layer: &GenomicLinear| {
-        writer.write_tensor(&format!("{}.dna", prefix), &compress(&layer.database)).unwrap();
-        writer.write_tensor(&format!("{}.centroids", prefix), &compress(&f32_to_u8(&layer.centroids))).unwrap();
+    fn write_linear(batch: &mut crate::core::db::GajeBatchWriter, prefix: &str, layer: &GenomicLinear) -> std::io::Result<()> {
+        let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
+            let mut res = vec![0u8; data.len() * 4];
+            unsafe {
+                std::ptr::copy_nonoverlapping(data.as_ptr() as *const u8, res.as_mut_ptr(), res.len());
+            }
+            res
+        };
+
+        let compress = |data: &[u8]| -> Vec<u8> {
+            lz4_flex::compress_prepend_size(data)
+        };
+
+        batch.write_tensor(&format!("{}.dna", prefix), &compress(&layer.database)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        batch.write_tensor(&format!("{}.centroids", prefix), &compress(&f32_to_u8(&layer.centroids))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         
         let anchors_u8 = unsafe {
             std::slice::from_raw_parts(layer.anchors.as_ptr() as *const u8, layer.anchors.len() * 2)
         };
-        writer.write_tensor(&format!("{}.anchors", prefix), &compress(anchors_u8)).unwrap();
+        batch.write_tensor(&format!("{}.anchors", prefix), &compress(anchors_u8)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         if !layer.bias.is_empty() {
-            writer.write_tensor(&format!("{}.bias", prefix), &compress(&f32_to_u8(&layer.bias))).unwrap();
+            batch.write_tensor(&format!("{}.bias", prefix), &compress(&f32_to_u8(&layer.bias))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
 
         if !layer.precision_mask.is_empty() {
-            writer.write_tensor(&format!("{}.precision_mask", prefix), &compress(&layer.precision_mask)).unwrap();
+            batch.write_tensor(&format!("{}.precision_mask", prefix), &compress(&layer.precision_mask)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
-    };
+        Ok(())
+    }
 
     // 2. Tensors - Embeddings
-    save_linear("token_embd", &model.embeddings);
+    write_linear(&mut batch, "token_embd", &model.embeddings)?;
 
     // 3. Tensors - Blocks
     for (i, block) in model.blocks.iter().enumerate() {
         let p = format!("blk.{}.", i);
-        save_linear(&format!("{}attn_q", p), &block.q_gen);
-        save_linear(&format!("{}attn_k", p), &block.k_gen);
-        save_linear(&format!("{}attn_v", p), &block.v_gen);
-        save_linear(&format!("{}attn_output", p), &block.w_o);
-        save_linear(&format!("{}ffn_gate", p), &block.gate_gen);
-        save_linear(&format!("{}ffn_up", p), &block.up_gen);
-        save_linear(&format!("{}ffn_down", p), &block.w_down);
+        write_linear(&mut batch, &format!("{}attn_q", p), &block.q_gen)?;
+        write_linear(&mut batch, &format!("{}attn_k", p), &block.k_gen)?;
+        write_linear(&mut batch, &format!("{}attn_v", p), &block.v_gen)?;
+        write_linear(&mut batch, &format!("{}attn_output", p), &block.w_o)?;
+        write_linear(&mut batch, &format!("{}ffn_gate", p), &block.gate_gen)?;
+        write_linear(&mut batch, &format!("{}ffn_up", p), &block.up_gen)?;
+        write_linear(&mut batch, &format!("{}ffn_down", p), &block.w_down)?;
 
-        writer.write_tensor(&format!("{}attn_norm", p), &compress(&f32_to_u8(&block.attn.rmsnorm_weight))).unwrap();
-        writer.write_tensor(&format!("{}ffn_norm", p), &compress(&f32_to_u8(&block.ffn_norm))).unwrap();
-        writer.write_tensor(&format!("{}h_scale", p), &compress(&f32_to_u8(&[block.h_scale]))).unwrap();
+        batch.write_tensor(&format!("{}attn_norm", p), &compress(&f32_to_u8(&block.attn.rmsnorm_weight))).unwrap();
+        batch.write_tensor(&format!("{}ffn_norm", p), &compress(&f32_to_u8(&block.ffn_norm))).unwrap();
+        batch.write_tensor(&format!("{}h_scale", p), &compress(&f32_to_u8(&[block.h_scale]))).unwrap();
     }
 
     // 4. Output
-    save_linear("lm_head", &model.lm_head);
-    writer.write_tensor("output_norm", &compress(&f32_to_u8(&model.output_norm))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    write_linear(&mut batch, "lm_head", &model.lm_head)?;
+    batch.write_tensor("output_norm", &compress(&f32_to_u8(&model.output_norm))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    // Commit the entire batch
+    batch.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     // 5. Compact database to minimize disk space
     println!("[*] Compactando base de datos genómica con compresión LZ4...");
@@ -387,6 +404,7 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
 
     Ok(())
 }
+
 
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {

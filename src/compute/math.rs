@@ -541,6 +541,53 @@ pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
     dna
 }
 
+/// Calcula el error cuadrático medio (MSE) entre dos vectores de forma paralela.
+#[pyfunction]
+pub fn calculate_mse_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<f32> {
+    if a.len() != b.len() {
+        return Err(pyo3::exceptions::PyValueError::new_err("Vector length mismatch"));
+    }
+    let n = a.len();
+    if n == 0 { return Ok(0.0); }
+    
+    let sum_sq_diff: f32 = a.par_iter()
+        .zip(b.par_iter())
+        .map(|(&va, &vb)| (va - vb).powi(2))
+        .sum();
+        
+    Ok(sum_sq_diff / n as f32)
+}
+
+/// Calcula la similitud coseno entre dos vectores de forma paralela.
+#[pyfunction]
+pub fn calculate_cosine_similarity_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<f32> {
+    if a.len() != b.len() {
+        return Err(pyo3::exceptions::PyValueError::new_err("Vector length mismatch"));
+    }
+    let n = a.len();
+    if n == 0 { return Ok(0.0); }
+
+    let dot: f32 = a.par_iter().zip(b.par_iter()).map(|(&va, &vb)| va * vb).sum();
+    let norm_a: f32 = a.par_iter().map(|&v| v * v).sum::<f32>().sqrt();
+    let norm_b: f32 = b.par_iter().map(|&v| v * v).sum::<f32>().sqrt();
+
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return Ok(0.0);
+    }
+
+    Ok(dot / (norm_a * norm_b))
+}
+
+/// Calcula la entropía de una distribución de probabilidad (Softmax output).
+#[pyfunction]
+pub fn calculate_distribution_entropy_native(probs: Vec<f32>) -> PyResult<f32> {
+    let entropy: f32 = probs.par_iter()
+        .filter(|&&p| p > 1e-12)
+        .map(|&p| -p * p.ln() / 2.0f32.ln())
+        .sum();
+    Ok(entropy)
+}
+
 /// Inicializa centroides heurísticos basados en una distribución normal estándar.
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     let mut centroids = Vec::with_capacity(n_blocks * 4);
@@ -553,3 +600,5 @@ pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     }
     centroids
 }
+
+
