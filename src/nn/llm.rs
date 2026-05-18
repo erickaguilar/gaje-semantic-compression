@@ -357,4 +357,22 @@ impl RustGenomicLLM {
         }
         Ok(())
     }
+
+    pub fn mutate_all_homeostasis(&mut self, scale: f32) -> PyResult<Vec<f32>> {
+        let mut deltas = Vec::with_capacity(self.blocks.len());
+        for block in &mut self.blocks {
+            deltas.push(block.mutate_homeostasis(scale)?);
+        }
+        Ok(deltas)
+    }
+
+    pub fn undo_homeostasis_mutation(&mut self, deltas: Vec<f32>) -> PyResult<()> {
+        if deltas.len() != self.blocks.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("Homeostasis delta size mismatch"));
+        }
+        for (block, d) in self.blocks.iter_mut().zip(deltas) {
+            block.h_scale -= d;
+        }
+        Ok(())
+    }
 }

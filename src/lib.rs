@@ -14,6 +14,7 @@ pub mod nn;
 use crate::core::index::GajeIndex;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, RustGenomicLLM};
 use crate::core::db::{GajeDatabaseWriter, GajeDatabaseReader};
+use crate::io::loader::{ModelConfig, ArchConfig};
 use crate::compute::math::*;
 use pyo3::prelude::*;
 
@@ -29,6 +30,9 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustGenomicLLM>()?;
     m.add_class::<GajeDatabaseWriter>()?;
     m.add_class::<GajeDatabaseReader>()?;
+    m.add_class::<ModelConfig>()?;
+    m.add_class::<ArchConfig>()?;
+    m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

@@ -3,19 +3,35 @@ use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
 use crate::core::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
+use pyo3::prelude::*;
 
+#[pyclass]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
+    #[pyo3(get, set)]
     #[serde(default = "default_name")]
     pub name: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_tokenizer")]
     pub tokenizer_id: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_rope_base")]
     pub rope_base: f32,
+    #[pyo3(get, set)]
     #[serde(default = "default_ffn_act")]
     pub ffn_act: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_false")]
     pub use_genomic_norm: bool,
+}
+
+#[pymethods]
+impl ArchConfig {
+    #[new]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false))]
+    pub fn new(name: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool) -> Self {
+        ArchConfig { name, tokenizer_id, rope_base, ffn_act, use_genomic_norm }
+    }
 }
 
 fn default_name() -> String { "GAJE-Model".to_string() }
@@ -24,15 +40,32 @@ fn default_rope_base() -> f32 { 10000.0 }
 fn default_ffn_act() -> String { "swiglu".to_string() }
 fn default_false() -> bool { false }
 
+#[pyclass]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModelConfig {
+    #[pyo3(get, set)]
     pub config: ArchConfig,
+    #[pyo3(get, set)]
     pub n_embd: usize,
+    #[pyo3(get, set)]
     pub n_head: usize,
+    #[pyo3(get, set)]
     pub n_head_kv: usize,
+    #[pyo3(get, set)]
     pub n_blocks: usize,
+    #[pyo3(get, set)]
     pub vocab_size: Option<usize>,
+    #[pyo3(get, set)]
     pub eps: f32,
+}
+
+#[pymethods]
+impl ModelConfig {
+    #[new]
+    #[pyo3(signature = (config, n_embd, n_head, n_head_kv, n_blocks, vocab_size=None, eps=1e-6))]
+    pub fn new(config: ArchConfig, n_embd: usize, n_head: usize, n_head_kv: usize, n_blocks: usize, vocab_size: Option<usize>, eps: f32) -> Self {
+        ModelConfig { config, n_embd, n_head, n_head_kv, n_blocks, vocab_size, eps }
+    }
 }
 
 use crate::io::gguf::{GGUFReader, GGMLType, GGUFValue};
@@ -171,6 +204,7 @@ impl GGUFLoader {
                 config.eps,
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
+                1.0, // Default h_scale
             ));
         }
 
@@ -340,6 +374,7 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
 
         writer.write_tensor(&format!("{}attn_norm", p), &compress(&f32_to_u8(&block.attn.rmsnorm_weight))).unwrap();
         writer.write_tensor(&format!("{}ffn_norm", p), &compress(&f32_to_u8(&block.ffn_norm))).unwrap();
+        writer.write_tensor(&format!("{}h_scale", p), &compress(&f32_to_u8(&[block.h_scale]))).unwrap();
     }
 
     // 4. Output
@@ -479,6 +514,9 @@ impl NativeLoader {
             let mut ffn_norm = Self::get_tensor_f32(&read_txn, &format!("{}ffn_norm", p));
             if ffn_norm.is_empty() { ffn_norm = vec![1.0f32; config.n_embd]; }
 
+            let h_scale_vec = Self::get_tensor_f32(&read_txn, &format!("{}h_scale", p));
+            let h_scale = if h_scale_vec.is_empty() { 1.0f32 } else { h_scale_vec[0] };
+
             let attn = GenomicAttention::new(
                 config.n_head,
                 config.n_head_kv,
@@ -502,6 +540,7 @@ impl NativeLoader {
                 config.eps,
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
+                h_scale,
             ));
         }
 
@@ -528,6 +567,12 @@ impl NativeLoader {
         }
         write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
+}
+
+#[pyfunction]
+#[pyo3(name = "init_born_genomic_model")]
+pub fn init_born_genomic_model_py(path: &str, config: ModelConfig, vocab_size: usize) -> PyResult<RustGenomicLLM> {
+    init_born_genomic_model(path, config, vocab_size).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
 }
 
 pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usize) -> std::io::Result<RustGenomicLLM> {
@@ -601,6 +646,7 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
             config.eps,
             config.config.ffn_act.clone(),
             config.config.use_genomic_norm,
+            1.0, // Default h_scale
         ));
     }
 

@@ -32,12 +32,14 @@ pub struct RustGenomicBlock {
     pub act_fn: String,
     #[pyo3(get)]
     pub use_genomic_norm: bool,
+    #[pyo3(get)]
+    pub h_scale: f32,
 }
 
 #[pymethods]
 impl RustGenomicBlock {
     #[new]
-    #[pyo3(signature = (idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn = "swiglu".to_string(), use_genomic_norm = false))]
+    #[pyo3(signature = (idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn = "swiglu".to_string(), use_genomic_norm = false, h_scale = 1.0))]
     pub fn new(
         idx: usize,
         attn: GenomicAttention,
@@ -52,6 +54,7 @@ impl RustGenomicBlock {
         eps: f32,
         act_fn: String,
         use_genomic_norm: bool,
+        h_scale: f32,
     ) -> Self {
         RustGenomicBlock {
             idx,
@@ -67,6 +70,7 @@ impl RustGenomicBlock {
             eps,
             act_fn,
             use_genomic_norm,
+            h_scale,
         }
     }
 
@@ -126,8 +130,12 @@ impl RustGenomicBlock {
 
         // Optional GenomicNorm to stabilize variance before the final down projection
         if self.use_genomic_norm {
-            let unit_weights = vec![1.0f32; ffn_out.len()];
-            ffn_out = unsafe { rms_norm(&ffn_out, &unit_weights, self.eps) };
+            let n = ffn_out.len();
+            let sum_sq: f32 = ffn_out.iter().map(|&v| v * v).sum();
+            let inv_rms = self.h_scale / (sum_sq / n as f32 + self.eps).sqrt();
+            for i in 0..n {
+                ffn_out[i] *= inv_rms;
+            }
         }
 
         let projected_ffn = self.w_down.forward(ffn_out)?;
@@ -143,6 +151,15 @@ impl RustGenomicBlock {
 
     pub fn clear_cache(&mut self) -> PyResult<()> {
         self.attn.clear_cache()
+    }
+
+    pub fn mutate_homeostasis(&mut self, scale: f32) -> PyResult<f32> {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let delta = rng.gen_range(-scale..scale);
+        self.h_scale += delta;
+        self.h_scale = self.h_scale.max(0.01).min(10.0); // Límites de seguridad
+        Ok(delta)
     }
 
     pub fn refine_ffn(
