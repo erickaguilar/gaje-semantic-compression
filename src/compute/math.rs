@@ -454,6 +454,58 @@ pub fn apply_repetition_penalty(
     Ok(out)
 }
 
+/// Calcula el cuantil q de un vector de datos.
+fn quantile(data: &mut [f32], q: f32) -> f32 {
+    if data.is_empty() { return 0.0; }
+    data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+    let pos = (data.len() - 1) as f32 * q;
+    let base = pos.floor() as usize;
+    let rest = pos - base as f32;
+    if base + 1 < data.len() {
+        data[base] + rest * (data[base + 1] - data[base])
+    } else {
+        data[base]
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (entropy_per_dim, fidelity_level=0.8))]
+pub fn generate_precision_mask_native(
+    entropy_per_dim: Vec<f32>,
+    fidelity_level: f32,
+) -> PyResult<Vec<u8>> {
+    let mut data = entropy_per_dim.clone();
+    let q_mid = quantile(&mut data, 1.0 - fidelity_level);
+    let q_high = quantile(&mut data, 1.0 - (fidelity_level / 2.0));
+
+    let mask: Vec<u8> = entropy_per_dim
+        .iter()
+        .map(|&e| {
+            if e > q_high { 2 }
+            else if e > q_mid { 1 }
+            else { 0 }
+        })
+        .collect();
+    
+    Ok(mask)
+}
+
+#[pyfunction]
+#[pyo3(signature = (entropy_per_dim, threshold=0.01))]
+pub fn get_active_dimensions_native(
+    entropy_per_dim: Vec<f32>,
+    threshold: f32,
+) -> PyResult<Vec<usize>> {
+    let active_dims: Vec<usize> = entropy_per_dim
+        .iter()
+        .enumerate()
+        .filter(|&(_, &e)| e > threshold)
+        .map(|(idx, _)| idx)
+        .collect();
+    
+    Ok(active_dims)
+}
+
 /// Genera un buffer de ADN aleatorio (2-bit packed) para una forma dada.
 pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
     use rand::Rng;

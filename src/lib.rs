@@ -41,5 +41,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sample_top_p, m)?)?;
     m.add_function(wrap_pyfunction!(calculate_shannon_entropy, m)?)?;
     m.add_function(wrap_pyfunction!(prune_genomic_database, m)?)?;
+    m.add_function(wrap_pyfunction!(generate_precision_mask_native, m)?)?;
+    m.add_function(wrap_pyfunction!(get_active_dimensions_native, m)?)?;
     Ok(())
 }
