@@ -181,9 +181,15 @@ impl GenomicLinear {
             .map(|i| {
                 let row_offset = i * n_blocks * self.stride;
 
-                // Phase 1: Pure SIMD MatMul for Base 2-bit Strands (Always runs, no branching)
+                // Phase 1: Pure SIMD MatMul for Base 2-bit Strands + High Fidelity Anchors (Evol 3.5)
                 let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
                 let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
+                let row_anchors = if has_anchors {
+                    &self.anchors[i * self.in_features..(i + 1) * self.in_features]
+                } else {
+                    &[]
+                };
+
                 let mut row_sum = unsafe {
                     genomic_dot_product(
                         row_weights,
@@ -191,6 +197,7 @@ impl GenomicLinear {
                         row_centroids,
                         self.stride,
                         n_blocks,
+                        row_anchors,
                     )
                 };
 
@@ -244,15 +251,6 @@ impl GenomicLinear {
                         }
                     }
                     row_sum += tri_sum;
-                }
-
-                if has_anchors {
-                    let anchor_row = &self.anchors[i * self.in_features..(i + 1) * self.in_features];
-                    let mut a_sum = 0.0f32;
-                    for j in 0..self.in_features {
-                        a_sum += anchor_row[j].to_f32() * input[j];
-                    }
-                    row_sum += a_sum;
                 }
 
                 if has_bias {
@@ -368,8 +366,14 @@ impl GenomicLinear {
             // Phase 1
             let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
             let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
+            let row_anchors = if has_anchors {
+                &self.anchors[i * self.in_features..(i + 1) * self.in_features]
+            } else {
+                &[]
+            };
+
             row_sum += unsafe {
-                genomic_dot_product(row_weights, &input, row_centroids, self.stride, n_blocks)
+                genomic_dot_product(row_weights, &input, row_centroids, self.stride, n_blocks, row_anchors)
             };
             
             // Phase 2
@@ -410,13 +414,6 @@ impl GenomicLinear {
                     }
                 }
                 row_sum += tri_sum;
-            }
-
-            if has_anchors {
-                let anchor_row = &self.anchors[i * self.in_features..(i + 1) * self.in_features];
-                for (j, &a) in anchor_row.iter().enumerate() {
-                    row_sum += a.to_f32() * input[j];
-                }
             }
 
             let grad_scale = (row_sum - target[i]) * lr;
