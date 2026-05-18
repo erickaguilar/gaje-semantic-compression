@@ -271,7 +271,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let mut count = 0;
             for (ts, data) in mutations.into_iter().rev() {
                 if ts > target {
-                    let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
+                    let mutation: crate::core::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
                     model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
                     count += 1;
                 }
@@ -290,14 +290,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
 
         loop {
-            print!("\n👤 User: ");
+        print!(\"{} \", decoded);
             io::stdout().flush()?;
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
             let prompt = input.trim();
             if prompt.is_empty() { continue; }
             if prompt == "exit" || prompt == "quit" { break; }
-            print!("🤖 GAJE: ");
+        print!(\"{} \", decoded);
             io::stdout().flush()?;
             generate(&mut model, &tokenizer, prompt, 100)?;
             println!();
@@ -358,6 +358,7 @@ fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> 
 }
 
 fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let encoding = tokenizer.encode(prompt, false).map_err(|e| e.to_string())?;
     let tokens = encoding.get_ids();
     model.clear_cache().unwrap();
@@ -367,18 +368,16 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
     for &tid in &current_tokens {
         logits = model.forward(tid as usize, false).unwrap();
     }
-    
     let temperature = 0.7;
     let top_k = 40;
     let top_p = 0.9;
-    
     for _ in 0..max_tokens {
         let next_token = sample_logits(&logits, temperature, top_k, top_p);
         if next_token == 0 { break; }
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
-        print!("{}", decoded);
+        print!(\"{}{}\", \"\", decoded);
         io::stdout().flush()?;
-        current_tokens.push(next_token as u32);
+        print!(\"{}{}\", \"\", decoded);
         logits = model.forward(next_token, false).unwrap();
     }
     Ok(())

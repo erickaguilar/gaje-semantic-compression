@@ -1,4 +1,4 @@
-use crate::kernels::rms_norm;
+use crate::compute::kernels::rms_norm;
 use crate::nn::attention::GenomicAttention;
 use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;

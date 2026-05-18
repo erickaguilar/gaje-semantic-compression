@@ -1,4 +1,4 @@
-use crate::kernels::*;
+use crate::compute::kernels::*;
 use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -284,7 +284,7 @@ impl GenomicLinear {
             let c_offset = (idx * n_blocks + b) * 4;
             let centroids_f32 = &self.centroids[c_offset..c_offset + 4];
 
-            let decoded = crate::utils::dequantize_embedding(
+            let decoded = crate::compute::math::dequantize_embedding(
                 block_dna.to_vec(),
                 self.block_size,
                 Some(centroids_f32.to_vec()),

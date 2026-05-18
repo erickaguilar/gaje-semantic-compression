@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
-use crate::db::{TENSOR_TABLE, METADATA_TABLE};
+use crate::core::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -35,7 +35,7 @@ pub struct ModelConfig {
     pub eps: f32,
 }
 
-use crate::gguf::{GGUFReader, GGMLType, GGUFValue};
+use crate::io::gguf::{GGUFReader, GGMLType, GGUFValue};
 
 pub struct GGUFLoader {
     pub reader: GGUFReader,
@@ -248,13 +248,13 @@ impl GGUFLoader {
                 res
             }
             GGMLType::Q8_0 => {
-                crate::utils::dequantize_q8_0_native(data.to_vec(), out_features, in_features)
+                crate::compute::math::dequantize_q8_0_native(data.to_vec(), out_features, in_features)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
             }
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported tensor type for genomization: {:?}", info.tensor_type))),
         };
 
-        let (dna, centroids, anchors_u8) = crate::utils::genomize_f32_core(&f32_data, block_size, anchor_threshold);
+        let (dna, centroids, anchors_u8) = crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold);
         let rmsnorm_weight = Vec::new();
         let eps = 1e-6;
 
@@ -283,7 +283,7 @@ pub struct NativeLoader {
 }
 
 pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConfig, tokenizer: Option<&tokenizers::Tokenizer>) -> std::io::Result<()> {
-    let writer = crate::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     
     // 1. Metadata & Config
     writer.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
@@ -515,15 +515,15 @@ impl NativeLoader {
     }
 
     pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
-        let reader = crate::db::GajeDatabaseReader::new_from_db(self.db.clone());
+        let reader = crate::core::db::GajeDatabaseReader::new_from_db(self.db.clone());
         reader.list_mutations().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
 
-    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::db::Mutation) -> std::io::Result<()> {
+    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::core::db::Mutation) -> std::io::Result<()> {
         let data = bincode::serialize(mutation).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         let write_txn = self.db.begin_write().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         {
-            let mut table = write_txn.open_table(crate::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            let mut table = write_txn.open_table(crate::core::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             table.insert(timestamp, data.as_slice()).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
         write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
@@ -536,8 +536,8 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
     let init_linear = |in_features: usize, out_features: usize| -> GenomicLinear {
         let n_elements = in_features * out_features;
         let n_blocks = n_elements / block_size;
-        let dna = crate::utils::generate_random_dna(n_elements);
-        let centroids = crate::utils::generate_default_centroids(n_blocks);
+        let dna = crate::compute::math::generate_random_dna(n_elements);
+        let centroids = crate::compute::math::generate_default_centroids(n_blocks);
         
         GenomicLinear::new(
             dna,
