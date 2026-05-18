@@ -245,17 +245,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
 
         let mut current_lr = scale;
+        let token_ids: Vec<usize> = tokens.iter().map(|&id| id as usize).collect();
         for epoch in 1..=train_epochs {
-            model.clear_cache().unwrap();
-            let mut total_loss = 0.0;
-            for i in 0..tokens.len() - 1 {
-                let token_id = tokens[i] as usize;
-                let target_id = tokens[i+1] as usize;
-                let loss = model.train_step(token_id, target_id, current_lr)?;
-                total_loss += loss;
-            }
-            let avg_loss = total_loss / (tokens.len() - 1) as f32;
-            println!("[Epoch {}] Avg Loss: {:.4} (LR: {:.4})", epoch, avg_loss, current_lr);
+            let loss = model.train_on_sequence(token_ids.clone(), current_lr)?;
+            println!("[Epoch {}] Loss Nativa (Seq): {:.4} (LR: {:.4})", epoch, loss, current_lr);
             current_lr *= 0.9;
         }
         println!("[+] Entrenamiento completado en {:?}", start_train.elapsed());
