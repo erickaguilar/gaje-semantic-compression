@@ -106,8 +106,17 @@ impl RustGenomicBlock {
                     .zip(gate.par_iter())
                     .zip(up.par_iter())
                     .for_each(|((out, &g), &u)| {
-                        let silu = g / (1.0 + (-g).exp());
-                        *out = silu * u;
+                        // Estabilización de SwiGLU (Silu gating)
+                        let g_safe = g.max(-88.0).min(88.0);
+                        let sigmoid = if g_safe >= 0.0 {
+                            1.0 / (1.0 + (-g_safe).exp())
+                        } else {
+                            let ex = g_safe.exp();
+                            ex / (1.0 + ex)
+                        };
+                        let silu = g * sigmoid;
+                        // Clamping para evitar deriva semántica destructiva en 2-bits
+                        *out = (silu * u).clamp(-128.0, 128.0);
                     });
             }
             "geglu" => {
@@ -115,8 +124,10 @@ impl RustGenomicBlock {
                     .zip(gate.par_iter())
                     .zip(up.par_iter())
                     .for_each(|((out, &g), &u)| {
-                        let gelu = 0.5 * g * (1.0 + ((0.79788456 * (g + 0.044715 * g * g * g)).tanh()));
-                        *out = gelu * u;
+                        // Estabilización de GeGLU
+                        let g_safe = g.clamp(-20.0, 20.0);
+                        let gelu = 0.5 * g_safe * (1.0 + ((0.79788456 * (g_safe + 0.044715 * g_safe * g_safe * g_safe)).tanh()));
+                        *out = (gelu * u).clamp(-128.0, 128.0);
                     });
             }
             "relu" => {
@@ -124,7 +135,7 @@ impl RustGenomicBlock {
                     .zip(gate.par_iter())
                     .zip(up.par_iter())
                     .for_each(|((out, &g), &u)| {
-                        *out = g.max(0.0) * u;
+                        *out = (g.max(0.0) * u).clamp(-128.0, 128.0);
                     });
             }
             _ => {
@@ -132,8 +143,15 @@ impl RustGenomicBlock {
                     .zip(gate.par_iter())
                     .zip(up.par_iter())
                     .for_each(|((out, &g), &u)| {
-                        let silu = g / (1.0 + (-g).exp());
-                        *out = silu * u;
+                        let g_safe = g.max(-88.0).min(88.0);
+                        let sigmoid = if g_safe >= 0.0 {
+                            1.0 / (1.0 + (-g_safe).exp())
+                        } else {
+                            let ex = g_safe.exp();
+                            ex / (1.0 + ex)
+                        };
+                        let silu = g * sigmoid;
+                        *out = (silu * u).clamp(-128.0, 128.0);
                     });
             }
         }
@@ -188,8 +206,14 @@ impl RustGenomicBlock {
             
             match self.act_fn.as_str() {
                 "swiglu" => {
-                    let s = 1.0 / (1.0 + (-g).exp());
-                    let current = g * s * u;
+                    let g_safe = g.max(-88.0).min(88.0);
+                    let s = if g_safe >= 0.0 {
+                        1.0 / (1.0 + (-g_safe).exp())
+                    } else {
+                        let ex = g_safe.exp();
+                        ex / (1.0 + ex)
+                    };
+                    let current = (g * s * u).clamp(-128.0, 128.0);
                     let diff = current - target;
                     let silu_p = s * (1.0 + g * (1.0 - s));
                     (diff * silu_p * u, diff * (g * s))
