@@ -13,6 +13,8 @@ use std::arch::aarch64::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+use rayon::prelude::*;
+
 // =============================================================================
 // dot_product — Producto punto vectorizado universal
 // =============================================================================
@@ -192,6 +194,54 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
 #[inline(always)]
 pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     rms_norm(x, weight, eps)
+}
+
+// =============================================================================
+// swiglu — Activación SwiGLU vectorizada universal
+// =============================================================================
+
+#[inline(always)]
+pub fn swiglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
+    let n = gate.len();
+    out.par_iter_mut()
+        .zip(gate.par_iter())
+        .zip(up.par_iter())
+        .for_each(|((o, &g), &u)| {
+            // Estabilización de SwiGLU (Silu gating)
+            let g_safe = g.max(-88.0).min(88.0);
+            let sigmoid = if g_safe >= 0.0 {
+                1.0 / (1.0 + (-g_safe).exp())
+            } else {
+                let ex = g_safe.exp();
+                ex / (1.0 + ex)
+            };
+            let silu = g * sigmoid;
+            *o = (silu * u).clamp(-128.0, 128.0);
+        });
+}
+
+#[inline(always)]
+pub fn geglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
+    out.par_iter_mut()
+        .zip(gate.par_iter())
+        .zip(up.par_iter())
+        .for_each(|((o, &g), &u)| {
+            // Estabilización de GeGLU
+            let g_safe = g.clamp(-20.0, 20.0);
+            let tanh_inner = 0.79788456f32 * (g_safe + 0.044715f32 * g_safe * g_safe * g_safe);
+            let gelu = 0.5f32 * g_safe * (1.0f32 + tanh_inner.tanh());
+            *o = (gelu * u).clamp(-128.0, 128.0);
+        });
+}
+
+#[inline(always)]
+pub fn relu_glu(gate: &[f32], up: &[f32], out: &mut [f32]) {
+    out.par_iter_mut()
+        .zip(gate.par_iter())
+        .zip(up.par_iter())
+        .for_each(|((o, &g), &u)| {
+            *o = (g.max(0.0) * u).clamp(-128.0, 128.0);
+        });
 }
 
 // =============================================================================

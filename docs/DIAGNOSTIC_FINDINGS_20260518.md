@@ -50,6 +50,6 @@ Este documento resume los hallazgos actuales sobre el estado del código, bugs d
 
 ---
 **Próximos Pasos Recomendados:**
-1. Sincronizar versiones a 0.7.0.
+1. Sincronizar versiones a 0.7.0. ✅ (Completado)
 2. Corregir el sistema de bloqueos de `Redb`.
 3. Vectorizar la activación SwiGLU en Rust.

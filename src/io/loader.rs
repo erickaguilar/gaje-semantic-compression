@@ -430,7 +430,7 @@ pub fn save_genomic_model(
     config: &ModelConfig,
     tokenizer: Option<&tokenizers::Tokenizer>,
 ) -> std::io::Result<()> {
-    let writer = crate::core::db::GajeDatabaseWriter::new(path)
+    let mut writer = crate::core::db::GajeDatabaseWriter::new(path)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     let mut batch = writer
         .begin_batch()
@@ -454,12 +454,9 @@ pub fn save_genomic_model(
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     }
 
-    let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
-        let mut res = vec![0u8; data.len() * 4];
-        unsafe {
-            std::ptr::copy_nonoverlapping(data.as_ptr() as *const u8, res.as_mut_ptr(), res.len());
-        }
-        res
+    // Helper zero-copy f32 -> u8
+    let f32_as_u8 = |data: &[f32]| -> &[u8] {
+        unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
     };
 
     let compress = |data: &[u8]| -> Vec<u8> { lz4_flex::compress_prepend_size(data) };
@@ -469,16 +466,8 @@ pub fn save_genomic_model(
         prefix: &str,
         layer: &GenomicLinear,
     ) -> std::io::Result<()> {
-        let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
-            let mut res = vec![0u8; data.len() * 4];
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    data.as_ptr() as *const u8,
-                    res.as_mut_ptr(),
-                    res.len(),
-                );
-            }
-            res
+        let f32_as_u8 = |data: &[f32]| -> &[u8] {
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 4) }
         };
 
         let compress = |data: &[u8]| -> Vec<u8> { lz4_flex::compress_prepend_size(data) };
@@ -489,7 +478,7 @@ pub fn save_genomic_model(
         batch
             .write_tensor(
                 &format!("{}.centroids", prefix),
-                &compress(&f32_to_u8(&layer.centroids)),
+                &compress(f32_as_u8(&layer.centroids)),
             )
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
@@ -504,7 +493,7 @@ pub fn save_genomic_model(
             batch
                 .write_tensor(
                     &format!("{}.bias", prefix),
-                    &compress(&f32_to_u8(&layer.bias)),
+                    &compress(f32_as_u8(&layer.bias)),
                 )
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
@@ -537,19 +526,19 @@ pub fn save_genomic_model(
         batch
             .write_tensor(
                 &format!("{}attn_norm", p),
-                &compress(&f32_to_u8(&block.attn.rmsnorm_weight)),
+                &compress(f32_as_u8(&block.attn.rmsnorm_weight)),
             )
             .unwrap();
         batch
             .write_tensor(
                 &format!("{}ffn_norm", p),
-                &compress(&f32_to_u8(&block.ffn_norm)),
+                &compress(f32_as_u8(&block.ffn_norm)),
             )
             .unwrap();
         batch
             .write_tensor(
                 &format!("{}h_scale", p),
-                &compress(&f32_to_u8(&[block.h_scale])),
+                &compress(f32_as_u8(&[block.h_scale])),
             )
             .unwrap();
     }
@@ -557,7 +546,7 @@ pub fn save_genomic_model(
     // 4. Output
     write_linear(&mut batch, "lm_head", &model.lm_head)?;
     batch
-        .write_tensor("output_norm", &compress(&f32_to_u8(&model.output_norm)))
+        .write_tensor("output_norm", &compress(f32_as_u8(&model.output_norm)))
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     // Commit the entire batch

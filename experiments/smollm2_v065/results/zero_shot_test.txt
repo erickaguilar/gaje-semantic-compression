@@ -1,3 +1,8 @@
-🧬 GAJE Native Runtime (v0.6.5)
+🧬 GAJE Native Runtime (v0.7.0)
 [*] Extracting tokenizer from GAJE DB...
-Error: Custom { kind: Other, error: "Database already open. Cannot acquire lock." }
+[*] Model & Tokenizer loaded.
+"Gran Cahui, la ciuralisme de la Francia. "
+
+"Gran Cahui, la ciuralisme de la Francia. "
+
+"Gran Cahui, la ciur

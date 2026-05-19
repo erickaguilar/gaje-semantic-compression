@@ -21,16 +21,26 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
 
     // Normalizar la ruta de forma robusta
     let path_obj = Path::new(path);
-    let abs_path = if let Ok(p) = path_obj.canonicalize() {
-        p.to_string_lossy().to_string()
-    } else {
-        // Si no existe, usamos la ruta absoluta basada en CWD
-        if path_obj.is_absolute() {
-            path_obj.to_string_lossy().to_string()
-        } else {
-            std::env::current_dir()
-                .map(|cwd| cwd.join(path_obj).to_string_lossy().to_string())
-                .unwrap_or_else(|_| path.to_string())
+    let abs_path = match path_obj.canonicalize() {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(_) => {
+            let mut resolved = None;
+            if let Some(parent) = path_obj.parent() {
+                if let Ok(canon_parent) = parent.canonicalize() {
+                    if let Some(file_name) = path_obj.file_name() {
+                        resolved = Some(canon_parent.join(file_name).to_string_lossy().to_string());
+                    }
+                }
+            }
+            resolved.unwrap_or_else(|| {
+                if path_obj.is_absolute() {
+                    path_obj.to_string_lossy().to_string()
+                } else {
+                    std::env::current_dir()
+                        .map(|cwd| cwd.join(path_obj).to_string_lossy().to_string())
+                        .unwrap_or_else(|_| path.to_string())
+                }
+            })
         }
     };
 
@@ -42,11 +52,11 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
 
     // Intentar abrir o crear con reintentos mínimos en caso de bloqueos temporales del OS
     let mut last_err = String::new();
-    for _ in 0..3 {
+    for i in 0..5 {
         let result = if create {
-            Database::create(path)
+            Database::create(&abs_path)
         } else {
-            Database::open(path)
+            Database::open(&abs_path)
         };
 
         match result {
@@ -58,7 +68,9 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
             Err(e) => {
                 last_err = e.to_string();
                 if last_err.contains("already open") || last_err.contains("lock") {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                    // Si estamos en el mismo proceso y llegamos aquí, es que el registry falló.
+                    // Pero si es otro proceso, esperamos un poco.
+                    std::thread::sleep(std::time::Duration::from_millis(100 * (i + 1)));
                     continue;
                 }
                 return Err(last_err);
@@ -67,8 +79,8 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
     }
 
     Err(format!(
-        "Failed to open database after retries: {}",
-        last_err
+        "Failed to open database '{}' after retries. Last error: {}",
+        abs_path, last_err
     ))
 }
 
@@ -202,15 +214,15 @@ impl GajeDatabaseWriter {
         self.write_metadata("last_checkpoint", &chrono::Utc::now().to_rfc3339())
     }
 
-    pub fn compact(&self) -> PyResult<bool> {
-        // Redb needs exclusive access for compaction.
-        if let Some(db_mut) = Arc::get_mut(&mut Arc::clone(&self.db)) {
+    pub fn compact(&mut self) -> PyResult<bool> {
+        // Redb requiere acceso exclusivo (&mut self) para compactar.
+        if let Some(db_mut) = Arc::get_mut(&mut self.db) {
             db_mut
                 .compact()
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Redb compaction failed: {}", e)))
         } else {
             Err(pyo3::exceptions::PyRuntimeError::new_err(
-                "Cannot compact database: multiple references exist",
+                "Cannot compact database: multiple references (Readers/Writers) are active. Close other instances first.",
             ))
         }
     }
