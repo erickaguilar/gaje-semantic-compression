@@ -387,20 +387,21 @@ pub unsafe fn genomic_dot_product_scalar(
     for j in 0..n_blocks {
         let input_block_ptr = input.as_ptr().add(j * stride * 4);
         let weights_block_ptr = weights.as_ptr().add(j * stride);
+        let centroids_ptr = centroids.as_ptr().add(j * 4);
         
         for k in 0..stride {
             let byte = *weights_block_ptr.add(k);
+            let anchor_offset = j * stride * 4 + k * 4;
+            
             for b in 0..4usize {
                 let shift = (3 - b) * 2;
                 let bits = (byte >> shift) & 0b11;
                 let c_idx = (bits ^ (bits >> 1)) as usize;
                 
-                let dim_idx = j * stride * 4 + k * 4 + b;
-                let base_val = *centroids.as_ptr().add(j * 4 + c_idx);
-                let mut weight_val = base_val;
+                let mut weight_val = *centroids_ptr.add(c_idx);
                 
                 if has_anchors {
-                    weight_val += anchors.get_unchecked(dim_idx).to_f32();
+                    weight_val += (*anchors.get_unchecked(anchor_offset + b)).to_f32();
                 }
                 
                 sum += weight_val * *input_block_ptr.add(k * 4 + b);
