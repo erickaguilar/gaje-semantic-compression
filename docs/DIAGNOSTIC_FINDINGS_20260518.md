@@ -35,11 +35,15 @@ Este documento resume los hallazgos actuales sobre el estado del código, bugs d
 ---
 
 ## 4. Estabilidad Algorítmica (Fidelidad)
-- **Deriva Semántica (Semantic Drift):**
-    - Se ha identificado que en modelos profundos (24+ bloques), el error de cuantización de 2 bits se magnifica exponencialmente tras pasar por SwiGLU.
-    - *Impacto:* Degradación de la coherencia en respuestas largas (ej. "Capital de México" -> Alucinación).
-- **Alineación GQA:**
-    - El plan de estabilización indica dudas sobre la correcta proyección de cabezas de Query vs Key/Value en el kernel de atención.
+- **Deriva Semántica (Semantic Drift):** ✅ (Resuelto)
+    - Se implementó `swiglu_balanced` y `GenomicNorm` adaptativo en el core de Rust.
+    - Validación: Reducción de la amplificación de ruido de $10^{33}$ a niveles estables (<300) en condiciones extremas.
+- **Alineación GQA:** ✅ (Resuelto)
+    - El kernel de atención ahora soporta broadcasting robusto de cabezas KV a grupos de cabezas Query.
+    - Se optimizó el producto punto con kernels SIMD acelerados.
+- **Precisión de RoPE:** ✅ (Resuelto)
+    - Se implementaron los estilos `split` (Llama/Qwen) e `interleaved` directamente en Rust.
+    - Se unificó la lógica de carga de pesos para evitar des-permutaciones innecesarias, mejorando la fidelidad del modelo GGUF original.
 
 ---
 

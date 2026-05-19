@@ -74,6 +74,7 @@ class GenomicLayer:
                     and is_q_or_k
                     and n_head is not None
                     and head_dim is not None
+                    and (self.config.rope_style != "split" if self.config else True)
                 )
 
                 if (
@@ -123,7 +124,8 @@ class GenomicLayer:
                     )
             else:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
-                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k)
+                rope_style = self.config.rope_style if self.config else "split"
+                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style)
                 self.out_features, self.in_features = weights_f32.shape
                 self._init_from_f32(
                     weights_f32, block_size, anchor_threshold, custom_base_c
@@ -136,7 +138,8 @@ class GenomicLayer:
             unpermute = (
                 self.config.unpermute_weights if self.config else False
             )  # Default false for raw
-            if unpermute and is_q_or_k and n_head is not None and head_dim is not None:
+            rope_style = self.config.rope_style if self.config else "split"
+            if unpermute and is_q_or_k and n_head is not None and head_dim is not None and rope_style != "split":
                 from gaje.utils.quantization import unpermute_to_interleaved
 
                 weights_f32 = unpermute_to_interleaved(weights_f32, n_head, head_dim)
@@ -363,6 +366,7 @@ class GenomicAttentionLayer:
             rmsnorm_weight.tolist() if rmsnorm_weight is not None else [],
             eps,
             rope_base,
+            config.rope_style if config else "split",
         )
 
     def forward(self, x, pos):

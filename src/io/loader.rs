@@ -23,18 +23,22 @@ pub struct ArchConfig {
     #[pyo3(get, set)]
     #[serde(default = "default_false")]
     pub use_genomic_norm: bool,
+    #[pyo3(get, set)]
+    #[serde(default = "default_rope_style")]
+    pub rope_style: String,
 }
 
 #[pymethods]
 impl ArchConfig {
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false))]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string()))]
     pub fn new(
         name: String,
         tokenizer_id: String,
         rope_base: f32,
         ffn_act: String,
         use_genomic_norm: bool,
+        rope_style: String,
     ) -> Self {
         ArchConfig {
             name,
@@ -42,6 +46,7 @@ impl ArchConfig {
             rope_base,
             ffn_act,
             use_genomic_norm,
+            rope_style,
         }
     }
 }
@@ -60,6 +65,9 @@ fn default_ffn_act() -> String {
 }
 fn default_false() -> bool {
     false
+}
+fn default_rope_style() -> String {
+    "split".to_string()
 }
 
 #[pyclass]
@@ -205,6 +213,7 @@ impl GGUFLoader {
                 rope_base,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
+                rope_style: "split".to_string(),
             },
             n_embd,
             n_head,
@@ -271,6 +280,7 @@ impl GGUFLoader {
                 attn_norm,
                 config.eps,
                 config.config.rope_base,
+                config.config.rope_style.clone(),
             );
 
             blocks.push(RustGenomicBlock::new(
@@ -788,6 +798,7 @@ impl NativeLoader {
                 attn_norm,
                 config.eps,
                 config.config.rope_base,
+                config.config.rope_style.clone(),
             );
 
             blocks.push(RustGenomicBlock::new(
@@ -919,6 +930,7 @@ pub fn init_born_genomic_model(
             attn_norm,
             config.eps,
             config.config.rope_base,
+            config.config.rope_style.clone(),
         );
 
         blocks.push(RustGenomicBlock::new(

@@ -102,7 +102,7 @@ impl RustGenomicBlock {
         let mut ffn_out = vec![0.0f32; gate.len()];
         match self.act_fn.as_str() {
             "swiglu" => {
-                crate::compute::kernels::swiglu(&gate, &up, &mut ffn_out);
+                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
             }
             "geglu" => {
                 crate::compute::kernels::geglu(&gate, &up, &mut ffn_out);
@@ -111,16 +111,22 @@ impl RustGenomicBlock {
                 crate::compute::kernels::relu_glu(&gate, &up, &mut ffn_out);
             }
             _ => {
-                crate::compute::kernels::swiglu(&gate, &up, &mut ffn_out);
+                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
             }
         }
 
-        // Optional GenomicNorm to stabilize variance before the final down projection
+        // Optional GenomicNorm to stabilize variance before the final down projection.
+        // If use_genomic_norm is true, we apply a more rigorous variance centering.
         if self.use_genomic_norm {
             let n = ffn_out.len();
             let sum_sq: f32 = ffn_out.par_iter().map(|&v| v * v).sum();
-            let inv_rms = self.h_scale / (sum_sq / n as f32 + self.eps).sqrt();
-            ffn_out.par_iter_mut().for_each(|out| *out *= inv_rms);
+            let rms = (sum_sq / n as f32 + self.eps).sqrt();
+            
+            // Re-normalización dinámica: forzamos que la varianza no exceda h_scale
+            if rms > self.h_scale {
+                let scale = self.h_scale / rms;
+                ffn_out.par_iter_mut().for_each(|out| *out *= scale);
+            }
         }
 
         let projected_ffn = self.w_down.forward(ffn_out)?;

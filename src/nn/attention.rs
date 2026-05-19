@@ -20,12 +20,14 @@ pub struct GenomicAttention {
     pub eps: f32,
     #[pyo3(get)]
     pub rope_base: f32,
+    #[pyo3(get)]
+    pub rope_style: String, // "split" or "interleaved"
 }
 
 #[pymethods]
 impl GenomicAttention {
     #[new]
-    #[pyo3(signature = (n_head, n_head_kv, head_dim, rmsnorm_weight=Vec::new(), eps=1e-6, rope_base=10000.0))]
+    #[pyo3(signature = (n_head, n_head_kv, head_dim, rmsnorm_weight=Vec::new(), eps=1e-6, rope_base=10000.0, rope_style="split".to_string()))]
     pub fn new(
         n_head: usize,
         n_head_kv: usize,
@@ -33,6 +35,7 @@ impl GenomicAttention {
         rmsnorm_weight: Vec<f32>,
         eps: f32,
         rope_base: f32,
+        rope_style: String,
     ) -> Self {
         GenomicAttention {
             n_head,
@@ -43,6 +46,7 @@ impl GenomicAttention {
             rmsnorm_weight,
             eps,
             rope_base,
+            rope_style,
         }
     }
 
@@ -87,36 +91,37 @@ impl GenomicAttention {
         let n_groups = n_head / n_head_kv;
         let scale = 1.0 / (head_dim as f32).sqrt();
         let rope_base = self.rope_base;
+        let is_split = self.rope_style == "split";
 
-        let mut q_rope = q.clone();
-        let mut k_rope = k.clone();
+        let mut q_rope = q;
+        let mut k_rope = k;
 
-        // 1. Apply RoPE to Q and K (using Interleaved format for Qwen2/Llama)
-        for h in 0..n_head {
-            let h_start = h * head_dim;
-            for i in 0..(head_dim / 2) {
-                let freq = 1.0 / rope_base.powf((2 * i) as f32 / head_dim as f32);
-                let theta = pos as f32 * freq;
-                let (sin, cos) = theta.sin_cos();
-                let v0 = q_rope[h_start + 2 * i];
-                let v1 = q_rope[h_start + 2 * i + 1];
-                q_rope[h_start + 2 * i] = v0 * cos - v1 * sin;
-                q_rope[h_start + 2 * i + 1] = v0 * sin + v1 * cos;
+        // 1. Apply RoPE to Q and K
+        let apply_rope = |vec: &mut [f32], heads: usize| {
+            for h in 0..heads {
+                let h_start = h * head_dim;
+                for i in 0..(head_dim / 2) {
+                    let freq = 1.0 / rope_base.powf((2 * i) as f32 / head_dim as f32);
+                    let theta = pos as f32 * freq;
+                    let (sin, cos) = theta.sin_cos();
+                    
+                    if is_split {
+                        let v0 = vec[h_start + i];
+                        let v1 = vec[h_start + i + head_dim / 2];
+                        vec[h_start + i] = v0 * cos - v1 * sin;
+                        vec[h_start + i + head_dim / 2] = v0 * sin + v1 * cos;
+                    } else {
+                        let v0 = vec[h_start + 2 * i];
+                        let v1 = vec[h_start + 2 * i + 1];
+                        vec[h_start + 2 * i] = v0 * cos - v1 * sin;
+                        vec[h_start + 2 * i + 1] = v0 * sin + v1 * cos;
+                    }
+                }
             }
-        }
+        };
 
-        for h in 0..n_head_kv {
-            let h_start = h * head_dim;
-            for i in 0..(head_dim / 2) {
-                let freq = 1.0 / rope_base.powf((2 * i) as f32 / head_dim as f32);
-                let theta = pos as f32 * freq;
-                let (sin, cos) = theta.sin_cos();
-                let v0 = k_rope[h_start + 2 * i];
-                let v1 = k_rope[h_start + 2 * i + 1];
-                k_rope[h_start + 2 * i] = v0 * cos - v1 * sin;
-                k_rope[h_start + 2 * i + 1] = v0 * sin + v1 * cos;
-            }
-        }
+        apply_rope(&mut q_rope, n_head);
+        apply_rope(&mut k_rope, n_head_kv);
 
         // 2. Store in Cache as F16
         self.k_cache
@@ -134,7 +139,6 @@ impl GenomicAttention {
             .flat_map(|h| {
                 let kv_h = h / n_groups;
                 // The KV cache stores the entire sequence of K and V vectors for all KV heads.
-                // Each entry in k_cache[t] is [n_head_kv * head_dim].
                 let kv_h_offset = kv_h * head_dim;
 
                 let q_slice = &q_rope[h * head_dim..(h + 1) * head_dim];
@@ -143,12 +147,14 @@ impl GenomicAttention {
                 let mut max_score = -f32::INFINITY;
 
                 for t in 0..seq_len {
-                    let k_slice = &k_cache[t][kv_h_offset..kv_h_offset + head_dim];
-                    let mut score = 0.0f32;
-                    for i in 0..head_dim {
-                        score += q_slice[i] * k_slice[i].to_f32();
+                    let k_head = &k_cache[t][kv_h_offset..kv_h_offset + head_dim];
+                    // Buffer temporal para de-cuantización f16 -> f32 (SIMD friendly)
+                    let mut k_f32 = [0.0f32; 256];
+                    for (i, &kx) in k_head.iter().enumerate() {
+                        k_f32[i] = kx.to_f32();
                     }
-                    score *= scale;
+
+                    let score = unsafe { dot_product(q_slice, &k_f32[..head_dim]) } * scale;
                     scores[t] = score;
                     if score > max_score {
                         max_score = score;
@@ -166,9 +172,9 @@ impl GenomicAttention {
                 let mut head_out = vec![0.0f32; head_dim];
                 for t in 0..seq_len {
                     let weight = scores[t] * inv_sum;
-                    let v_slice = &v_cache[t][kv_h_offset..kv_h_offset + head_dim];
+                    let v_head = &v_cache[t][kv_h_offset..kv_h_offset + head_dim];
                     for i in 0..head_dim {
-                        head_out[i] += weight * v_slice[i].to_f32();
+                        head_out[i] += weight * v_head[i].to_f32();
                     }
                 }
                 head_out

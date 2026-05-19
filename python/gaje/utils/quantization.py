@@ -29,7 +29,7 @@ def unpermute_to_interleaved(w, n_head, head_dim):
                 w_new[h * head_dim + 2 * i + 1] = w[h * head_dim + head_dim // 2 + i]
     return w_new
 
-def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
+def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False, rope_style="split"):
     """
     De-cuantiza un tensor Q8_0 de GGUF utilizando el kernel optimizado en Rust.
     """
@@ -40,7 +40,8 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False):
     flat_weights = dna_semantic_compression.dequantize_q8_0_native(data, out_features, in_features)
     w = np.array(flat_weights, dtype=np.float32).reshape(out_features, in_features)
     
-    # Para RoPE Interleaved en Rust, necesitamos des-permutar de Split a Interleaved
-    if is_q_or_k and n_head is not None and head_dim is not None:
+    # Para RoPE Interleaved en Rust, necesitamos des-permutar de Split a Interleaved.
+    # Pero si ya estamos en Split y el motor soporta Split, lo dejamos así.
+    if is_q_or_k and n_head is not None and head_dim is not None and rope_style != "split":
         return unpermute_to_interleaved(w, n_head, head_dim)
     return w
