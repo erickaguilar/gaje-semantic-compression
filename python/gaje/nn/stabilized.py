@@ -36,11 +36,13 @@ class GenomicLayer:
         n_head=None,
         head_dim=None,
         config=None,
+        custom_base_c=None,
     ):
         self.name = name
         self.block_size = block_size
         self.balancer = balancer
         self.config = config
+        self.custom_base_c = custom_base_c
         is_q_or_k = "attn_q" in name or "attn_k" in name
 
         if hasattr(weights_f32_or_tensor, "tensor_type"):
@@ -84,7 +86,10 @@ class GenomicLayer:
                         centroids,
                         anchors,
                     ) = dna_semantic_compression.genomize_f16_native(
-                        tensor.data.tobytes(), block_size, anchor_threshold
+                        tensor.data.tobytes(),
+                        block_size,
+                        anchor_threshold,
+                        custom_base_c,
                     )
                     self.dna_database = bytes(dna) if isinstance(dna, list) else dna
                     self.dna_centroids = centroids
@@ -113,12 +118,16 @@ class GenomicLayer:
 
                         w_matrix = unpermute_to_interleaved(w_matrix, n_head, head_dim)
 
-                    self._init_from_f32(w_matrix, block_size, anchor_threshold)
+                    self._init_from_f32(
+                        w_matrix, block_size, anchor_threshold, custom_base_c
+                    )
             else:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k)
                 self.out_features, self.in_features = weights_f32.shape
-                self._init_from_f32(weights_f32, block_size, anchor_threshold)
+                self._init_from_f32(
+                    weights_f32, block_size, anchor_threshold, custom_base_c
+                )
         else:
             weights_f32 = weights_f32_or_tensor
             self.out_features, self.in_features = weights_f32.shape
@@ -132,7 +141,9 @@ class GenomicLayer:
 
                 weights_f32 = unpermute_to_interleaved(weights_f32, n_head, head_dim)
 
-            self._init_from_f32(weights_f32, block_size, anchor_threshold)
+            self._init_from_f32(
+                weights_f32, block_size, anchor_threshold, custom_base_c
+            )
 
         # Manejo de Bias (Crucial para Qwen2)
         self.bias = []
@@ -171,7 +182,9 @@ class GenomicLayer:
             bias=self.bias,
         )
 
-    def _init_from_f32(self, weights_f32, block_size, anchor_threshold):
+    def _init_from_f32(
+        self, weights_f32, block_size, anchor_threshold, custom_base_c=None
+    ):
         # Para evitar picos de memoria masivos (copias de matrices f32), procesamos por bloques
         # si la matriz es muy grande (> 100MB)
         matrix_size_mb = (weights_f32.nbytes) / (1024 * 1024)
@@ -190,7 +203,7 @@ class GenomicLayer:
                 w_chunk = weights_f32[i:end].copy()
 
                 ret = dna_semantic_compression.genomize_f32_native(
-                    w_chunk.tobytes(), block_size, anchor_threshold
+                    w_chunk.tobytes(), block_size, anchor_threshold, custom_base_c
                 )
                 d_db, d_c, a_bin = ret
                 dna_db_list.append(d_db)
@@ -209,7 +222,7 @@ class GenomicLayer:
         else:
             # Procedimiento estándar para capas pequeñas
             dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
-                weights_f32.tobytes(), block_size, anchor_threshold
+                weights_f32.tobytes(), block_size, anchor_threshold, custom_base_c
             )
             self.dna_database = dna_db
             self.dna_centroids = dna_centroids
@@ -377,11 +390,17 @@ class GenomicTransformerBlock:
         rope_base,
         eps,
         anchor_threshold=0.1,
+        ffn_anchor_threshold=0.02,
         config=None,
+        custom_centroids=None,
     ):
         self.config = config
         p = f"blk.{idx}."
         attn_norm_data = loader.get(p + "attn_norm.weight").data.astype(np.float32)
+
+        # Resolve custom centroids for this block
+        layer_c = custom_centroids or {}
+
         self.attn_layer = GenomicAttentionLayer(
             loader,
             p,
@@ -393,29 +412,42 @@ class GenomicTransformerBlock:
             eps=eps,
             config=config,
         )
+        # Update attn_q with custom centroids if available
+        if p + "attn_q.weight" in layer_c:
+            self.attn_layer.q_gen = GenomicLayer(
+                p + "attn_q",
+                loader.get(p + "attn_q.weight"),
+                anchor_threshold=anchor_threshold,
+                config=config,
+                custom_base_c=layer_c[p + "attn_q.weight"],
+            )
+
         g, u = loader.get(p + "ffn_gate.weight"), loader.get(p + "ffn_up.weight")
         self.gate_gen, self.up_gen = (
             GenomicLayer(
                 p + "gate",
                 g,
                 balancer=None,
-                anchor_threshold=anchor_threshold,
+                anchor_threshold=ffn_anchor_threshold,
                 config=config,
+                custom_base_c=layer_c.get(p + "ffn_gate.weight"),
             ),
             GenomicLayer(
                 p + "up",
                 u,
                 balancer=None,
-                anchor_threshold=anchor_threshold,
+                anchor_threshold=ffn_anchor_threshold,
                 config=config,
+                custom_base_c=layer_c.get(p + "ffn_up.weight"),
             ),
         )
         self.w_down = GenomicLayer(
             p + "ffn_down",
             loader.get(p + "ffn_down.weight"),
             balancer=None,
-            anchor_threshold=anchor_threshold,
+            anchor_threshold=ffn_anchor_threshold,
             config=config,
+            custom_base_c=layer_c.get(p + "ffn_down.weight"),
         )
         self.ffn_norm = (
             loader.get(p + "ffn_norm.weight").data.astype(np.float32).tolist()
@@ -470,7 +502,13 @@ from gaje.nn.configs import get_config, detect_arch  # noqa: E402
 
 class GenomicLLM:
     def __init__(
-        self, model_path=None, num_blocks=None, config=None, n_embd=None, n_head=None
+        self,
+        model_path=None,
+        num_blocks=None,
+        config=None,
+        n_embd=None,
+        n_head=None,
+        custom_centroids=None,
     ):
         start_total = time.time()
 
@@ -536,6 +574,18 @@ class GenomicLLM:
             loader = None
             print(
                 f"🧬 Iniciando Organismo GAJE Nativo (Born-Genomic): {self.config.name}"
+            )
+
+        # Inyectar centroides desde la configuración si no se proveen manualmente
+        self.custom_centroids = custom_centroids or (
+            self.config.default_centroids
+            if hasattr(self.config, "default_centroids")
+            else {}
+        )
+
+        if self.custom_centroids:
+            print(
+                f"    [*] Aplicando calibración de fábrica ({len(self.custom_centroids)} capas)..."
             )
 
         print(f"[*] RoPE Base: {self.rope_base}")
@@ -614,7 +664,9 @@ class GenomicLLM:
                     self.rope_base,
                     self.eps,
                     anchor_threshold=0.1,
+                    ffn_anchor_threshold=0.02,
                     config=self.config,
+                    custom_centroids=custom_centroids,
                 )
             else:
                 block = self._create_random_block(i)
@@ -770,18 +822,20 @@ class GenomicLLM:
                             db_writer.write_metadata("tokenizer", f.read())
 
         def save_layer(layer, name):
-            db_writer.write_tensor(
+            db_writer.write_tensor_compressed(
                 f"{name}.dna",
                 np.frombuffer(layer.linear.database, dtype=np.uint8).tobytes(),
             )
-            db_writer.write_tensor(
+            db_writer.write_tensor_compressed(
                 f"{name}.centroids",
                 np.array(layer.linear.centroids, dtype=np.float32).tobytes(),
             )
             # Usamos el atributo guardado durante la inicialización para evitar la reconstrucción de la lista
-            db_writer.write_tensor(f"{name}.anchors", layer.anchors_f16_bytes)
+            db_writer.write_tensor_compressed(
+                f"{name}.anchors", layer.anchors_f16_bytes
+            )
             if hasattr(layer.linear, "bias") and len(layer.linear.bias) > 0:
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.bias",
                     np.array(layer.linear.bias, dtype=np.float32).tobytes(),
                 )
@@ -790,31 +844,31 @@ class GenomicLLM:
                 hasattr(layer.linear, "precision_mask")
                 and len(layer.linear.precision_mask) > 0
             ):
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.precision_mask",
                     np.frombuffer(
                         layer.linear.precision_mask, dtype=np.uint8
                     ).tobytes(),
                 )
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.epi_dna",
                     np.frombuffer(
                         layer.linear.epigenetic_database, dtype=np.uint8
                     ).tobytes(),
                 )
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.epi_centroids",
                     np.array(
                         layer.linear.epigenetic_centroids, dtype=np.float32
                     ).tobytes(),
                 )
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.tri_dna",
                     np.frombuffer(
                         layer.linear.triplet_database, dtype=np.uint8
                     ).tobytes(),
                 )
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     f"{name}.tri_centroids",
                     np.array(
                         layer.linear.triplet_centroids, dtype=np.float32
@@ -828,7 +882,7 @@ class GenomicLLM:
 
         # Save Global Output Norm
         if hasattr(self.rust_llm, "output_norm"):
-            db_writer.write_tensor(
+            db_writer.write_tensor_compressed(
                 "output_norm",
                 np.array(self.rust_llm.output_norm, dtype=np.float32).tobytes(),
             )
@@ -846,14 +900,14 @@ class GenomicLLM:
 
             # Save Block Norms
             if hasattr(block.rust_block, "ffn_norm"):
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     p + "ffn_norm",
                     np.array(block.rust_block.ffn_norm, dtype=np.float32).tobytes(),
                 )
             if hasattr(block.rust_block, "attn") and hasattr(
                 block.rust_block.attn, "rmsnorm_weight"
             ):
-                db_writer.write_tensor(
+                db_writer.write_tensor_compressed(
                     p + "attn_norm",
                     np.array(
                         block.rust_block.attn.rmsnorm_weight, dtype=np.float32

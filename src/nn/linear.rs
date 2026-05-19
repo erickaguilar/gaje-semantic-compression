@@ -34,7 +34,7 @@ pub struct GenomicLinear {
     pub bias: Vec<f32>,
     #[pyo3(get)]
     pub stride: usize,
-    
+
     // Kept to not break Python compatibility on legacy scripts
     pub epigenetic_database: Arc<Vec<u8>>,
     pub triplet_database: Arc<Vec<u8>>,
@@ -62,15 +62,13 @@ impl GenomicLinear {
         bias: Vec<f32>,
     ) -> Self {
         let stride = block_size / 4;
-        
+
         let anchors = if anchors_u8.is_empty() {
             Vec::new()
         } else {
             unsafe {
-                std::slice::from_raw_parts(
-                    anchors_u8.as_ptr() as *const f16,
-                    anchors_u8.len() / 2
-                ).to_vec()
+                std::slice::from_raw_parts(anchors_u8.as_ptr() as *const f16, anchors_u8.len() / 2)
+                    .to_vec()
             }
         };
 
@@ -84,8 +82,12 @@ impl GenomicLinear {
             for j in 0..n_blocks {
                 for k in 0..stride {
                     let mode = precision_mask[j * stride + k];
-                    if mode >= 1 { epi_cols.push((j, k)); }
-                    if mode >= 2 { tri_cols.push((j, k)); }
+                    if mode >= 1 {
+                        epi_cols.push((j, k));
+                    }
+                    if mode >= 2 {
+                        tri_cols.push((j, k));
+                    }
                 }
             }
         }
@@ -173,17 +175,26 @@ impl GenomicLinear {
     }
 
     #[getter]
-    pub fn epigenetic_database<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    pub fn epigenetic_database<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.epigenetic_database))
     }
 
     #[getter]
-    pub fn triplet_database<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    pub fn triplet_database<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.triplet_database))
     }
 
     #[getter]
-    pub fn precision_mask<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    pub fn precision_mask<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.precision_mask))
     }
 
@@ -191,7 +202,6 @@ impl GenomicLinear {
     pub fn anchors(&self) -> Vec<f32> {
         self.anchors.iter().map(|&x| x.to_f32()).collect()
     }
-
 
     pub fn forward(&self, mut input: Vec<f32>) -> PyResult<Vec<f32>> {
         if !self.rmsnorm_weight.is_empty() {
@@ -201,7 +211,7 @@ impl GenomicLinear {
         let n_blocks = self.in_features / self.block_size;
         let has_anchors = !self.anchors.is_empty();
         let has_bias = !self.bias.is_empty();
-        
+
         let has_epi = !self.epi_strands.is_empty();
         let has_tri = !self.tri_strands.is_empty();
 
@@ -238,7 +248,7 @@ impl GenomicLinear {
                         let c_offset = (i * n_blocks + j) * 4;
                         let ce = &self.epigenetic_centroids[c_offset..c_offset + 4];
                         let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                        
+
                         let byte = self.epi_strands[row_epi_offset + idx];
                         for s in 0..4 {
                             let shift = (3 - s) * 2;
@@ -264,7 +274,7 @@ impl GenomicLinear {
                         let c_offset = (i * n_blocks + j) * 4;
                         let ct = &self.triplet_centroids[c_offset..c_offset + 4];
                         let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
-                        
+
                         let byte = self.tri_strands[row_tri_offset + idx];
                         for s in 0..4 {
                             let shift = (3 - s) * 2;
@@ -285,7 +295,7 @@ impl GenomicLinear {
                 if has_bias {
                     row_sum += self.bias[i];
                 }
-                
+
                 row_sum
             })
             .collect();
@@ -320,10 +330,10 @@ impl GenomicLinear {
                 res[b * self.block_size + i] = decoded[i];
             }
         }
-        
+
         let has_epi = !self.epi_strands.is_empty();
         let has_tri = !self.tri_strands.is_empty();
-        
+
         if has_epi {
             let row_epi_offset = idx * self.epi_cols.len();
             for (col_idx, &(j, k)) in self.epi_cols.iter().enumerate() {
@@ -344,7 +354,7 @@ impl GenomicLinear {
                 }
             }
         }
-        
+
         if has_tri {
             let row_tri_offset = idx * self.tri_cols.len();
             for (col_idx, &(j, k)) in self.tri_cols.iter().enumerate() {
@@ -388,7 +398,7 @@ impl GenomicLinear {
         let n_blocks = self.in_features / self.block_size;
         let has_anchors = !self.anchors.is_empty();
 
-        // Buffer to accumulate deltas and apply them in parallel if needed, 
+        // Buffer to accumulate deltas and apply them in parallel if needed,
         // but for now we'll parallelize the row-loop directly since rows are independent.
         let out_features = self.out_features;
         let in_features = self.in_features;
@@ -407,72 +417,91 @@ impl GenomicLinear {
         let mut new_epi_centroids = self.epigenetic_centroids.clone();
         let mut new_tri_centroids = self.triplet_centroids.clone();
 
-        new_centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
-            let mut row_sum = 0.0f32;
-            let row_offset = i * n_blocks * stride;
-            
-            // Phase 1
-            let row_weights = &database[row_offset..row_offset + n_blocks * stride];
-            let row_anchors = if has_anchors {
-                &anchors[i * in_features..(i + 1) * in_features]
-            } else {
-                &[]
-            };
+        new_centroids
+            .par_chunks_mut(n_blocks * 4)
+            .enumerate()
+            .for_each(|(i, row_centroids)| {
+                let mut row_sum = 0.0f32;
+                let row_offset = i * n_blocks * stride;
 
-            row_sum += unsafe {
-                genomic_dot_product(row_weights, &input, row_centroids, stride, n_blocks, row_anchors)
-            };
-            
-            // Phase 2
-            if !epi_strands.is_empty() {
-                let mut epi_sum = 0.0f32;
-                let row_epi_offset = i * epi_cols.len();
-                for (idx, &(j, k)) in epi_cols.iter().enumerate() {
-                    let c_offset = j * 4;
-                    // Note: row_centroids is already the slice for this row
-                    let ce = &new_epi_centroids[(i * n_blocks + j) * 4..(i * n_blocks + j) * 4 + 4];
-                    let input_block = &input[j * block_size..(j + 1) * block_size];
-                    let byte = epi_strands[row_epi_offset + idx];
-                    for s in 0..4 {
-                        let shift = (3 - s) * 2;
-                        let val = match (byte >> shift) & 0b11 {
-                            0b00 => ce[0], 0b01 => ce[1], 0b11 => ce[2], 0b10 => ce[3], _ => 0.0,
-                        };
-                        epi_sum += input_block[k * 4 + s] * val;
-                    }
-                }
-                row_sum += epi_sum;
-            }
-            
-            // Phase 3 ... skipping detailed Phase 3 for brevity in this parallel attempt, 
-            // but keeping it consistent with refine_with_grads logic below.
+                // Phase 1
+                let row_weights = &database[row_offset..row_offset + n_blocks * stride];
+                let row_anchors = if has_anchors {
+                    &anchors[i * in_features..(i + 1) * in_features]
+                } else {
+                    &[]
+                };
 
-            let grad_scale = (row_sum - target[i]) * lr;
-            if grad_scale.abs() > 1e-8 {
-                // Apply update to row_centroids
-                for j in 0..n_blocks {
-                    let block_start = row_offset + j * stride;
-                    let input_block = &input[j * block_size..(j + 1) * block_size];
-                    let weights = &database[block_start..block_start + stride];
-                    let mut dims = 0;
-                    for k in 0..stride {
-                        let byte = weights[k];
+                row_sum += unsafe {
+                    genomic_dot_product(
+                        row_weights,
+                        &input,
+                        row_centroids,
+                        stride,
+                        n_blocks,
+                        row_anchors,
+                    )
+                };
+
+                // Phase 2
+                if !epi_strands.is_empty() {
+                    let mut epi_sum = 0.0f32;
+                    let row_epi_offset = i * epi_cols.len();
+                    for (idx, &(j, k)) in epi_cols.iter().enumerate() {
+                        let c_offset = j * 4;
+                        // Note: row_centroids is already the slice for this row
+                        let ce =
+                            &new_epi_centroids[(i * n_blocks + j) * 4..(i * n_blocks + j) * 4 + 4];
+                        let input_block = &input[j * block_size..(j + 1) * block_size];
+                        let byte = epi_strands[row_epi_offset + idx];
                         for s in 0..4 {
                             let shift = (3 - s) * 2;
-                            let bits = (byte >> shift) & 0b11;
-                            let c_idx = match bits {
-                                0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4,
+                            let val = match (byte >> shift) & 0b11 {
+                                0b00 => ce[0],
+                                0b01 => ce[1],
+                                0b11 => ce[2],
+                                0b10 => ce[3],
+                                _ => 0.0,
                             };
-                            if c_idx < 4 {
-                                let delta = grad_scale * input_block[dims];
-                                row_centroids[j * 4 + c_idx] -= delta;
+                            epi_sum += input_block[k * 4 + s] * val;
+                        }
+                    }
+                    row_sum += epi_sum;
+                }
+
+                // Phase 3 ... skipping detailed Phase 3 for brevity in this parallel attempt,
+                // but keeping it consistent with refine_with_grads logic below.
+
+                let grad_scale = (row_sum - target[i]) * lr;
+                if grad_scale.abs() > 1e-8 {
+                    // Apply update to row_centroids
+                    for j in 0..n_blocks {
+                        let block_start = row_offset + j * stride;
+                        let input_block = &input[j * block_size..(j + 1) * block_size];
+                        let weights = &database[block_start..block_start + stride];
+                        let mut dims = 0;
+                        for k in 0..stride {
+                            let byte = weights[k];
+                            for s in 0..4 {
+                                let shift = (3 - s) * 2;
+                                let bits = (byte >> shift) & 0b11;
+                                let c_idx = match bits {
+                                    0b00 => 0,
+                                    0b01 => 1,
+                                    0b11 => 2,
+                                    0b10 => 3,
+                                    _ => 4,
+                                };
+                                if c_idx < 4 {
+                                    let delta = grad_scale * input_block[dims];
+                                    row_centroids[j * 4 + c_idx] -= delta;
+                                }
+                                dims += 1;
                             }
-                            dims += 1;
                         }
                     }
                 }
-            }
-        });
+            });
 
         self.centroids = new_centroids;
         Ok(())
@@ -494,46 +523,50 @@ impl GenomicLinear {
         let database = &self.database;
 
         // Optimization: Parallelize updates and skip near-zero gradients
-        self.centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
-            let grad_scale = grads[i] * lr;
-            if grad_scale.abs() > 1e-8 {
-                let row_offset = i * n_blocks * stride;
-                for j in 0..n_blocks {
-                    let block_start = row_offset + j * stride;
-                    let input_block = &input[j * block_size..(j + 1) * block_size];
-                    let weights = &database[block_start..block_start + stride];
-                    let mut dims = 0;
-                    for k in 0..stride {
-                        let byte = weights[k];
-                        for s in 0..4 {
-                            let shift = (3 - s) * 2;
-                            let bits = (byte >> shift) & 0b11;
-                            let c_idx = match bits {
-                                0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4,
-                            };
-                            if c_idx < 4 {
-                                let delta = grad_scale * input_block[dims];
-                                row_centroids[j * 4 + c_idx] -= delta;
+        self.centroids
+            .par_chunks_mut(n_blocks * 4)
+            .enumerate()
+            .for_each(|(i, row_centroids)| {
+                if i >= out_features || i >= grads.len() {
+                    return;
+                }
+                let grad_scale = grads[i] * lr;
+                if grad_scale.abs() > 1e-8 {
+                    let row_offset = i * n_blocks * stride;
+                    for j in 0..n_blocks {
+                        let block_start = row_offset + j * stride;
+                        let input_block = &input[j * block_size..(j + 1) * block_size];
+                        let weights = &database[block_start..block_start + stride];
+                        let mut dims = 0;
+                        for k in 0..stride {
+                            let byte = weights[k];
+                            for s in 0..4 {
+                                let shift = (3 - s) * 2;
+                                let bits = (byte >> shift) & 0b11;
+                                let c_idx = match bits {
+                                    0b00 => 0,
+                                    0b01 => 1,
+                                    0b11 => 2,
+                                    0b10 => 3,
+                                    _ => 4,
+                                };
+                                if c_idx < 4 {
+                                    let delta = grad_scale * input_block[dims];
+                                    row_centroids[j * 4 + c_idx] -= delta;
+                                }
+                                dims += 1;
                             }
-                            dims += 1;
                         }
                     }
                 }
-            }
-        });
+            });
 
         Ok(())
     }
 }
 
 impl GenomicLinear {
-    pub fn apply_grad_to_row(
-        &mut self,
-        i: usize,
-        input: &[f32],
-        grad_scale: f32,
-        n_blocks: usize,
-    ) {
+    pub fn apply_grad_to_row(&mut self, i: usize, input: &[f32], grad_scale: f32, n_blocks: usize) {
         self.apply_grad_to_row_with_delta(i, input, grad_scale, n_blocks, &mut None)
     }
 
@@ -580,13 +613,11 @@ impl GenomicLinear {
 
                         if mode >= 1 && !self.epi_strands.is_empty() {
                             let current_e = self.epigenetic_centroids[c_offset + c_idx];
-                            self.epigenetic_centroids[c_offset + c_idx] =
-                                current_e - delta * 0.5;
+                            self.epigenetic_centroids[c_offset + c_idx] = current_e - delta * 0.5;
                         }
                         if mode >= 2 && !self.tri_strands.is_empty() {
                             let current_t = self.triplet_centroids[c_offset + c_idx];
-                            self.triplet_centroids[c_offset + c_idx] =
-                                current_t - delta * 0.25;
+                            self.triplet_centroids[c_offset + c_idx] = current_t - delta * 0.25;
                         }
                     }
                     dims += 1;
@@ -597,11 +628,13 @@ impl GenomicLinear {
 
     pub fn apply_mutation(&mut self, delta_centroids: Vec<f32>, undo: bool) -> PyResult<()> {
         if delta_centroids.len() != self.centroids.len() {
-            return Err(pyo3::exceptions::PyValueError::new_err("Mutation delta size mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Mutation delta size mismatch",
+            ));
         }
         for (i, d) in self.centroids.iter_mut().zip(delta_centroids) {
             if undo {
-                *i += d; 
+                *i += d;
             } else {
                 *i -= d;
             }
@@ -623,7 +656,9 @@ impl GenomicLinear {
 
     pub fn undo_delta(&mut self, delta: Vec<f32>) -> PyResult<()> {
         if delta.len() != self.centroids.len() {
-            return Err(pyo3::exceptions::PyValueError::new_err("Delta size mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Delta size mismatch",
+            ));
         }
         for (c, d) in self.centroids.iter_mut().zip(delta) {
             *c -= d;
@@ -633,7 +668,9 @@ impl GenomicLinear {
 
     pub fn apply_weighted_mutation(&mut self, delta: Vec<f32>, weight: f32) -> PyResult<()> {
         if delta.len() != self.centroids.len() {
-            return Err(pyo3::exceptions::PyValueError::new_err("Delta size mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Delta size mismatch",
+            ));
         }
         for (c, d) in self.centroids.iter_mut().zip(delta) {
             *c += d * weight;

@@ -1,9 +1,9 @@
-use redb::{Database, TableDefinition, ReadableTable};
 use pyo3::prelude::*;
+use redb::{Database, ReadableTable, TableDefinition};
 use serde::{Deserialize, Serialize};
-use std::sync::{Arc, Mutex, Weak};
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex, Weak};
 
 pub const TENSOR_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("tensors");
 pub const METADATA_TABLE: TableDefinition<&str, &str> = TableDefinition::new("metadata");
@@ -66,7 +66,10 @@ pub(crate) fn get_or_create_db(path: &str, create: bool) -> Result<Arc<Database>
         }
     }
 
-    Err(format!("Failed to open database after retries: {}", last_err))
+    Err(format!(
+        "Failed to open database after retries: {}",
+        last_err
+    ))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -92,35 +95,66 @@ pub struct GajeBatchWriter {
 impl GajeBatchWriter {
     pub fn commit(&mut self) -> PyResult<()> {
         if let Some(txn) = self.txn.take() {
-            txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            txn.commit()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
         Ok(())
     }
 
     pub fn abort(&mut self) -> PyResult<()> {
         if let Some(txn) = self.txn.take() {
-            txn.abort().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            txn.abort()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
         Ok(())
     }
 
     pub fn write_tensor(&mut self, key: &str, data: &[u8]) -> PyResult<()> {
         if let Some(ref txn) = self.txn {
-            let mut table = txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table.insert(key, data).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let mut table = txn
+                .open_table(TENSOR_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, data)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             Ok(())
         } else {
-            Err(pyo3::exceptions::PyRuntimeError::new_err("Transaction already closed"))
+            Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Transaction already closed",
+            ))
+        }
+    }
+
+    pub fn write_tensor_compressed(&mut self, key: &str, data: &[u8]) -> PyResult<()> {
+        let compressed_data = lz4_flex::compress_prepend_size(data);
+        if let Some(ref txn) = self.txn {
+            let mut table = txn
+                .open_table(TENSOR_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, compressed_data.as_slice())
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            Ok(())
+        } else {
+            Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Transaction already closed",
+            ))
         }
     }
 
     pub fn write_metadata(&mut self, key: &str, json_str: &str) -> PyResult<()> {
         if let Some(ref txn) = self.txn {
-            let mut table = txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table.insert(key, json_str).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let mut table = txn
+                .open_table(METADATA_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, json_str)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             Ok(())
         } else {
-            Err(pyo3::exceptions::PyRuntimeError::new_err("Transaction already closed"))
+            Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Transaction already closed",
+            ))
         }
     }
 }
@@ -129,19 +163,33 @@ impl GajeBatchWriter {
 impl GajeDatabaseWriter {
     #[new]
     pub fn new(path: &str) -> PyResult<Self> {
-        let db_arc = get_or_create_db(path, true).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
+        let db_arc =
+            get_or_create_db(path, true).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
         {
-            let write_txn = db_arc.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            write_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            write_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            write_txn.open_table(MUTATIONS_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let write_txn = db_arc
+                .begin_write()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            write_txn
+                .open_table(TENSOR_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            write_txn
+                .open_table(METADATA_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            write_txn
+                .open_table(MUTATIONS_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            write_txn
+                .commit()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
         Ok(Self { db: db_arc })
     }
 
     pub fn begin_batch(&self) -> PyResult<GajeBatchWriter> {
-        let txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let txn = self
+            .db
+            .begin_write()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(GajeBatchWriter {
             txn: Some(txn),
             db: Arc::clone(&self.db),
@@ -154,43 +202,93 @@ impl GajeDatabaseWriter {
         self.write_metadata("last_checkpoint", &chrono::Utc::now().to_rfc3339())
     }
 
-
     pub fn compact(&self) -> PyResult<bool> {
         // Redb needs exclusive access for compaction.
         if let Some(db_mut) = Arc::get_mut(&mut Arc::clone(&self.db)) {
-             db_mut.compact().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+            db_mut
+                .compact()
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
         } else {
-            Err(pyo3::exceptions::PyRuntimeError::new_err("Cannot compact database: multiple references exist"))
+            Err(pyo3::exceptions::PyRuntimeError::new_err(
+                "Cannot compact database: multiple references exist",
+            ))
         }
     }
 
     pub fn write_mutation(&self, timestamp: u64, data: &[u8]) -> PyResult<()> {
-        let write_txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {
-            let mut table = write_txn.open_table(MUTATIONS_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table.insert(timestamp, data).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let mut table = write_txn
+                .open_table(MUTATIONS_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(timestamp, data)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(())
     }
 
     pub fn write_tensor(&self, key: &str, data: &[u8]) -> PyResult<()> {
-        let write_txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {
-            let mut table = write_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table.insert(key, data).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let mut table = write_txn
+                .open_table(TENSOR_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, data)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn write_tensor_compressed(&self, key: &str, data: &[u8]) -> PyResult<()> {
+        let compressed_data = lz4_flex::compress_prepend_size(data);
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        {
+            let mut table = write_txn
+                .open_table(TENSOR_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, compressed_data.as_slice())
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+        write_txn
+            .commit()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(())
     }
 
     pub fn write_metadata(&self, key: &str, json_str: &str) -> PyResult<()> {
-        let write_txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         {
-            let mut table = write_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table.insert(key, json_str).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let mut table = write_txn
+                .open_table(METADATA_TABLE)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            table
+                .insert(key, json_str)
+                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(())
     }
 }
@@ -210,14 +308,23 @@ impl GajeDatabaseReader {
 impl GajeDatabaseReader {
     #[new]
     pub fn new(path: &str) -> PyResult<Self> {
-        let db_arc = get_or_create_db(path, false).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
+        let db_arc =
+            get_or_create_db(path, false).map_err(|e| pyo3::exceptions::PyIOError::new_err(e))?;
         Ok(Self { db: db_arc })
     }
 
     pub fn read_tensor(&self, key: &str) -> PyResult<Vec<u8>> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyKeyError::new_err(e.to_string()))?;
-        if let Some(val) = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))? {
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn
+            .open_table(TENSOR_TABLE)
+            .map_err(|e| pyo3::exceptions::PyKeyError::new_err(e.to_string()))?;
+        if let Some(val) = table
+            .get(key)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+        {
             let data = val.value();
             // Intentar descomprimir si parece LZ4 (primeros 4 bytes son el tamaño original)
             // lz4_flex::decompress_size_prepended retornará error si no es un formato LZ4 válido con prefijo de tamaño
@@ -226,12 +333,18 @@ impl GajeDatabaseReader {
                 Err(_) => Ok(data.to_vec()),
             }
         } else {
-            Err(pyo3::exceptions::PyKeyError::new_err(format!("Key not found: {}", key)))
+            Err(pyo3::exceptions::PyKeyError::new_err(format!(
+                "Key not found: {}",
+                key
+            )))
         }
     }
-    
+
     pub fn has_tensor(&self, key: &str) -> PyResult<bool> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         if let Ok(table) = read_txn.open_table(TENSOR_TABLE) {
             if let Ok(Some(_)) = table.get(key) {
                 return Ok(true);
@@ -241,7 +354,10 @@ impl GajeDatabaseReader {
     }
 
     pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         if let Ok(table) = read_txn.open_table(METADATA_TABLE) {
             if let Ok(Some(_)) = table.get(key) {
                 return Ok(true);
@@ -251,23 +367,39 @@ impl GajeDatabaseReader {
     }
 
     pub fn read_metadata(&self, key: &str) -> PyResult<String> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyKeyError::new_err(e.to_string()))?;
-        if let Some(val) = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))? {
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn
+            .open_table(METADATA_TABLE)
+            .map_err(|e| pyo3::exceptions::PyKeyError::new_err(e.to_string()))?;
+        if let Some(val) = table
+            .get(key)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+        {
             Ok(val.value().to_string())
         } else {
-            Err(pyo3::exceptions::PyKeyError::new_err(format!("Key not found: {}", key)))
+            Err(pyo3::exceptions::PyKeyError::new_err(format!(
+                "Key not found: {}",
+                key
+            )))
         }
     }
 
     pub fn list_mutations(&self) -> PyResult<Vec<(u64, Vec<u8>)>> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         let table = match read_txn.open_table(MUTATIONS_TABLE) {
             Ok(t) => t,
             Err(_) => return Ok(Vec::new()), // Table doesn't exist yet, so no mutations
         };
         let mut results = Vec::new();
-        let iter = table.iter().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let iter = table
+            .iter()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         for res in iter {
             let (k, v) = res.map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             results.push((k.value(), v.value().to_vec()));

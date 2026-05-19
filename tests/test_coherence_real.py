@@ -4,16 +4,24 @@ import os
 from gaje.nn.stabilized import GenomicLLM
 
 
-def test_coherence():
-    model_path = "models/SmolLM2-135M-Instruct-Q8_0.gguf"
+def test_coherence(model_arg=None):
+    model_path = model_arg or "models/SmolLM2-135M-Instruct-Q8_0.gguf"
     if not os.path.exists(model_path):
-        # Intentar ruta alternativa
-        model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
-        if not os.path.exists(model_path):
+        # Intentar rutas alternativas
+        possible = [
+            "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf",
+            "data/models/qwen2-0_5b-instruct-fp16.gguf",
+            "data/models/smollm2-135m-f16.gguf",
+        ]
+        for p in possible:
+            if os.path.exists(p):
+                model_path = p
+                break
+        else:
             print("❌ Model not found. Skipping test.")
             return
 
-    print("🧬 Starting Real Coherence Test (Native DGI Flow)")
+    print(f"🧬 Starting Real Coherence Test (Model: {model_path})")
     print("-" * 50)
 
     # Using all blocks for full verification
@@ -41,8 +49,10 @@ def test_coherence():
     top_5_ids = np.argsort(logits)[-5:][::-1]
     print("[*] Top 5 candidates:")
     for i, tid in enumerate(top_5_ids):
-        prob = np.exp(logits[tid] - np.max(logits))
-        prob /= np.sum(np.exp(logits - np.max(logits)))
+        # Evitar overflow/underflow en softmax manual
+        max_logit = np.max(logits)
+        exp_logits = np.exp(logits - max_logit)
+        prob = exp_logits[tid] / np.sum(exp_logits)
         print(
             f"  {i+1}. '{llm.tokenizer.decode([tid])}' (ID: {tid}) - Prob: {prob:.4f}"
         )
@@ -54,4 +64,9 @@ def test_coherence():
 
 
 if __name__ == "__main__":
-    test_coherence()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default=None)
+    args = parser.parse_args()
+    test_coherence(args.model)
