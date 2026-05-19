@@ -263,11 +263,15 @@ class GenomicLLM:
             self.n_blocks = int(self.reader.fields[f"{arch_name}.block_count"].parts[-1][0]) if num_blocks is None else num_blocks
             self.eps = float(self.reader.fields[f"{arch_name}.attention.layer_norm_rms_epsilon"].parts[-1][0])
             
-            rope_base_field = f"{arch_name}.rope.freq_base"
-            if rope_base_field in self.reader.fields:
-                self.rope_base = float(self.reader.fields[rope_base_field].parts[-1][0])
+            # Forzado manual para SmolLM/Llama si se detecta desviación
+            if arch_name == "llama":
+                self.rope_base = 10000.0
             else:
-                self.rope_base = self.config.rope_base
+                rope_base_field = f"{arch_name}.rope.freq_base"
+                if rope_base_field in self.reader.fields:
+                    self.rope_base = float(self.reader.fields[rope_base_field].parts[-1][0])
+                else:
+                    self.rope_base = self.config.rope_base
                 
             if self.config.apply_smollm_rope_patch and self.rope_base > 1000000.0:
                 print(f"[!] Aviso: Forzando RoPE Base a 10000.0 para {os.path.basename(model_path)}")
