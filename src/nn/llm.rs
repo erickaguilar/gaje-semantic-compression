@@ -1,9 +1,10 @@
-use crate::kernels::rms_norm_neon;
+use crate::compute::kernels::rms_norm;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
 use pyo3::prelude::*;
 
 #[pyclass]
+#[derive(Clone)]
 pub struct RustGenomicLLM {
     #[pyo3(get)]
     pub embeddings: GenomicLinear,
@@ -64,12 +65,55 @@ impl RustGenomicLLM {
         }
 
         // 3. Final RMSNorm
-        let h_norm = unsafe { rms_norm_neon(&h, &self.output_norm, self.eps) };
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
 
         // 4. LM Head Projection
         let logits = self.lm_head.forward(h_norm)?;
 
         Ok(logits)
+    }
+
+    pub fn train_step(&mut self, token_id: usize, target_token: usize, lr: f32) -> PyResult<f32> {
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
+
+        if token_id >= self.embeddings.out_features {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!("Token id {} out of bounds", token_id)));
+        }
+
+        let mut h = self.embeddings.get_row(token_id)?;
+        for block in &mut self.blocks {
+            h = block.forward(h, pos)?;
+        }
+
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
+        let logits = self.lm_head.forward(h_norm.clone())?;
+
+        let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let mut exps = vec![0.0f32; logits.len()];
+        let mut sum_exp = 0.0f32;
+        for i in 0..logits.len() {
+            let e = (logits[i] - max_l).exp();
+            exps[i] = e;
+            sum_exp += e;
+        }
+
+        let mut probs = vec![0.0f32; logits.len()];
+        for i in 0..logits.len() {
+            probs[i] = exps[i] / sum_exp;
+        }
+
+        let loss = -(probs[target_token] + 1e-12).ln();
+
+        let mut d_logits = probs;
+        d_logits[target_token] -= 1.0;
+
+        self.lm_head.refine_with_grads(h_norm, d_logits, lr)?;
+
+        Ok(loss)
     }
 
     pub fn embeddings_forward(&self, token_id: usize) -> PyResult<Vec<f32>> {
@@ -265,9 +309,69 @@ impl RustGenomicLLM {
         )))
     }
 
+    pub fn train_on_sequence(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> {
+        if tokens.len() < 2 { return Ok(0.0); }
+        let mut total_loss = 0.0;
+        self.clear_cache()?;
+
+        for i in 0..tokens.len() - 1 {
+            let token_id = tokens[i];
+            let target_token = tokens[i+1];
+            
+            // Reutilizamos la lógica de train_step pero sin limpiar caché para mantener contexto
+            let pos = if self.blocks.is_empty() { 0 } else { self.blocks[0].attn.k_cache_len() };
+            let mut h = self.embeddings.get_row(token_id)?;
+            for block in &mut self.blocks {
+                h = block.forward(h, pos)?;
+            }
+            let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
+            let logits = self.lm_head.forward(h_norm.clone())?;
+
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_exp = 0.0f32;
+            let mut exps = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                let e = (logits[j] - max_l).exp();
+                exps[j] = e;
+                sum_exp += e;
+            }
+
+            let prob_target = (exps[target_token] / sum_exp).max(1e-12);
+            total_loss -= prob_target.ln();
+
+            let mut d_logits = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                d_logits[j] = exps[j] / sum_exp;
+            }
+            d_logits[target_token] -= 1.0;
+
+            self.lm_head.refine_with_grads(h_norm, d_logits, lr)?;
+        }
+
+        Ok(total_loss / (tokens.len() - 1) as f32)
+    }
+
     pub fn clear_cache(&mut self) -> PyResult<()> {
         for block in &mut self.blocks {
             block.clear_cache()?;
+        }
+        Ok(())
+    }
+
+    pub fn mutate_all_homeostasis(&mut self, scale: f32) -> PyResult<Vec<f32>> {
+        let mut deltas = Vec::with_capacity(self.blocks.len());
+        for block in &mut self.blocks {
+            deltas.push(block.mutate_homeostasis(scale)?);
+        }
+        Ok(deltas)
+    }
+
+    pub fn undo_homeostasis_mutation(&mut self, deltas: Vec<f32>) -> PyResult<()> {
+        if deltas.len() != self.blocks.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("Homeostasis delta size mismatch"));
+        }
+        for (block, d) in self.blocks.iter_mut().zip(deltas) {
+            block.h_scale -= d;
         }
         Ok(())
     }

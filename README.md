@@ -1,12 +1,12 @@
 # 🧬 Protocolo GAJE: Inteligencia Genómica Evolutiva
 
-[![Version](https://img.shields.io/badge/version-0.6.5-purple)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.0-purple)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) con solo **2 bits por peso**, utilizando un alfabeto de 4 bases nitrogenadas digitales (A, C, G, T).
 
-## 🚀 Breakthrough v0.6.5: Crianza por Integración de Caminos
-GAJE v0.6.5 marca el fin de la era de la compresión pasiva y el inicio de la **Inteligencia Evolutiva Local**. Hemos superado la barrera de fidelidad de los 2 bits mediante la fusión de múltiples historias evolutivas (Path Integrals).
+## 🚀 Breakthrough v0.7.0: Soberanía Nativa
+GAJE v0.7.0 marca la transición hacia la independencia total del ecosistema Python, permitiendo la ejecución de LLMs genómicos directamente en Rust con máxima eficiencia.
 
 | Característica | Impacto | Estado |
 | :--- | :---: | :--- |
@@ -21,7 +21,7 @@ GAJE v0.6.5 marca el fin de la era de la compresión pasiva y el inicio de la **
 - **Monte Carlo Optimization**: Motor de mutación y selección natural que permite entrenar modelos en espacios de pesos discretos donde el descenso de gradiente tradicional (Backpropagation) falla.
 
 ## 📈 Benchmarks de Nueva Generación (SmolLM2-135M)
-| Métrica | Original (Float16) | GAJE v0.6.5 (2-bit) | Ganancia |
+| Métrica | Original (Float16) | GAJE v0.7.0 (2-bit) | Ganancia |
 | :--- | :--- | :--- | :--- |
 | **Tamaño en Disco** | ~270 MB | **~37 MB** | **7.3x Compresión** |
 | **Prob. Token Promedio**| > 99% | **~84% (Criado)** | **Coherencia Real** |

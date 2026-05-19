@@ -1,10 +1,12 @@
-use _impl::loader::NativeLoader;
-use _impl::nn::RustGenomicLLM;
-use _impl::kernels;
+use _impl::io::loader::NativeLoader;
+use _impl::nn::llm::RustGenomicLLM;
+use _impl::compute::kernels;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
 use std::io::{self, Write};
+use rand::distributions::{Distribution, WeightedIndex};
+use rayon::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe {
@@ -19,19 +21,35 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut rollback_target = None;
     let mut i = 1;
     let mut evolve_target = None;
+    let mut train_target = None;
     let mut generations = 2000;
+    let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut save_path = None;
+    let mut init_path = None;
+    let mut tokenize_text = None;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i+1].clone();
+            i += 2;
+        } else if args[i] == "--init" && i + 1 < args.len() {
+            init_path = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--tokenize" && i + 1 < args.len() {
+            tokenize_text = Some(args[i+1].clone());
             i += 2;
         } else if args[i] == "--prompt" && i + 1 < args.len() {
             prompt_arg = Some(args[i+1].clone());
             i += 2;
         } else if args[i] == "--evolve" && i + 1 < args.len() {
             evolve_target = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--train" && i + 1 < args.len() {
+            train_target = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--epochs" && i + 1 < args.len() {
+            train_epochs = args[i+1].parse().unwrap_or(10);
             i += 2;
         } else if args[i] == "--gens" && i + 1 < args.len() {
             generations = args[i+1].parse().unwrap_or(2000);
@@ -55,17 +73,46 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--gens 2000] [--save output.gaje]");
+    if let Some(path) = init_path {
+        println!("[*] Creando nuevo organismo genómico 100% nativo en: {}", path);
+        let config = _impl::io::loader::ModelConfig {
+            config: _impl::io::loader::ArchConfig {
+                name: "GAJE-Pure-Organism".to_string(),
+                tokenizer_id: "tokenizer".to_string(),
+                rope_base: 1000000.0,
+                ffn_act: "swiglu".to_string(),
+                use_genomic_norm: false,
+            },
+            n_embd: 768,
+            n_head: 12,
+            n_head_kv: 12,
+            n_blocks: 6,
+            vocab_size: Some(49152),
+            eps: 1e-6,
+        };
+        let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), 49152)?;
+        
+        if Path::new("tokenizer.json").exists() {
+            let tok = tokenizers::Tokenizer::from_file("tokenizer.json").map_err(|e| e.to_string())?;
+            _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            println!("[+] Tokenizador 'tokenizer.json' integrado en el organismo.");
+        }
+
+        println!("[+] Nuevo organismo inicializado exitosamente.");
         return Ok(());
     }
 
-    println!("🧬 GAJE Native Runtime (v0.6.5)");
+    if model_path.is_empty() {
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje]");
+        return Ok(());
+    }
+
+    println!("🧬 GAJE Native Runtime (v0.7.0)");
     
     let mut gaje_loader_opt = None;
     
     let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
-        let mut loader = _impl::loader::GGUFLoader::new(&model_path)?;
+        let mut loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
         let config = loader.infer_config()?;
         println!("[+] GGUF Config Inferred: {} layers, {} dim", config.n_blocks, config.n_embd);
         
@@ -83,17 +130,27 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
         let config = loader.load_config()?;
         let model = loader.load_llm()?;
-        let l = NativeLoader::new(&model_path)?;
-        gaje_loader_opt = Some(l);
+        gaje_loader_opt = Some(loader);
         (model, tokenizer, config)
     };
 
     println!("[*] Model & Tokenizer loaded.");
 
+    if let Some(text) = tokenize_text {
+        println!("[*] Tokenizando texto de forma nativa: \"{}\"", text);
+        let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
+        let ids = encoding.get_ids();
+        println!("    IDs de Tokens: {:?}", ids);
+        println!("    Fragmentación:");
+        for &id in ids {
+            let piece = tokenizer.decode(&[id], true).map_err(|e| e.to_string())?;
+            println!("      [{:>6}] -> \"{}\"", id, piece);
+        }
+        return Ok(());
+    }
+
     if let Some(ref target_text) = evolve_target {
         println!("[*] Iniciando Crianza por Integración de Caminos (Poblacional) para: '{}'", target_text);
-        let _start_evolve = Instant::now();
-
         let encoding = tokenizer.encode(target_text.clone(), false).map_err(|e| e.to_string())?;
         let tokens = encoding.get_ids();
 
@@ -138,16 +195,23 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         for gen in 1..=generations {
             let layer_name = layers.choose(&mut rng).unwrap();
             let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
-            let mut paths = Vec::new();
             
+            let mut population = Vec::new();
             for _ in 0..population_size {
-                let delta = model.mutate_layer(layer_name, current_scale).unwrap();
-                let fitness = evaluate(&mut model, tokens);
-                if fitness > best_fitness {
-                    paths.push((delta.clone(), fitness));
-                }
-                model.undo_layer_mutation(layer_name, delta).unwrap();
+                population.push(model.clone());
             }
+
+            let results: Vec<Option<(Vec<f32>, f32)>> = population.into_par_iter().map(|mut p_model| {
+                if let Ok(delta) = p_model.mutate_layer(layer_name, current_scale) {
+                    let fitness = evaluate(&mut p_model, tokens);
+                    if fitness > best_fitness {
+                        return Some((delta, fitness));
+                    }
+                }
+                None
+            }).collect();
+
+            let mut paths: Vec<(Vec<f32>, f32)> = results.into_iter().flatten().collect();
             
             if !paths.is_empty() {
                 paths.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -167,24 +231,41 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 break;
             }
         }
-        println!("[+] Crianza completada. Log-Fitness Final: {:.4}", best_fitness);
+    }
+
+    if let Some(ref dataset_path) = train_target {
+        println!("[*] Iniciando Auto-Grad Nativo con texto: {}", dataset_path);
+        let start_train = Instant::now();
+        let text = std::fs::read_to_string(&dataset_path).unwrap_or_else(|_| dataset_path.clone());
+        let encoding = tokenizer.encode(text, false).map_err(|e| e.to_string())?;
+        let tokens = encoding.get_ids();
+
+        if tokens.len() < 2 {
+            return Err("Dataset too short for training".into());
+        }
+
+        let mut current_lr = scale;
+        let token_ids: Vec<usize> = tokens.iter().map(|&id| id as usize).collect();
+        for epoch in 1..=train_epochs {
+            let loss = model.train_on_sequence(token_ids.clone(), current_lr)?;
+            println!("[Epoch {}] Loss Nativa (Seq): {:.4} (LR: {:.4})", epoch, loss, current_lr);
+            current_lr *= 0.9;
+        }
+        println!("[+] Entrenamiento completado en {:?}", start_train.elapsed());
     }
 
     if let Some(ref path) = save_path {
-        println!("[*] Guardando organismo genómico en: {}", path);
-        let start_save = Instant::now();
-        _impl::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?;
-        println!("[+] Modelo guardado exitosamente en {:?}", start_save.elapsed());
+        _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?;
+        println!("[+] Modelo guardado exitosamente.");
     }
 
     if let Some(target) = rollback_target {
         if let Some(loader) = gaje_loader_opt {
-            println!("[*] Initiating rollback to timestamp: {}", target);
             let mutations = loader.list_mutations().map_err(|e| e.to_string())?;
             let mut count = 0;
             for (ts, data) in mutations.into_iter().rev() {
                 if ts > target {
-                    let mutation: _impl::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
+                    let mutation: _impl::core::db::Mutation = bincode::deserialize(&data).map_err(|e| e.to_string())?;
                     model.apply_mutation(&mutation.layer_name, mutation.delta_centroids, true).map_err(|e| e.to_string())?;
                     count += 1;
                 }
@@ -195,7 +276,13 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(prompt) = prompt_arg {
         generate(&mut model, &tokenizer, &prompt, 50)?;
-    } else if evolve_target.is_none() {
+    } else if evolve_target.is_none() && train_target.is_none() {
+        use std::io::IsTerminal;
+        if !io::stdin().is_terminal() {
+            println!("[!] No-TTY detected and no prompt provided. Exiting.");
+            return Ok(());
+        }
+
         loop {
             print!("\n👤 User: ");
             io::stdout().flush()?;
@@ -214,8 +301,65 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
+fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> usize {
+    if temperature == 0.0 {
+        return logits.iter().enumerate().filter(|(_, &a)| !a.is_nan())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(i, _)| i).unwrap_or(0);
+    }
+
+    let mut indexed_logits: Vec<(usize, f32)> = logits.iter().enumerate()
+        .filter(|(_, &l)| !l.is_nan())
+        .map(|(i, &l)| (i, l / temperature))
+        .collect();
+
+    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    if top_k > 0 && top_k < indexed_logits.len() {
+        indexed_logits.truncate(top_k);
+    }
+
+    let max_logit = indexed_logits.first().map(|&(_, l)| l).unwrap_or(0.0);
+    let mut probs: Vec<(usize, f32)> = indexed_logits.iter()
+        .map(|&(i, l)| (i, (l - max_logit).exp()))
+        .collect();
+
+    let sum_probs: f32 = probs.iter().map(|&(_, p)| p).sum();
+    for item in &mut probs {
+        item.1 /= sum_probs;
+    }
+
+    if top_p < 1.0 {
+        let mut cumulative = 0.0;
+        let mut cutoff = probs.len();
+        for (idx, &(_, p)) in probs.iter().enumerate() {
+            cumulative += p;
+            if cumulative > top_p {
+                cutoff = idx + 1;
+                break;
+            }
+        }
+        probs.truncate(cutoff);
+    }
+
+    let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
+    if let Ok(dist) = WeightedIndex::new(&weights) {
+        let mut rng = rand::thread_rng();
+        probs[dist.sample(&mut rng)].0
+    } else {
+        probs[0].0
+    }
+}
+
 fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let encoding = tokenizer.encode(prompt, false).map_err(|e| e.to_string())?;
+    // Implementación básica de ChatML si detectamos un prompt que no sea crudo
+    let formatted_prompt = if !prompt.contains("<|im_start|>") && prompt.len() < 200 {
+        format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt)
+    } else {
+        prompt.to_string()
+    };
+
+    let encoding = tokenizer.encode(formatted_prompt, false).map_err(|e| e.to_string())?;
     let tokens = encoding.get_ids();
     model.clear_cache().unwrap();
     let mut current_tokens = tokens.to_vec();
@@ -224,12 +368,14 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
     for &tid in &current_tokens {
         logits = model.forward(tid as usize, false).unwrap();
     }
+    
+    let temperature = 0.7;
+    let top_k = 40;
+    let top_p = 0.9;
+    
     for _ in 0..max_tokens {
-        let next_token = logits.iter().enumerate().filter(|(_, &a)| !a.is_nan())
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-            .map(|(i, _)| i);
-        let next_token = match next_token { Some(t) => t, None => break };
-        if next_token == 0 { break; }
+        let next_token = sample_logits(&logits, temperature, top_k, top_p);
+        if next_token == 0 || next_token == 151643 || next_token == 151645 { break; } // Qwen2 end tokens
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
         print!("{}", decoded);
         io::stdout().flush()?;

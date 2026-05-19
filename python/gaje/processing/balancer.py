@@ -24,8 +24,6 @@ class SignalToNoiseBalancer:
         self.drift_history.append(drift)
 
         # PID simple o lógica proporcional para el umbral
-        error = drift - self.target_drift
-
         if drift > self.target_drift:
             # Demasiado ruido -> bajar umbral para capturar más anclas
             adjustment = 0.90
@@ -44,27 +42,36 @@ class SignalToNoiseBalancer:
     def generate_precision_mask(self, entropy_per_dim, fidelity_level=0.8):
         """
         Genera una máscara de precisión (Fase 12) basada en la entropía de Shannon.
-        0 = 2-bit (Baja entropía)
-        1 = 4-bit (Media)
-        2 = 6-bit (Alta entropía / Crítico)
         """
-        q_mid = np.quantile(entropy_per_dim, 1.0 - fidelity_level)
-        q_high = np.quantile(entropy_per_dim, 1.0 - (fidelity_level / 2))
+        try:
+            from gaje.core import _impl as dna_core
 
-        mask = np.zeros_like(entropy_per_dim, dtype=np.uint8)
-        mask[entropy_per_dim > q_mid] = 1
-        mask[entropy_per_dim > q_high] = 2
+            mask_bytes = dna_core.generate_precision_mask_native(
+                entropy_per_dim.tolist(), fidelity_level
+            )
+            return np.frombuffer(mask_bytes, dtype=np.uint8).copy()
+        except (ImportError, AttributeError):
+            q_mid = np.quantile(entropy_per_dim, 1.0 - fidelity_level)
+            q_high = np.quantile(entropy_per_dim, 1.0 - (fidelity_level / 2))
 
-        return mask
+            mask = np.zeros_like(entropy_per_dim, dtype=np.uint8)
+            mask[entropy_per_dim > q_mid] = 1
+            mask[entropy_per_dim > q_high] = 2
+            return mask
 
     def prune_dimensions(self, database, stride, entropy_per_dim, threshold=0.01):
         """
         Elimina dimensiones redundantes (Neural Pruning DNA - Fase 12).
-        Retorna la nueva base de datos y los índices de las dimensiones activas.
         """
         from gaje.core import _impl as dna_core
 
-        active_dims = np.where(entropy_per_dim > threshold)[0].tolist()
+        try:
+            active_dims = dna_core.get_active_dimensions_native(
+                entropy_per_dim.tolist(), threshold
+            )
+        except AttributeError:
+            active_dims = np.where(entropy_per_dim > threshold)[0].tolist()
+
         if len(active_dims) == len(entropy_per_dim):
             return database, active_dims
 

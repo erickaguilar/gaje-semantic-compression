@@ -1,4 +1,4 @@
-use crate::kernels::*;
+use crate::compute::kernels::*;
 use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -71,7 +71,7 @@ impl GenomicAttention {
         if self.rmsnorm_weight.is_empty() {
             return Ok(input);
         }
-        Ok(unsafe { rms_norm_neon(&input, &self.rmsnorm_weight, self.eps) })
+        Ok(unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) })
     }
 
     pub fn forward_attention(

@@ -1,21 +1,37 @@
 use serde::{Deserialize, Serialize};
 use redb::{Database, ReadTransaction};
 use crate::nn::{GenomicLinear, RustGenomicBlock, GenomicAttention, RustGenomicLLM};
-use crate::db::{TENSOR_TABLE, METADATA_TABLE};
+use crate::core::db::{TENSOR_TABLE, METADATA_TABLE};
 use std::sync::Arc;
+use pyo3::prelude::*;
 
+#[pyclass]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
+    #[pyo3(get, set)]
     #[serde(default = "default_name")]
     pub name: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_tokenizer")]
     pub tokenizer_id: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_rope_base")]
     pub rope_base: f32,
+    #[pyo3(get, set)]
     #[serde(default = "default_ffn_act")]
     pub ffn_act: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_false")]
     pub use_genomic_norm: bool,
+}
+
+#[pymethods]
+impl ArchConfig {
+    #[new]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false))]
+    pub fn new(name: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool) -> Self {
+        ArchConfig { name, tokenizer_id, rope_base, ffn_act, use_genomic_norm }
+    }
 }
 
 fn default_name() -> String { "GAJE-Model".to_string() }
@@ -24,18 +40,35 @@ fn default_rope_base() -> f32 { 10000.0 }
 fn default_ffn_act() -> String { "swiglu".to_string() }
 fn default_false() -> bool { false }
 
+#[pyclass]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModelConfig {
+    #[pyo3(get, set)]
     pub config: ArchConfig,
+    #[pyo3(get, set)]
     pub n_embd: usize,
+    #[pyo3(get, set)]
     pub n_head: usize,
+    #[pyo3(get, set)]
     pub n_head_kv: usize,
+    #[pyo3(get, set)]
     pub n_blocks: usize,
+    #[pyo3(get, set)]
     pub vocab_size: Option<usize>,
+    #[pyo3(get, set)]
     pub eps: f32,
 }
 
-use crate::gguf::{GGUFReader, GGMLType, GGUFValue};
+#[pymethods]
+impl ModelConfig {
+    #[new]
+    #[pyo3(signature = (config, n_embd, n_head, n_head_kv, n_blocks, vocab_size=None, eps=1e-6))]
+    pub fn new(config: ArchConfig, n_embd: usize, n_head: usize, n_head_kv: usize, n_blocks: usize, vocab_size: Option<usize>, eps: f32) -> Self {
+        ModelConfig { config, n_embd, n_head, n_head_kv, n_blocks, vocab_size, eps }
+    }
+}
+
+use crate::io::gguf::{GGUFReader, GGMLType, GGUFValue};
 
 pub struct GGUFLoader {
     pub reader: GGUFReader,
@@ -171,6 +204,7 @@ impl GGUFLoader {
                 config.eps,
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
+                1.0, // Default h_scale
             ));
         }
 
@@ -234,31 +268,29 @@ impl GGUFLoader {
         let out_features = info.shape[info.n_dims as usize - 1] as usize;
         let in_features = info.shape[0] as usize;
 
-        let f32_data = match info.tensor_type {
-            GGMLType::F32 => data,
+        let f32_data: Vec<f32> = match info.tensor_type {
+            GGMLType::F32 => {
+                data.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect()
+            }
             GGMLType::F16 => {
                 let count = data.len() / 2;
                 let mut res = vec![0.0f32; count];
                 let f16_ptr = data.as_ptr() as *const half::f16;
                 for i in 0..count {
-                    unsafe {
-                        res[i] = (*f16_ptr.add(i)).to_f32();
-                    }
+                    unsafe { res[i] = (*f16_ptr.add(i)).to_f32(); }
                 }
-                unsafe {
-                    std::slice::from_raw_parts(res.as_ptr() as *const u8, res.len() * 4).to_vec()
-                }
+                res
             }
             GGMLType::Q8_0 => {
-                crate::utils::dequantize_q8_0_native(data, out_features, in_features)
+                crate::compute::math::dequantize_q8_0_native(data.to_vec(), out_features, in_features)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
-                    .into_iter().flat_map(|v| v.to_le_bytes()).collect()
             }
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported tensor type for genomization: {:?}", info.tensor_type))),
         };
 
-        let (dna, centroids, anchors_u8) = crate::utils::genomize_f32_native(f32_data, block_size, anchor_threshold)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let (dna, centroids, anchors_u8) = crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold);
+        let rmsnorm_weight = Vec::new();
+        let eps = 1e-6;
 
         Ok(GenomicLinear::new(
             dna,
@@ -267,8 +299,8 @@ impl GGUFLoader {
             out_features,
             in_features,
             block_size,
-            Vec::new(),
-            1e-6,
+            rmsnorm_weight,
+            eps,
             Vec::new(),
             Vec::new(),
             Vec::new(),
@@ -276,6 +308,7 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
         ))
+
     }
 }
 
@@ -284,15 +317,16 @@ pub struct NativeLoader {
 }
 
 pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConfig, tokenizer: Option<&tokenizers::Tokenizer>) -> std::io::Result<()> {
-    let writer = crate::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-    
+    let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    let mut batch = writer.begin_batch().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
     // 1. Metadata & Config
-    writer.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
+    batch.write_metadata("config", &serde_json::to_string(config).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     
     if let Some(tok) = tokenizer {
         let tok_json = tok.to_string(true).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        writer.write_metadata("tokenizer", &tok_json).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        batch.write_metadata("tokenizer", &tok_json).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
     }
 
     let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
@@ -303,49 +337,80 @@ pub fn save_genomic_model(path: &str, model: &RustGenomicLLM, config: &ModelConf
         res
     };
 
-    let save_linear = |prefix: &str, layer: &GenomicLinear| {
-        writer.write_tensor(&format!("{}.dna", prefix), &layer.database).unwrap();
-        writer.write_tensor(&format!("{}.centroids", prefix), &f32_to_u8(&layer.centroids)).unwrap();
+    let compress = |data: &[u8]| -> Vec<u8> {
+        lz4_flex::compress_prepend_size(data)
+    };
+
+    fn write_linear(batch: &mut crate::core::db::GajeBatchWriter, prefix: &str, layer: &GenomicLinear) -> std::io::Result<()> {
+        let f32_to_u8 = |data: &[f32]| -> Vec<u8> {
+            let mut res = vec![0u8; data.len() * 4];
+            unsafe {
+                std::ptr::copy_nonoverlapping(data.as_ptr() as *const u8, res.as_mut_ptr(), res.len());
+            }
+            res
+        };
+
+        let compress = |data: &[u8]| -> Vec<u8> {
+            lz4_flex::compress_prepend_size(data)
+        };
+
+        batch.write_tensor(&format!("{}.dna", prefix), &compress(&layer.database)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        batch.write_tensor(&format!("{}.centroids", prefix), &compress(&f32_to_u8(&layer.centroids))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         
         let anchors_u8 = unsafe {
             std::slice::from_raw_parts(layer.anchors.as_ptr() as *const u8, layer.anchors.len() * 2)
         };
-        writer.write_tensor(&format!("{}.anchors", prefix), anchors_u8).unwrap();
+        batch.write_tensor(&format!("{}.anchors", prefix), &compress(anchors_u8)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         if !layer.bias.is_empty() {
-            writer.write_tensor(&format!("{}.bias", prefix), &f32_to_u8(&layer.bias)).unwrap();
+            batch.write_tensor(&format!("{}.bias", prefix), &compress(&f32_to_u8(&layer.bias))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
-    };
+
+        if !layer.precision_mask.is_empty() {
+            batch.write_tensor(&format!("{}.precision_mask", prefix), &compress(&layer.precision_mask)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        }
+        Ok(())
+    }
 
     // 2. Tensors - Embeddings
-    save_linear("token_embd", &model.embeddings);
+    write_linear(&mut batch, "token_embd", &model.embeddings)?;
 
     // 3. Tensors - Blocks
     for (i, block) in model.blocks.iter().enumerate() {
         let p = format!("blk.{}.", i);
-        save_linear(&format!("{}attn_q", p), &block.q_gen);
-        save_linear(&format!("{}attn_k", p), &block.k_gen);
-        save_linear(&format!("{}attn_v", p), &block.v_gen);
-        save_linear(&format!("{}attn_output", p), &block.w_o);
-        save_linear(&format!("{}ffn_gate", p), &block.gate_gen);
-        save_linear(&format!("{}ffn_up", p), &block.up_gen);
-        save_linear(&format!("{}ffn_down", p), &block.w_down);
+        write_linear(&mut batch, &format!("{}attn_q", p), &block.q_gen)?;
+        write_linear(&mut batch, &format!("{}attn_k", p), &block.k_gen)?;
+        write_linear(&mut batch, &format!("{}attn_v", p), &block.v_gen)?;
+        write_linear(&mut batch, &format!("{}attn_output", p), &block.w_o)?;
+        write_linear(&mut batch, &format!("{}ffn_gate", p), &block.gate_gen)?;
+        write_linear(&mut batch, &format!("{}ffn_up", p), &block.up_gen)?;
+        write_linear(&mut batch, &format!("{}ffn_down", p), &block.w_down)?;
 
-        writer.write_tensor(&format!("{}attn_norm", p), &f32_to_u8(&block.attn.rmsnorm_weight)).unwrap();
-        writer.write_tensor(&format!("{}ffn_norm", p), &f32_to_u8(&block.ffn_norm)).unwrap();
+        batch.write_tensor(&format!("{}attn_norm", p), &compress(&f32_to_u8(&block.attn.rmsnorm_weight))).unwrap();
+        batch.write_tensor(&format!("{}ffn_norm", p), &compress(&f32_to_u8(&block.ffn_norm))).unwrap();
+        batch.write_tensor(&format!("{}h_scale", p), &compress(&f32_to_u8(&[block.h_scale]))).unwrap();
     }
 
     // 4. Output
-    save_linear("lm_head", &model.lm_head);
-    writer.write_tensor("output_norm", &f32_to_u8(&model.output_norm)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    write_linear(&mut batch, "lm_head", &model.lm_head)?;
+    batch.write_tensor("output_norm", &compress(&f32_to_u8(&model.output_norm))).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    // Commit the entire batch
+    batch.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+    // 5. Compact database to minimize disk space
+    println!("[*] Compactando base de datos genómica con compresión LZ4...");
+    let _ = writer.compact();
 
     Ok(())
 }
 
+
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
-        let db = Database::open(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        Ok(NativeLoader { db: Arc::new(db) })
+        let db = crate::core::db::get_or_create_db(path, false)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(NativeLoader { db })
     }
 
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
@@ -373,7 +438,9 @@ impl NativeLoader {
     fn get_tensor(txn: &ReadTransaction, key: &str) -> Vec<u8> {
         if let Ok(table) = txn.open_table(TENSOR_TABLE) {
             if let Ok(Some(val)) = table.get(key) {
-                return val.value().to_vec();
+                let data = val.value();
+                // Decompress if it looks like LZ4
+                return lz4_flex::decompress_size_prepended(data).unwrap_or_else(|_| data.to_vec());
             }
         }
         Vec::new()
@@ -466,6 +533,9 @@ impl NativeLoader {
             let mut ffn_norm = Self::get_tensor_f32(&read_txn, &format!("{}ffn_norm", p));
             if ffn_norm.is_empty() { ffn_norm = vec![1.0f32; config.n_embd]; }
 
+            let h_scale_vec = Self::get_tensor_f32(&read_txn, &format!("{}h_scale", p));
+            let h_scale = if h_scale_vec.is_empty() { 1.0f32 } else { h_scale_vec[0] };
+
             let attn = GenomicAttention::new(
                 config.n_head,
                 config.n_head_kv,
@@ -489,6 +559,7 @@ impl NativeLoader {
                 config.eps,
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
+                h_scale,
             ));
         }
 
@@ -502,19 +573,116 @@ impl NativeLoader {
     }
 
     pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
-        let reader = crate::db::GajeDatabaseReader::new_from_db(self.db.clone());
+        let reader = crate::core::db::GajeDatabaseReader::new_from_db(self.db.clone());
         reader.list_mutations().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
 
-    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::db::Mutation) -> std::io::Result<()> {
+    pub fn save_mutation(&self, timestamp: u64, mutation: &crate::core::db::Mutation) -> std::io::Result<()> {
         let data = bincode::serialize(mutation).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         let write_txn = self.db.begin_write().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         {
-            let mut table = write_txn.open_table(crate::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            let mut table = write_txn.open_table(crate::core::db::MUTATIONS_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
             table.insert(timestamp, data.as_slice()).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
         write_txn.commit().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     }
+}
+
+#[pyfunction]
+#[pyo3(name = "init_born_genomic_model")]
+pub fn init_born_genomic_model_py(path: &str, config: ModelConfig, vocab_size: usize) -> PyResult<RustGenomicLLM> {
+    init_born_genomic_model(path, config, vocab_size).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+}
+
+pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usize) -> std::io::Result<RustGenomicLLM> {
+    let block_size = 32;
+    
+    let init_linear = |in_features: usize, out_features: usize| -> GenomicLinear {
+        let n_elements = in_features * out_features;
+        let n_blocks = n_elements / block_size;
+        let dna = crate::compute::math::generate_random_dna(n_elements);
+        let centroids = crate::compute::math::generate_default_centroids(n_blocks);
+        
+        GenomicLinear::new(
+            dna,
+            Vec::new(),
+            centroids,
+            out_features,
+            in_features,
+            block_size,
+            Vec::new(),
+            1e-6,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        )
+    };
+
+    // 1. Embeddings
+    let embeddings = init_linear(config.n_embd, vocab_size);
+
+    // 2. Blocks
+    let mut blocks = Vec::new();
+    let head_dim = config.n_embd / config.n_head;
+    let ffn_hidden = config.n_embd * 4; 
+
+    for i in 0..config.n_blocks {
+        let q_gen = init_linear(config.n_embd, config.n_head * head_dim);
+        let k_gen = init_linear(config.n_embd, config.n_head_kv * head_dim);
+        let v_gen = init_linear(config.n_embd, config.n_head_kv * head_dim);
+        let w_o = init_linear(config.n_head * head_dim, config.n_embd);
+        
+        let gate_gen = init_linear(config.n_embd, ffn_hidden);
+        let up_gen = init_linear(config.n_embd, ffn_hidden);
+        let w_down = init_linear(ffn_hidden, config.n_embd);
+
+        let attn_norm = vec![1.0f32; config.n_embd];
+        let ffn_norm = vec![1.0f32; config.n_embd];
+
+        let attn = GenomicAttention::new(
+            config.n_head,
+            config.n_head_kv,
+            head_dim,
+            attn_norm,
+            config.eps,
+            config.config.rope_base,
+        );
+
+        blocks.push(RustGenomicBlock::new(
+            i,
+            attn,
+            q_gen,
+            k_gen,
+            v_gen,
+            w_o,
+            gate_gen,
+            up_gen,
+            w_down,
+            ffn_norm,
+            config.eps,
+            config.config.ffn_act.clone(),
+            config.config.use_genomic_norm,
+            1.0, // Default h_scale
+        ));
+    }
+
+    // 3. Output
+    let output_norm = vec![1.0f32; config.n_embd];
+    let lm_head = init_linear(config.n_embd, vocab_size);
+
+    let model = RustGenomicLLM::new(
+        embeddings,
+        blocks,
+        output_norm,
+        lm_head,
+        config.eps,
+    );
+
+    save_genomic_model(path, &model, &config, None)?;
+    Ok(model)
 }
 
 #[cfg(test)]

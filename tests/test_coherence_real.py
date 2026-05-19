@@ -1,23 +1,17 @@
 import numpy as np
 import time
 import os
-<<<<<<< HEAD
-from gaje.nn.genomize import GenomicLLM
-=======
-import sys
 from gaje.nn.stabilized import GenomicLLM
->>>>>>> origin/develop
 
 
 def test_coherence():
-<<<<<<< HEAD
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
-=======
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
->>>>>>> origin/develop
+    model_path = "models/SmolLM2-135M-Instruct-Q8_0.gguf"
     if not os.path.exists(model_path):
-        print(f"❌ Model not found at {model_path}")
-        return
+        # Intentar ruta alternativa
+        model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+        if not os.path.exists(model_path):
+            print("❌ Model not found. Skipping test.")
+            return
 
     print("🧬 Starting Real Coherence Test (Native DGI Flow)")
     print("-" * 50)
@@ -34,7 +28,7 @@ def test_coherence():
 
     start_time = time.time()
     all_logits = llm.forward(tokens)
-    logits = all_logits[-1] # Get logits for the last token
+    logits = all_logits[-1]  # Get logits for the last token
     end_time = time.time()
 
     next_token_id = np.argmax(logits)
@@ -60,11 +54,4 @@ def test_coherence():
 
 
 if __name__ == "__main__":
-    test_coherence()
-   print("⚠️ WARNING: Coherence still low. Further calibration needed.")
-
-
-if __name__ == "__main__":
-    test_coherence()
-me__ == "__main__":
     test_coherence()

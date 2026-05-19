@@ -2,8 +2,8 @@ import numpy as np
 import os
 import sys
 
-# Ensure we use the local package
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
+# Asegurar que usamos el código local de 'python/'
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
 
 from gaje.processing.balancer import SignalToNoiseBalancer
 

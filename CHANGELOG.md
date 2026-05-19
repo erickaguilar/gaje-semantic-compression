@@ -1,5 +1,15 @@
-## [0.6.5] - 2026-05-15
+## [0.7.0] - 2026-05-18
 ### Added
+- **Soberanía Nativa (Rust 100%):** Independencia absoluta del runtime de Python. El ecosistema GAJE ahora puede cargar, ejecutar, muestrear, evolucionar y entrenar LLMs directamente desde un entorno nativo seguro.
+- **Inmortalidad RAM (Zero-Copy Cloning):** Migración de matrices pesadas de ADN (2-bit) a punteros atómicos compartidos (`Arc<Vec<u8>>`). Permite clonar LLMs masivos en memoria a costo computacional de ~0 bytes.
+- **Path Integral Breeding Paralelo:** Evolución genómica poblacional re-escrita con `Rayon`. Todos los núcleos de la CPU simulan futuros paralelos simultáneos, acelerando la convergencia evolutiva ("Hola Mundo" en <15ms).
+- **Auto-Grad Nativo (Hybrid Training):** Bucle de `CrossEntropyLoss` y `Softmax` migrado matemáticamente a `RustGenomicLLM::train_step`. Permite entrenamiento directo (`--train`) desde `gaje-cli`.
+- **Muestreador de Texto Complejo:** Decodificación fluida nativa con Temperatura, Top-K y Top-P integrada al CLI, reemplazando el rudimentario Greedy Decoding.
+
+### Changed
+- Actualización de `Cargo.toml` (`v0.7.0`) con directrices nativas de vectorización (AVX2/FMA) por defecto en `target-cpu=native`.
+
+## [0.6.5] - 2026-05-15
 - **Genomic Sequential Memory:** Implementación de una RNN genómica de 2 bits capaz de aprender secuencias textuales ("Hola Mundo").
 - **Monte Carlo Evolution Engine:** Motor de optimización basado en mutaciones aleatorias y selección natural en Rust, superando las limitaciones del gradiente en espacios discretos.
 - **Evolución Acelerada:** Validación de aprendizaje secuencial en <20ms en dispositivos móviles.

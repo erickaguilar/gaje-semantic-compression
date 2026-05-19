@@ -27,6 +27,7 @@ __pycache__/
 /data/
 gaje_v2_premium/
 data/models/
+/models/
 /training/
 maintenance/local_artifacts/
 

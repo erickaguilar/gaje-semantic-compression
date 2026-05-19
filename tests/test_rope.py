@@ -6,7 +6,7 @@ q.unpermute_to_interleaved = lambda w, *args: w
 
 from gaje.nn.stabilized import GenomicLLM
 
-llm = GenomicLLM("/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf", num_blocks=10)
+llm = GenomicLLM("models/SmolLM2-135M-Instruct-Q8_0.gguf", num_blocks=10)
 print(f"Usando RoPE Base: {llm.rope_base} | SIN PERMUTACION")
 
 prompt = "<|im_start|>user\nWho are you?<|im_end|>\n<|im_start|>assistant\n"
