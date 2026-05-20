@@ -82,6 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 rope_base: 1000000.0,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
+                rope_style: "split".to_string(),
             },
             n_embd: 768,
             n_head: 12,

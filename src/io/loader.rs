@@ -492,11 +492,9 @@ pub fn save_genomic_model(
             )
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
-        let anchors_u8 = unsafe {
-            std::slice::from_raw_parts(layer.anchors.as_ptr() as *const u8, layer.anchors.len() * 2)
-        };
+        let anchors_u8 = layer.anchors_sparse_buffer();
         batch
-            .write_tensor(&format!("{}.anchors", prefix), &compress(anchors_u8))
+            .write_tensor(&format!("{}.anchors", prefix), &compress(&anchors_u8))
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         if !layer.bias.is_empty() {
