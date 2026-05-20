@@ -89,7 +89,7 @@ fn softmax(x: &[f32]) -> Vec<f32> {
 }
 
 fn main() {
-    let dataset_path = "dataset_entrenamiento.txt";
+    let dataset_path = "data/datasets/dataset_entrenamiento.txt";
     let target_text = fs::read_to_string(dataset_path).expect("No se pudo leer el dataset");
     let chars: Vec<char> = target_text.chars().collect();
     let mut vocab: Vec<char> = chars.clone();

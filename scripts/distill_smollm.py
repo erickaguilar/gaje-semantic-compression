@@ -33,7 +33,7 @@ def main():
     print(f"[*] Destilación completada en {distill_time:.2f}s")
 
     # 2. Carga de Dataset para Refinamiento de Identidad
-    dataset_path = "dataset_entrenamiento.txt"
+    dataset_path = "data/datasets/dataset_entrenamiento.txt"
     if os.path.exists(dataset_path):
         with open(dataset_path, "r", encoding="utf-8") as f:
             lines = f.readlines()

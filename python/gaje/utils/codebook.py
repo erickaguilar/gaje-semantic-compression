@@ -31,7 +31,7 @@ def fast_kmeans_1d(data, k=4):
     return centroids
 
 
-def train_genomic_codebook(vectors, output_path="codebook.json", mode="per_dim"):
+def train_genomic_codebook(vectors, output_path="models/codebook.json", mode="per_dim"):
     """
     mode: 'global' or 'per_dim'
     """

@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--embd", type=int, default=512, help="Embedding dimension (default: 512)")
     parser.add_argument("--epochs", type=int, default=20, help="Training epochs (default: 20)")
     parser.add_argument("--lr", type=float, default=0.005, help="Learning rate (default: 0.005)")
-    parser.add_argument("--dataset", type=str, default="dataset_entrenamiento.txt", help="Path to dataset")
+    parser.add_argument("--dataset", type=str, default="data/datasets/dataset_entrenamiento.txt", help="Path to dataset")
     args = parser.parse_args()
 
     print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC LARGE TRAINING")

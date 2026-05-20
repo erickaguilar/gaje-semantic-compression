@@ -22,7 +22,7 @@ def main():
     print("=" * 60)
 
     # 1. Cargar Dataset (Usando el dataset extendido de 150 frases)
-    dataset_path = "dataset_es_ext.txt"
+    dataset_path = "data/datasets/dataset_es_ext.txt"
     if not os.path.exists(dataset_path):
         print(f"❌ Error: {dataset_path} no encontrado.")
         return
