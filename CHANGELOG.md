@@ -69,7 +69,7 @@
 
 ## [0.4.1] - 2026-05-07
 ### Added
-- **Reporte Técnico de Destilación:** Publicación de `docs/qwen2_distillation_report.md` con análisis de fallas en el modelo Qwen2 2-bit.
+- **Reporte Técnico de Destilación:** Publicación de `docs/reports/qwen2_distillation_report.md` con análisis de fallas en el modelo Qwen2 2-bit.
 - **Validación de 24 Bloques:** Script `benchmarks/distilled_qwen_test.py` para evaluación de modelos de profundidad completa.
 - **Soporte de Attention en Python:** Clase `GenomicAttention` expuesta y verificada tras actualización del core.
 

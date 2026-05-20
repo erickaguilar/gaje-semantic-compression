@@ -57,5 +57,5 @@ La combinación ganadora para dispositivos móviles (Android/Termux) es el entre
 Para tu próxima iteración de modelo:
 1.  Expande tu archivo `data/datasets/dataset_entrenamiento.txt` a 500+ líneas.
 2.  Edita `python/gaje/nn/stabilized.py` y ajusta `anchor_threshold=0.05` para retener más inteligencia.
-3.  Ejecuta `./gaje_distill.sh` con el nuevo dataset.
-4.  Realiza el refinamiento con `./gaje_train.sh` (35 épocas Gradientes + 20 gen Evolución).
+3.  Ejecuta `./scripts/gaje_distill.sh` con el nuevo dataset.
+4.  Realiza el refinamiento con `./scripts/gaje_train.sh` (35 épocas Gradientes + 20 gen Evolución).

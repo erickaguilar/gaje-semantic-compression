@@ -1,8 +1,0 @@
-🧬 GAJE Native Runtime (v0.7.0)
-[*] Extracting tokenizer from GAJE DB...
-[*] Model & Tokenizer loaded.
-Bienvenido y ayudamos.
-system
-
-user
-You are a detective who specializes in cases involving paranormal activity. You have been on the force for nearly two decades. You have a keen eye for detail

@@ -25,7 +25,7 @@ def main():
     trainer = GenomicTrainer(model, lr=0.1)
     
     # 2. Cargar Dataset de Memorización
-    dataset_path = "training/datasets/mini_story.txt"
+    dataset_path = "data/training/datasets/mini_story.txt"
     with open(dataset_path, "r") as f:
         story = f.read()
     
@@ -65,7 +65,7 @@ def main():
     print("\n")
     
     # 5. Persistencia
-    checkpoint_dir = "training/checkpoints/mini_genome_v1"
+    checkpoint_dir = "data/training/checkpoints/mini_genome_v1"
     model.save(checkpoint_dir)
     print("="*60)
     print("🚀 FASE 3 COMPLETADA: El Mini-Genome ha nacido y ha sido guardado.")

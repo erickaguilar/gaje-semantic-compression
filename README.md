@@ -40,8 +40,9 @@ dna-semantic-compression/
 
 ## 📚 Documentación Adicional
 - [**Manifiesto del Proyecto**](docs/meta/MANIFESTO.md): Nuestra visión de la inteligencia ligera.
-- [**Memoria Secuencial Genómica**](docs/GENOMIC_SEQUENTIAL_MEMORY.md): El hito del nacimiento desde cero.
+- [**Memoria Secuencial Genómica**](docs/reports/GENOMIC_SEQUENTIAL_MEMORY.md): El hito del nacimiento desde cero.
 - [**Hoja de Ruta (Roadmap)**](docs/meta/ROADMAP.md): El camino hacia los modelos de 10 MB.
+- [**Plan de Implementación v0.7.0**](docs/plans/GAJE_FLOW_IMPLEMENTATION_PLAN.md): Nuestra estrategia actual de desarrollo.
 
 ## 🚀 Instalación y Ejecución (CLI Nativo)
 ```bash

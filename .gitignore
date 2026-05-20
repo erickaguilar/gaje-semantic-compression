@@ -23,13 +23,10 @@ __pycache__/
 /eggs
 *.eggs
 
-# Data
+# Data and Outputs
 /data/
-gaje_v2_premium/
-data/models/
 /models/
-/training/
-maintenance/local_artifacts/
+/scripts/maintenance/local_artifacts/
 
 # Large Model Artifacts (GAJE/GGUF/Binaries)
 *.gaje
@@ -37,4 +34,4 @@ maintenance/local_artifacts/
 *.bin
 *.pth
 *.ckpt
-/experiments/smollm2_v065/smollm2-evolved.gaje
+
