@@ -3,7 +3,7 @@ import sys
 import numpy as np
 
 # Ensure we use the local package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..", "python")))
 
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config

@@ -3,7 +3,7 @@ import os
 import sys
 
 # Ajustar paths para importar el core
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..", "python")))
 
 from gaje.core._impl import (
     calculate_mse_native, 

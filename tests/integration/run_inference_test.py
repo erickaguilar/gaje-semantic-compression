@@ -15,7 +15,7 @@ import platform
 import numpy as np
 
 # Asegurar que el path del proyecto este en PYTHONPATH
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "python"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "python"))
 
 def detect_simd_capabilities():
     """Detecta las capacidades SIMD del hardware actual."""
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     # Auto-detectar modelo si no se especifica
     if args.model is None:
         default_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
             "models", "SmolLM2-135M-Instruct-Q8_0.gguf"
         )
         if os.path.exists(default_path):
