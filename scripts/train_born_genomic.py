@@ -59,11 +59,63 @@ def main():
         print(token_text, end="", flush=True)
     
     print("\n")
+
+    # 5.1 Cálculo de Perplexity post-entrenamiento
+    import numpy as np
+    print("[*] Calculando Perplexity sobre el dataset de entrenamiento...")
+    total_ppl = 0
+    for text in dataset:
+        tokens = llm.tokenizer.encode(text, add_special_tokens=False)
+        if len(tokens) < 2: continue
+        llm.rust_llm.clear_cache()
+        log_likelihoods = []
+        # Inferencia secuencial
+        logits_all = llm.forward(tokens[:-1], clear_cache=True)
+        for i, target_id in enumerate(tokens[1:]):
+            logits = logits_all[i]
+            probs = np.exp(logits - np.max(logits))
+            probs /= probs.sum()
+            prob_target = probs[target_id]
+            log_likelihoods.append(np.log(max(prob_target, 1e-10)))
+        
+        ppl = np.exp(-np.mean(log_likelihoods))
+        total_ppl += ppl
+        print(f"    - PPL para '{text[:20]}...': {ppl:.4f}")
     
+    print(f"[*] Perplexity Media: {total_ppl / len(dataset):.4f}")
+    
+    # Pre-save logits for consistency check
+    prompt_test = "El protocolo"
+    tokens_test = llm.tokenizer.encode(prompt_test, add_special_tokens=False)
+    logits_before = llm.forward(tokens_test, clear_cache=True)[-1]
+
     # 6. Guardar el organismo
     out_dir = "models/born_genomic_qwen"
     os.makedirs(out_dir, exist_ok=True)
+    out_file = os.path.join(out_dir, "model.gaje")
     llm.save(out_dir)
+
+    # 7. Recargar y verificar consistencia
+    print("\n[*] Verificando consistencia tras guardado...")
+    llm_reloaded = GenomicLLM.load_genomic(out_file)
+    logits_after = llm_reloaded.forward(tokens_test, clear_cache=True)[-1]
+    
+    from gaje.core import _impl as core
+    mse = core.calculate_mse_native(logits_before.tolist(), logits_after.tolist())
+    cos_sim = core.calculate_cosine_similarity_native(logits_before.tolist(), logits_after.tolist())
+    
+    print(f"    - MSE Logits: {mse:.8f}")
+    print(f"    - Similitud Coseno: {cos_sim:.8f}")
+    
+    if cos_sim > 0.999:
+        print("✅ CONSISTENCIA OK: El modelo se guardó y cargó perfectamente.")
+    else:
+        print("❌ ERROR DE CONSISTENCIA: El modelo cargado difiere del original.")
+        # Analizar diferencias en parámetros clave
+        print(f"    - Original vocab size: {len(llm.tokenizer)}")
+        print(f"    - Reloaded vocab size: {len(llm_reloaded.tokenizer)}")
+        print(f"    - Original blocks: {len(llm.blocks)}")
+        print(f"    - Reloaded blocks: {len(llm_reloaded.blocks)}")
 
 if __name__ == "__main__":
     main()

@@ -66,11 +66,38 @@ impl GenomicLinear {
         let anchors = if anchors_u8.is_empty() {
             Vec::new()
         } else {
-            unsafe {
-                std::slice::from_raw_parts(
-                    anchors_u8.as_ptr() as *const f16,
-                    anchors_u8.len() / 2
-                ).to_vec()
+            let total_elements = out_features * in_features;
+            let dense_size = total_elements * 2;
+            
+            if anchors_u8.len() == dense_size {
+                // Dense format
+                anchors_u8.chunks_exact(2)
+                    .map(|c| f16::from_le_bytes([c[0], c[1]]))
+                    .collect()
+            } else if anchors_u8.len() >= 4 {
+                // Sparse format: [uint32: count] [indices: u32*count] [values: f16*count]
+                let count = u32::from_le_bytes([anchors_u8[0], anchors_u8[1], anchors_u8[2], anchors_u8[3]]) as usize;
+                let mut vec = vec![f16::ZERO; total_elements];
+                
+                let indices_start = 4;
+                let values_start = 4 + count * 4;
+                
+                if anchors_u8.len() >= values_start + count * 2 {
+                    for i in 0..count {
+                        let idx_bytes = &anchors_u8[indices_start + i * 4..indices_start + (i + 1) * 4];
+                        let idx = u32::from_le_bytes([idx_bytes[0], idx_bytes[1], idx_bytes[2], idx_bytes[3]]) as usize;
+                        
+                        let val_bytes = &anchors_u8[values_start + i * 2..values_start + (i + 1) * 2];
+                        let val = f16::from_le_bytes([val_bytes[0], val_bytes[1]]);
+                        
+                        if idx < total_elements {
+                            vec[idx] = val;
+                        }
+                    }
+                }
+                vec
+            } else {
+                Vec::new()
             }
         };
 
