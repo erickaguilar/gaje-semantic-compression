@@ -6,9 +6,9 @@
 # 1. Configuración de Parámetros
 THREADS=2
 ARCH="smollm"
-BLOCKS=2
-EPOCHS=10
-MODEL_NAME="born_genomic_smollm"
+BLOCKS=4
+EPOCHS=20
+MODEL_NAME="born_genomic_smollm_deep"
 
 # 2. Interfaz Visual
 clear
