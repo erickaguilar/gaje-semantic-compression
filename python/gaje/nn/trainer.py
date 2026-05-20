@@ -144,6 +144,44 @@ class GenomicTrainer:
             # The LM head update is sufficient to prove the Born-Genomic training loop works.
         return loss_total / seq_len
 
+    def evaluate(self, dataset):
+        """Computes average loss over the dataset."""
+        total_loss = 0
+        count = 0
+        for text in dataset:
+            tokens = self.model.tokenizer.encode(text, add_special_tokens=False)
+            if len(tokens) < 2: continue
+            # Usamos el forward para obtener logits y calcular loss manual o train_on_sequence con lr=0
+            loss = self.model.rust_llm.train_on_sequence(tokens, 0.0)
+            total_loss += loss
+            count += 1
+        return total_loss / count if count > 0 else 0
+
+    def evolve(self, dataset, generations=10, mutation_scale=0.01):
+        """
+        Native Evolutionary Algorithm:
+        1. Evaluate current loss.
+        2. Mutate h_scale (homeostasis) in Rust.
+        3. Re-evaluate loss.
+        4. If improved, keep mutation. Otherwise, undo.
+        """
+        current_loss = self.evaluate(dataset)
+        print(f"[*] Iniciando Evolución | Loss inicial: {current_loss:.4f}")
+
+        for gen in range(generations):
+            # Mutar homeostasis aleatoriamente en el core de Rust
+            deltas = self.model.rust_llm.mutate_all_homeostasis(mutation_scale)
+            
+            new_loss = self.evaluate(dataset)
+            
+            if new_loss < current_loss:
+                # Mejora: Actualizamos el loss de referencia
+                print(f"  [Gen {gen+1}] 🔥 Mejora: {current_loss:.4f} -> {new_loss:.4f}")
+                current_loss = new_loss
+            else:
+                # Empeoramiento: Revertimos la mutación en Rust
+                self.model.rust_llm.undo_homeostasis_mutation(deltas)
+
     def fit(self, dataset, epochs=10):
         print(f"[*] Iniciando entrenamiento GAJE Nativo ({epochs} épocas)")
         for epoch in range(epochs):

@@ -16,9 +16,12 @@ def main():
     parser.add_argument("--blocks", type=int, default=2, help="Number of transformer blocks (default: 2)")
     parser.add_argument("--epochs", type=int, default=50, help="Training epochs (default: 50)")
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate (default: 0.01)")
+    parser.add_argument("--evolve", action="store_true", help="Enable evolutionary refinement phase")
+    parser.add_argument("--gen", type=int, default=20, help="Number of evolutionary generations (default: 20)")
+    parser.add_argument("--dataset", type=str, default="data/datasets/dataset_entrenamiento.txt", help="Path to dataset file")
     args = parser.parse_args()
 
-    print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING v0.7.0")
+    print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING v0.7.1")
     print("=" * 60)
 
     # 1. Configuración de Arquitectura
@@ -30,25 +33,37 @@ def main():
     llm = GenomicLLM(model_path=None, num_blocks=args.blocks, config=config)
     print(f"[*] Modelo inicializado con {args.blocks} bloques ocultos y vocabulario de {len(llm.tokenizer)}.")
 
-    # 3. Micro-Dataset de prueba (Para probar Overfitting / Memorización)
-    dataset = [
-        "El protocolo GAJE es nativo.",
-        "El protocolo GAJE comprime semántica.",
-        "GAJE utiliza ADN en lugar de pesos.",
-        "Qwen es la arquitectura base."
-    ]
-    print("\n[*] Dataset de prueba:")
-    for text in dataset:
-        print(f"    - '{text}'")
+    # 3. Carga de Dataset
+    if os.path.exists(args.dataset):
+        with open(args.dataset, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        # Filtramos líneas vacías o muy cortas
+        dataset = [line.strip() for line in lines if len(line.strip()) > 10]
+        print(f"[*] Dataset cargado: {len(dataset)} interacciones desde {args.dataset}")
+    else:
+        print(f"[!] Aviso: Dataset no encontrado en {args.dataset}. Usando dataset de respaldo.")
+        dataset = [
+            "El protocolo GAJE es nativo.",
+            "El protocolo GAJE comprime semántica.",
+            "GAJE utiliza ADN en lugar de pesos.",
+            "Qwen es la arquitectura base."
+        ]
 
     # 4. Iniciar Entrenamiento
     trainer = GenomicTrainer(llm, lr=args.lr)
     
     start_time = time.time()
+    print(f"[*] Fase 1: Entrenamiento por Gradientes ({args.epochs} épocas)...")
     trainer.fit(dataset, epochs=args.epochs)
+    
+    # 5. Fase Evolutiva (Opcional)
+    if args.evolve:
+        print(f"\n[*] Fase 2: Refinamiento Evolutivo ({args.gen} generaciones)...")
+        trainer.evolve(dataset, generations=args.gen, mutation_scale=0.02)
+
     duration = time.time() - start_time
     
-    print(f"\n[*] Entrenamiento finalizado en {duration:.2f} segundos.")
+    print(f"\n[*] Protocolo completo finalizado en {duration:.2f} segundos.")
     
     # 5. Generación de prueba (Inferencia Zero-Shot tras el entrenamiento)
     prompt = "El protocolo GAJE"

@@ -45,9 +45,14 @@ def main():
 
     # 3. Refinamiento Genómico (Fine-tuning post-destilación)
     if dataset and args.epochs > 0:
-        print(f"\n[*] Iniciando refinamiento genómico ({args.epochs} épocas)...")
-        trainer = GenomicTrainer(llm, lr=0.001) # LR bajo para no romper la sabiduría heredada
+        print(f"\n[*] Iniciando refinamiento de alta fidelidad ({args.epochs} épocas)...")
+        # LR muy bajo para preservar el conocimiento del maestro
+        trainer = GenomicTrainer(llm, lr=0.0001) 
         trainer.fit(dataset, epochs=args.epochs)
+        
+        # Opcional: Estabilización Evolutiva
+        print("\n[*] Aplicando estabilización evolutiva (10 generaciones)...")
+        trainer.evolve(dataset, generations=10, mutation_scale=0.01)
 
     # 4. Guardar el nuevo organismo
     out_dir = f"models/{args.name.lower()}"
@@ -57,9 +62,9 @@ def main():
 
     # 5. Prueba de Coherencia
     prompt = "Usuario: Hola, ¿quién eres?\nAsistente:"
-    print(f"\n[*] Prueba de Coherencia Post-Destilación:")
+    print(f"\n[*] Prueba de Coherencia Final:")
     print(f"🤖 GAJE: ", end="", flush=True)
-    for token in llm.generate(prompt, max_new_tokens=30, temperature=0.3):
+    for token in llm.generate(prompt, max_new_tokens=40, temperature=0.2, repetition_penalty=1.2):
         print(token, end="", flush=True)
     print("\n")
 
