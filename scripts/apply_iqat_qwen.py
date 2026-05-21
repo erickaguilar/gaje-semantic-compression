@@ -81,9 +81,9 @@ def apply_iqat_calibration(model_path, calibration_prompts, lr=0.005):
 
 if __name__ == "__main__":
     # Prioridad: SmolLM para estabilidad en Termux, luego Qwen
-    MODELS = [
-        "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf",
-        "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    models = [
+        "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf",
+        "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     ]
     
     MODEL_PATH = next((m for m in MODELS if os.path.exists(m)), None)

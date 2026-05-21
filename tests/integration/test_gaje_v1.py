@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath("python"))
 from gaje.nn.stabilized import GenomicLLM
 
 def test_inference():
-    model_path = "models/gajeexpert-v1/model.gaje"
+    model_path = "models/checkpoints/gajeexpert-v1/model.gaje"
     if not os.path.exists(model_path):
         print(f"[!] Error: No se encuentra el modelo en {model_path}")
         return

@@ -19,7 +19,7 @@ def dequantize_variant_b(tensor):
     return np.array(flat).reshape(out_f, in_f).T
 
 def diagnostic_test():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     reader = gguf.GGUFReader(model_path)
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B")
     

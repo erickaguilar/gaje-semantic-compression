@@ -61,7 +61,7 @@ class GenomicTokenizer:
 def test_genomic_tokenizer():
     import gguf
 
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
 
     if not os.path.exists(model_path):
         print(

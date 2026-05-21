@@ -73,7 +73,7 @@ def main():
         print("\n")
     
     # 6. Guardar el organismo experto
-    out_dir = f"models/{args.name.lower()}"
+    out_dir = f"models/checkpoints/{args.name.lower()}"
     os.makedirs(out_dir, exist_ok=True)
     llm.save(out_dir)
     print(f"[+] Organismo guardado en: {out_dir}")

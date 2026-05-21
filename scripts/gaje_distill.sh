@@ -5,7 +5,7 @@
 
 # 1. Configuración de Parámetros
 THREADS=2
-SOURCE_MODEL="models/SmolLM2-135M-Instruct-Q8_0.gguf"
+SOURCE_MODEL="models/gguf/smollm2-135m-q8_0.gguf"
 NAME="GajeSmol-v1"
 EPOCHS=5 # Pocas épocas porque el modelo ya es inteligente
 

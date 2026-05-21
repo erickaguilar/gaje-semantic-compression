@@ -13,7 +13,7 @@ def run_reasoning_test():
     print("🧠 VALIDACIÓN DE RAZONAMIENTO Y CONOCIMIENTO (Fase 2)")
     print("=" * 60)
 
-    MODEL_PATH = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    MODEL_PATH = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     if not os.path.exists(MODEL_PATH):
         print(f"❌ Error: Modelo no encontrado en {MODEL_PATH}")
         return

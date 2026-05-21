@@ -51,7 +51,7 @@ python test_gaje_v1.py
 
 Para verificar la integridad de la base de datos genómica:
 ```bash
-python scripts/inspect_gguf.py --model models/gajeexpert-v2/model.gaje
+python scripts/inspect_gguf.py --model models/checkpoints/gajeexpert-v2/model.gaje
 ```
 
 ---

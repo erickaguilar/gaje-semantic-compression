@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath("python"))
 from genomize_llm import GenomicLLM
 
 def diagnose():
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     model = GenomicLLM(model_path)
     
     text = "The capital of France is Paris. The capital of Germany is"

@@ -97,10 +97,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         };
         let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), 49152)?;
         
-        if Path::new("models/tokenizer.json").exists() {
-            let tok = tokenizers::Tokenizer::from_file("models/tokenizer.json").map_err(|e| e.to_string())?;
+        if Path::new("models/core/tokenizer.json").exists() {
+            let tok = tokenizers::Tokenizer::from_file("models/core/tokenizer.json").map_err(|e| e.to_string())?;
             _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
-            println!("[+] Tokenizador 'models/tokenizer.json' integrado en el organismo.");
+            println!("[+] Tokenizador 'models/core/tokenizer.json' integrado en el organismo.");
         }
 
         println!("[+] Nuevo organismo inicializado exitosamente.");

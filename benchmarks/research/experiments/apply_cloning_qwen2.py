@@ -6,7 +6,7 @@ def apply_cloning_to_block(block_idx=0):
     print("-" * 50)
     
     # Rutas de los archivos del bloque
-    base_path = f"models/gaje_model_v1/block_{block_idx}/"
+    base_path = f"models/checkpoints/gaje_model_v1/block_{block_idx}/"
     weights_path = os.path.join(base_path, "attn_w_q.bin")
     centroids_path = os.path.join(base_path, "attn_centroids.npy")
     

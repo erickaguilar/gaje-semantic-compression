@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath("python"))
 from gaje.nn.stabilized import GenomicLLM
 
 def main():
-    model_path = "models/mc_optimized_qwen/model.gaje"
+    model_path = "models/checkpoints/mc_optimized_qwen/model.gaje"
     print(f"[*] Intentando cargar el modelo desde: {model_path}")
     
     start = time.time()

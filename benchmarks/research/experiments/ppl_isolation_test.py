@@ -48,7 +48,7 @@ def calculate_ppl_custom(model, text):
     return np.exp(-np.mean(log_likelihoods))
 
 def run_isolation_test():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     test_text = "El protocolo GAJE es eficiente."
 
     print("="*60)

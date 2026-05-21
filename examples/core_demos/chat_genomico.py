@@ -16,7 +16,7 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="models/SmolLM2-135M-Instruct-Q8_0.gguf",
+        default="models/gguf/smollm2-135m-q8_0.gguf",
         help="Path to the GGUF model",
     )
     parser.add_argument(

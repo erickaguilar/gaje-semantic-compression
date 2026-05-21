@@ -36,7 +36,7 @@ def calculate_ppl(model, text):
     return ppl
 
 def run_test():
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     if not os.path.exists(model_path):
         print(f"❌ Modelo no encontrado.")
         return

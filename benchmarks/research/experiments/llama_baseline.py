@@ -3,7 +3,7 @@ import os
 import sys
 
 def test_gguf_integrity():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     if not os.path.exists(model_path):
         print(f"❌ Error: El archivo {model_path} no existe.")
         return

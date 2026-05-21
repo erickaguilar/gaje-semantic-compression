@@ -66,7 +66,7 @@ def main():
         print("\n" + "-" * 20)
 
     # 5. Guardar Organismo Evolucionado
-    out_dir = "models/qwen2_es_v2_ext"
+    out_dir = "models/checkpoints/qwen2_es_v2_ext"
     os.makedirs(out_dir, exist_ok=True)
     llm.save(out_dir)
     print(f"\n✅ Organismo 'Políglota ES v2' guardado en {out_dir}")

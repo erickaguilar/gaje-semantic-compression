@@ -13,7 +13,7 @@ def run_teacher_test():
     print("🧪 PRUEBA DE BASELINE: QWEN2 TEACHER (FLOAT32) 🧪")
     print("="*60)
 
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     if not os.path.exists(model_path):
         print("❌ Modelo GGUF no encontrado.")
         return

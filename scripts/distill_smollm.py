@@ -12,7 +12,7 @@ from gaje.nn.trainer import GenomicTrainer
 
 def main():
     parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: SMOL-DISTILLATION")
-    parser.add_argument("--source", type=str, default="models/SmolLM2-135M-Instruct-Q8_0.gguf", help="Source GGUF model")
+    parser.add_argument("--source", type=str, default="models/gguf/smollm2-135m-q8_0.gguf", help="Source GGUF model")
     parser.add_argument("--name", type=str, default="GajeSmol-v1", help="Name of the distilled organism")
     parser.add_argument("--epochs", type=int, default=10, help="Refinement epochs (default: 10)")
     args = parser.parse_args()
@@ -55,7 +55,7 @@ def main():
         trainer.evolve(dataset, generations=10, mutation_scale=0.01)
 
     # 4. Guardar el nuevo organismo
-    out_dir = f"models/{args.name.lower()}"
+    out_dir = f"models/checkpoints/{args.name.lower()}"
     os.makedirs(out_dir, exist_ok=True)
     llm.save(out_dir)
     print(f"\n[+] Organismo destilado guardado en {out_dir}")

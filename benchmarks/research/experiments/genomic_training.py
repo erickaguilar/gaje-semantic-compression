@@ -11,7 +11,7 @@ from stabilized_genomic_llm import GenomicLLM
 
 def train_metabolism():
     model_id = "HuggingFaceTB/SmolLM2-135M-Instruct"
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     
     print("🧬 INICIANDO MICRO-ENTRENAMIENTO GENÓMICO")
     print("="*50)

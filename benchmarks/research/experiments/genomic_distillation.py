@@ -18,7 +18,7 @@ def run_distillation():
     # para calibrar los centroides residuales del alumno.
     
     tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     
     print(f"👶 Sincronizando Alumno Genómico (2-bit + Epigenética)...")
     student = GenomicLLM(model_path, num_blocks=30)

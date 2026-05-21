@@ -59,10 +59,10 @@ def calculate_ppl_and_show_predictions(model, phrases):
 
 def run_precision_test():
 <<<<<<< HEAD
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-instruct-fp16.gguf"
 
 =======
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-f16.gguf"
     
 >>>>>>> origin/develop
     # Frases de baja entropía

@@ -11,7 +11,7 @@ from gaje.nn.configs import get_config
 def test_genomic_norm_evolution():
     print("🔬 Probando 'GenomicNorm Adaptativo' (Evolución de Coherencia)...")
     
-    path = "models/gnorm_test.gaje"
+    path = "models/checkpoints/gnorm_test.gaje"
     config = engine.ModelConfig(
         config=engine.ArchConfig(
             name="GNORM-Test",

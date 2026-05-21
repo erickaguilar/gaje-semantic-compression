@@ -1037,7 +1037,7 @@ mod gguf_tests {
 
     #[test]
     fn test_gguf_loader_reads_qwen2() {
-        let path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf";
+        let path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf";
         if !Path::new(path).exists() {
             println!("Skipping test since {} does not exist.", path);
             return;

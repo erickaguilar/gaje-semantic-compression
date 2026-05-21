@@ -73,7 +73,7 @@ class PerplexityValidator:
 
 
 def run_ppl_test():
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-instruct-fp16.gguf"
     if not os.path.exists(model_path):
         print("❌ Modelo no encontrado.")
         return

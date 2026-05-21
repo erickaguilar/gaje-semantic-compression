@@ -198,7 +198,7 @@ class EntropyValidator:
 
 
 if __name__ == "__main__":
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-instruct-fp16.gguf"
     if os.path.exists(model_path):
         validator = EntropyValidator(model_path)
         validator.analyze_fidelity()

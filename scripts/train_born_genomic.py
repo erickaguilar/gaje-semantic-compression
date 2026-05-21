@@ -20,7 +20,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=50, help="Épocas de entrenamiento")
     parser.add_argument("--lr", type=float, default=0.005, help="Learning Rate")
     parser.add_argument("--dataset", type=str, default="data/datasets/dataset_born_2000.txt", help="Ruta al dataset")
-    parser.add_argument("--tokenizer", type=str, default="models/tokenizer.json", help="Ruta al tokenizador")
+    parser.add_argument("--tokenizer", type=str, default="models/core/tokenizer.json", help="Ruta al tokenizador")
     args = parser.parse_args()
 
     print(f"🧬 Iniciando Nacimiento Genómico: {args.name}")
@@ -46,7 +46,7 @@ def main():
         eps=1e-6
     )
 
-    model_dir = f"models/{args.name.lower()}"
+    model_dir = f"models/checkpoints/{args.name.lower()}"
     model_path = f"{model_dir}/model.gaje"
     os.makedirs(model_dir, exist_ok=True)
 

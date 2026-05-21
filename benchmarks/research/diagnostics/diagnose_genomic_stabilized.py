@@ -6,7 +6,7 @@ sys.path.append(os.path.abspath("python"))
 from stabilized_genomic_llm import GenomicLLM
 
 def diagnose():
-    model_path = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     model = GenomicLLM(model_path, num_blocks=4)
     
     text = "The capital of France is"

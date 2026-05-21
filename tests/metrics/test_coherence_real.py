@@ -5,11 +5,11 @@ from gaje.nn.stabilized import GenomicLLM
 
 
 def test_coherence(model_arg=None):
-    model_path = model_arg or "models/SmolLM2-135M-Instruct-Q8_0.gguf"
+    model_path = model_arg or "models/gguf/smollm2-135m-q8_0.gguf"
     if not os.path.exists(model_path):
         # Intentar rutas alternativas
         possible = [
-            "/data/data/com.termux/files/home/models/smollm2-135m-f16.gguf",
+            "/data/data/com.termux/files/home/models/gguf/smollm2-135m-f16.gguf",
             "data/models/qwen2-0_5b-instruct-fp16.gguf",
             "data/models/smollm2-135m-f16.gguf",
         ]

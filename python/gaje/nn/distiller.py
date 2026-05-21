@@ -148,7 +148,7 @@ class GenomicDistiller:
 
 
 if __name__ == "__main__":
-    model_path = "./data/models/qwen2-0_5b-instruct-fp16.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     # DISTILACIÓN QUIRÚRGICA: Solo 2 bloques para validar el enfoque híbrido
     num_test_blocks = 2
     distiller = GenomicDistiller(model_path, num_blocks=num_test_blocks)

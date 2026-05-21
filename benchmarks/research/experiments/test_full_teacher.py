@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath("python"))
 from genomize_llm import GenomicLLM
 
 def test_full_teacher():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     if not os.path.exists(model_path):
         print("❌ Modelo no encontrado.")
         return

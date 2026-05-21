@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--arch", type=str, default="qwen2", help="Arquitectura a optimizar")
     parser.add_argument("--blocks", type=int, default=1, help="Número de bloques")
     parser.add_argument("--iterations", type=int, default=300, help="Número de generaciones de Monte Carlo")
-    parser.add_argument("--out", type=str, default="models/mc_optimized_qwen", help="Directorio de salida")
+    parser.add_argument("--out", type=str, default="models/checkpoints/mc_optimized_qwen", help="Directorio de salida")
     args = parser.parse_args()
     
     print(f"🎲 Iniciando Optimización Global Monte Carlo para {args.arch} ({args.iterations} generaciones)")

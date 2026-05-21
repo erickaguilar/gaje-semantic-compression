@@ -43,7 +43,7 @@ def calculate_top_prediction(model, text, disable_attn=False, disable_ffn=False)
     return model.tokenizer.decode([top_id])
 
 def run_supreme_isolation():
-    model_path = "/data/data/com.termux/files/home/models/qwen2-0_5b-q8_0.gguf"
+    model_path = "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf"
     test_phrase = "Paris is the capital of"
     
     print("[*] Cargando Maestro F32 (1 bloque para aislar)...")

@@ -58,7 +58,7 @@ class GAJEHealthReport:
         print("💡 Estado: El motor de 24 bloques es estable. Listo para Fase 10.")
 
 if __name__ == "__main__":
-    PATH = "/data/data/com.termux/files/home/models/smollm2-135m-q8_0.gguf"
+    PATH = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
     try:
         report = GAJEHealthReport(PATH, num_blocks=30) # SmolLM2 tiene 30 bloques
         report.run_full_fidelity_test()
