@@ -1,41 +1,41 @@
-# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad
+# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad (v0.7.0)
 
-Este archivo define las reglas de flujo de trabajo para el proyecto **DNA Semantic Compression**. El objetivo es garantizar que la rama `develop` se mantenga siempre estable y libre de regresiones de memoria (OOM).
+Este archivo define las reglas de flujo de trabajo, la arquitectura del repositorio y los estándares técnicos para el proyecto **DNA Semantic Compression**. Es de cumplimiento obligatorio para todas las sesiones de desarrollo asistido.
 
-## 1. Arquitectura de Ramas (Branching)
+## 1. Arquitectura del Repositorio (Organización v0.7.0)
 
-- **`main`**: Código de producción. Solo recibe merges de `develop` tras validación completa de perplejidad (PPL).
-- **`develop`**: Rama de integración **SAGRADA**. Todo código aquí DEBE compilar y pasar `pytest`.
-- **`feature/*`**: Nuevas funcionalidades. Se crean desde `develop`.
-- **`fix/*`**: Correcciones de bugs. Se crean desde la rama afectada.
-- **`research/*`**: Experimentos especulativos. Pueden ser descartados sin llegar nunca a `develop`.
+El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos en la raíz que no sean de configuración esencial.
+
+- **`/docs`**: Documentación segmentada (`guides/`, `plans/`, `reports/`, `meta/`, `research/`).
+- **`/scripts`**: Utilidades de entrenamiento, destilación y mantenimiento (`maintenance/`).
+- **`/data`**: Centralización de datos generados (`training/`, `experiments/`, `datasets/`).
+- **`/examples`**: Demos categorizadas (`core_demos/`, `visual_demos/`, `legacy_research/`).
+- **`/tests`**: Suite de validación (`unit/`, `integration/`, `metrics/`, `training/`).
+- **`/benchmarks`**: Evaluación de rendimiento con logs centralizados en `benchmarks/logs/`.
+- **`/src` & `/python`**: Núcleo nativo (Rust) y lógica de investigación (Python).
 
 ## 2. Reglas de Oro para el Agente (Gemini CLI)
 
-1.  **Aislamiento:** Ante cualquier instrucción de cambio significativo, propón crear una rama `feature/` o `fix/` antes de tocar `develop`.
-2.  **Validación Pre-Merge:** Antes de fusionar cualquier rama a `develop`, se debe ejecutar:
-    - `cargo build --release` (Verificación de compilación nativa).
-    - `pytest tests/test_integration_v060.py` (Verificación de estabilidad funcional).
+1.  **Aislamiento y Ramas:** Ante cambios significativos, usa ramas `feature/` o `fix/`. La rama `develop` es sagrada.
+2.  **Validación Pre-Merge:** Obligatorio ejecutar:
+    - `cargo build --release` (Verificación nativa).
+    - `pytest tests/integration/test_integration_v060.py` (Estabilidad funcional).
 3.  **Mandato de Estabilidad de Memoria:**
-    - PROHIBIDO realizar pre-asignaciones masivas de tensores `f32` en el bucle de inferencia (`forward`).
-    - Las conversiones `f16 -> f32` deben ser "on-the-fly" o en buffers pequeños y controlados.
-    - Se debe priorizar el uso de punteros y memoria compartida sobre la copia de vectores (`collect()`).
+    - Prohibidas las pre-asignaciones masivas de tensores `f32` en el `forward`.
+    - Priorizar el uso de punteros y memoria compartida (`Arc<Vec<u8>>`).
+4.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
 
-## 3. Procedimiento ante Errores Críticos (OOM/Crash)
+## 3. Estado Técnico y Metas (v0.7.0)
 
-Si se detecta un error de estabilidad en una rama de desarrollo:
-1.  **NO** intentar parches rápidos sobre `develop`.
-2.  **Backtrack:** Identificar el commit estable anterior.
-3.  **Aislamiento:** Mover el experimento fallido a una rama `research/` para análisis post-mortem.
-4.  **Limpieza:** Utilizar `git push --force` solo como último recurso para sanear `develop` tras una divergencia crítica, como se hizo en la v0.6.3.
+- **Soberanía Nativa:** Transición activa hacia Rust 100% (Ver `docs/plans/NATIVE_SOVEREIGNTY_PLAN.md`).
+- **Rendimiento Validado:** >200,000 registros/seg en búsqueda asimétrica (ADC) en ARM/NEON.
+- **Precisión:** Recall@10 > 82% en vectores de 768d (SBERT).
+- **Compresión:** 2 bits por peso (16x reducción de RAM).
 
 ## 4. Estilo de Commits
 
 Seguir el estándar de **Conventional Commits**:
-- `feat(scope):` para nuevas funciones.
-- `fix(scope):` para correcciones.
-- `perf(scope):` para mejoras de rendimiento.
-- `docs(scope):` para cambios en documentación.
+- `feat(scope):`, `fix(scope):`, `perf(scope):`, `docs(scope):`, `chore(scope):`.
 
 ---
-*Este protocolo es vinculante para todas las sesiones de desarrollo asistido.*
+*Este protocolo es vinculante y actualiza todas las versiones previas.*
