@@ -1,39 +1,37 @@
-use crate::nn::spiking::neuron::{SpikingNeuron, GajeWeight2Bit};
+use crate::nn::spiking::neuron::GajeWeight2Bit;
+use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use crate::compute::scheduler::NeuromorphicScheduler;
 use rand::Rng;
 use rayon::prelude::*;
 
-/// Representa un "Organismo" Neuromórfico en la población evolutiva.
+/// Representa un "Organismo" Neuromórfico en la población evolutiva usando SoA.
 #[derive(Clone)]
 pub struct NeuromorphicOrganism {
-    pub layers: Vec<Vec<SpikingNeuron>>,
+    pub layers: Vec<GajeNeuromorphicLayer>,
     pub fitness: f32,
 }
 
 impl NeuromorphicOrganism {
-    pub fn new(layers: Vec<Vec<SpikingNeuron>>) -> Self {
+    pub fn new(layers: Vec<GajeNeuromorphicLayer>) -> Self {
         Self { layers, fitness: 0.0 }
     }
 
-    /// Aplica mutaciones bitwise ultra-rápidas directamente sobre el buffer de pesos.
+    /// Aplica mutaciones bitwise ultra-rápidas directamente sobre el buffer de pesos masivo.
     pub fn mutate(&mut self, rate: f32) {
         let mut rng = rand::thread_rng();
         for layer in &mut self.layers {
-            for neuron in layer {
-                for byte in &mut neuron.weights {
-                    if rng.gen::<f32>() < rate {
-                        // Mutación Bitwise: XOR con una máscara aleatoria
-                        // Esto cambia estados de 2-bits de forma impredecible pero rápida.
-                        let mask = rng.gen::<u8>();
-                        *byte ^= mask;
-                    }
+            for byte in &mut layer.packed_weights {
+                if rng.gen::<f32>() < rate {
+                    // Mutación Bitwise: XOR con una máscara aleatoria
+                    let mask = rng.gen::<u8>();
+                    *byte ^= mask;
                 }
             }
         }
     }
 }
 
-/// Motor de Evolución para el Emulador Neuromórfico.
+/// Motor de Evolución para el Emulador Neuromórfico Industrial.
 pub struct SpikingEvolutionEngine {
     pub population: Vec<NeuromorphicOrganism>,
     pub centroides: [f32; 4],
@@ -42,7 +40,7 @@ pub struct SpikingEvolutionEngine {
 
 impl SpikingEvolutionEngine {
     pub fn new(
-        initial_model: Vec<Vec<SpikingNeuron>>,
+        initial_model: Vec<GajeNeuromorphicLayer>,
         pop_size: usize,
         centroides: [f32; 4],
         mutation_rate: f32,
@@ -76,12 +74,9 @@ impl SpikingEvolutionEngine {
             let output_spikes = scheduler.run_to_completion(&mut organism.layers);
 
             // 3. Calcular Fitness (SFA)
-            // Medimos qué tan cerca está la frecuencia de disparos de salida del objetivo
             let mut score = 0.0;
             let total_outputs = output_spikes.len() as f32;
             
-            // Simplificación: El fitness mejora si hay actividad (frecuencia > 0)
-            // y si los timestamps están distribuidos (precisión temporal)
             if total_outputs > 0.0 {
                 score = total_outputs / (target_frequencies.len() as f32);
             }
@@ -90,13 +85,13 @@ impl SpikingEvolutionEngine {
         });
 
         // Ordenar por fitness (descendente)
-        self.population.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).unwrap());
+        self.population.sort_by(|a, b| b.fitness.partial_cmp(&a.fitness).expect("Fitness NaN detectado"));
     }
 
     /// Produce la siguiente generación mediante selección y mutación.
     pub fn evolve(&mut self) {
         let pop_size = self.population.len();
-        let elite_count = pop_size / 10; // Mantener el 10% mejor
+        let elite_count = (pop_size / 10).max(1); // Mantener el 10% mejor
         
         let mut new_population = Vec::with_capacity(pop_size);
         
@@ -120,31 +115,25 @@ impl SpikingEvolutionEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::nn::spiking::neuron::GajeWeight2Bit;
 
     #[test]
-    fn test_evolution_flow() {
+    fn test_evolution_flow_soa() {
         let centroides = [0.0, 0.5, 0.8, 1.2];
         
-        // Crear modelo base: 1 capa, 2 neuronas
-        let mut neuron = SpikingNeuron::new(1.0, 0.9, 1);
-        neuron.set_weight(0, GajeWeight2Bit::State00);
-        let layers = vec![vec![neuron]];
+        // Crear modelo base SoA: 1 capa, 1 neurona, 1 input
+        let layer = GajeNeuromorphicLayer::new(1, 1, 1.0, 0.9);
+        let layers = vec![layer];
 
         let mut engine = SpikingEvolutionEngine::new(layers, 10, centroides, 0.1);
         
-        // Evaluar (Input en L0, N0; Target 1.0 frecuencia)
+        // Evaluar
         engine.evaluate(&[(0, 0)], &[1.0]);
-        
         let best_fitness_before = engine.population[0].fitness;
         
-        // Evolucionar
         engine.evolve();
         engine.evaluate(&[(0, 0)], &[1.0]);
-        
         let best_fitness_after = engine.population[0].fitness;
         
-        // El fitness debería ser >= tras una generación (elitismo asegura no empeorar)
         assert!(best_fitness_after >= best_fitness_before);
     }
 }

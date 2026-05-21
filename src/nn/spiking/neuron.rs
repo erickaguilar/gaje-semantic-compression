@@ -80,7 +80,10 @@ impl SpikingNeuron {
             self.membrane_potential = 0.0; // Reset (Periodo refractario implícito)
             true
         } else {
-            self.membrane_potential *= self.decay; // Fuga de energía
+            // Aplicar fuga solo si hay potencial positivo, para evitar extinción inmediata
+            if self.membrane_potential > 0.0 {
+                self.membrane_potential *= self.decay;
+            }
             false
         }
     }

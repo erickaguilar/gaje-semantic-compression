@@ -1,5 +1,5 @@
-use _impl::nn::spiking::{SpikingNeuron, GajeWeight2Bit};
-use _impl::core::evolution_bitwise::{SpikingEvolutionEngine, NeuromorphicOrganism};
+use _impl::nn::spiking::{GajeNeuromorphicLayer, GajeWeight2Bit};
+use _impl::core::evolution_bitwise::SpikingEvolutionEngine;
 use _impl::compute::scheduler::NeuromorphicScheduler;
 use std::collections::HashMap;
 
@@ -33,21 +33,15 @@ fn main() {
 
     println!("   Vocabulario: {} palabras.", id_counter);
 
-    // 3. Configuración del Motor Optimizada para 1.00 Fitness
+    // 3. Configuración del Motor Industrial (SoA)
     let dim = 128; 
     let centroides = [-1.0, -0.2, 0.2, 1.0];
     
-    let mut layers = vec![
-        Vec::new(), // L0
-        Vec::new(), // L1
-    ];
-
-    for _ in 0..id_counter {
-        layers[0].push(SpikingNeuron::new(0.05, 0.8, 1)); 
-    }
-    for _ in 0..dim {
-        layers[1].push(SpikingNeuron::new(0.05, 0.8, id_counter));
-    }
+    // Crear capas SoA
+    // L0 ahora es una capa densa que recibe el ID de la palabra como un spike broadcast
+    let l0 = GajeNeuromorphicLayer::new(id_counter, id_counter, 0.05, 0.8);
+    let l1 = GajeNeuromorphicLayer::new(dim, id_counter, 0.05, 0.8);
+    let layers = vec![l0, l1];
 
     let mut engine = SpikingEvolutionEngine::new(layers, 200, centroides, 0.3);
 
@@ -75,13 +69,15 @@ fn main() {
         }
     }
 
-    // 5. Verificación de "Pensamiento"
+    // 5. Verificación de "Pensamiento" Industrial
     println!("\n🧠 Verificación de Inferencia (Palabras Semilla):");
     let best_organism = &mut engine.population[0];
     
     for word in &["rust", "el", "gaje"] {
         let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
         let id = *word_to_id.get(*word).unwrap();
+        
+        // En SoA, el id de la palabra activa una neurona específica de la capa de entrada
         scheduler.inject_spike(0, id, 0);
         
         let outputs = scheduler.run_to_completion(&mut best_organism.layers);

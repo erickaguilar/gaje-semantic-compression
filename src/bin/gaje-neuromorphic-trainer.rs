@@ -1,4 +1,4 @@
-use _impl::nn::spiking::{SpikingNeuron, GajeWeight2Bit};
+use _impl::nn::spiking::{GajeNeuromorphicLayer, GajeWeight2Bit};
 use _impl::core::evolution_bitwise::SpikingEvolutionEngine;
 use std::fs;
 use std::time::Instant;
@@ -13,7 +13,7 @@ fn main() {
     let mutation_rate = 0.2;
     let centroides = [-1.0, -0.2, 0.2, 1.0];
 
-    println!("🧬 GAJE-Flow: Iniciando Nacimiento de Modelo Neuromórfico");
+    println!("🧬 GAJE-Flow: Iniciando Nacimiento de Modelo Neuromórfico (Industrial SoA)");
     println!("   Dataset: {}", dataset_path);
     println!("   Población: {}, Gen: {}, Dim: {}", pop_size, generations, dim);
 
@@ -41,25 +41,16 @@ fn main() {
 
     println!("   Vocabulario: {} tokens únicos.", id_counter);
 
-    // 3. Inicialización del Modelo "Born"
-    // L0: Capa de Entrada (Embeddings de Spikes)
-    // L1: Capa de Procesamiento Neuromórfico
-    let mut layers = vec![
-        Vec::new(), // L0
-        Vec::new(), // L1
-    ];
-
-    for _ in 0..id_counter {
-        layers[0].push(SpikingNeuron::new(0.05, 0.8, 1)); 
-    }
-    for _ in 0..dim {
-        layers[1].push(SpikingNeuron::new(0.05, 0.8, id_counter));
-    }
+    // 3. Inicialización del Modelo Industrial (SoA)
+    // L0 es densa: id_counter neuronas, cada una con id_counter pesos
+    let l0 = GajeNeuromorphicLayer::new(id_counter, id_counter, 0.05, 0.8);
+    let l1 = GajeNeuromorphicLayer::new(dim, id_counter, 0.05, 0.8);
+    let layers = vec![l0, l1];
 
     let mut engine = SpikingEvolutionEngine::new(layers, pop_size, centroides, mutation_rate);
 
     // 4. Protocolo de Entrenamiento (Evolución)
-    println!("\n🔥 Iniciando Entrenamiento Genómico (Resonancia Bitwise)...");
+    println!("\n🔥 Iniciando Entrenamiento Genómico (Resonancia Bitwise SoA)...");
     let start = Instant::now();
 
     let input_spikes: Vec<(usize, usize)> = sequences.iter()
@@ -87,8 +78,4 @@ fn main() {
     println!("\n✅ Entrenamiento Completado en {:?}", duration);
     println!("   Fitness Final: {:.4}", best.fitness);
     println!("   Modelo 'Born' generado exitosamente.");
-    println!("   Pesos de 2-bits optimizados para el dataset.");
-
-    // Aquí se llamaría a NativeLoader::save_genomic_model en una versión completa
-    println!("\n[*] Modelo guardado virtualmente como: born_neuromorphic_v1.gaje");
 }
