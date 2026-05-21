@@ -32,22 +32,22 @@ Para lograr la máxima eficiencia en dispositivos móviles y sistemas embebidos,
 
 ---
 
-## 🗺️ Hoja de Ruta hacia v0.8.0
+## 🗺️ Hoja de Ruta hacia v0.8.0 (Actualizada)
 
-### Fase 1: Estandarización y Carga (Inmediato)
-- [ ] Definir y validar el formato `.gaje` autocontenido.
-- [ ] Implementar `src/io/loader.rs` nativo (Zero-Copy).
-- [ ] Integrar `tokenizers` en `gaje-cli`.
+### ✅ Fase 1: Estandarización y Carga (Completada)
+- [x] Definir y validar el formato `.gaje` autocontenido.
+- [x] Implementar `src/io/loader.rs` nativo (Zero-Copy).
+- [x] Integrar `tokenizers` en `gaje-cli`.
 
-### Fase 2: Ejecución Independiente (Corto Plazo)
-- [ ] Migrar el bucle autoregresivo completo a `src/bin/gaje-cli.rs`.
-- [ ] Eliminar la dependencia de `PyO3` para la inferencia base.
-- [ ] Lograr la ejecución de un modelo `.gaje` solo con `./target/release/gaje-cli model.gaje`.
+### ✅ Fase 2: Ejecución Independiente (Completada)
+- [x] Migrar el bucle autoregresivo completo a `src/bin/gaje-cli.rs`.
+- [x] Eliminar la dependencia de `PyO3` para la inferencia base.
+- [x] Lograr la ejecución de un modelo `.gaje` solo con `./target/release/gaje-cli model.gaje`.
 
-### Fase 3: Aprendizaje Nativo (Medio Plazo)
+### 🚀 Fase 3: Aprendizaje Nativo (En Curso)
 - [ ] Implementar el ciclo de entrenamiento `forward -> loss -> refine` en Rust.
-- [ ] Habilitar el "Island Model" para evolución paralela masiva usando `Rayon`.
-
+- [x] Habilitar el "Island Model" para evolución paralela masiva usando `Rayon` (Implementado en v0.9.0-alpha).
+- [x] Implementar arquitectura industrial SoA + Timing Wheel para escalabilidad.
 ---
 
 ## 📊 Beneficios Esperados

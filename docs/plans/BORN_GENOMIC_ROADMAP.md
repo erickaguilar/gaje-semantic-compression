@@ -1,28 +1,24 @@
 # 🧬 Plan de Trabajo: Desarrollo de Modelos "Born-Genomic" (GAJE Nativo)
 
-**Estado:** En Planificación  
-**Rama:** `feature/gaje-native-llm`  
+**Estado:** Fase 1 Completada (Infraestructura Industrial Lista)
+**Rama:** `android` (v0.9.0-alpha)
 **Objetivo Principal:** Entrenar un modelo de lenguaje (LLM) desde cero (pesos aleatorios) utilizando directamente el protocolo de compresión semántica GAJE (2-bits por dimensión), eliminando la dependencia de destilar modelos *float32* pre-entrenados.
 
 ---
 
-## 🔬 Fase 1: Infraestructura de Entrenamiento Genómico (Semanas 1-2)
-*El modelo actual puede inferir y actualizar centroides, pero necesitamos un bucle de entrenamiento completo.*
+## ✅ Fase 1: Infraestructura de Entrenamiento Genómico (Completada)
+*Se ha implementado el motor industrial necesario para el aprendizaje masivo.*
 
-1. **Autograd Híbrido (PyTorch a Rust):**
-   - Implementar un bucle de entrenamiento donde el *forward pass* se ejecute en el motor de Rust (para aprovechar el cálculo genómico real).
-   - Utilizar PyTorch únicamente como motor de cálculo de gradientes (*Cross-Entropy Loss*) sobre los *logits* de salida.
-   - Enrutar los gradientes resultantes hacia las capas genómicas utilizando la función `refine_with_grads` recientemente implementada.
-2. **Dataset Pipeline Ligero:**
-   - Crear un cargador de datos optimizado para Termux/Móvil que consuma micro-datasets (ej. *TinyStories* o un corpus muy específico y reducido).
-   - Generación de *batches* y manejo de secuencias cortas (context length: 128-256 tokens) para iteración rápida.
-3. **Métricas de Convergencia en Tiempo Real:**
-   - Monitoreo de Perplejidad (PPL) y *Loss* durante el entrenamiento.
-   - Visualización de la evolución de los centroides genómicos (verificar que los 4 valores base del ADN divergen y se especializan).
+1. **Arquitectura SoA (Structure of Arrays):**
+   - Implementada en `src/nn/spiking/layer.rs`. Permite procesamiento SIMD y optimización de caché.
+2. **Motor Evolutivo Paralelo (Rayon):**
+   - El `SpikingEvolutionEngine` evalúa múltiples linajes genómicos simultáneamente, acelerando la convergencia.
+3. **Métricas de Convergencia (SFA):**
+   - Implementado el cálculo de *Spike Frequency Accuracy* para medir la resonancia del modelo.
 
-## 🛠️ Fase 2: Ajustes Arquitectónicos Nativos (Semanas 2-3)
+## 🛠️ Fase 2: Ajustes Arquitectónicos Nativos (En Curso)
 *SwiGLU demostró ser destructivo para modelos pequeños de 2 bits. Un modelo nacido genómico debe tener una arquitectura adaptada a su naturaleza de baja precisión.*
-
+...
 1. **Reemplazo de Activaciones No-Lineales:**
    - Experimentar con activaciones más estables frente al ruido de cuantización (ej. `ReLU`, `GELU` suave, o una variante acotada) en la `ArchitectureConfig` de `gaje_native`.
 2. **Normas Adaptativas (GenomicNorm):**

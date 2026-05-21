@@ -10,23 +10,19 @@ Este documento detalla la hoja de ruta para la implementación del motor neurom�
     - Implementación de la estructura `SpikingNeuron` (LIF).
     - Métodos `integrate` (suma directa de centroides) y `check_spike`.
 - [ ] **Unit Tests**: Validar que la integración de 4 spikes produce un disparo correcto según el umbral.
+## Fase 2: Motor de Eventos y Programador (Completada)
+**Objetivo:** Implementar la cola de prioridad asíncrona y la Timing Wheel.
 
-## Fase 2: Motor de Eventos y Programador (Semana 1-2)
-**Objetivo:** Implementar la cola de prioridad asíncrona para evitar el procesamiento denso.
+- [x] **Módulo `src/compute/event_queue.rs`**: Gestión de eventos en el tiempo.
+- [x] **Módulo `src/compute/timing_wheel.rs`**: Implementación industrial $O(1)$ para contextos masivos.
+- [x] **Módulo `src/compute/scheduler.rs`**: Lógica de propagación de retardos (`Δt`).
 
-- [ ] **Módulo `src/compute/event_queue.rs`**:
-    - Estructura `SpikeEvent` (timestamp, source_neuron_id, target_layer_id).
-    - Implementación de `std::collections::BinaryHeap` para la gestión de eventos en el tiempo.
-- [ ] **Módulo `src/compute/scheduler.rs`**:
-    - Lógica de propagación de retardos (`Δt`).
-    - Manejo de ventanas de tiempo para simulación en tiempo real vs. tiempo acelerado.
+## Fase 3: Capas Neuromórficas Industriales (En Curso)
+**Objetivo:** Traducir la arquitectura Transformer a disparos discretos con diseño SoA.
 
-## Fase 3: Capas Neuromórficas (Atención y FFN) (Semana 2)
-**Objetivo:** Traducir la arquitectura Transformer a disparos discretos.
-
-- [ ] **Módulo `src/nn/spiking/attention.rs`**:
-    - Implementación de "Spiking Self-Attention". 
-    - Los scores de atención se convierten en probabilidades de disparo o frecuencias de spike.
+- [x] **Módulo `src/nn/spiking/layer.rs`**: Estructura SoA optimizada para SIMD.
+- [ ] **Módulo `src/nn/spiking/attention.rs`**: Adaptar a la nueva arquitectura de capas.
+...
 - [ ] **Módulo `src/nn/spiking/ffn.rs`**:
     - Capas lineales de disparos rápidos usando los pesos comprimidos de 2-bits.
 - [ ] **Módulo `src/nn/spiking/block.rs`**: Ensamblaje del bloque Transformer neuromórfico.
