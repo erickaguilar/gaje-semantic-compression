@@ -1,5 +1,4 @@
 use crate::compute::event_queue::SpikeEvent;
-use std::collections::VecDeque;
 
 /// Implementación de Timing Wheel para gestión de eventos neuromórficos con costo O(1).
 /// Ideal para contextos masivos donde una cola de prioridad (BinaryHeap) colapsaría.

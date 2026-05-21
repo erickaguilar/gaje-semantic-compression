@@ -21,7 +21,7 @@ impl SpikingTransformerBlock {
     /// Lógica de propagación dentro del bloque.
     /// Este método es una simplificación; la verdadera magia ocurre en el Scheduler
     /// inyectando eventos entre las neuronas de Atención -> FFN.
-    pub fn process_event(&mut self, event: SpikeEvent, scheduler: &mut NeuromorphicScheduler) {
+    pub fn process_event(&mut self, _event: SpikeEvent, _scheduler: &mut NeuromorphicScheduler) {
         // Aquí se implementaría la lógica de enrutamiento interna del bloque
         // Por ejemplo, un disparo en la capa de atención programa eventos para la capa FFN.
     }

@@ -1,4 +1,4 @@
-use _impl::nn::spiking::{GajeNeuromorphicLayer, GajeWeight2Bit};
+use _impl::nn::spiking::GajeNeuromorphicLayer;
 use _impl::core::evolution_bitwise::SpikingEvolutionEngine;
 use _impl::compute::scheduler::NeuromorphicScheduler;
 use std::collections::HashMap;

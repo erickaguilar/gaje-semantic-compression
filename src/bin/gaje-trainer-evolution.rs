@@ -112,7 +112,7 @@ fn main() {
     let start_time = Instant::now();
 
     for gen in 0..iterations {
-        let mut paths: Vec<RecurrentMicroOrganism> = (0..population_size)
+        let paths: Vec<RecurrentMicroOrganism> = (0..population_size)
             .map(|_| {
                 let mut clone = organism.clone();
                 clone.mutate(5);

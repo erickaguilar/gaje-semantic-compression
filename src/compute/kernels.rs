@@ -202,7 +202,7 @@ pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
 
 #[inline(always)]
 pub fn swiglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
-    let n = gate.len();
+    let _n = gate.len();
     out.par_iter_mut()
         .zip(gate.par_iter())
         .zip(up.par_iter())

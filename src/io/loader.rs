@@ -462,7 +462,7 @@ pub struct NativeLoader {
 }
 
 #[pyfunction]
-#[pyo3(name = "save_genomic_model")]
+#[pyo3(name = "save_genomic_model", signature = (path, model, config, tokenizer_path=None))]
 pub fn save_genomic_model_py(
     path: &str,
     model: &RustGenomicLLM,

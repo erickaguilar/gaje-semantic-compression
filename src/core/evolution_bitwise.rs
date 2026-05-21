@@ -1,4 +1,3 @@
-use crate::nn::spiking::neuron::GajeWeight2Bit;
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use crate::compute::scheduler::NeuromorphicScheduler;
 use rand::Rng;

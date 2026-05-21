@@ -1,4 +1,4 @@
-use _impl::nn::spiking::{GajeNeuromorphicLayer, GajeWeight2Bit};
+use _impl::nn::spiking::GajeNeuromorphicLayer;
 use _impl::core::evolution_bitwise::SpikingEvolutionEngine;
 use std::fs;
 use std::time::Instant;
