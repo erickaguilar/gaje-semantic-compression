@@ -1,1 +1,0 @@
-Recall@10 ADC (Per-Dim Optimized): 82.10%

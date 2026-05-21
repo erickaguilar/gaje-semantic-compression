@@ -1,0 +1,20 @@
+[
+    {
+        "scale": "Serious",
+        "n": 100000,
+        "quant_time_s": 6.685975551605225,
+        "avg_latency_ms": 432.47302293777466,
+        "throughput_ops_s": 231228,
+        "est_mem_mb": 18.310546875,
+        "top1_correct": true
+    },
+    {
+        "scale": "Very Serious",
+        "n": 1000000,
+        "quant_time_s": 63.133156538009644,
+        "avg_latency_ms": 3561.670708656311,
+        "throughput_ops_s": 280767,
+        "est_mem_mb": 183.10546875,
+        "top1_correct": true
+    }
+]

@@ -95,7 +95,7 @@ def run_accuracy_test():
     print("-" * 50)
 
     # Save results
-    with open("benchmarks/ACCURACY_LOG.txt", "w") as f:
+    with open("benchmarks/logs/ACCURACY_LOG.txt", "w") as f:
         f.write(f"Recall@10 ADC (Per-Dim Optimized): {avg_accuracy_adc:.2f}%\n")
 
 
