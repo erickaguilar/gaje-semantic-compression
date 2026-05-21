@@ -1,3 +1,14 @@
+## [0.8.0] - 2026-05-21
+### Added
+- **Emulador Neuromórfico v1.0 (Spiking Transformer):** Implementación de un motor de inferencia asíncrono basado en eventos que simula hardware neuromórfico real.
+- **Inferencia de 2-bits sin Multiplicaciones:** Neuronas LIF (Leaky Integrate-and-Fire) que utilizan sumas directas de centroides, eliminando el cuello de botella del ALU.
+- **Scheduler de Eventos Asíncronos:** Gestión de tiempo basada en `BinaryHeap` (Min-Heap) que permite saltar periodos de inactividad, ideal para contextos de 1,000,000 de tokens.
+- **Motor Evolutivo Bitwise XOR:** Entrenamiento nativo mediante mutaciones a nivel de bits sobre pesos empaquetados, logrando resonancia total (1.00 Fitness) en segundos.
+- **Gaje Identity Cloner:** Nueva herramienta de validación para clonar identidades cognitivas y estilos de lenguaje mediante resonancia genómica.
+
+### Changed
+- Estructura del núcleo (`src/nn/spiking` y `src/compute`) para soportar la arquitectura de disparos discretos.
+
 ## [0.7.0] - 2026-05-18
 ### Added
 - **Soberanía Nativa (Rust 100%):** Independencia absoluta del runtime de Python. El ecosistema GAJE ahora puede cargar, ejecutar, muestrear, evolucionar y entrenar LLMs directamente desde un entorno nativo seguro.
