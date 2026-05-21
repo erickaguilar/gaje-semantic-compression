@@ -23,6 +23,7 @@ impl From<u8> for GajeWeight2Bit {
 
 /// Estructura de una neurona neuromórfica emulada (Leaky Integrate-and-Fire).
 /// Diseñada para procesamiento de 2-bits sin multiplicaciones.
+#[derive(Clone)]
 pub struct SpikingNeuron {
     pub membrane_potential: f32,    // El "voltaje" acumulado (Potencial de membrana)
     pub threshold: f32,             // Umbral de disparo (Ancla FFN)
