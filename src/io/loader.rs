@@ -26,12 +26,24 @@ pub struct ArchConfig {
     #[pyo3(get, set)]
     #[serde(default = "default_rope_style")]
     pub rope_style: String,
+    #[pyo3(get, set)]
+    #[serde(default = "default_anchor_threshold")]
+    pub anchor_threshold: f32,
+    #[pyo3(get, set)]
+    #[serde(default = "default_anchor_threshold")]
+    pub ffn_anchor_threshold: f32,
+    #[pyo3(get, set)]
+    #[serde(default = "default_false")]
+    pub unpermute_weights: bool,
+    #[pyo3(get, set)]
+    #[serde(default = "default_false")]
+    pub apply_smollm_rope_patch: bool,
 }
 
 #[pymethods]
 impl ArchConfig {
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string()))]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false))]
     pub fn new(
         name: String,
         tokenizer_id: String,
@@ -39,6 +51,10 @@ impl ArchConfig {
         ffn_act: String,
         use_genomic_norm: bool,
         rope_style: String,
+        anchor_threshold: f32,
+        ffn_anchor_threshold: f32,
+        unpermute_weights: bool,
+        apply_smollm_rope_patch: bool,
     ) -> Self {
         ArchConfig {
             name,
@@ -47,6 +63,10 @@ impl ArchConfig {
             ffn_act,
             use_genomic_norm,
             rope_style,
+            anchor_threshold,
+            ffn_anchor_threshold,
+            unpermute_weights,
+            apply_smollm_rope_patch,
         }
     }
 }
@@ -68,6 +88,9 @@ fn default_false() -> bool {
 }
 fn default_rope_style() -> String {
     "split".to_string()
+}
+fn default_anchor_threshold() -> f32 {
+    0.1
 }
 
 #[pyclass]
@@ -214,6 +237,10 @@ impl GGUFLoader {
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
                 rope_style: "split".to_string(),
+                anchor_threshold: 0.1,
+                ffn_anchor_threshold: 0.1,
+                unpermute_weights: false,
+                apply_smollm_rope_patch: false,
             },
             n_embd,
             n_head,
@@ -432,6 +459,23 @@ impl GGUFLoader {
 
 pub struct NativeLoader {
     db: Arc<Database>,
+}
+
+#[pyfunction]
+#[pyo3(name = "save_genomic_model")]
+pub fn save_genomic_model_py(
+    path: &str,
+    model: &RustGenomicLLM,
+    config: &ModelConfig,
+    tokenizer_path: Option<&str>,
+) -> PyResult<()> {
+    let tok = if let Some(p) = tokenizer_path {
+        Some(tokenizers::Tokenizer::from_file(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?)
+    } else {
+        None
+    };
+    save_genomic_model(path, model, config, tok.as_ref())
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
 }
 
 pub fn save_genomic_model(

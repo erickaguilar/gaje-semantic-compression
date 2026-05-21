@@ -2,83 +2,98 @@ import os
 import sys
 import argparse
 import time
+import numpy as np
 
-# Ensure we use the local package first
-sys.path.insert(0, os.path.abspath("python"))
+# Asegurar que usamos el código local de 'python/'
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
 
+from gaje.core._impl import ArchConfig, ModelConfig, init_born_genomic_model, save_genomic_model, RustGenomicLLM
 from gaje.nn.stabilized import GenomicLLM
-from gaje.nn.configs import get_config
 from gaje.nn.trainer import GenomicTrainer
+from tokenizers import Tokenizer
 
 def main():
-    parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING")
-    parser.add_argument("--arch", type=str, default="qwen2", help="Architecture config to use (default: qwen2)")
-    parser.add_argument("--blocks", type=int, default=2, help="Number of transformer blocks (default: 2)")
-    parser.add_argument("--epochs", type=int, default=50, help="Training epochs (default: 50)")
-    parser.add_argument("--lr", type=float, default=0.01, help="Learning rate (default: 0.01)")
-    parser.add_argument("--evolve", action="store_true", help="Enable evolutionary refinement phase")
-    parser.add_argument("--gen", type=int, default=20, help="Number of evolutionary generations (default: 20)")
-    parser.add_argument("--dataset", type=str, default="data/datasets/dataset_entrenamiento.txt", help="Path to dataset file")
+    parser = argparse.ArgumentParser(description="🧬 GAJE Born-Genomic Training Phase 1")
+    parser.add_argument("--name", type=str, default="GajeSmall-v1", help="Nombre del organismo")
+    parser.add_argument("--blocks", type=int, default=4, help="Número de bloques")
+    parser.add_argument("--embd", type=int, default=512, help="Dimensión de embedding")
+    parser.add_argument("--epochs", type=int, default=50, help="Épocas de entrenamiento")
+    parser.add_argument("--lr", type=float, default=0.005, help="Learning Rate")
+    parser.add_argument("--dataset", type=str, default="data/datasets/dataset_born_2000.txt", help="Ruta al dataset")
+    parser.add_argument("--tokenizer", type=str, default="models/tokenizer.json", help="Ruta al tokenizador")
     args = parser.parse_args()
 
-    print(f"🧬 GAJE PROTOCOL: BORN-GENOMIC TRAINING v0.7.1")
-    print("=" * 60)
+    print(f"🧬 Iniciando Nacimiento Genómico: {args.name}")
+    print("-" * 50)
 
-    # 1. Configuración de Arquitectura
-    config = get_config(args.arch)
-    print(f"[*] Configuración cargada: {config.name}")
+    # 1. Configuración del Organismo
+    arch = ArchConfig(
+        name=args.name,
+        tokenizer_id=args.tokenizer, # Use the local path
+        rope_base=1000000.0,
+        ffn_act="swiglu",
+        use_genomic_norm=True,
+        rope_style="split"
+    )
+    
+    config = ModelConfig(
+        config=arch,
+        n_embd=args.embd,
+        n_head=8,
+        n_head_kv=8,
+        n_blocks=args.blocks,
+        vocab_size=151936, # Qwen2 Vocab Size
+        eps=1e-6
+    )
 
-    # 2. Inicialización Born-Genomic
-    # No pasamos model_path, así que el motor inicializa tensores genómicos con centroides aleatorios.
-    llm = GenomicLLM(model_path=None, num_blocks=args.blocks, config=config)
-    print(f"[*] Modelo inicializado con {args.blocks} bloques ocultos y vocabulario de {len(llm.tokenizer)}.")
+    model_dir = f"models/{args.name.lower()}"
+    model_path = f"{model_dir}/model.gaje"
+    os.makedirs(model_dir, exist_ok=True)
 
-    # 3. Carga de Dataset
-    if os.path.exists(args.dataset):
-        with open(args.dataset, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        # Filtramos líneas vacías o muy cortas
-        dataset = [line.strip() for line in lines if len(line.strip()) > 10]
-        print(f"[*] Dataset cargado: {len(dataset)} interacciones desde {args.dataset}")
+    # 2. Inicialización Nativa (Pesos aleatorios)
+    print(f"[*] Inicializando organismo en {model_path}...")
+    rust_llm = init_born_genomic_model(model_path, config, 151936)
+    
+    # Cargar tokenizador
+    if os.path.exists(args.tokenizer):
+        tokenizer = Tokenizer.from_file(args.tokenizer)
+        print(f"[*] Tokenizador cargado desde {args.tokenizer}")
     else:
-        print(f"[!] Aviso: Dataset no encontrado en {args.dataset}. Usando dataset de respaldo.")
-        dataset = [
-            "El protocolo GAJE es nativo.",
-            "El protocolo GAJE comprime semántica.",
-            "GAJE utiliza ADN en lugar de pesos.",
-            "Qwen es la arquitectura base."
-        ]
+        print(f"❌ Error: Tokenizador no encontrado en {args.tokenizer}")
+        return
 
-    # 4. Iniciar Entrenamiento
-    trainer = GenomicTrainer(llm, lr=args.lr)
+    # Envolver en la clase estabilizada de Python
+    llm = GenomicLLM(None, config=arch, n_embd=args.embd, num_blocks=args.blocks)
+    llm.rust_llm = rust_llm
+    llm.tokenizer = tokenizer
+    llm.config = config # This is the ModelConfig
+
+    # 3. Preparación del Dataset
+    print(f"[*] Cargando dataset desde {args.dataset}...")
+    if not os.path.exists(args.dataset):
+        print(f"❌ Error: Dataset no encontrado.")
+        return
+        
+    with open(args.dataset, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
     
+    print(f"📊 Dataset cargado: {len(lines)} líneas.")
+
+    # 4. Bucle de Entrenamiento Híbrido (Phase 1)
+    trainer = GenomicTrainer(llm, lr=args.lr, use_torch=True)
+    
+    print(f"[*] Iniciando entrenamiento Born-Genomic...")
     start_time = time.time()
-    print(f"[*] Fase 1: Entrenamiento por Gradientes ({args.epochs} épocas)...")
-    trainer.fit(dataset, epochs=args.epochs)
     
-    # 5. Fase Evolutiva (Opcional)
-    if args.evolve:
-        print(f"\n[*] Fase 2: Refinamiento Evolutivo ({args.gen} generaciones)...")
-        trainer.evolve(dataset, generations=args.gen, mutation_scale=0.02)
+    trainer.fit(lines, epochs=args.epochs)
+    
+    total_duration = time.time() - start_time
+    print(f"\n✅ Entrenamiento completado en {total_duration/60:.2f} minutos.")
 
-    duration = time.time() - start_time
-    
-    print(f"\n[*] Protocolo completo finalizado en {duration:.2f} segundos.")
-    
-    # 5. Generación de prueba (Inferencia Zero-Shot tras el entrenamiento)
-    prompt = "El protocolo GAJE"
-    print(f"\n[*] Generando texto a partir de: '{prompt}'")
-    print("🤖 GAJE: ", end="", flush=True)
-    
-    for token_text in llm.generate(prompt, max_new_tokens=10, temperature=0.1):
-        print(token_text, end="", flush=True)
-    
-    print("\n")
-    
-    # 6. Guardar el organismo
-    out_dir = "models/born_genomic_qwen"
-    os.makedirs(out_dir, exist_ok=True)
-    llm.save(out_dir)
+    # 5. Guardar Organismo Final
+    print(f"[*] Guardando organismo evolucionado...")
+    save_genomic_model(model_path, rust_llm, config, args.tokenizer)
+    print(f"✨ Organismo '{args.name}' nacido y guardado exitosamente.")
 
 if __name__ == "__main__":
     main()

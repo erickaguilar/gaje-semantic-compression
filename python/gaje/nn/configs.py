@@ -15,6 +15,10 @@ class ArchitectureConfig:
     tensor_name_mapping: Dict[str, str] = field(default_factory=dict)
     default_centroids: Dict[str, List[float]] = field(default_factory=dict)
 
+    # Quantization Settings
+    anchor_threshold: float = -1.0 # -1.0 means disable by default
+    ffn_anchor_threshold: float = -1.0
+    
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
 
@@ -65,6 +69,8 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         unpermute_weights=False,
         ffn_act="relu",
         use_genomic_norm=True,
+        anchor_threshold=0.15,
+        ffn_anchor_threshold=0.15,
     ),
 }
 

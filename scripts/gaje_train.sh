@@ -7,10 +7,10 @@
 THREADS=2
 ARCH="smollm"
 BLOCKS=4
-EPOCHS=35
-GEN=20
-DATASET="data/datasets/dataset_entrenamiento.txt"
-MODEL_NAME="born_genomic_full"
+EPOCHS=50
+GEN=30
+DATASET="data/datasets/dataset_1000.txt"
+MODEL_NAME="born_genomic_v2"
 
 # 2. Interfaz Visual
 clear

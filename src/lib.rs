@@ -33,6 +33,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ModelConfig>()?;
     m.add_class::<ArchConfig>()?;
     m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::io::loader::save_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(dna_similarity_search_adc, m)?)?;

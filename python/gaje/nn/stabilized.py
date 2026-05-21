@@ -29,7 +29,7 @@ class GenomicLayer:
         weights_f32_or_tensor,
         bias_f32_or_tensor=None,
         block_size=32,
-        anchor_threshold=-1.0,
+        anchor_threshold=None,
         rmsnorm_weight=None,
         eps=1e-6,
         balancer=None,
@@ -43,6 +43,11 @@ class GenomicLayer:
         self.balancer = balancer
         self.config = config
         self.custom_base_c = custom_base_c
+        
+        # Use config defaults if not provided
+        if anchor_threshold is None:
+            anchor_threshold = self.config.anchor_threshold if self.config else -1.0
+            
         is_q_or_k = "attn_q" in name or "attn_k" in name
 
         if hasattr(weights_f32_or_tensor, "tensor_type"):
@@ -330,7 +335,7 @@ class GenomicAttentionLayer:
             n_head=n_head,
             head_dim=head_dim,
             balancer=None,
-            anchor_threshold=-1.0,
+            anchor_threshold=self.config.anchor_threshold,
             config=config,
         )
         self.k_gen = GenomicLayer(
@@ -340,7 +345,7 @@ class GenomicAttentionLayer:
             n_head=n_head_kv,
             head_dim=head_dim,
             balancer=None,
-            anchor_threshold=-1.0,
+            anchor_threshold=self.config.anchor_threshold,
             config=config,
         )
         self.v_gen = GenomicLayer(
@@ -348,7 +353,7 @@ class GenomicAttentionLayer:
             loader.get(p + "attn_v.weight"),
             bias_f32_or_tensor=loader.get(p + "attn_v.bias", required=False),
             balancer=None,
-            anchor_threshold=-1.0,
+            anchor_threshold=self.config.anchor_threshold,
             config=config,
         )
         self.w_o = GenomicLayer(
@@ -356,7 +361,7 @@ class GenomicAttentionLayer:
             loader.get(p + "attn_output.weight"),
             bias_f32_or_tensor=loader.get(p + "attn_output.bias", required=False),
             balancer=None,
-            anchor_threshold=-1.0,
+            anchor_threshold=self.config.anchor_threshold,
             config=config,
         )
         self.attn = dna_semantic_compression.GenomicAttention(
@@ -393,12 +398,18 @@ class GenomicTransformerBlock:
         head_dim,
         rope_base,
         eps,
-        anchor_threshold=0.1,
-        ffn_anchor_threshold=0.02,
+        anchor_threshold=None,
+        ffn_anchor_threshold=None,
         config=None,
         custom_centroids=None,
     ):
         self.config = config
+        
+        # Use config defaults if not provided
+        if anchor_threshold is None:
+            anchor_threshold = self.config.anchor_threshold if self.config else -1.0
+        if ffn_anchor_threshold is None:
+            ffn_anchor_threshold = self.config.ffn_anchor_threshold if self.config else -1.0
         p = f"blk.{idx}."
         attn_norm_data = loader.get(p + "attn_norm.weight").data.astype(np.float32)
 
@@ -594,8 +605,32 @@ class GenomicLLM:
 
         print(f"[*] RoPE Base: {self.rope_base}")
 
-        self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
-        vocab_size = len(self.tokenizer)
+        # 1. Configuración del Tokenizer
+        if self.config and self.config.tokenizer_id:
+            if os.path.exists(self.config.tokenizer_id):
+                if os.path.isdir(self.config.tokenizer_id):
+                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                elif self.config.tokenizer_id.endswith(".json"):
+                    from tokenizers import Tokenizer as lib_tokenizer
+                    self.tokenizer = lib_tokenizer.from_file(self.config.tokenizer_id)
+                else:
+                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+            else:
+                try:
+                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                except Exception as e:
+                    print(f"[!] Warning: Could not load tokenizer '{self.config.tokenizer_id}': {e}")
+                    self.tokenizer = None
+        else:
+            self.tokenizer = None
+
+        if self.tokenizer:
+            if hasattr(self.tokenizer, "get_vocab_size"):
+                vocab_size = self.tokenizer.get_vocab_size()
+            else:
+                vocab_size = len(self.tokenizer)
+        else:
+            vocab_size = 0
 
         # Initialization logic
         if loader:
@@ -604,7 +639,7 @@ class GenomicLLM:
                 "token_embd",
                 embd_tensor,
                 balancer=None,
-                anchor_threshold=-1.0,
+                anchor_threshold=self.config.anchor_threshold,
                 config=self.config,
             )
             output_norm = (
@@ -621,7 +656,7 @@ class GenomicLLM:
                     "lm_head",
                     head_tensor or embd_tensor,
                     balancer=None,
-                    anchor_threshold=0.1,
+                    anchor_threshold=self.config.anchor_threshold,
                     config=self.config,
                 )
             else:
@@ -629,7 +664,7 @@ class GenomicLLM:
                     "lm_head",
                     head_tensor,
                     balancer=None,
-                    anchor_threshold=0.1,
+                    anchor_threshold=self.config.anchor_threshold,
                     config=self.config,
                 )
         else:
@@ -640,7 +675,7 @@ class GenomicLLM:
                 "token_embd",
                 emb_w,
                 balancer=None,
-                anchor_threshold=-1.0,
+                anchor_threshold=self.config.anchor_threshold,
                 config=self.config,
             )
             output_norm = np.ones(self.n_embd).astype(np.float32).tolist()
@@ -651,7 +686,7 @@ class GenomicLLM:
                 "lm_head",
                 lm_head_w,
                 balancer=None,
-                anchor_threshold=0.1,
+                anchor_threshold=self.config.anchor_threshold,
                 config=self.config,
             )
 
@@ -667,8 +702,8 @@ class GenomicLLM:
                     self.head_dim,
                     self.rope_base,
                     self.eps,
-                    anchor_threshold=0.1,
-                    ffn_anchor_threshold=0.02,
+                    anchor_threshold=self.config.anchor_threshold,
+                    ffn_anchor_threshold=self.config.ffn_anchor_threshold,
                     config=self.config,
                     custom_centroids=custom_centroids,
                 )

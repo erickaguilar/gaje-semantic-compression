@@ -73,6 +73,32 @@ impl RustGenomicLLM {
         Ok(logits)
     }
 
+    pub fn forward_with_hidden(&mut self, token_id: usize, clear_cache: bool) -> PyResult<(Vec<f32>, Vec<f32>)> {
+        if clear_cache {
+            self.clear_cache()?;
+        }
+
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
+
+        if token_id >= self.embeddings.out_features {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!("Token id {} out of bounds", token_id)));
+        }
+
+        let mut h = self.embeddings.get_row(token_id)?;
+        for block in &mut self.blocks {
+            h = block.forward(h, pos)?;
+        }
+
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
+        let logits = self.lm_head.forward(h_norm.clone())?;
+
+        Ok((logits, h_norm))
+    }
+
     pub fn train_step(&mut self, token_id: usize, target_token: usize, lr: f32) -> PyResult<f32> {
         let pos = if self.blocks.is_empty() {
             0
