@@ -1,4 +1,4 @@
-# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad (v0.7.0)
+# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad (v0.8.0)
 
 Este archivo define las reglas de flujo de trabajo, la arquitectura del repositorio y los estándares técnicos para el proyecto **DNA Semantic Compression**. Es de cumplimiento obligatorio para todas las sesiones de desarrollo asistido.
 
