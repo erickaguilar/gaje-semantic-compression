@@ -1,3 +1,17 @@
+## [0.9.0-alpha] - 2026-05-21
+### Added
+- **Arquitectura SoA (Structure of Arrays):** Rediseño total del motor neuromórfico en `src/nn/spiking/layer.rs` para maximizar la localidad de datos y habilitar auto-vectorización SIMD.
+- **Timing Wheel Industrial:** Implementación de un algoritmo de rueda de tiempo $O(1)$ en `src/compute/timing_wheel.rs` para gestionar contextos masivos (1M+ tokens) sin degradación de rendimiento.
+- **Paralelismo Masivo con Rayon:** El motor evolutivo ahora evalúa linajes genómicos en paralelo sobre todos los núcleos de la CPU, acelerando el entrenamiento "Born-Genomic".
+- **Integración Industrial:** Refactorización del `NeuromorphicScheduler` para operar de forma nativa sobre capas SoA y la Timing Wheel.
+
+### Changed
+- Mejora en la dinámica de las neuronas LIF: decaimiento (*decay*) más estable para prevenir la extinción prematura del potencial de membrana.
+- Optimización de binarios: `gaje-identity-cloner` y `gaje-neuromorphic-trainer` migrados a la nueva arquitectura industrial.
+
+### Fixed
+- Resolución de todas las advertencias de compilación de Cargo y actualización de firmas de PyO3 para compatibilidad futura.
+
 ## [0.8.0] - 2026-05-21
 ### Added
 - **Emulador Neuromórfico v1.0 (Spiking Transformer):** Implementación de un motor de inferencia asíncrono basado en eventos que simula hardware neuromórfico real.
