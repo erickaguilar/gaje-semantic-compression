@@ -119,20 +119,32 @@ impl GajeNeuromorphicLayer {
 
     /// Procesa el estado de todas las neuronas para verificar disparos.
     /// Retorna un vector de (índice, intensidad, fase) de las neuronas que dispararon.
+    /// Implementa GenomicNorm (v1) para estabilizar la varianza de la señal.
     pub fn check_spikes(&mut self) -> Vec<(usize, f32, u8)> {
         let mut spikes = Vec::new();
         
-        for i in 0..self.num_neurons {
+        // 1. Calcular Varianza Global (para GenomicNorm)
+        let n = self.num_neurons;
+        let mut sum_sq = 0.0f32;
+        for &p in &self.membrane_potentials {
+            if p > 0.0 { sum_sq += p * p; }
+        }
+        let rms = (sum_sq / n as f32 + 1e-6).sqrt();
+        
+        // 2. Umbral Adaptativo y Disparo
+        for i in 0..n {
             let potential = self.membrane_potentials[i];
             let threshold = self.thresholds[i];
             
             if potential >= threshold {
-                // 1. Intensidad graduada (residuo)
-                let intensity = 1.0 + (potential - threshold) / threshold;
+                // GenomicNorm: Si la energía global es muy alta, suavizamos el disparo
+                // h_scale actúa como el factor de TEMPERANCIA
+                let norm_factor = if rms > 1.0 { 1.0 / rms } else { 1.0 };
                 
-                // 2. Codificación de Fase (Latencia Temporal)
-                // Cuanto más energía, más cerca del inicio del tick (phase 0)
-                // Mapeo: Exceso de 0.0 -> phase 15, Exceso >= threshold -> phase 0
+                // Intensidad graduada normalizada
+                let intensity = (1.0 + (potential - threshold) / threshold) * norm_factor;
+                
+                // Codificación de Fase (Latencia Temporal)
                 let excess_ratio = (potential - threshold) / threshold;
                 let phase = if excess_ratio >= 1.0 {
                     0
