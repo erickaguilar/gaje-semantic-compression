@@ -42,16 +42,16 @@ impl NeuromorphicScheduler {
                 // Integración Masiva: Modulación graduada por intensidad del spike entrante
                 layer.integrate_batch(event.source_neuron_id, &self.centroides, event.intensity);
 
-                // Verificar disparos con intensidad graduada (residuo)
+                // Verificar disparos con intensidad y fase graduada
                 let layer_spikes = layer.check_spikes();
                 
-                for (neuron_idx, intensity) in layer_spikes {
+                for (neuron_idx, intensity, phase) in layer_spikes {
                     let next_layer_id = event.target_layer_id + 1;
                     if next_layer_id < layers.len() {
                         let new_event = SpikeEvent {
                             timestamp: self.wheel.current_tick + self.delay_per_layer,
-                            phase_offset: 0, // Fase 3: Latencia temporal
-                            intensity,       // Fase 2: Intensidad basada en residuo
+                            phase_offset: phase, // Fase 3: Propagación de latencia temporal
+                            intensity,          // Fase 2: Intensidad basada en residuo
                             source_neuron_id: neuron_idx,
                             target_layer_id: next_layer_id,
                             target_neuron_id: 0,
@@ -62,7 +62,7 @@ impl NeuromorphicScheduler {
                         // Output Spike
                         new_spikes.push(SpikeEvent {
                             timestamp: self.wheel.current_tick,
-                            phase_offset: 0,
+                            phase_offset: phase,
                             intensity,
                             source_neuron_id: neuron_idx,
                             target_layer_id: next_layer_id,

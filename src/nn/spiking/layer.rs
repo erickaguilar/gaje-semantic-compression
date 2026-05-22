@@ -89,8 +89,8 @@ impl GajeNeuromorphicLayer {
     }
 
     /// Procesa el estado de todas las neuronas para verificar disparos.
-    /// Retorna un vector de (índice, intensidad) de las neuronas que dispararon.
-    pub fn check_spikes(&mut self) -> Vec<(usize, f32)> {
+    /// Retorna un vector de (índice, intensidad, fase) de las neuronas que dispararon.
+    pub fn check_spikes(&mut self) -> Vec<(usize, f32, u8)> {
         let mut spikes = Vec::new();
         
         for i in 0..self.num_neurons {
@@ -98,12 +98,21 @@ impl GajeNeuromorphicLayer {
             let threshold = self.thresholds[i];
             
             if potential >= threshold {
-                // Cálculo de intensidad graduada (residuo)
-                // Al menos 1.0 de intensidad, escalado por el exceso de energía
+                // 1. Intensidad graduada (residuo)
                 let intensity = 1.0 + (potential - threshold) / threshold;
                 
+                // 2. Codificación de Fase (Latencia Temporal)
+                // Cuanto más energía, más cerca del inicio del tick (phase 0)
+                // Mapeo: Exceso de 0.0 -> phase 15, Exceso >= threshold -> phase 0
+                let excess_ratio = (potential - threshold) / threshold;
+                let phase = if excess_ratio >= 1.0 {
+                    0
+                } else {
+                    15 - (excess_ratio * 15.0) as u8
+                };
+                
                 self.membrane_potentials[i] = 0.0; // Reset
-                spikes.push((i, intensity));
+                spikes.push((i, intensity, phase));
             } else {
                 // Aplicar fuga de energía (decay)
                 if self.membrane_potentials[i] > 0.0 {
@@ -147,10 +156,12 @@ mod tests {
         
         let spikes = layer.check_spikes();
         assert_eq!(spikes.len(), 1);
-        let (idx, intensity) = spikes[0];
+        let (idx, intensity, phase) = spikes[0];
         assert_eq!(idx, 2);
-        // Umbral 0.5, Potencial 2.0 -> Intensidad = 1.0 + (2.0 - 0.5)/0.5 = 1.0 + 3.0 = 4.0
+        // Umbral 0.5, Potencial 2.0 -> Intensidad = 4.0
         assert_eq!(intensity, 4.0);
+        // Exceso = 1.5, Ratio = 1.5 / 0.5 = 3.0. Como Ratio >= 1.0, Phase = 0
+        assert_eq!(phase, 0);
         assert_eq!(layer.membrane_potentials[2], 0.0);
     }
 }
