@@ -41,6 +41,9 @@ impl GajeNeuromorphicLayer {
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_index * row_size;
         
+        // Sesgo homeostático basal para facilitar disparos en capas profundas
+        let homeostatic_bias = 0.01;
+
         #[cfg(target_arch = "aarch64")]
         unsafe {
             use std::arch::aarch64::*;
@@ -49,6 +52,7 @@ impl GajeNeuromorphicLayer {
             let potentials_ptr = self.membrane_potentials.as_mut_ptr();
             let weights_ptr = self.packed_weights.as_ptr().add(start_byte);
             let intensity_v = vdupq_n_f32(intensity);
+            let bias_v = vdupq_n_f32(homeostatic_bias);
             
             // Tabla de centroides para vqtbl1q_u8 (4 f32 = 16 bytes)
             let table_v = vld1q_u8(centroides.as_ptr() as *const u8);
@@ -91,6 +95,7 @@ impl GajeNeuromorphicLayer {
                 
                 let mut p_v = vld1q_f32(potentials_ptr.add(i));
                 p_v = vfmaq_f32(p_v, c_v, intensity_v); // p = p + c * intensity
+                p_v = vaddq_f32(p_v, bias_v);           // + bias
                 vst1q_f32(potentials_ptr.add(i), p_v);
                 
                 i += 4;
@@ -101,7 +106,7 @@ impl GajeNeuromorphicLayer {
                 let byte_idx = i / 4;
                 let bit_shift = (i % 4) * 2;
                 let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials[i] += centroides[weight_bits as usize] * intensity;
+                self.membrane_potentials[i] += (centroides[weight_bits as usize] * intensity) + homeostatic_bias;
                 i += 1;
             }
         }
