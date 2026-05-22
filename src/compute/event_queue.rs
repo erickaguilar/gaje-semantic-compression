@@ -1,15 +1,38 @@
+use pyo3::prelude::*;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 /// Representa un evento de disparo (Spike) en el tiempo con precisión de fase e intensidad.
+#[pyclass]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpikeEvent {
+    #[pyo3(get)]
     pub timestamp: u64,           // Tiempo en el que ocurre el evento (ticks de simulación)
+    #[pyo3(get)]
     pub phase_offset: u8,         // Desplazamiento de fase (0-15 sub-ticks para precisión temporal)
+    #[pyo3(get)]
     pub intensity: f32,           // Intensidad del disparo (Graded Spiking)
+    #[pyo3(get)]
     pub source_neuron_id: usize,  // ID de la neurona que disparó
+    #[pyo3(get)]
     pub target_layer_id: usize,   // ID de la capa destino
+    #[pyo3(get)]
     pub target_neuron_id: usize,  // ID de la neurona destino dentro de la capa
+}
+
+#[pymethods]
+impl SpikeEvent {
+    #[new]
+    pub fn new(timestamp: u64, phase_offset: u8, intensity: f32, source_neuron_id: usize, target_layer_id: usize, target_neuron_id: usize) -> Self {
+        Self {
+            timestamp,
+            phase_offset,
+            intensity,
+            source_neuron_id,
+            target_layer_id,
+            target_neuron_id,
+        }
+    }
 }
 
 /// Implementación de ordenamiento para BinaryHeap (Min-Heap basado en timestamp y fase).

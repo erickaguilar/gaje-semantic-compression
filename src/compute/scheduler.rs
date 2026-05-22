@@ -1,16 +1,20 @@
 use crate::compute::event_queue::SpikeEvent;
 use crate::compute::timing_wheel::TimingWheel;
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
+use pyo3::prelude::*;
 use std::collections::HashSet;
 
 /// El Scheduler coordina la simulación completa basada en eventos usando Timing Wheel y SoA.
+#[pyclass]
 pub struct NeuromorphicScheduler {
     pub wheel: TimingWheel,
     pub centroides: [f32; 4],
     pub delay_per_layer: u64, // Retardo Δt entre capas en ticks
 }
 
+#[pymethods]
 impl NeuromorphicScheduler {
+    #[new]
     pub fn new(centroides: [f32; 4], delay_per_layer: u64) -> Self {
         Self {
             wheel: TimingWheel::new(1024), // Horizonte de 1024 ticks O(1)
@@ -31,9 +35,35 @@ impl NeuromorphicScheduler {
         });
     }
 
-    /// Ejecuta un paso de simulación procesando todos los eventos del tick actual.
-    /// Implementa Inhibición Lateral (K-WTA) para filtrar el ruido.
-    pub fn step(&mut self, layers: &mut [GajeNeuromorphicLayer]) -> Vec<SpikeEvent> {
+    /// Pasarela para Python: ejecuta un paso.
+    #[pyo3(name = "step")]
+    pub fn step_py(&mut self, mut layers: Vec<PyRefMut<GajeNeuromorphicLayer>>) -> Vec<SpikeEvent> {
+        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> = layers.iter_mut().map(|l| &mut **l).collect();
+        self.step(&mut layers_mut)
+    }
+
+    /// Pasarela para Python: ejecuta hasta completar.
+    #[pyo3(name = "run_to_completion")]
+    pub fn run_to_completion_py(&mut self, mut layers: Vec<PyRefMut<GajeNeuromorphicLayer>>, max_ticks: u64) -> Vec<SpikeEvent> {
+        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> = layers.iter_mut().map(|l| &mut **l).collect();
+        let mut all_output_spikes = Vec::new();
+        let mut ticks = 0;
+        while !self.wheel.is_empty() && ticks < max_ticks {
+            let outputs = self.step(&mut layers_mut);
+            for out in outputs {
+                if out.target_layer_id >= layers_mut.len() {
+                    all_output_spikes.push(out);
+                }
+            }
+            ticks += 1;
+        }
+        all_output_spikes
+    }
+}
+
+impl NeuromorphicScheduler {
+    /// Ejecuta un paso de simulación (Interno Rust).
+    pub fn step(&mut self, layers: &mut [&mut GajeNeuromorphicLayer]) -> Vec<SpikeEvent> {
         let mut new_spikes = Vec::new();
         let events = self.wheel.pop_active();
         
@@ -42,7 +72,7 @@ impl NeuromorphicScheduler {
             return new_spikes;
         }
 
-        // 1. Fase de Integración: Acumular impactos en todas las capas afectadas
+        // 1. Fase de Integración
         let mut affected_layers = HashSet::new();
         for event in &events {
             if event.target_layer_id < layers.len() {
@@ -53,22 +83,20 @@ impl NeuromorphicScheduler {
 
         // 2. Fase de Disparo e Inhibición Lateral (K-WTA)
         for layer_id in affected_layers {
-            let layer = &mut layers[layer_id];
+            let layer = &mut *layers[layer_id];
             let mut layer_spikes = layer.check_spikes();
             
             if layer_spikes.is_empty() { continue; }
 
-            // Aplicar K-WTA: Ordenar por fase (menor es mejor) e intensidad (mayor es mejor)
             layer_spikes.sort_by(|a, b| {
-                let res = a.2.cmp(&b.2); // Comparar phase_offset (u8)
+                let res = a.2.cmp(&b.2);
                 if res == std::cmp::Ordering::Equal {
-                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal) // Comparar intensidad (f32)
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
                 } else {
                     res
                 }
             });
 
-            // Limitar a los K ganadores (Inhibición Lateral)
             let num_winners = layer_spikes.len().min(layer.k_wta);
             
             for i in 0..num_winners {
@@ -87,7 +115,6 @@ impl NeuromorphicScheduler {
                     self.wheel.push(new_event);
                     new_spikes.push(new_event);
                 } else {
-                    // Output Spike
                     new_spikes.push(SpikeEvent {
                         timestamp: self.wheel.current_tick,
                         phase_offset: phase,
@@ -104,19 +131,18 @@ impl NeuromorphicScheduler {
         new_spikes
     }
 
-    /// Ejecuta la simulación hasta que no queden eventos.
+    /// Ejecuta la simulación hasta completar (Interno Rust).
     pub fn run_to_completion(&mut self, layers: &mut [GajeNeuromorphicLayer]) -> Vec<SpikeEvent> {
+        let num_layers = layers.len();
+        let mut layers_refs: Vec<&mut GajeNeuromorphicLayer> = layers.iter_mut().collect();
         let mut all_output_spikes = Vec::new();
         while !self.wheel.is_empty() {
-            let outputs = self.step(layers);
+            let outputs = self.step(&mut layers_refs);
             for out in outputs {
-                if out.target_layer_id >= layers.len() {
+                if out.target_layer_id >= num_layers {
                     all_output_spikes.push(out);
                 }
             }
-            
-            // Nota: El skip_to_next_event es más complejo en Timing Wheel,
-            // pero podemos avanzar ticks vacíos rápidamente si es necesario.
         }
         all_output_spikes
     }

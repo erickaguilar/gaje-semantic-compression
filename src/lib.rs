@@ -19,6 +19,8 @@ use crate::compute::math::*;
 use pyo3::prelude::*;
 
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
+use crate::compute::scheduler::NeuromorphicScheduler;
+use crate::compute::event_queue::SpikeEvent;
 
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -29,6 +31,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GenomicAttention>()?;
     m.add_class::<GenomicLinear>()?;
     m.add_class::<GajeNeuromorphicLayer>()?;
+    m.add_class::<NeuromorphicScheduler>()?;
+    m.add_class::<SpikeEvent>()?;
     m.add_class::<RustGenomicBlock>()?;
     m.add_class::<RustGenomicLLM>()?;
     m.add_class::<GajeDatabaseWriter>()?;
