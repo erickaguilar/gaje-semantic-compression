@@ -1,35 +1,35 @@
 use _impl::nn::spiking::GajeNeuromorphicLayer;
-use _impl::core::evolution_bitwise::SpikingEvolutionEngine;
 use std::fs;
 use std::time::Instant;
 use std::collections::HashMap;
+use std::io::{self, Write};
 
 fn main() {
-    // 1. Configuración de Parámetros (Ajustada para Born-Genomic)
+    // 1. Configuración de Parámetros (Estándar SMG-1)
     let dataset_path = "data/datasets/dataset_born_2000.txt";
-    let pop_size = 64;
-    let generations = 200;
-    let mutation_rate = 0.15;
-    let centroides = [-1.5, -0.5, 0.5, 1.5]; // Centroides Born estándar
+    let generations = 150;
+    let lr = 0.5;
+    let centroides = [-1.5, -0.5, 0.5, 1.5];
 
-    println!("🧬 GAJE-Flow: Iniciando Crianza de Micro-Modelo Born-Genomic");
+    println!("🧬 GAJE-Flow: Estandarizando Micro-Genoma (Arquitectura SMG-1)");
     println!("   Dataset: {}", dataset_path);
-    println!("   Estrategia: Evolución Masiva Bitwise (Industrial SoA)");
-    println!("   Población: {}, Gen: {}", pop_size, generations);
+    println!("   Estrategia: Refinamiento Genómico Local (Nativo)");
+    println!("   Configuración: 3 Capas (256/128), Gen: {}", generations);
 
     // 2. Carga y Tokenización del Dataset
     let content = fs::read_to_string(dataset_path).expect("Error al leer el dataset");
     let mut word_to_id = HashMap::new();
+    let mut id_to_word = Vec::new();
     let mut id_counter = 0;
     let mut sequences = Vec::new();
 
-    // Procesar dataset completo para construir el vocabulario
     for line in content.lines() {
         let mut seq = Vec::new();
         for word in line.split_whitespace() {
             let clean = word.to_lowercase().replace(".", "").replace(",", "").replace("?", "").replace("¿", "");
-            let id = *word_to_id.entry(clean).or_insert_with(|| {
+            let id = *word_to_id.entry(clean.clone()).or_insert_with(|| {
                 let id = id_counter;
+                id_to_word.push(clean);
                 id_counter += 1;
                 id
             });
@@ -43,44 +43,76 @@ fn main() {
     println!("   Vocabulario: {} tokens únicos.", id_counter);
     println!("   Secuencias cargadas: {}.", sequences.len());
 
-    // 3. Inicialización del Modelo Industrial (SoA)
-    // Usamos una dimensión oculta pequeña (128) para rapidez en el nacimiento
-    let hidden_dim = 128;
-    let l0 = GajeNeuromorphicLayer::new(hidden_dim, id_counter, 0.05, 0.8);
-    let l1 = GajeNeuromorphicLayer::new(id_counter, hidden_dim, 0.05, 0.8);
-    let layers = vec![l0, l1];
+    // 3. Inicialización SMG-1 (Standard Micro-Genome)
+    let dim_latent = 256;
+    let dim_logic = 128;
+    
+    let l0 = GajeNeuromorphicLayer::new(dim_latent, id_counter, 0.4, 0.8);
+    let l1 = GajeNeuromorphicLayer::new(dim_logic, dim_latent, 0.4, 0.8);
+    let l2 = GajeNeuromorphicLayer::new(id_counter, dim_logic, 0.4, 0.8);
+    let mut layers = vec![l0, l1, l2];
 
-    let mut engine = SpikingEvolutionEngine::new(layers, pop_size, centroides, mutation_rate);
-
-    // 4. Protocolo de Entrenamiento (Resonancia Semántica)
-    println!("\n🔥 Iniciando Simulación Evolutiva...");
+    // 4. Protocolo de Entrenamiento Nativo (Life-long Learning)
+    println!("\n🔥 Iniciando Nacimiento Genómico...");
     let start = Instant::now();
 
-    // Preparar inputs de prueba (Primeros 100 tokens para resonancia inicial)
-    let input_spikes: Vec<(usize, usize)> = sequences.iter()
-        .take(100)
-        .map(|seq| (0, seq[0]))
-        .collect();
-    let targets = vec![1.0; input_spikes.len()];
+    // Solo tomamos una muestra representativa para el nacimiento rápido
+    let train_sequences: Vec<Vec<usize>> = sequences.iter().take(200).cloned().collect();
 
-    for gen in 0..=generations {
-        engine.evaluate(&input_spikes, &targets);
+    for gen in 1..=generations {
+        let mut total_hits = 0;
+        let mut total_tokens = 0;
 
-        if gen % 20 == 0 {
-            let best_fitness = engine.population[0].fitness;
-            println!("   [Gen {:3}] Fitness: {:.4} | Tiempo: {:?}", gen, best_fitness, start.elapsed());
+        for seq in &train_sequences {
+            for i in 0..seq.len() - 1 {
+                let input_id = seq[i];
+                let target_id = seq[i+1];
+                total_tokens += 1;
+
+                // Forward/Refinement Step (SMG-1 Logic)
+                for layer in &mut layers { layer.membrane_potentials.fill(0.0); }
+
+                // REFORZAR L0
+                let mut l0_deltas = vec![-0.1; dim_latent];
+                let offset_l0 = (input_id * 16) % dim_latent;
+                for j in 0..16 { l0_deltas[(offset_l0 + j) % dim_latent] = 1.0; }
+                layers[0].refine_step(input_id, &l0_deltas, 1.0);
+
+                layers[0].integrate_batch(input_id, &centroides, 1.0);
+                let s0 = layers[0].check_spikes();
+
+                // REFORZAR L1
+                let mut l1_deltas = vec![-0.1; dim_logic];
+                let offset_l1 = (input_id * 8) % dim_logic;
+                for j in 0..8 { l1_deltas[(offset_l1 + j) % dim_logic] = 1.0; }
+                for &(idx, _, _) in &s0 { layers[1].refine_step(idx, &l1_deltas, 1.0); }
+
+                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, &centroides, intensity); }
+                let s1 = layers[1].check_spikes();
+
+                // REFORZAR L2 (Output)
+                let mut l2_deltas = vec![-1.0; id_counter];
+                l2_deltas[target_id] = 1.0;
+                for &(idx, _, _) in &s1 { layers[2].refine_step(idx, &l2_deltas, lr); }
+
+                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, &centroides, intensity); }
+                let s2 = layers[2].check_spikes();
+
+                if s2.iter().any(|&(idx, _, _)| idx == target_id) {
+                    total_hits += 1;
+                }
+                
+                for layer in &mut layers { layer.apply_homeostasis(2.0); }
+            }
         }
 
-        if gen < generations {
-            engine.evolve();
+        if gen % 30 == 0 || gen == 1 {
+            let accuracy = (total_hits as f32 / total_tokens as f32) * 100.0;
+            println!("   [Gen {:3}] Precisión de Resonancia: {:.2}% | Tiempo: {:?}", gen, accuracy, start.elapsed());
+            io::stdout().flush().unwrap();
         }
     }
 
-    let duration = start.elapsed();
-    let best = &engine.population[0];
-
-    // 5. Finalización
-    println!("\n✅ Crianza Finalizada en {:?}", duration);
-    println!("   Fitness Final: {:.4}", best.fitness);
-    println!("   El organismo ha nacido exitosamente en el motor SoA.");
+    println!("\n✅ Micro-Genoma SMG-1 nacido en {:?}", start.elapsed());
+    println!("   El organismo ha sido estandarizado y está listo para evolución continua.");
 }
