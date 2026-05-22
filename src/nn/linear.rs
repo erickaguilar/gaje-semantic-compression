@@ -2,6 +2,7 @@ use crate::compute::kernels::*;
 use half::f16;
 use pyo3::prelude::*;
 use rayon::prelude::*;
+use rand::Rng;
 
 use std::sync::Arc;
 
@@ -69,13 +70,17 @@ impl GenomicLinear {
         // Detect if anchors_u8 is Sparse or Dense
         let (anchor_indices, anchor_values, anchor_row_ptrs, legacy_anchors) = if anchors_u8.is_empty() {
             (Vec::new(), Vec::new(), vec![0; out_features + 1], Vec::new())
-        } else if anchors_u8.len() > 5 && anchors_u8[0] == 0x5A { // Magic byte 'Z' for Sparse
-            let count = u32::from_le_bytes(anchors_u8[1..5].try_into().unwrap()) as usize;
+        } else if (anchors_u8.len() > 8 && &anchors_u8[0..4] == b"GAJE") || (anchors_u8.len() > 5 && anchors_u8[0] == 0x5A) { 
+            // Magic bytes for Sparse (GAJE = new, 0x5A = legacy)
+            let is_gaje = &anchors_u8[0..4] == b"GAJE";
+            let count_start = if is_gaje { 4 } else { 1 };
+            let count = u32::from_le_bytes(anchors_u8[count_start..count_start+4].try_into().unwrap()) as usize;
+            
             let mut indices = Vec::with_capacity(count);
             let mut values = Vec::with_capacity(count);
             let mut row_ptrs = vec![0; out_features + 1];
 
-            let index_start = 5;
+            let index_start = count_start + 4;
             let value_start = index_start + count * 4;
             let ptr_start = value_start + count * 2;
 
@@ -216,7 +221,7 @@ impl GenomicLinear {
 
     pub fn anchors_sparse_buffer(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        out.push(0x5A); // Magic byte
+        out.extend_from_slice(b"GAJE"); // Magic bytes
         let count = self.anchor_indices.len();
         out.extend_from_slice(&(count as u32).to_le_bytes());
         for &idx in self.anchor_indices.iter() {
@@ -370,6 +375,47 @@ impl GenomicLinear {
         Ok(results)
     }
 
+    pub fn spiking_forward(
+        &self,
+        input: Vec<f32>,
+        steps: usize,
+        threshold: f32,
+        decay: f32,
+    ) -> PyResult<Vec<f32>> {
+        let n_out = self.out_features;
+        let mut potentials = vec![0.0f32; n_out];
+        let mut spike_counts = vec![0.0f32; n_out];
+        let mut first_spike_time = vec![0.0f32; n_out];
+
+        // Pre-calculate the excitation (synaptic current)
+        let excitation = self.forward(input)?;
+
+        // Simulate LIF dynamics
+        for t in 0..steps {
+            for i in 0..n_out {
+                potentials[i] += excitation[i];
+                if potentials[i] >= threshold {
+                    if first_spike_time[i] == 0.0 {
+                        // Temporal priority: earlier spikes get higher temporal score
+                        first_spike_time[i] = (steps - t) as f32;
+                    }
+                    potentials[i] = 0.0; // Reset
+                    spike_counts[i] += 1.0;
+                } else if potentials[i] > 0.0 {
+                    potentials[i] *= decay;
+                }
+            }
+        }
+
+        // Calculate Resonance Score: Frequency + Temporal Precision
+        let mut resonance = vec![0.0f32; n_out];
+        for i in 0..n_out {
+            resonance[i] = spike_counts[i] * (steps as f32) + first_spike_time[i];
+        }
+
+        Ok(resonance)
+    }
+
     pub fn get_row(&self, idx: usize) -> PyResult<Vec<f32>> {
         if idx >= self.out_features {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(
@@ -500,6 +546,52 @@ impl GenomicLinear {
                 }
             }
         });
+        Ok(())
+    }
+
+    pub fn monte_carlo_refine(&mut self, mut input: Vec<f32>, target: Vec<f32>, iterations: usize, noise_scale: f32) -> PyResult<()> {
+        if !self.rmsnorm_weight.is_empty() {
+            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
+        }
+        let n_blocks = self.in_features / self.block_size;
+        let mut new_centroids = self.centroids.clone();
+
+        new_centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
+            if i >= target.len() { return; }
+            let row_offset = i * n_blocks * self.stride;
+            let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
+            
+            let get_row_sum = |c_vals: &[f32]| -> f32 {
+                let mut sum = unsafe { genomic_dot_product(row_weights, &input, c_vals, self.stride, n_blocks, &[]) };
+                let a_start = self.anchor_row_ptrs[i];
+                let a_end = self.anchor_row_ptrs[i + 1];
+                for k in a_start..a_end {
+                    sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32();
+                }
+                sum
+            };
+
+            let best_sum = get_row_sum(row_centroids);
+            let mut best_error = (best_sum - target[i]).powi(2);
+            let mut rng = rand::thread_rng();
+            
+            let mut candidate = row_centroids.to_vec();
+            for _ in 0..iterations {
+                for (j, val) in candidate.iter_mut().enumerate() {
+                    *val = row_centroids[j] + (rng.gen::<f32>() * 2.0 - 1.0) * noise_scale;
+                }
+                
+                let cand_sum = get_row_sum(&candidate);
+                let cand_error = (cand_sum - target[i]).powi(2);
+                
+                if cand_error < best_error {
+                    best_error = cand_error;
+                    row_centroids.copy_from_slice(&candidate);
+                }
+            }
+        });
+        
+        self.centroids = new_centroids;
         Ok(())
     }
 }

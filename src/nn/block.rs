@@ -33,7 +33,7 @@ pub struct RustGenomicBlock {
     pub act_fn: String,
     #[pyo3(get)]
     pub use_genomic_norm: bool,
-    #[pyo3(get)]
+    #[pyo3(get, set)]
     pub h_scale: f32,
 }
 

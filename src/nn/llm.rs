@@ -99,6 +99,14 @@ impl RustGenomicLLM {
         Ok((logits, h_norm))
     }
 
+    pub fn forward_spiking(&mut self, token_id: usize, steps: usize, threshold: f32, decay: f32) -> PyResult<Vec<f32>> {
+        // 1. Process through blocks normally to get the final hidden state
+        let (_, h_norm) = self.forward_with_hidden(token_id, false)?;
+
+        // 2. Use neuromorphic spiking for the LM Head
+        self.lm_head.spiking_forward(h_norm, steps, threshold, decay)
+    }
+
     pub fn train_step(&mut self, token_id: usize, target_token: usize, lr: f32) -> PyResult<f32> {
         let pos = if self.blocks.is_empty() {
             0
