@@ -14,6 +14,7 @@ pub struct GajeNeuromorphicLayer {
     
     pub num_neurons: usize,
     pub weights_per_neuron: usize,
+    pub k_wta: usize, // Límite de Ganadores (K-Winners-Take-All)
 }
 
 impl GajeNeuromorphicLayer {
@@ -29,6 +30,7 @@ impl GajeNeuromorphicLayer {
             packed_weights: vec![0; packed_size],
             num_neurons,
             weights_per_neuron,
+            k_wta: (num_neurons / 10).max(1), // Por defecto, 10% de ganadores
         }
     }
 

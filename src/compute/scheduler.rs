@@ -1,6 +1,7 @@
 use crate::compute::event_queue::SpikeEvent;
 use crate::compute::timing_wheel::TimingWheel;
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
+use std::collections::HashSet;
 
 /// El Scheduler coordina la simulación completa basada en eventos usando Timing Wheel y SoA.
 pub struct NeuromorphicScheduler {
@@ -31,44 +32,70 @@ impl NeuromorphicScheduler {
     }
 
     /// Ejecuta un paso de simulación procesando todos los eventos del tick actual.
+    /// Implementa Inhibición Lateral (K-WTA) para filtrar el ruido.
     pub fn step(&mut self, layers: &mut [GajeNeuromorphicLayer]) -> Vec<SpikeEvent> {
         let mut new_spikes = Vec::new();
         let events = self.wheel.pop_active();
+        
+        if events.is_empty() {
+            self.wheel.advance_tick(1);
+            return new_spikes;
+        }
 
-        for event in events {
+        // 1. Fase de Integración: Acumular impactos en todas las capas afectadas
+        let mut affected_layers = HashSet::new();
+        for event in &events {
             if event.target_layer_id < layers.len() {
-                let layer = &mut layers[event.target_layer_id];
-                
-                // Integración Masiva: Modulación graduada por intensidad del spike entrante
-                layer.integrate_batch(event.source_neuron_id, &self.centroides, event.intensity);
+                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, &self.centroides, event.intensity);
+                affected_layers.insert(event.target_layer_id);
+            }
+        }
 
-                // Verificar disparos con intensidad y fase graduada
-                let layer_spikes = layer.check_spikes();
+        // 2. Fase de Disparo e Inhibición Lateral (K-WTA)
+        for layer_id in affected_layers {
+            let layer = &mut layers[layer_id];
+            let mut layer_spikes = layer.check_spikes();
+            
+            if layer_spikes.is_empty() { continue; }
+
+            // Aplicar K-WTA: Ordenar por fase (menor es mejor) e intensidad (mayor es mejor)
+            layer_spikes.sort_by(|a, b| {
+                let res = a.2.cmp(&b.2); // Comparar phase_offset (u8)
+                if res == std::cmp::Ordering::Equal {
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal) // Comparar intensidad (f32)
+                } else {
+                    res
+                }
+            });
+
+            // Limitar a los K ganadores (Inhibición Lateral)
+            let num_winners = layer_spikes.len().min(layer.k_wta);
+            
+            for i in 0..num_winners {
+                let (neuron_idx, intensity, phase) = layer_spikes[i];
+                let next_layer_id = layer_id + 1;
                 
-                for (neuron_idx, intensity, phase) in layer_spikes {
-                    let next_layer_id = event.target_layer_id + 1;
-                    if next_layer_id < layers.len() {
-                        let new_event = SpikeEvent {
-                            timestamp: self.wheel.current_tick + self.delay_per_layer,
-                            phase_offset: phase, // Fase 3: Propagación de latencia temporal
-                            intensity,          // Fase 2: Intensidad basada en residuo
-                            source_neuron_id: neuron_idx,
-                            target_layer_id: next_layer_id,
-                            target_neuron_id: 0,
-                        };
-                        self.wheel.push(new_event);
-                        new_spikes.push(new_event);
-                    } else {
-                        // Output Spike
-                        new_spikes.push(SpikeEvent {
-                            timestamp: self.wheel.current_tick,
-                            phase_offset: phase,
-                            intensity,
-                            source_neuron_id: neuron_idx,
-                            target_layer_id: next_layer_id,
-                            target_neuron_id: 0,
-                        });
-                    }
+                if next_layer_id < layers.len() {
+                    let new_event = SpikeEvent {
+                        timestamp: self.wheel.current_tick + self.delay_per_layer,
+                        phase_offset: phase,
+                        intensity,
+                        source_neuron_id: neuron_idx,
+                        target_layer_id: next_layer_id,
+                        target_neuron_id: 0,
+                    };
+                    self.wheel.push(new_event);
+                    new_spikes.push(new_event);
+                } else {
+                    // Output Spike
+                    new_spikes.push(SpikeEvent {
+                        timestamp: self.wheel.current_tick,
+                        phase_offset: phase,
+                        intensity,
+                        source_neuron_id: neuron_idx,
+                        target_layer_id: next_layer_id,
+                        target_neuron_id: 0,
+                    });
                 }
             }
         }
