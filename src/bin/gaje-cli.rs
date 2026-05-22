@@ -369,23 +369,28 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
     model.clear_cache().unwrap();
     let mut current_tokens = tokens.to_vec();
     if current_tokens.is_empty() { return Ok(()); }
+    
     let mut logits = Vec::new();
+    // Procesar contexto inicial
     for &tid in &current_tokens {
-        logits = model.forward(tid as usize, false).unwrap();
+        logits = model.forward_phase_gaje(tid as usize, 64).unwrap();
     }
     
-    let temperature = 0.7;
+    let temperature = 0.4; // Temperatura más baja para Phase-GAJE (más determinista)
     let top_k = 40;
     let top_p = 0.9;
     
     for _ in 0..max_tokens {
         let next_token = sample_logits(&logits, temperature, top_k, top_p);
-        if next_token == 0 || next_token == 151643 || next_token == 151645 { break; } // Qwen2 end tokens
+        if next_token == 0 || next_token == 151643 || next_token == 151645 { break; } 
+        
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
         print!("{}", decoded);
         io::stdout().flush()?;
+        
         current_tokens.push(next_token as u32);
-        logits = model.forward(next_token, false).unwrap();
+        // Generar siguiente token con Motor Temporal Phase-GAJE
+        logits = model.forward_phase_gaje(next_token, 64).unwrap();
     }
     Ok(())
 }

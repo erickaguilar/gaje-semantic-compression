@@ -107,6 +107,56 @@ impl RustGenomicLLM {
         self.lm_head.spiking_forward(h_norm, steps, threshold, decay)
     }
 
+    pub fn forward_phase_gaje(&mut self, token_id: usize, k_wta: usize) -> PyResult<Vec<f32>> {
+        // 1. Inferencia de alta precisión para el cuerpo del Transformer
+        let (_, h_norm) = self.forward_with_hidden(token_id, false)?;
+
+        // 2. Proyección LM Head (Excitación base)
+        let excitation = self.lm_head.forward(h_norm)?;
+        let n_tokens = excitation.len();
+        
+        // 3. Cálculo de Umbral Dinámico (Homeostasis)
+        let max_excitation = excitation.iter().fold(0.0f32, |a, &b| a.max(b));
+        let threshold = (max_excitation * 0.7).max(0.1); // Umbral al 70% del pico
+
+        // 4. Simulación de Dinámica Temporal (Phase Coding)
+        let mut candidates = Vec::with_capacity(n_tokens);
+        for i in 0..n_tokens {
+            let energy = excitation[i];
+            if energy >= threshold {
+                let intensity = 1.0 + (energy - threshold) / threshold;
+                let excess_ratio = (energy - threshold) / threshold;
+                let phase = if excess_ratio >= 1.0 {
+                    0
+                } else {
+                    15 - (excess_ratio * 15.0) as u8
+                };
+                candidates.push((i, intensity, phase));
+            }
+        }
+
+        // 5. Inhibición Lateral (K-WTA)
+        candidates.sort_by(|a, b| {
+            let res = a.2.cmp(&b.2); // Fase (menor primero)
+            if res == std::cmp::Ordering::Equal {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal) // Intensidad (mayor primero)
+            } else {
+                res
+            }
+        });
+
+        let mut resonance_logits = vec![-100.0f32; n_tokens];
+        let num_winners = candidates.len().min(k_wta);
+        
+        for i in 0..num_winners {
+            let (idx, intensity, phase) = candidates[i];
+            let phase_score = (16 - phase) as f32;
+            resonance_logits[idx] = intensity * phase_score;
+        }
+
+        Ok(resonance_logits)
+    }
+
     pub fn train_step(&mut self, token_id: usize, target_token: usize, lr: f32) -> PyResult<f32> {
         let pos = if self.blocks.is_empty() {
             0
