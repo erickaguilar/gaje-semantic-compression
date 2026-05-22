@@ -28,7 +28,7 @@ En dispositivos móviles, el uso sostenido de todos los núcleos al 100% provoca
 Contamos con compresión de 2 bits para los pesos, pero la memoria contextual de la conversación sigue siendo efímera.
 
 *   **El Problema:** La persistencia de experiencias pasadas es limitada.
-*   **La Solución:** Integrar la **Base de Datos Semántica (`redb`)** directamente con el motor de spikes. Cada "pensamiento" o interacción del modelo debe cuantizarse y almacenarse en un espacio persistente de 2 bits. Esto permitirá al modelo "recordar" contextos de hace meses con un impacto mínimo en la memoria RAM.
+*   **La Solución:** Implementar el **Plan de RAG Nativo** (ver `docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md`). Esto incluye integrar `redb` directamente con el motor de spikes, permitiendo que cada pensamiento se guarde en ADN de 2 bits para una recuperación ultra-eficiente mediante ADC (Asymmetric Distance Computation).
 
 ## 5. Dashboard de Resonancia (Salud Genómica)
 A medida que el modelo muta y se adapta localmente, es vital monitorizar su integridad.
