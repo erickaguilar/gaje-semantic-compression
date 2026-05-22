@@ -5,7 +5,8 @@ from typing import Dict, List
 @dataclass
 class ArchitectureConfig:
     name: str
-    tokenizer_id: str
+    version: str = "0.9.5"
+    tokenizer_id: str = "gpt2"
     rope_base: float = 10000.0
     has_bias: bool = False
     rope_style: str = "split"  # "split" (Llama/Qwen) or "interleaved"
@@ -27,6 +28,7 @@ class ArchitectureConfig:
 ARCHITECTURES: Dict[str, ArchitectureConfig] = {
     "llama": ArchitectureConfig(
         name="llama",
+        version="0.9.5",
         tokenizer_id="HuggingFaceTB/SmolLM2-135M-Instruct",  # Default for small llama-like
         rope_base=10000.0,
         has_bias=False,
@@ -35,6 +37,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
     ),
     "qwen2": ArchitectureConfig(
         name="qwen2",
+        version="0.9.5",
         tokenizer_id="Qwen/Qwen2-0.5B",
         rope_base=1000000.0,  # Qwen2 usually uses 1M
         has_bias=True,
@@ -53,6 +56,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
     ),
     "smollm": ArchitectureConfig(
         name="smollm",
+        version="0.9.5",
         tokenizer_id="HuggingFaceTB/SmolLM2-135M-Instruct",
         rope_base=10000.0,
         has_bias=False,
@@ -62,6 +66,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
     ),
     "gaje_native": ArchitectureConfig(
         name="gaje_native",
+        version="0.9.5",
         tokenizer_id="Qwen/Qwen2-0.5B",  # Placeholder or custom
         rope_base=10000.0,
         has_bias=False,

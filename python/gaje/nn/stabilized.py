@@ -1066,13 +1066,23 @@ class GenomicLLM:
                         dtype=np.float32,
                     )
 
+                def get_row(self, idx):
+                    return np.array(self.linear.get_row(idx), dtype=np.float32)
+
             return MockLayer(linear, anchors_u8)
 
+        vocab_size = meta.get("vocab_size")
+        if vocab_size is None:
+            # Detectar desde el tamaño del tensor DNA de embeddings
+            embd_dna = db_reader.read_tensor("token_embd.dna")
+            vocab_size = (len(embd_dna) * 4) // model.n_embd
+            print(f"[*] Vocab size detectado automáticamente: {vocab_size}")
+
         model.embeddings = load_linear(
-            "token_embd", meta.get("vocab_size", 50257), model.n_embd
+            "token_embd", vocab_size, model.n_embd
         )
         model.lm_head = load_linear(
-            "lm_head", meta.get("vocab_size", 50257), model.n_embd
+            "lm_head", vocab_size, model.n_embd
         )
 
         output_norm = np.ones(model.n_embd).astype(np.float32).tolist()

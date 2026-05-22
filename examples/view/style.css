@@ -186,7 +186,7 @@ main {
 
     .app-container {
         width: 100%;
-        height: 100vh;
+        height: 100dvh; /* Usa dynamic viewport height si está disponible */
         border-radius: 0;
         border: none;
     }
@@ -200,10 +200,11 @@ main {
         height: auto;
         border-right: none;
         border-bottom: 1px solid #30363d;
-        padding: 0.8rem;
+        padding: 0.5rem;
         flex-direction: row;
-        gap: 0.5rem;
+        gap: 0.4rem;
         overflow-x: auto;
+        flex-shrink: 0;
     }
 
     .sidebar h3 {
@@ -212,29 +213,43 @@ main {
 
     .stats-card, .dna-viewer {
         flex: 1;
-        min-width: 180px;
-        padding: 0.6rem;
+        min-width: 140px;
+        padding: 0.5rem;
         margin-bottom: 0;
+        font-size: 0.7rem;
+    }
+
+    .model-dropdown {
+        padding: 0.4rem;
+        font-size: 0.7rem;
+    }
+
+    .model-meta {
+        display: none;
     }
 
     .strand-display {
-        max-height: 45px;
-        -webkit-line-clamp: 2;
-        display: -webkit-box;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
+        max-height: 32px;
+        font-size: 0.55rem;
     }
 
     .chat-window {
-        padding: 0.8rem;
+        padding: 0.6rem;
     }
 
     .input-area {
-        padding: 0.8rem;
+        padding: 0.6rem;
+        gap: 0.5rem;
     }
 
     input {
-        font-size: 16px; /* Evita zoom en iOS al enfocar */
+        font-size: 16px; 
+        padding: 0.6rem 0.8rem;
+    }
+
+    button {
+        padding: 0.6rem 1rem;
+        font-size: 0.8rem;
     }
 }
 

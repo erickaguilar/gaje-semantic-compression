@@ -12,6 +12,9 @@ pub struct ArchConfig {
     #[serde(default = "default_name")]
     pub name: String,
     #[pyo3(get, set)]
+    #[serde(default = "default_version")]
+    pub version: String,
+    #[pyo3(get, set)]
     #[serde(default = "default_tokenizer")]
     pub tokenizer_id: String,
     #[pyo3(get, set)]
@@ -43,9 +46,10 @@ pub struct ArchConfig {
 #[pymethods]
 impl ArchConfig {
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false))]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "0.9.5".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false))]
     pub fn new(
         name: String,
+        version: String,
         tokenizer_id: String,
         rope_base: f32,
         ffn_act: String,
@@ -58,6 +62,7 @@ impl ArchConfig {
     ) -> Self {
         ArchConfig {
             name,
+            version,
             tokenizer_id,
             rope_base,
             ffn_act,
@@ -73,6 +78,9 @@ impl ArchConfig {
 
 fn default_name() -> String {
     "GAJE-Model".to_string()
+}
+fn default_version() -> String {
+    "0.9.5".to_string()
 }
 fn default_tokenizer() -> String {
     "gpt2".to_string()
@@ -232,6 +240,7 @@ impl GGUFLoader {
                 name: self
                     .get_metadata_string("general.name")
                     .unwrap_or_else(|| "GGUF-Model".to_string()),
+                version: "0.9.5".to_string(),
                 tokenizer_id: "tokenizer".to_string(),
                 rope_base,
                 ffn_act: "swiglu".to_string(),

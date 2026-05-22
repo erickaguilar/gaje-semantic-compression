@@ -78,6 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let config = _impl::io::loader::ModelConfig {
             config: _impl::io::loader::ArchConfig {
                 name: "GAJE-Pure-Organism".to_string(),
+                version: "0.9.5".to_string(),
                 tokenizer_id: "tokenizer".to_string(),
                 rope_base: 1000000.0,
                 ffn_act: "swiglu".to_string(),

@@ -2,21 +2,38 @@ import http.server
 import socketserver
 import json
 import os
+import sys
 import numpy as np
+
+# Asegurar que usamos el código local de 'python/'
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
+
 from gaje.core import _impl as dna_semantic_compression
+from gaje.nn.stabilized import GenomicLLM
 
 PORT = 8080
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 
-# Intentar cargar SentenceTransformer para embeddings reales
-try:
-    from sentence_transformers import SentenceTransformer
-    print("[*] Cargando modelo de lenguaje (all-MiniLM-L6-v2)...")
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    HAS_MODEL = True
-except ImportError:
-    print("[!] SentenceTransformer no encontrado. Usando vectores sintéticos.")
-    HAS_MODEL = False
+# Cache de modelos para no recargar en cada mensaje
+loaded_models = {}
+
+def get_model(model_name):
+    if model_name in loaded_models:
+        return loaded_models[model_name]
+    
+    model_path = os.path.join(PROJECT_ROOT, "models", "checkpoints", model_name)
+    if not os.path.exists(model_path):
+        return None
+        
+    print(f"🧬 Cargando modelo real: {model_path}")
+    try:
+        llm = GenomicLLM.load_genomic(model_path)
+        loaded_models[model_name] = llm
+        return llm
+    except Exception as e:
+        print(f"❌ Error cargando modelo {model_name}: {e}")
+        return None
 
 class GajeHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -24,7 +41,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/api/models':
-            checkpoints_dir = os.path.join("models", "checkpoints")
+            checkpoints_dir = os.path.join(PROJECT_ROOT, "models", "checkpoints")
             models = []
             if os.path.exists(checkpoints_dir):
                 for f in os.listdir(checkpoints_dir):
@@ -49,32 +66,48 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             data = json.loads(post_data)
             
             message = data.get('message', '')
-            model_name = data.get('model', 'auto')
+            model_name = data.get('model', '')
             
             print(f"[*] Procesando mensaje con modelo: {model_name}")
 
-            # 1. Obtener Embedding
-            if HAS_MODEL:
-                embedding = model.encode(message).tolist()
-            else:
-                np.random.seed(sum(ord(c) for c in message) % 1234)
-                embedding = np.random.normal(0, 1, 384).tolist()
+            llm = get_model(model_name)
+            if not llm:
+                response_data = {"error": f"Modelo {model_name} no disponible o error al cargar."}
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response_data).encode())
+                return
 
-            dims = len(embedding)
+            # 1. Obtener Embedding (simulado del input para visualización)
+            try:
+                tokens = llm.tokenizer.encode(message, add_special_tokens=False)
+                if hasattr(tokens, "ids"): tokens = tokens.ids
+            except:
+                tokens = [0]
             
-            # 2. Simular carga de pesos .gaje si no es 'auto'
-            if model_name != "auto":
-                model_path = os.path.join("models/checkpoints", model_name)
-                if os.path.exists(model_path):
-                    print(f"[+] Pesos cargados desde: {model_path}")
-                else:
-                    print(f"[!] Archivo no encontrado: {model_path}")
+            # 2. Generación Genómica
+            response_text = ""
+            print("[*] Generando respuesta...")
+            try:
+                # Usamos un número pequeño de tokens para la web por latencia
+                # Aumentamos el repetition_penalty para evitar bucles
+                for token_text in llm.generate(message, max_new_tokens=50, temperature=0.6, repetition_penalty=1.2):
+                    response_text += token_text
+                    if len(response_text) > 400: break # Límite de seguridad
+            except Exception as e:
+                response_text = f"Error en generación: {e}"
 
-            # 3. Cuantizar con el Motor Rust
+            # 3. Visualización del primer token (para la UI de ADN)
+            first_token_id = tokens[0] if tokens else 0
+            # Recuperar embedding del primer token
+            emb_row = llm.embeddings.get_row(first_token_id)
+            
+            # 4. Cuantizar para visualización (Motor Rust)
             thresholds = [-0.34, 0.0, 0.34]
-            dna_strand_bytes = dna_semantic_compression.quantize_embedding(embedding, thresholds)
+            dna_strand_bytes = dna_semantic_compression.quantize_embedding(emb_row.tolist(), thresholds)
             
-            # 4. Convertir a Bases (A, C, G, T)
+            # Convertir a Bases (A, C, G, T)
             mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
             bases = []
             for byte in dna_strand_bytes[:32]:
@@ -84,24 +117,15 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             
             dna_visual = "".join(bases)
             
-            # 5. Calcular Métricas
+            # 5. Métricas
+            dims = llm.n_embd
             orig_size = dims * 4
-            dna_size = len(dna_strand_bytes)
+            dna_size = (dims + 3) // 4
             ratio = orig_size / dna_size
             saved = (1 - (dna_size / orig_size)) * 100
             
-            # 6. Respuesta Dinámica según el modelo
-            if "smollm2" in model_name:
-                bot_msg = f"[SmolLM2]: Procesando token genómico. Densidad optimizada para {model_name}."
-            elif "polyglot" in model_name:
-                bot_msg = f"[Polyglot]: Análisis multilingüe completado. Resonancia detectada."
-            elif "english" in model_name:
-                bot_msg = f"[English-Org]: Semantic refinement applied using {model_name}."
-            else:
-                bot_msg = "Entrada semántica procesada con éxito por el núcleo GAJE."
-            
             response_data = {
-                "response": bot_msg,
+                "response": response_text or "Procesamiento completado.",
                 "dna": dna_visual,
                 "metrics": {
                     "dims": dims,
@@ -122,7 +146,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     os.chdir(DIRECTORY)
     with socketserver.TCPServer(("", PORT), GajeHandler) as httpd:
-        print(f"🚀 Servidor GAJE Visual activo en http://localhost:{PORT}")
+        print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
         print("Presiona Ctrl+C para detener.")
         try:
             httpd.serve_forever()
