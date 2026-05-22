@@ -36,17 +36,58 @@ impl GajeNeuromorphicLayer {
     /// `input_index` es el índice de la neurona de la capa anterior que disparó.
     /// ¡Cero Multiplicaciones!: Solo sumas de centroides.
     pub fn integrate_batch(&mut self, input_index: usize, centroides: &[f32; 4]) {
-        // Este bucle es un candidato perfecto para auto-vectorización SIMD
-        for i in 0..self.num_neurons {
-            let global_weight_index = i * self.weights_per_neuron + input_index;
-            let byte_index = global_weight_index / 4;
-            let bit_shift = (global_weight_index % 4) * 2;
+        #[cfg(target_arch = "aarch64")]
+        unsafe {
+            use std::arch::aarch64::*;
             
-            // Extracción rápida de 2-bits
-            let weight_bits = (self.packed_weights[byte_index] >> bit_shift) & 0x03;
+            let n = self.num_neurons;
+            let weights_per_neuron = self.weights_per_neuron;
+            let potentials_ptr = self.membrane_potentials.as_mut_ptr();
             
-            // Suma del centroide al potencial de la neurona i
-            self.membrane_potentials[i] += centroides[weight_bits as usize];
+            let mut i = 0;
+            while i + 4 <= n {
+                // Cargar potenciales actuales de 4 neuronas
+                let mut p_v = vld1q_f32(potentials_ptr.add(i));
+                
+                // Extraer incrementos (centroides) para estas 4 neuronas
+                let mut c_v = [0.0f32; 4];
+                for j in 0..4 {
+                    let neuron_idx = i + j;
+                    let global_idx = neuron_idx * weights_per_neuron + input_index;
+                    let byte_idx = global_idx / 4;
+                    let bit_shift = (global_idx % 4) * 2;
+                    let weight_bits = (self.packed_weights[byte_idx] >> bit_shift) & 0x03;
+                    c_v[j] = centroides[weight_bits as usize];
+                }
+                
+                // Sumar vectorialmente y guardar
+                let inc_v = vld1q_f32(c_v.as_ptr());
+                p_v = vaddq_f32(p_v, inc_v);
+                vst1q_f32(potentials_ptr.add(i), p_v);
+                
+                i += 4;
+            }
+            
+            // Fallback para el resto
+            while i < n {
+                let global_weight_index = i * weights_per_neuron + input_index;
+                let byte_index = global_weight_index / 4;
+                let bit_shift = (global_weight_index % 4) * 2;
+                let weight_bits = (self.packed_weights[byte_index] >> bit_shift) & 0x03;
+                self.membrane_potentials[i] += centroides[weight_bits as usize];
+                i += 1;
+            }
+        }
+
+        #[cfg(not(target_arch = "aarch64"))]
+        {
+            for i in 0..self.num_neurons {
+                let global_weight_index = i * self.weights_per_neuron + input_index;
+                let byte_index = global_weight_index / 4;
+                let bit_shift = (global_weight_index % 4) * 2;
+                let weight_bits = (self.packed_weights[byte_index] >> bit_shift) & 0x03;
+                self.membrane_potentials[i] += centroides[weight_bits as usize];
+            }
         }
     }
 

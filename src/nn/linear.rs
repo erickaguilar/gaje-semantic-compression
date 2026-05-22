@@ -70,10 +70,10 @@ impl GenomicLinear {
         // Detect if anchors_u8 is Sparse or Dense
         let (anchor_indices, anchor_values, anchor_row_ptrs, legacy_anchors) = if anchors_u8.is_empty() {
             (Vec::new(), Vec::new(), vec![0; out_features + 1], Vec::new())
-        } else if (anchors_u8.len() > 8 && &anchors_u8[0..4] == b"GAJE") || (anchors_u8.len() > 5 && anchors_u8[0] == 0x5A) { 
-            // Magic bytes for Sparse (GAJE = new, 0x5A = legacy)
+        } else if (anchors_u8.len() > 8 && &anchors_u8[0..4] == b"GAJE") || (anchors_u8.len() > 6 && &anchors_u8[0..2] == b"GA") { 
+            // Magic bytes for Sparse (GAJE = new, GA = legacy/stable)
             let is_gaje = &anchors_u8[0..4] == b"GAJE";
-            let count_start = if is_gaje { 4 } else { 1 };
+            let count_start = if is_gaje { 4 } else { 2 };
             let count = u32::from_le_bytes(anchors_u8[count_start..count_start+4].try_into().unwrap()) as usize;
             
             let mut indices = Vec::with_capacity(count);
