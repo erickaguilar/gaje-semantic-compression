@@ -46,6 +46,24 @@ impl GajeNeuromorphicLayer {
     }
 
     #[getter]
+    pub fn membrane_potentials(&self) -> Vec<f32> {
+        self.membrane_potentials.clone()
+    }
+
+    #[setter]
+    pub fn set_membrane_potentials(&mut self, values: Vec<f32>) -> PyResult<()> {
+        if values.len() != self.num_neurons {
+            return Err(pyo3::exceptions::PyValueError::new_err("Size mismatch"));
+        }
+        self.membrane_potentials = values;
+        Ok(())
+    }
+
+    pub fn reset_potentials(&mut self) {
+        self.membrane_potentials.fill(0.0);
+    }
+
+    #[getter]
     pub fn packed_weights<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.packed_weights))
     }
