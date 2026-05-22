@@ -164,11 +164,73 @@ impl GajeNeuromorphicLayer {
         self.packed_weights[start_byte + byte_idx] &= !(0x03 << bit_shift);
         self.packed_weights[start_byte + byte_idx] |= val << bit_shift;
     }
+
+    /// Refinamiento Genómico Local (Entrenamiento Nativo).
+    /// Ajusta los pesos de un conjunto de neuronas basándose en un error local (delta).
+    /// - `input_index`: Índice del input que disparó.
+    /// - `deltas`: Valor de ajuste para cada neurona (>0 para reforzar, <0 para inhibir).
+    /// - `learning_rate`: Probabilidad de que el cambio de bit ocurra (0.0 a 1.0).
+    pub fn refine_step(&mut self, input_index: usize, deltas: &[f32], learning_rate: f32) {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let row_size = (self.num_neurons + 3) / 4;
+        let start_byte = input_index * row_size;
+
+        for (i, &delta) in deltas.iter().enumerate() {
+            if i >= self.num_neurons || delta.abs() < 1e-5 {
+                continue;
+            }
+
+            // Aplicar learning rate como probabilidad de mutación dirigida
+            if rng.gen::<f32>() > learning_rate {
+                continue;
+            }
+
+            let byte_idx = i / 4;
+            let bit_shift = (i % 4) * 2;
+            let current_byte = self.packed_weights[start_byte + byte_idx];
+            let current_weight = (current_byte >> bit_shift) & 0x03;
+
+            let mut new_weight = current_weight;
+            if delta > 0.0 {
+                if current_weight < 3 { new_weight += 1; }
+            } else {
+                if current_weight > 0 { new_weight -= 1; }
+            }
+
+            if new_weight != current_weight {
+                self.packed_weights[start_byte + byte_idx] &= !(0x03 << bit_shift);
+                self.packed_weights[start_byte + byte_idx] |= new_weight << bit_shift;
+            }
+        }
+    }
+
+    /// Mecanismo de Homeostasis Genómica para mitigar el olvido catastrófico.
+    pub fn apply_homeostasis(&mut self, target_potential: f32) {
+        for p in self.membrane_potentials.iter_mut() {
+            if *p > target_potential {
+                *p *= 0.95; 
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_refine_step() {
+        let mut layer = GajeNeuromorphicLayer::new(4, 1, 1.0, 0.9);
+        let deltas = [1.0, 0.0, 1.0, 0.0];
+        layer.refine_step(0, &deltas, 1.0);
+        assert_eq!((layer.packed_weights[0] >> 0) & 0x03, 1);
+        assert_eq!((layer.packed_weights[0] >> 4) & 0x03, 1);
+        
+        let deltas_neg = [-1.0, 0.0, 0.0, 0.0];
+        layer.refine_step(0, &deltas_neg, 1.0);
+        assert_eq!((layer.packed_weights[0] >> 0) & 0x03, 0);
+    }
 
     #[test]
     fn test_soa_integration() {
