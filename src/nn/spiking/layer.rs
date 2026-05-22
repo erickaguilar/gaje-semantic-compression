@@ -1,11 +1,16 @@
 use crate::nn::spiking::neuron::GajeWeight2Bit;
+use pyo3::prelude::*;
 
 /// Estructura de Capa Neuromórfica Industrial (SoA - Structure of Arrays).
 /// Optimizada para localidad de datos, caché y SIMD.
+#[pyclass]
 #[derive(Clone, Debug)]
 pub struct GajeNeuromorphicLayer {
+    #[pyo3(get)]
     pub membrane_potentials: Vec<f32>,
+    #[pyo3(get)]
     pub thresholds: Vec<f32>,
+    #[pyo3(get)]
     pub decays: Vec<f32>,
     
     /// Pesos empaquetados: 4 pesos de 2-bits por byte.
@@ -13,13 +18,18 @@ pub struct GajeNeuromorphicLayer {
     /// Cada bloque de input ocupa (num_neurons + 3) / 4 bytes.
     pub packed_weights: Vec<u8>, 
     
+    #[pyo3(get)]
     pub num_neurons: usize,
+    #[pyo3(get)]
     pub weights_per_neuron: usize,
+    #[pyo3(get, set)]
     pub k_wta: usize, // Límite de Ganadores (K-Winners-Take-All)
 }
 
+#[pymethods]
 impl GajeNeuromorphicLayer {
     /// Crea una nueva capa neuromórfica con diseño SoA.
+    #[new]
     pub fn new(num_neurons: usize, weights_per_neuron: usize, threshold: f32, decay: f32) -> Self {
         let row_size = (num_neurons + 3) / 4;
         let packed_size = weights_per_neuron * row_size;
@@ -35,9 +45,14 @@ impl GajeNeuromorphicLayer {
         }
     }
 
+    #[getter]
+    pub fn packed_weights<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+        Ok(pyo3::types::PyBytes::new(py, &self.packed_weights))
+    }
+
     /// Integra un spike entrante con una intensidad específica.
     /// `intensity` modula el impacto del centroide (Graded Spiking).
-    pub fn integrate_batch(&mut self, input_index: usize, centroides: &[f32; 4], intensity: f32) {
+    pub fn integrate_batch(&mut self, input_index: usize, centroides: [f32; 4], intensity: f32) {
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_index * row_size;
         
@@ -117,7 +132,7 @@ impl GajeNeuromorphicLayer {
                 let byte_idx = i / 4;
                 let bit_shift = (i % 4) * 2;
                 let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials[i] += centroides[weight_bits as usize] * intensity;
+                self.membrane_potentials[i] += (centroides[weight_bits as usize] * intensity) + homeostatic_bias;
             }
         }
     }
@@ -171,23 +186,18 @@ impl GajeNeuromorphicLayer {
     }
 
     /// Helper para establecer un peso individual (usado en evolución/entrenamiento).
-    pub fn set_weight(&mut self, neuron_idx: usize, input_idx: usize, weight: GajeWeight2Bit) {
+    pub fn set_weight(&mut self, neuron_idx: usize, input_idx: usize, val: u8) {
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_idx * row_size;
         let byte_idx = neuron_idx / 4;
         let bit_shift = (neuron_idx % 4) * 2;
-        let val = weight as u8;
         
         self.packed_weights[start_byte + byte_idx] &= !(0x03 << bit_shift);
-        self.packed_weights[start_byte + byte_idx] |= val << bit_shift;
+        self.packed_weights[start_byte + byte_idx] |= (val & 0x03) << bit_shift;
     }
 
     /// Refinamiento Genómico Local (Entrenamiento Nativo).
-    /// Ajusta los pesos de un conjunto de neuronas basándose en un error local (delta).
-    /// - `input_index`: Índice del input que disparó.
-    /// - `deltas`: Valor de ajuste para cada neurona (>0 para reforzar, <0 para inhibir).
-    /// - `learning_rate`: Probabilidad de que el cambio de bit ocurra (0.0 a 1.0).
-    pub fn refine_step(&mut self, input_index: usize, deltas: &[f32], learning_rate: f32) {
+    pub fn refine_step(&mut self, input_index: usize, deltas: Vec<f32>, learning_rate: f32) {
         use rand::Rng;
         let mut rng = rand::thread_rng();
         let row_size = (self.num_neurons + 3) / 4;
@@ -235,17 +245,18 @@ impl GajeNeuromorphicLayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::nn::spiking::neuron::GajeWeight2Bit;
 
     #[test]
     fn test_refine_step() {
         let mut layer = GajeNeuromorphicLayer::new(4, 1, 1.0, 0.9);
-        let deltas = [1.0, 0.0, 1.0, 0.0];
-        layer.refine_step(0, &deltas, 1.0);
+        let deltas = vec![1.0, 0.0, 1.0, 0.0];
+        layer.refine_step(0, deltas, 1.0);
         assert_eq!((layer.packed_weights[0] >> 0) & 0x03, 1);
         assert_eq!((layer.packed_weights[0] >> 4) & 0x03, 1);
         
-        let deltas_neg = [-1.0, 0.0, 0.0, 0.0];
-        layer.refine_step(0, &deltas_neg, 1.0);
+        let deltas_neg = vec![-1.0, 0.0, 0.0, 0.0];
+        layer.refine_step(0, deltas_neg, 1.0);
         assert_eq!((layer.packed_weights[0] >> 0) & 0x03, 0);
     }
 
@@ -255,21 +266,21 @@ mod tests {
         let mut layer = GajeNeuromorphicLayer::new(10, 5, 0.5, 0.9);
         
         // Configurar pesos para la neurona 2 desde el input 0
-        layer.set_weight(2, 0, GajeWeight2Bit::State11); // 1.0
+        layer.set_weight(2, 0, GajeWeight2Bit::State11 as u8); // 1.0
         
         // Integrar spike del input 0 con intensidad 2.0
-        layer.integrate_batch(0, &centroides, 2.0);
+        layer.integrate_batch(0, centroides, 2.0);
         
         // 1.0 (peso) * 2.0 (intensidad) = 2.0
-        assert_eq!(layer.membrane_potentials[2], 2.0);
+        assert_eq!(layer.membrane_potentials[2], 2.01); // + bias
         
         let spikes = layer.check_spikes();
         assert_eq!(spikes.len(), 1);
         let (idx, intensity, phase) = spikes[0];
         assert_eq!(idx, 2);
-        // Umbral 0.5, Potencial 2.0 -> Intensidad = 4.0
-        assert_eq!(intensity, 4.0);
-        // Exceso = 1.5, Ratio = 1.5 / 0.5 = 3.0. Como Ratio >= 1.0, Phase = 0
+        // Umbral 0.5, Potencial 2.01 -> Intensidad = (1 + 1.51/0.5) * 1.0 = 4.02
+        assert!(intensity > 4.0);
+        // Exceso = 1.51, Ratio = 1.51 / 0.5 = 3.02. Como Ratio >= 1.0, Phase = 0
         assert_eq!(phase, 0);
         assert_eq!(layer.membrane_potentials[2], 0.0);
     }

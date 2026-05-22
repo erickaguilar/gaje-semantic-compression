@@ -39,12 +39,12 @@ fn main() {
         // Para simplificar, asumimos que todas las neuronas de la capa oculta contribuyeron
         let hidden_spikes: Vec<usize> = (0..hidden_dim).collect(); // Heurística simple
         for &h_idx in &hidden_spikes {
-            layers[1].refine_step(h_idx, &layer1_deltas, learning_rate);
+            layers[1].refine_step(h_idx, layer1_deltas.clone(), learning_rate);
         }
 
         // Refinar Capa 0: Queremos que la capa oculta responda al input
         let mut layer0_deltas = vec![1.0; hidden_dim];
-        layers[0].refine_step(input_id, &layer0_deltas, learning_rate);
+        layers[0].refine_step(input_id, layer0_deltas, learning_rate);
 
         // Homeostasis para estabilidad
         layers[0].apply_homeostasis(1.0);

@@ -56,14 +56,14 @@ fn main() {
             let mut l0_deltas = vec![-0.1; hidden_dim];
             let start_h = (input_id * 8) % hidden_dim;
             for j in 0..8 { l0_deltas[(start_h + j) % hidden_dim] = 1.0; }
-            layers[0].refine_step(input_id, &l0_deltas, 1.0);
+            layers[0].refine_step(input_id, l0_deltas, 1.0);
             
             // 2. Forward pass para obtener spikes
-            layers[0].integrate_batch(input_id, &centroides, 1.0);
+            layers[0].integrate_batch(input_id, centroides, 1.0);
             let l0_spikes = layers[0].check_spikes();
             
             for &(idx, intensity, _) in &l0_spikes {
-                layers[1].integrate_batch(idx, &centroides, intensity);
+                layers[1].integrate_batch(idx, centroides, intensity);
             }
             let l1_spikes = layers[1].check_spikes();
             
@@ -72,7 +72,7 @@ fn main() {
             l1_deltas[target_id] = 1.0;
             
             for &(h_idx, _, _) in &l0_spikes {
-                layers[1].refine_step(h_idx, &l1_deltas, lr);
+                layers[1].refine_step(h_idx, l1_deltas.clone(), lr);
             }
             
             if l1_spikes.iter().any(|&(idx, _, _)| idx == target_id) {
@@ -98,11 +98,11 @@ fn main() {
         layers[0].membrane_potentials.fill(0.0);
         layers[1].membrane_potentials.fill(0.0);
         
-        layers[0].integrate_batch(current_id, &centroides, 1.0);
+        layers[0].integrate_batch(current_id, centroides, 1.0);
         let l0_spikes = layers[0].check_spikes();
         
         for &(idx, intensity, _) in &l0_spikes {
-            layers[1].integrate_batch(idx, &centroides, intensity);
+            layers[1].integrate_batch(idx, centroides, intensity);
         }
         let l1_spikes = layers[1].check_spikes();
         

@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from gaje.core._impl import ArchConfig, ModelConfig, init_born_genomic_model, save_genomic_model, RustGenomicLLM
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.trainer import GenomicTrainer
+from gaje.utils.version import get_project_version
 from tokenizers import Tokenizer
 
 def main():
@@ -23,12 +24,14 @@ def main():
     parser.add_argument("--tokenizer", type=str, default="models/core/tokenizer.json", help="Ruta al tokenizador")
     args = parser.parse_args()
 
-    print(f"🧬 Iniciando Nacimiento Genómico: {args.name}")
+    version = get_project_version()
+    print(f"🧬 Iniciando Nacimiento Genómico (v{version}): {args.name}")
     print("-" * 50)
 
     # 1. Configuración del Organismo
     arch = ArchConfig(
         name=args.name,
+        version=version,
         tokenizer_id=args.tokenizer, # Use the local path
         rope_base=1000000.0,
         ffn_act="swiglu",

@@ -838,6 +838,7 @@ class GenomicLLM:
         import json
         import os
         import tempfile
+        from gaje.utils.version import get_project_version
 
         if not output_path.endswith(".gaje"):
             if not os.path.exists(output_path):
@@ -850,6 +851,7 @@ class GenomicLLM:
         metadata = {
             "config": {
                 "name": self.config.name,
+                "version": get_project_version(),
                 "tokenizer_id": self.config.tokenizer_id,
                 "rope_base": self.rope_base,
                 "ffn_act": self.config.ffn_act,

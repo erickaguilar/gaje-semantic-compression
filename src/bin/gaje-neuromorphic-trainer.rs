@@ -76,26 +76,26 @@ fn main() {
                 let mut l0_deltas = vec![-0.1; dim_latent];
                 let offset_l0 = (input_id * 16) % dim_latent;
                 for j in 0..16 { l0_deltas[(offset_l0 + j) % dim_latent] = 1.0; }
-                layers[0].refine_step(input_id, &l0_deltas, 1.0);
+                layers[0].refine_step(input_id, l0_deltas, 1.0);
 
-                layers[0].integrate_batch(input_id, &centroides, 1.0);
+                layers[0].integrate_batch(input_id, centroides, 1.0);
                 let s0 = layers[0].check_spikes();
 
                 // REFORZAR L1
                 let mut l1_deltas = vec![-0.1; dim_logic];
                 let offset_l1 = (input_id * 8) % dim_logic;
                 for j in 0..8 { l1_deltas[(offset_l1 + j) % dim_logic] = 1.0; }
-                for &(idx, _, _) in &s0 { layers[1].refine_step(idx, &l1_deltas, 1.0); }
+                for &(idx, _, _) in &s0 { layers[1].refine_step(idx, l1_deltas.clone(), 1.0); }
 
-                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, &centroides, intensity); }
+                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, centroides, intensity); }
                 let s1 = layers[1].check_spikes();
 
                 // REFORZAR L2 (Output)
                 let mut l2_deltas = vec![-1.0; id_counter];
                 l2_deltas[target_id] = 1.0;
-                for &(idx, _, _) in &s1 { layers[2].refine_step(idx, &l2_deltas, lr); }
+                for &(idx, _, _) in &s1 { layers[2].refine_step(idx, l2_deltas.clone(), lr); }
 
-                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, &centroides, intensity); }
+                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, centroides, intensity); }
                 let s2 = layers[2].check_spikes();
 
                 if s2.iter().any(|&(idx, _, _)| idx == target_id) {

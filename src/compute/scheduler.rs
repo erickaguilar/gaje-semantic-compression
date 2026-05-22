@@ -46,7 +46,7 @@ impl NeuromorphicScheduler {
         let mut affected_layers = HashSet::new();
         for event in &events {
             if event.target_layer_id < layers.len() {
-                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, &self.centroides, event.intensity);
+                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, self.centroides, event.intensity);
                 affected_layers.insert(event.target_layer_id);
             }
         }
@@ -134,10 +134,10 @@ mod tests {
         
         // Crear 2 capas SoA
         let mut layer0 = GajeNeuromorphicLayer::new(1, 1, 1.0, 1.0);
-        layer0.set_weight(0, 0, GajeWeight2Bit::State11); // Peso 1.2
+        layer0.set_weight(0, 0, GajeWeight2Bit::State11 as u8); // Peso 1.2
         
         let mut layer1 = GajeNeuromorphicLayer::new(1, 1, 1.0, 1.0);
-        layer1.set_weight(0, 0, GajeWeight2Bit::State11); // Peso 1.2
+        layer1.set_weight(0, 0, GajeWeight2Bit::State11 as u8); // Peso 1.2
 
         let mut layers = vec![layer0, layer1];
 
