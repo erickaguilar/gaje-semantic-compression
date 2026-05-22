@@ -549,6 +549,62 @@ impl GenomicLinear {
         Ok(())
     }
 
+    /// Propagación hacia atrás (Backward): Calcula el gradiente de la entrada.
+    /// d_input = d_output * W^T
+    pub fn backward(&self, d_output: Vec<f32>) -> PyResult<Vec<f32>> {
+        let n_blocks = self.in_features / self.block_size;
+        let mut d_input = vec![0.0f32; self.in_features];
+
+        // Procesamos por bloques de entrada para paralelizar el acumulado
+        d_input.par_chunks_mut(self.block_size).enumerate().for_each(|(j, d_in_block)| {
+            for i in 0..self.out_features {
+                let d_out_val = d_output[i];
+                if d_out_val == 0.0 { continue; }
+
+                let row_offset = i * n_blocks * self.stride;
+                let weights = &self.database[row_offset + j * self.stride .. row_offset + (j + 1) * self.stride];
+                let c_offset = (i * n_blocks + j) * 4;
+                let row_centroids = &self.centroids[c_offset..c_offset + 4];
+
+                let mut dims = 0;
+                for k in 0..self.stride {
+                    let byte = weights[k];
+                    for s in 0..4 {
+                        let bits = (byte >> ((3 - s) * 2)) & 0b11;
+                        let val = match bits {
+                            0b00 => row_centroids[0],
+                            0b01 => row_centroids[1],
+                            0b11 => row_centroids[2],
+                            0b10 => row_centroids[3],
+                            _ => 0.0,
+                        };
+                        d_in_block[dims] += d_out_val * val;
+                        dims += 1;
+                    }
+                }
+            }
+            
+            // Sumar impacto de las anclas (Sparse Anchors)
+            // Nota: Aquí solo sumamos si el ancla está en este bloque j
+        });
+
+        // Impacto de anclas (se procesa de forma más eficiente por fila ya que son pocas)
+        for i in 0..self.out_features {
+            let d_out_val = d_output[i];
+            if d_out_val == 0.0 { continue; }
+            
+            let start = self.anchor_row_ptrs[i];
+            let end = self.anchor_row_ptrs[i+1];
+            for k in start..end {
+                let col = self.anchor_indices[k] as usize;
+                let val = self.anchor_values[k].to_f32();
+                d_input[col] += d_out_val * val;
+            }
+        }
+
+        Ok(d_input)
+    }
+
     pub fn monte_carlo_refine(&mut self, mut input: Vec<f32>, target: Vec<f32>, iterations: usize, noise_scale: f32) -> PyResult<()> {
         if !self.rmsnorm_weight.is_empty() {
             input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };

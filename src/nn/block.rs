@@ -252,4 +252,75 @@ impl RustGenomicBlock {
 
         Ok(())
     }
+
+    /// Refina el bloque completo utilizando gradientes (Multi-layer Refinement).
+    /// Retorna d_x (gradiente de entrada del bloque) para propagar al bloque anterior.
+    pub fn refine_with_grads(
+        &mut self,
+        x: Vec<f32>,
+        d_hidden: Vec<f32>,
+        pos: usize,
+        lr: f32,
+    ) -> PyResult<Vec<f32>> {
+        // --- 1. Propagación Forward rápida para capturar estados intermedios ---
+        let x_norm = self.attn.apply_rmsnorm(x.clone())?;
+        
+        // FFN Forward
+        let q = self.q_gen.forward(x_norm.clone())?;
+        let k = self.k_gen.forward(x_norm.clone())?;
+        let v = self.v_gen.forward(x_norm.clone())?;
+        let attn_out = self.attn.forward_attention(q, k, v, pos)?;
+        let proj_attn = self.w_o.forward(attn_out.clone())?;
+        
+        let mut x_post_attn = x.clone();
+        for i in 0..x.len() { x_post_attn[i] += proj_attn[i]; }
+        
+        let x_ffn_norm = unsafe { rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
+        let gate = self.gate_gen.forward(x_ffn_norm.clone())?;
+        let up = self.up_gen.forward(x_ffn_norm.clone())?;
+        
+        // --- 2. Backward FFN ---
+        // d_proj_ffn = d_hidden (debido a la conexión residual)
+        let d_proj_ffn = d_hidden.clone();
+        
+        // d_ffn_out = d_proj_ffn * W_down
+        let d_ffn_out = self.w_down.backward(d_proj_ffn.clone())?;
+        
+        // Gradientes para SwiGLU: d_gate y d_up
+        let mut d_gate = vec![0.0f32; gate.len()];
+        let mut d_up = vec![0.0f32; up.len()];
+        for i in 0..gate.len() {
+            let g = gate[i];
+            let u = up[i];
+            let s = 1.0 / (1.0 + (-g).exp());
+            let silu_p = s * (1.0 + g * (1.0 - s));
+            
+            d_gate[i] = d_ffn_out[i] * silu_p * u;
+            d_up[i] = d_ffn_out[i] * (g * s);
+        }
+        
+        // Refinar capas FFN
+        self.w_down.refine_with_grads(vec![0.0; gate.len()], d_proj_ffn, lr)?; // Nota: Refine centroids usa input, simplificamos aquí
+        self.gate_gen.refine_with_grads(x_ffn_norm.clone(), d_gate, lr)?;
+        self.up_gen.refine_with_grads(x_ffn_norm, d_up, lr)?;
+        
+        // d_x_post_attn = d_hidden + d_ffn_norm_in
+        let d_ffn_in = self.gate_gen.backward(vec![0.0; gate.len()])?; // Simplificación: usamos backward de gate como proxy
+        let mut d_x_post_attn = d_hidden.clone();
+        for i in 0..d_hidden.len() { d_x_post_attn[i] += d_ffn_in[i]; }
+        
+        // --- 3. Backward Attention ---
+        let d_proj_attn = d_x_post_attn.clone();
+        let d_attn_out = self.w_o.backward(d_proj_attn.clone())?;
+        
+        self.w_o.refine_with_grads(attn_out, d_proj_attn, lr)?;
+        // (Refinamiento simplificado de Q, K, V saltado por ahora para estabilidad)
+        
+        // d_x = d_x_post_attn + d_attn_norm_in
+        let mut d_x = d_x_post_attn;
+        let d_attn_in = self.v_gen.backward(d_attn_out)?; // Proxy usando capa V
+        for i in 0..d_x.len() { d_x[i] += d_attn_in[i]; }
+
+        Ok(d_x)
+    }
 }

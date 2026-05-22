@@ -402,15 +402,22 @@ impl RustGenomicLLM {
             let token_id = tokens[i];
             let target_token = tokens[i+1];
             
-            // Reutilizamos la lógica de train_step pero sin limpiar caché para mantener contexto
+            // 1. Forward Pass con captura de estados para Backward
             let pos = if self.blocks.is_empty() { 0 } else { self.blocks[0].attn.k_cache_len() };
-            let mut h = self.embeddings.get_row(token_id)?;
+            
+            let mut hidden_states = Vec::with_capacity(self.blocks.len() + 1);
+            let mut current_h = self.embeddings.get_row(token_id)?;
+            hidden_states.push(current_h.clone());
+            
             for block in &mut self.blocks {
-                h = block.forward(h, pos)?;
+                current_h = block.forward(current_h, pos)?;
+                hidden_states.push(current_h.clone());
             }
-            let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-            let logits = self.lm_head.forward(h_norm.clone())?;
+            
+            let h_final = unsafe { rms_norm(&current_h, &self.output_norm, self.eps) };
+            let logits = self.lm_head.forward(h_final.clone())?;
 
+            // 2. Calcular Error en la Cabeza (Softmax + CrossEntropy)
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_exp = 0.0f32;
             let mut exps = vec![0.0f32; logits.len()];
@@ -429,7 +436,20 @@ impl RustGenomicLLM {
             }
             d_logits[target_token] -= 1.0;
 
-            self.lm_head.refine_with_grads(h_norm, d_logits, lr)?;
+            // 3. Backward Pass y Refinamiento Multi-capa
+            // A. Refinar LM Head
+            let d_h_final = self.lm_head.backward(d_logits.clone())?;
+            self.lm_head.refine_with_grads(h_final, d_logits, lr)?;
+
+            // B. Refinar Bloques (Propagar d_h hacia atrás)
+            let mut d_h = d_h_final;
+            
+            // Refinamos solo los últimos 3 bloques para estabilidad en móviles
+            let start_block = self.blocks.len().saturating_sub(3);
+            for b_idx in (start_block..self.blocks.len()).rev() {
+                let x_input = hidden_states[b_idx].clone();
+                d_h = self.blocks[b_idx].refine_with_grads(x_input, d_h, pos, lr * 0.5)?; // LR menor para bloques
+            }
         }
 
         Ok(total_loss / (tokens.len() - 1) as f32)
