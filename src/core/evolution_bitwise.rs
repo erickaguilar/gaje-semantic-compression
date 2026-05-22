@@ -66,7 +66,7 @@ impl SpikingEvolutionEngine {
             
             // 1. Inyectar estímulos
             for &(layer_id, neuron_id) in input_spikes {
-                scheduler.inject_spike(layer_id, neuron_id, 0);
+                scheduler.inject_spike(layer_id, neuron_id, 0, 0, 1.0);
             }
 
             // 2. Ejecutar simulación

@@ -26,7 +26,7 @@ pub fn run_context_benchmark(
     // 2. Inyectar estímulos (simulando contexto masivo)
     let num_spikes = (context_length as f32 * sparsity) as usize;
     for i in 0..num_spikes {
-        scheduler.inject_spike(0, i % dim, (i as u64) % 1024);
+        scheduler.inject_spike(0, i % dim, (i as u64) % 1024, 0, 1.0);
     }
 
     println!("   Eventos programados (SoA): {}", num_spikes);

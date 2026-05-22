@@ -78,7 +78,7 @@ fn main() {
         let id = *word_to_id.get(*word).unwrap();
         
         // En SoA, el id de la palabra activa una neurona específica de la capa de entrada
-        scheduler.inject_spike(0, id, 0);
+        scheduler.inject_spike(0, id, 0, 0, 1.0);
         
         let outputs = scheduler.run_to_completion(&mut best_organism.layers);
         println!("   Al procesar '{}', la red generó {} disparos.", word, outputs.len());

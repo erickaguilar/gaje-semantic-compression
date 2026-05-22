@@ -18,10 +18,12 @@ impl NeuromorphicScheduler {
         }
     }
 
-    /// Inyecta un estímulo inicial.
-    pub fn inject_spike(&mut self, layer_id: usize, neuron_id: usize, timestamp: u64) {
+    /// Inyecta un estímulo inicial con precisión de fase e intensidad.
+    pub fn inject_spike(&mut self, layer_id: usize, neuron_id: usize, timestamp: u64, phase_offset: u8, intensity: f32) {
         self.wheel.push(SpikeEvent {
             timestamp,
+            phase_offset,
+            intensity,
             source_neuron_id: neuron_id,
             target_layer_id: layer_id,
             target_neuron_id: neuron_id,
@@ -37,12 +39,10 @@ impl NeuromorphicScheduler {
             if event.target_layer_id < layers.len() {
                 let layer = &mut layers[event.target_layer_id];
                 
-                // Integración Masiva (SIMD-ready): El spike afecta a toda la capa o a una neurona específica.
-                // En esta versión industrial, el spike representa una neurona del input disparando.
+                // Integración Masiva: En Fase 2 usaremos event.intensity aquí para modulación graduada.
                 layer.integrate_batch(event.source_neuron_id, &self.centroides);
 
                 // Verificar disparos en toda la capa tras la integración
-                // (Optimización: Esto podría hacerse solo una vez por tick por capa)
                 let layer_spikes = layer.check_spikes();
                 
                 for neuron_idx in layer_spikes {
@@ -50,9 +50,11 @@ impl NeuromorphicScheduler {
                     if next_layer_id < layers.len() {
                         let new_event = SpikeEvent {
                             timestamp: self.wheel.current_tick + self.delay_per_layer,
+                            phase_offset: 0, // En Fase 3 se calculará la latencia exacta
+                            intensity: 1.0,  // En Fase 2 se calculará el residuo de energía
                             source_neuron_id: neuron_idx,
                             target_layer_id: next_layer_id,
-                            target_neuron_id: 0, // En SoA, el target_neuron_id se maneja en integrate_batch
+                            target_neuron_id: 0,
                         };
                         self.wheel.push(new_event);
                         new_spikes.push(new_event);
@@ -60,6 +62,8 @@ impl NeuromorphicScheduler {
                         // Output Spike
                         new_spikes.push(SpikeEvent {
                             timestamp: self.wheel.current_tick,
+                            phase_offset: 0,
+                            intensity: 1.0,
                             source_neuron_id: neuron_idx,
                             target_layer_id: next_layer_id,
                             target_neuron_id: 0,
@@ -110,8 +114,8 @@ mod tests {
 
         let mut layers = vec![layer0, layer1];
 
-        // Inyectar spike inicial en Capa 0, Neurona 0
-        scheduler.inject_spike(0, 0, 0);
+        // Inyectar spike inicial en Capa 0, Neurona 0 (Fase 0, Intensidad 1.0)
+        scheduler.inject_spike(0, 0, 0, 0, 1.0);
 
         // Ejecutar
         let outputs = scheduler.run_to_completion(&mut layers);

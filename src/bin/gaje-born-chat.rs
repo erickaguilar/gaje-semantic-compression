@@ -85,11 +85,11 @@ fn main() {
             // Inyectar contexto (última palabra)
             if let Some(last_word) = words.last() {
                 if let Some(&id) = word_to_id.get(last_word) {
-                    scheduler.inject_spike(0, id, 0);
+                    scheduler.inject_spike(0, id, 0, 0, 1.0);
                 } else {
                     // Si no conoce la palabra, inyectar una aleatoria del vocabulario
                     let rand_id = rand::random::<usize>() % id_counter;
-                    scheduler.inject_spike(0, rand_id, 0);
+                    scheduler.inject_spike(0, rand_id, 0, 0, 1.0);
                 }
             }
 
