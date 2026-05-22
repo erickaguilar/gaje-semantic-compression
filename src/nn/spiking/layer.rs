@@ -50,6 +50,18 @@ impl GajeNeuromorphicLayer {
         Ok(pyo3::types::PyBytes::new(py, &self.packed_weights))
     }
 
+    pub fn load_packed_weights(&mut self, data: Vec<u8>) -> PyResult<()> {
+        if data.len() != self.packed_weights.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Weight size mismatch: expected {}, got {}",
+                self.packed_weights.len(),
+                data.len()
+            )));
+        }
+        self.packed_weights = data;
+        Ok(())
+    }
+
     /// Integra un spike entrante con una intensidad específica.
     /// `intensity` modula el impacto del centroide (Graded Spiking).
     pub fn integrate_batch(&mut self, input_index: usize, centroides: [f32; 4], intensity: f32) {

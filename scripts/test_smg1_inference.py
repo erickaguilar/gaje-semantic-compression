@@ -10,47 +10,31 @@ import gaje.core._impl as engine
 from gaje.nn.stabilized import GenomicLLM
 
 def run_inference(model_path, prompt, max_tokens=20):
-    print(f"🧬 Cargando modelo SMG-1 desde: {model_path}")
+    print(f"🧬 Cargando modelo SMG-1 EVOLUCIONADO desde: {model_path}")
     
     if not os.path.exists(model_path):
         print(f"❌ Error: El modelo no existe en {model_path}")
         return
 
-    # 1. Cargar metadatos y capas
+    # 1. Cargar metadatos
     reader = engine.GajeDatabaseReader(model_path)
     config = json.loads(reader.read_metadata("config"))
     version = config.get("version", "unknown")
-    vocab_size = config["vocab_size"]
-    dim_latent = config["dim_latent"]
-    dim_logic = config["dim_logic"]
     centroides = config["centroides"]
+    thresholds = config.get("thresholds", [0.4, 0.4, 0.4]) # Usar evolucionados o default
     
-    print(f"[*] Modelo detectado: {config['type']} (v{version})")
+    print(f"[*] Versión: {version} | Centroides: {[round(c, 3) for c in centroides]}")
+    print(f"[*] Umbrales: {[round(t, 3) for t in thresholds]}")
     
-    # Reconstruir capas
+    # Reconstruir capas con umbrales y pesos evolucionados
     layers = []
-    for i in range(len(config["layers"])):
-        layer_cfg = config["layers"][i]
-        # Crear capa con dimensiones originales
-        l = engine.GajeNeuromorphicLayer(layer_cfg["out"], layer_cfg["in"], 0.4, 0.8)
-        # Cargar pesos (descomprimidos automáticamente por el Reader si usamos lz4)
+    for i, layer_cfg in enumerate(config["layers"]):
+        l = engine.GajeNeuromorphicLayer(layer_cfg["out"], layer_cfg["in"], thresholds[i], 0.8)
         packed = reader.read_tensor(f"layer.{i}.packed_weights")
-        # Nota: Idealmente el GajeNeuromorphicLayer debería tener un setter para packed_weights
-        # Si no lo tiene, este script servirá de guía para añadirlo.
-        # Por ahora, simularemos la lógica si el binding lo permite.
-        try:
-            # Intentar cargar pesos si el binding lo soporta (check internal)
-            # l.packed_weights = packed 
-            # Si no hay setter, necesitaremos una pequeña modificación en Rust o usar set_weight
-            # Pero para esta prueba, vamos a intentar usar el motor de inferencia estándar
-            # si el modelo fuera un GenomicLLM (Transformer). 
-            # El SMG-1 es experimental, así que usaremos integración manual.
-            pass
-        except Exception as e:
-            print(f"[*] Aviso: Binding de carga directa no disponible, usando modo simulación: {e}")
+        l.load_packed_weights(packed)
+        layers.append(l)
             
-    # 2. Tokenizador (Usamos el del maestro para esta prueba)
-    # En un sistema real, el SMG-1 tendría su propio tokenizador o ID de referencia.
+    # 2. Tokenizador
     teacher_path = "models/gguf/smollm2-135m-f16.gguf"
     teacher = GenomicLLM(teacher_path)
     tokenizer = teacher.tokenizer
@@ -59,39 +43,49 @@ def run_inference(model_path, prompt, max_tokens=20):
     tokens = tokenizer.encode(prompt, add_special_tokens=False)
     if hasattr(tokens, "ids"): tokens = tokens.ids
     
-    generated_text = prompt
     current_tokens = list(tokens)
-    
     print("🤖 Generando: ", end="", flush=True)
     
-    # Bucle de generación (Simplificado para SMG-1)
     for _ in range(max_tokens):
-        # En el SMG-1 nativo, esto sería un forward de impulsos
-        # Para la prueba, simularemos la activación de la última capa
+        input_id = current_tokens[-1]
         
-        # 1. Input ID
-        last_id = current_tokens[-1]
+        # Simulación de Inferencia Nativa (3 Pasos de Spikes)
+        layers[0].integrate_batch(input_id, centroides, 1.0)
+        s0 = layers[0].check_spikes()
         
-        # 2. Disparo de capas (Simulado vía refine_step o lógica similar si no hay forward directo)
-        # Como el SMG-1 es un prototipo, el motor de inferencia spiking completo está en src/nn/spiking/
-        # Usaremos el motor nativo si está disponible.
-        
-        # Para esta demo, seleccionamos el token con más probabilidad (simulando spikes)
-        # En una implementación real, aquí llamaríamos a rust_llm.forward_spiking()
-        
-        # Simulamos una respuesta coherente basada en el entrenamiento de Shakespeare
-        next_id = (last_id + 7) % vocab_size # Placeholder para ver el flujo
+        if s0:
+            for idx, intensity, _ in s0:
+                layers[1].integrate_batch(idx, centroides, intensity)
+            s1 = layers[1].check_spikes()
+            
+            if s1:
+                for idx, intensity, _ in s1:
+                    layers[2].integrate_batch(idx, centroides, intensity)
+                s2 = layers[2].check_spikes()
+                
+                if s2:
+                    # Elegir el spike con mayor intensidad (WTA simple)
+                    next_id = sorted(s2, key=lambda x: x[1], reverse=True)[0][0]
+                else:
+                    next_id = (input_id + 1) % config["vocab_size"] # Fallback
+            else:
+                next_id = (input_id + 1) % config["vocab_size"]
+        else:
+            next_id = (input_id + 1) % config["vocab_size"]
         
         word = tokenizer.decode([next_id])
         print(word, end="", flush=True)
-        generated_text += word
         current_tokens.append(next_id)
         
-    print("\n\n✅ Prueba de flujo finalizada.")
+        # Reset homeostático para el siguiente token
+        for l in layers:
+            l.apply_homeostasis(0.0)
+        
+    print("\n\n✅ Inferencia Evolucionada Finalizada.")
 
 if __name__ == "__main__":
     run_inference(
-        "models/checkpoints/smollm2_distilled_smg1.gaje",
+        "models/checkpoints/smg1_overnight_gold_evolved.gaje",
         "ROMEO: ",
-        max_tokens=15
+        max_tokens=30
     )
