@@ -1,8 +1,9 @@
 ## [0.9.5] - 2026-05-22
 ### Added
 - **Genomic Training Nativo:** Implementación de `refine_step` en `GajeNeuromorphicLayer` para aprendizaje supervisado local mediante refuerzo/inhibición de bits.
-- **Homeostasis Genómica:** Mecanismo de estabilización de potenciales para prevenir la saturación y mitigar el olvido catastrófico en entornos de aprendizaje continuo.
+- **Gestión de Energía Consciente:** Nuevo módulo `PowerManager` con detección dinámica de arquitecturas big.LITTLE y control de afinidad de hilos (Thread Affinity) para optimizar batería y temperatura.
 - **Demo de Life-long Learning:** Nuevo script `gaje-native-trainer-demo` que valida el aprendizaje de asociaciones en un solo organismo en <60ms.
+- **Demo de Power-Awareness:** Script `gaje-power-demo` demostrando la conmutación de hilos entre núcleos de eficiencia y rendimiento.
 - **Optimización SIMD NEON v2:** Refactorización a layout `Input-Major` y uso de `vqtbl1q_u8` (Shuffle) para procesar 4 neuronas por byte de forma vectorial.
 
 ## [0.9.0-alpha] - 2026-05-21

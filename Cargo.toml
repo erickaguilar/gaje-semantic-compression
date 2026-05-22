@@ -31,6 +31,8 @@ rayon = "1.10.0"
 # Generación de números aleatorios para muestreo Top-P
 rand = "0.8.5"
 
+libc = "0.2"
+
 # Manejo de precisión f16 (Half) para compatibilidad con pesos GGUF
 half = { version = "2.4.1", features = ["num-traits", "zerocopy"] }
 
