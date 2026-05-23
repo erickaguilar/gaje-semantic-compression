@@ -17,25 +17,17 @@ path = "src/lib.rs"
 name = "gaje-cli"
 path = "src/bin/gaje-cli.rs"
 
-
 [dependencies]
 # PyO3 para la interfaz con Python
-pyo3 = { version = "0.23.3", features = ["extension-module", "abi3-py310"] }
-
+pyo3 = { version = "0.23.3", features = ["abi3-py310"] }
 # Soporte para tensores de NumPy
 numpy = "0.23.0"
-
-# Paralelismo masivo (utilizado en genomización y búsqueda)
+# Paralelismo masivo
 rayon = "1.10.0"
-
-# Generación de números aleatorios para muestreo Top-P
+# Generación de números aleatorios
 rand = "0.8.5"
-
 libc = "0.2"
-
-# Manejo de precisión f16 (Half) para compatibilidad con pesos GGUF
 half = { version = "2.4.1", features = ["num-traits", "zerocopy"] }
-
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokenizers = "0.21.0"
@@ -44,8 +36,11 @@ bincode = "1.3.3"
 lz4_flex = "0.11.3"
 chrono = "0.4"
 
+[features]
+default = ["python"]
+python = ["pyo3/extension-module"]
+
 [profile.release]
-# Optimizaciones balanceadas para Termux (evita OOM en el linker)
 lto = "thin"
 codegen-units = 16
 opt-level = 3

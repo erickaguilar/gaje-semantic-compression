@@ -9,7 +9,7 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 - **`/docs`**: Documentación segmentada (`guides/`, `plans/`, `reports/`, `meta/`, `research/`).
 - **`/scripts`**: Utilidades de entrenamiento y mantenimiento (`maintenance/`).
 - **`/data`**: Centralización de datos generados (`training/`, `experiments/`, `datasets/`).
-- **`/examples`**: Demos categorizadas (`core_demos/`, `visual_demos/`, `legacy_research/`).
+- **`/examples`**: Demos categorizadas (`core_demos/`, `visual_demos/`, `legacy_research/`). Incluye pruebas de chat interactivas (`neuromorphic_chat.py`, `chat_genomico.py`) esenciales para validar la coherencia del modelo.
 - **`/tests`**: Suite de validación (`unit/`, `integration/`, `metrics/`, `training/`).
 - **`/benchmarks`**: Evaluación de rendimiento con logs centralizados en `benchmarks/logs/`.
 - **`/src` & `/python`**: Núcleo nativo (Rust) y lógica de investigación/puente (Python).
@@ -24,6 +24,7 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
     - Prohibidas las pre-asignaciones masivas de tensores `f32` en el `forward`.
     - Priorizar el uso de punteros y memoria compartida (`Arc<Vec<u8>>`).
 4.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
+5.  **Benchmarking Interactivo y No Bloqueante:** Las herramientas de benchmarking y evaluación deben estar diseñadas para aceptar entrada de texto (simulando flujos de chat) y no deben quedar en espera infinita de procesos externos. Deben implementar timeouts y manejo asíncrono para garantizar que el flujo de trabajo (especialmente en Monte Carlo) no se interrumpa. El uso de las demos en `examples/core_demos/` es obligatorio para validar la experiencia de usuario.
 
 ## 3. Estado Técnico y Metas (v0.9.0)
 
@@ -36,6 +37,14 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 
 Seguir el estándar de **Conventional Commits**:
 - `feat(scope):`, `fix(scope):`, `perf(scope):`, `docs(scope):`, `chore(scope):`.
+
+## 5. Ciclo de Desarrollo Integral (SDD -> BDD -> TDD)
+
+Para garantizar la excelencia técnica, el proyecto sigue un flujo de tres capas:
+
+1.  **SDD (Software Design Document):** Definición de arquitectura, estructuras de datos y contratos técnicos. Ver [docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md).
+2.  **BDD (Behavior-Driven Development):** Definición del comportamiento esperado mediante escenarios *Given-When-Then*. Ver [docs/bdd/BDD_GUIDE.md](docs/bdd/BDD_GUIDE.md).
+3.  **TDD (Test-Driven Development):** Implementación técnica iterativa (Red-Green-Refactor) para asegurar la solidez del código.
 
 ---
 *Este protocolo es vinculante y actualiza todas las versiones previas.*

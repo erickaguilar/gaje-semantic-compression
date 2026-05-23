@@ -985,42 +985,104 @@ class GenomicLLM:
         import os
         import time
         from gaje.nn.configs import ArchitectureConfig
+        from gaje.nn import constants as C
 
         if not input_path.endswith(".gaje"):
             input_path = os.path.join(input_path, "model.gaje")
 
         db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
-        meta_str = db_reader.read_metadata("config")
-        meta = json.loads(meta_str)
+        
+        # Try to read metadata safely
+        try:
+            meta_str = db_reader.read_metadata(C.META_KEY_CONFIG)
+            meta = json.loads(meta_str)
+        except Exception:
+            # LEGACY FALLBACK: If 'config' is missing, the model is likely SMG1 or older.
+            print(f"⚠️ Warning: Model at {input_path} lacks modern metadata. Applying legacy recovery...")
+            meta = {
+                C.META_KEY_CONFIG: {
+                    "name": "legacy_recovered",
+                    "version": "unknown",
+                    "rope_base": C.DEFAULT_ROPE_BASE
+                },
+                C.META_KEY_N_EMBD: 256, # Default for old SMG1
+                C.META_KEY_N_HEAD: 8,
+                C.META_KEY_N_HEAD_KV: 8,
+                C.META_KEY_N_BLOCKS: 2,
+                C.META_KEY_EPS: C.DEFAULT_EPS
+            }
+            # Attempt to extract what we can from alternative metadata keys if they exist
+            # (Some old models put everything in a single JSON)
+            try:
+                raw_meta = json.loads(db_reader.read_metadata("config")) # Re-try if just missing sub-keys
+            except:
+                raw_meta = {}
+            
+            meta.update(raw_meta)
 
-        config = ArchitectureConfig(**meta["config"])
+        # Ensure critical keys exist with defaults
+        config_data = meta.get(C.META_KEY_CONFIG, {})
+        if "name" not in config_data:
+            config_data["name"] = "legacy_recovered"
+            
+        config = ArchitectureConfig(**config_data)
 
         # Instantiate model directly without `__init__` calling random generation
         model = cls.__new__(cls)
         model.config = config
-        model.n_embd = meta["n_embd"]
-        model.n_head = meta["n_head"]
-        model.n_head_kv = meta["n_head_kv"]
-        model.head_dim = model.n_embd // model.n_head
-        model.n_blocks = meta["n_blocks"]
-        model.eps = meta["eps"]
-        model.rope_base = meta["config"]["rope_base"]
+        model.n_embd = meta.get(C.META_KEY_N_EMBD, 576)
+        model.n_head = meta.get(C.META_KEY_N_HEAD, 9)
+        model.n_head_kv = meta.get(C.META_KEY_N_HEAD_KV, 3)
+        model.head_dim = model.n_embd // model.n_head if model.n_head > 0 else 64
+        model.n_blocks = meta.get(C.META_KEY_N_BLOCKS, 30)
+        model.eps = meta.get(C.META_KEY_EPS, C.DEFAULT_EPS)
+        model.rope_base = config_data.get("rope_base", C.DEFAULT_ROPE_BASE)
 
         print(f"🧬 Despertando Organismo GAJE desde base de datos: {input_path}")
         start_total = time.time()
 
         def load_linear(name, out_features, in_features):
-            dna = db_reader.read_tensor(f"{name}.dna")
-            centroids = np.frombuffer(
-                db_reader.read_tensor(f"{name}.centroids"), dtype=np.float32
-            ).tolist()
-            # Pasamos bytes de anclas directamente
-            anchors_u8 = db_reader.read_tensor(f"{name}.anchors")
+            # TENSOR NAME MAPPING LOGIC
+            actual_name = name
+            is_legacy_packed = False
+            
+            if not db_reader.has_tensor(f"{name}.dna"):
+                # Try aliases from LEGACY_TENSOR_MAP
+                aliases = C.LEGACY_TENSOR_MAP.get(name, [])
+                for alias in aliases:
+                    if db_reader.has_tensor(f"{alias}.dna") or db_reader.has_tensor(alias):
+                        actual_name = alias
+                        if "packed_weights" in alias or not alias.endswith(".dna"):
+                            is_legacy_packed = True
+                        print(f"🔗 Mapped tensor: '{name}' -> '{actual_name}' (Legacy Packed: {is_legacy_packed})")
+                        break
+                else:
+                    if "blk." in name and not name.startswith("blk.0"):
+                        print(f"⚠️ Skipping non-existent layer in small model: {name}")
+                        return None
+            
+            # Loading Strategy
+            if is_legacy_packed:
+                # SMG1 or Legacy packed format
+                dna = db_reader.read_tensor(actual_name)
+                # For legacy packed, we might need to synthesize centroids if not present
+                # Old SMG1 used fixed [-1.5, -0.5, 0.5, 1.5]
+                centroids = meta.get("centroides", [-1.5, -0.5, 0.5, 1.5])
+                # Expand centroids for all blocks
+                n_blocks = (out_features * in_features) // 32
+                centroids = (centroids * n_blocks)
+                anchors_u8 = b"" # Legacy didn't have anchors
+            else:
+                dna = db_reader.read_tensor(f"{actual_name}.dna")
+                centroids = np.frombuffer(
+                    db_reader.read_tensor(f"{actual_name}.centroids"), dtype=np.float32
+                ).tolist()
+                anchors_u8 = db_reader.read_tensor(f"{actual_name}.anchors")
 
             bias = []
-            if db_reader.has_tensor(f"{name}.bias"):
+            if db_reader.has_tensor(f"{actual_name}.bias"):
                 bias = np.frombuffer(
-                    db_reader.read_tensor(f"{name}.bias"), dtype=np.float32
+                    db_reader.read_tensor(f"{actual_name}.bias"), dtype=np.float32
                 ).tolist()
 
             precision_mask = []
@@ -1095,11 +1157,17 @@ class GenomicLLM:
 
         rust_blocks = []
         model.blocks = []
+        actual_n_blocks = 0
         for i in range(model.n_blocks):
             p = f"blk.{i}."
             q_gen = load_linear(
                 p + "attn_q", model.n_head * model.head_dim, model.n_embd
             )
+            # SAFETY CHECK: If block components are missing, stop reconstruction
+            if q_gen is None:
+                print(f"🛑 Stopping block reconstruction at index {i} (Incomplete or missing block)")
+                break
+
             k_gen = load_linear(
                 p + "attn_k", model.n_head_kv * model.head_dim, model.n_embd
             )
@@ -1114,9 +1182,24 @@ class GenomicLLM:
             # For Qwen/SmolLM, FFN is usually hidden_dim * (8/3) or similar
             # We check the centroids size to be sure
             def get_out_features(name, in_features):
+                # Handle mapped names
+                actual_name = name
                 if not db_reader.has_tensor(f"{name}.centroids"):
+                    aliases = C.LEGACY_TENSOR_MAP.get(name, [])
+                    for alias in aliases:
+                        if db_reader.has_tensor(f"{alias}.centroids") or db_reader.has_tensor(alias):
+                            actual_name = alias
+                            break
+                    else:
+                        return model.n_embd * 4
+
+                if "packed_weights" in actual_name or not actual_name.endswith(".centroids"):
+                    # For legacy packed, we can't easily infer shape from size without knowing packing format
+                    # SMG1 had fixed sizes: l0(vocab->256), l1(256->128), l2(128->vocab)
+                    if "layer.1" in actual_name: return 128
                     return model.n_embd * 4
-                c_bytes = db_reader.read_tensor(f"{name}.centroids")
+
+                c_bytes = db_reader.read_tensor(f"{actual_name}.centroids")
                 c_count = len(c_bytes) // 4
                 # Genomic linear: centroids count = out_features * (in_features // block_size) * 4
                 return c_count // (in_features // 32 * 4)
@@ -1126,6 +1209,10 @@ class GenomicLLM:
             gate_gen = load_linear(p + "ffn_gate", ffn_hidden, model.n_embd)
             up_gen = load_linear(p + "ffn_up", ffn_hidden, model.n_embd)
             w_down = load_linear(p + "ffn_down", model.n_embd, ffn_hidden)
+
+            if not all([k_gen, v_gen, w_o, gate_gen, up_gen, w_down]):
+                print(f"🛑 Block {i} components incomplete. Stopping.")
+                break
 
             attn_norm_data = np.ones(model.n_embd).astype(np.float32).tolist()
             if db_reader.has_tensor(p + "attn_norm"):
@@ -1183,6 +1270,10 @@ class GenomicLLM:
                 )
             )
             rust_blocks.append(rust_block)
+            actual_n_blocks += 1
+            
+        model.n_blocks = actual_n_blocks
+        print(f"✅ Reconstructed {model.n_blocks} transformer blocks.")
 
         model.rust_llm = dna_semantic_compression.RustGenomicLLM(
             model.embeddings.linear,

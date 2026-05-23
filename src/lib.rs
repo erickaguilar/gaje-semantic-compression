@@ -22,6 +22,7 @@ use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use crate::compute::scheduler::NeuromorphicScheduler;
 use crate::compute::event_queue::SpikeEvent;
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     unsafe {
@@ -55,6 +56,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(calculate_mse_native, m)?)?;
     m.add_function(wrap_pyfunction!(calculate_cosine_similarity_native, m)?)?;
     m.add_function(wrap_pyfunction!(calculate_distribution_entropy_native, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::calculate_genomic_mse, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::mcts::optimize_centroids_mcts, m)?)?;
     m.add_function(wrap_pyfunction!(prune_genomic_database, m)?)?;
     m.add_function(wrap_pyfunction!(generate_precision_mask_native, m)?)?;
     m.add_function(wrap_pyfunction!(get_active_dimensions_native, m)?)?;

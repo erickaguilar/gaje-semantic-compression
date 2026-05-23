@@ -24,6 +24,9 @@ pub struct GajeNeuromorphicLayer {
     pub weights_per_neuron: usize,
     #[pyo3(get, set)]
     pub k_wta: usize, // Límite de Ganadores (K-Winners-Take-All)
+
+    #[pyo3(get)]
+    pub rms_ema: f32, // Promedio móvil de la energía (GenomicNorm v2)
 }
 
 #[pymethods]
@@ -42,6 +45,7 @@ impl GajeNeuromorphicLayer {
             num_neurons,
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1), // Por defecto, 10% de ganadores
+            rms_ema: 1.0, // Inicialización basal
         }
     }
 
@@ -181,15 +185,18 @@ impl GajeNeuromorphicLayer {
         }
         let rms = (sum_sq / n as f32 + 1e-6).sqrt();
         
+        // Actualizar EMA (GenomicNorm v2) - Suaviza la respuesta ante ráfagas de ruido
+        let alpha = 0.15; // Factor de suavizado adaptativo
+        self.rms_ema = (1.0 - alpha) * self.rms_ema + alpha * rms;
+        
         // 2. Umbral Adaptativo y Disparo
         for i in 0..n {
             let potential = self.membrane_potentials[i];
             let threshold = self.thresholds[i];
             
             if potential >= threshold {
-                // GenomicNorm: Si la energía global es muy alta, suavizamos el disparo
-                // h_scale actúa como el factor de TEMPERANCIA
-                let norm_factor = if rms > 1.0 { 1.0 / rms } else { 1.0 };
+                // GenomicNorm v2: Usamos el EMA para una estabilización más robusta
+                let norm_factor = if self.rms_ema > 1.0 { 1.0 / self.rms_ema } else { 1.0 };
                 
                 // Intensidad graduada normalizada
                 let intensity = (1.0 + (potential - threshold) / threshold) * norm_factor;

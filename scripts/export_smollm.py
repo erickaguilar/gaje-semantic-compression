@@ -1,72 +1,87 @@
 import os
 import sys
 import numpy as np
-from gaje.nn.stabilized import GenomicLLM
-from gaje.core.archive import GAJEArchive
 import json
+import gaje.core._impl as engine
+from gaje.nn.stabilized import GenomicLLM
 
 def export_smollm(gguf_path, output_path):
     print(f"🧬 Exporting SmolLM-135M to GAJE format: {gguf_path}")
     
     # 1. Genomize the model using the established protocol
-    # Note: We use num_blocks=None to load the full 30 layers
     model = GenomicLLM(gguf_path)
     
-    # 2. Create the Archive
-    # We'll use shared centroids if possible to save space
-    shared_centroids = model.rust_llm.embeddings.centroids
-    archive = GAJEArchive(codebook={"centroids": shared_centroids})
+    # 2. Create the Database Writer
+    if os.path.exists(output_path):
+        os.remove(output_path)
     
-    def add_layer(layer, name):
-        # We store the primary DNA strand. 
-        # For a truly minimal SmolLM, we avoid epi/tri strands in this first pass.
-        dna = bytes(layer.database)
-        archive.add(f"{name}.dna", dna)
-        # If the layer has unique centroids, we'd need to extend the format or store them as entries
-        # For now, we assume shared centroids as per the 'codebook' concept
-        if hasattr(layer, 'bias') and len(layer.bias) > 0:
-            archive.add(f"{name}.bias", bytes(np.array(layer.bias, dtype=np.float32)))
+    writer = engine.GajeDatabaseWriter(output_path)
+    batch = writer.begin_batch()
+    
+    def add_layer_packed(layer, name):
+        # We store the packed weights (2-bit DNA)
+        batch.write_tensor(f"{name}.dna", bytes(layer.database))
+        
+        # Centroids are essential
+        batch.write_tensor(f"{name}.centroids", np.array(layer.centroids, dtype=np.float32).tobytes())
+        
+        # Anchors (Sparse buffer)
+        batch.write_tensor(f"{name}.anchors", bytes(layer.anchors_raw))
+        
+        if hasattr(layer, 'bias') and layer.bias is not None and len(layer.bias) > 0:
+            batch.write_tensor(f"{name}.bias", np.array(layer.bias, dtype=np.float32).tobytes())
 
-    print("[*] Packing layers into archive...")
+        if hasattr(layer, 'precision_mask') and len(layer.precision_mask) > 0:
+            batch.write_tensor(f"{name}.precision_mask", bytes(layer.precision_mask))
+            batch.write_tensor(f"{name}.epi_dna", bytes(layer.epigenetic_database))
+            batch.write_tensor(f"{name}.epi_centroids", np.array(layer.epigenetic_centroids, dtype=np.float32).tobytes())
+            batch.write_tensor(f"{name}.tri_dna", bytes(layer.triplet_database))
+            batch.write_tensor(f"{name}.tri_centroids", np.array(layer.triplet_centroids, dtype=np.float32).tobytes())
+
+    print("[*] Packing layers into database...")
     # Embeddings
-    add_layer(model.rust_llm.embeddings, "token_embd")
+    add_layer_packed(model.rust_llm.embeddings, "token_embd")
     
     # Blocks
     for i, block in enumerate(model.rust_llm.blocks):
         prefix = f"blk.{i}."
-        add_layer(block.q_gen, prefix + "attn_q")
-        add_layer(block.k_gen, prefix + "attn_k")
-        add_layer(block.v_gen, prefix + "attn_v")
-        add_layer(block.w_o, prefix + "attn_output")
-        add_layer(block.gate_gen, prefix + "ffn_gate")
-        add_layer(block.up_gen, prefix + "ffn_up")
-        add_layer(block.w_down, prefix + "ffn_down")
+        add_layer_packed(block.q_gen, prefix + "attn_q")
+        add_layer_packed(block.k_gen, prefix + "attn_k")
+        add_layer_packed(block.v_gen, prefix + "attn_v")
+        add_layer_packed(block.w_o, prefix + "attn_output")
+        add_layer_packed(block.gate_gen, prefix + "ffn_gate")
+        add_layer_packed(block.up_gen, prefix + "ffn_up")
+        add_layer_packed(block.w_down, prefix + "ffn_down")
         
-        # Norm weights are small, we could store them as JSON in metadata or as raw entries
-        archive.add(prefix + "ffn_norm", bytes(np.array(block.ffn_norm, dtype=np.float32)))
-        # Attn norm is in GenomicAttention, we need to extract it
-        archive.add(prefix + "attn_norm", bytes(np.array(block.attn.rmsnorm_weight, dtype=np.float32)))
+        # Norm weights
+        batch.write_tensor(prefix + "ffn_norm", np.array(block.ffn_norm, dtype=np.float32).tobytes())
+        batch.write_tensor(prefix + "attn_norm", np.array(block.attn.rmsnorm_weight, dtype=np.float32).tobytes())
 
     # LM Head
-    add_layer(model.rust_llm.lm_head, "lm_head")
-    archive.add("output_norm", bytes(np.array(model.rust_llm.output_norm, dtype=np.float32)))
+    add_layer_packed(model.rust_llm.lm_head, "lm_head")
+    batch.write_tensor("output_norm", np.array(model.rust_llm.output_norm, dtype=np.float32).tobytes())
 
-    # 3. Save the Archive
-    archive.save(output_path)
-    
-    # 4. Save metadata separately or integrated
-    metadata = {
+    # 3. Save metadata
+    config_meta = {
         "n_embd": model.n_embd,
         "n_head": model.n_head,
         "n_head_kv": model.n_head_kv,
         "n_blocks": model.n_blocks,
         "vocab_size": model.rust_llm.embeddings.out_features,
         "rope_base": model.rope_base,
-        "eps": model.eps
+        "eps": model.eps,
+        "config": {
+            "name": "llama",
+            "rope_base": model.rope_base,
+            "rope_style": "split",
+            "ffn_act": "swiglu"
+        }
     }
-    with open(output_path + ".json", "w") as f:
-        json.dump(metadata, f, indent=4)
-
+    batch.write_metadata("config", json.dumps(config_meta))
+    
+    # Commit changes
+    batch.commit()
+    
     print(f"✅ Export complete: {output_path}")
 
 if __name__ == "__main__":

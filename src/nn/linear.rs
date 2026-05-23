@@ -523,6 +523,8 @@ impl GenomicLinear {
             input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
         }
         let n_blocks = self.in_features / self.block_size;
+        
+        // 1. Refinar Centroides Base (2-bit)
         self.centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
             if i >= grads.len() { return; }
             let grad_scale = grads[i] * lr;
@@ -546,6 +548,56 @@ impl GenomicLinear {
                 }
             }
         });
+
+        // 2. Refinar Centroides Epigenéticos (si existen)
+        if !self.epi_strands.is_empty() {
+            let n_epi = self.epi_cols.len();
+            self.epigenetic_centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
+                if i >= grads.len() { return; }
+                let grad_scale = grads[i] * lr;
+                if grad_scale.abs() > 1e-8 {
+                    let row_epi_offset = i * n_epi;
+                    for (idx, &(j, k)) in self.epi_cols.iter().enumerate() {
+                        let byte = self.epi_strands[row_epi_offset + idx];
+                        let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
+                        for s in 0..4 {
+                            let shift = (3 - s) * 2;
+                            let eb = (byte >> shift) & 0b11;
+                            let c_idx = match eb { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4 };
+                            if c_idx < 4 {
+                                // k es el offset del stride (bloque de 4 pesos)
+                                row_centroids[j * 4 + c_idx] -= grad_scale * input_block[k * 4 + s];
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Refinar Centroides de Tripletes (si existen)
+        if !self.tri_strands.is_empty() {
+            let n_tri = self.tri_cols.len();
+            self.triplet_centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
+                if i >= grads.len() { return; }
+                let grad_scale = grads[i] * lr;
+                if grad_scale.abs() > 1e-8 {
+                    let row_tri_offset = i * n_tri;
+                    for (idx, &(j, k)) in self.tri_cols.iter().enumerate() {
+                        let byte = self.tri_strands[row_tri_offset + idx];
+                        let input_block = &input[j * self.block_size..(j + 1) * self.block_size];
+                        for s in 0..4 {
+                            let shift = (3 - s) * 2;
+                            let tb = (byte >> shift) & 0b11;
+                            let c_idx = match tb { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4 };
+                            if c_idx < 4 {
+                                row_centroids[j * 4 + c_idx] -= grad_scale * input_block[k * 4 + s];
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
         Ok(())
     }
 
@@ -647,6 +699,66 @@ impl GenomicLinear {
             }
         });
         
+        self.centroids = new_centroids;
+        Ok(())
+    }
+
+    /// Refinamiento avanzado utilizando Monte Carlo Tree Search (MCTS)
+    pub fn mcts_refine(&mut self, mut input: Vec<f32>, target: Vec<f32>, iterations: usize, c_puct: f32, noise_scale: f32) -> PyResult<()> {
+        use crate::compute::mcts::MctsTree;
+        
+        if !self.rmsnorm_weight.is_empty() {
+            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
+        }
+        let n_blocks = self.in_features / self.block_size;
+        let mut new_centroids = self.centroids.clone();
+
+        new_centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
+            if i >= target.len() { return; }
+            let row_offset = i * n_blocks * self.stride;
+            let row_weights = &self.database[row_offset..row_offset + n_blocks * self.stride];
+            
+            let get_row_sum = |c_vals: &[f32]| -> f32 {
+                let mut sum = unsafe { genomic_dot_product(row_weights, &input, c_vals, self.stride, n_blocks, &[]) };
+                let a_start = self.anchor_row_ptrs[i];
+                let a_end = self.anchor_row_ptrs[i + 1];
+                for k in a_start..a_end {
+                    sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32();
+                }
+                sum
+            };
+
+            let mut tree = MctsTree::new(row_centroids.to_vec(), 1.0);
+            let target_val = target[i];
+
+            for _ in 0..iterations {
+                let selected_idx = tree.select(0, c_puct);
+                
+                let node_to_eval = if tree.nodes[selected_idx].n_visits > 0 {
+                    tree.expand(selected_idx, 4, noise_scale);
+                    tree.nodes.len() - 1
+                } else {
+                    selected_idx
+                };
+
+                let current_sum = get_row_sum(&tree.nodes[node_to_eval].state);
+                let error = (current_sum - target_val).powi(2);
+                let score = 1.0 / (error + 1e-10);
+                tree.backpropagate(node_to_eval, score);
+            }
+
+            // Seleccionar el mejor resultado del árbol
+            let mut best_idx = 0;
+            let mut max_q = -1.0;
+            for (idx, node) in tree.nodes.iter().enumerate() {
+                if node.q_value > max_q && node.n_visits > 0 {
+                    max_q = node.q_value;
+                    best_idx = idx;
+                }
+            }
+            row_centroids.copy_from_slice(&tree.nodes[best_idx].state);
+        });
+
         self.centroids = new_centroids;
         Ok(())
     }

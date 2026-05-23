@@ -12,7 +12,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe {
         kernels::init_shuffle_table();
     }
-    pyo3::prepare_freethreaded_python();
     
     let args: Vec<String> = env::args().collect();
     

@@ -693,6 +693,26 @@ pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
     dna
 }
 
+/// Calcula el MSE para un vector dado 4 centroides de cuantización.
+#[pyfunction]
+pub fn calculate_genomic_mse(weights: Vec<f32>, centroids: Vec<f32>) -> f32 {
+    if centroids.len() != 4 {
+        return 1.0; // Fallback simple
+    }
+    
+    weights.par_iter().map(|&w| {
+        let mut min_sq_diff = f32::MAX;
+        for &c in &centroids {
+            let diff = w - c;
+            let sq_diff = diff * diff;
+            if sq_diff < min_sq_diff {
+                min_sq_diff = sq_diff;
+            }
+        }
+        min_sq_diff
+    }).sum::<f32>() / (weights.len() as f32).max(1.0)
+}
+
 /// Calcula el error cuadrático medio (MSE) entre dos vectores de forma paralela.
 #[pyfunction]
 pub fn calculate_mse_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<f32> {

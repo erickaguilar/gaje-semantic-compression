@@ -84,8 +84,15 @@ def run_inference(model_path, prompt, max_tokens=20):
     print("\n\n✅ Inferencia Evolucionada Finalizada.")
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="models/checkpoints/smg1_overnight_gold_evolved.gaje")
+    parser.add_argument("--prompt", type=str, default="ROMEO: ")
+    parser.add_argument("--tokens", type=int, default=30)
+    args = parser.parse_args()
+
     run_inference(
-        "models/checkpoints/smg1_overnight_gold_evolved.gaje",
-        "ROMEO: ",
-        max_tokens=30
+        args.model,
+        args.prompt,
+        max_tokens=args.tokens
     )
