@@ -27,6 +27,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut scale = 0.02;
     let mut save_path = None;
     let mut init_path = None;
+    let mut import_path = None;
+    let mut output_path = None;
     let mut init_preset = "default".to_string();
     let mut tokenize_text = None;
     let mut inspect_model = false;
@@ -34,6 +36,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i+1].clone();
+            i += 2;
+        } else if args[i] == "--import" && i + 1 < args.len() {
+            import_path = Some(args[i+1].clone());
+            i += 2;
+        } else if args[i] == "--output" && i + 1 < args.len() {
+            output_path = Some(args[i+1].clone());
             i += 2;
         } else if args[i] == "--preset" && i + 1 < args.len() {
             init_preset = args[i+1].clone();
@@ -123,8 +131,30 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Ok(());
     }
 
+    if let Some(path) = import_path {
+        let out = output_path.ok_or("Debe especificar --output <path.gaje> al importar")?;
+        println!("[*] Importando modelo GGUF a formato GAJE nativo...");
+        println!("    Fuente: {}", path);
+        println!("    Destino: {}", out);
+
+        let loader = _impl::io::loader::GGUFLoader::new(&path)?;
+        let config = loader.infer_config()?;
+        let model = loader.load_genomic_llm(config.clone(), -1.0)?;
+        
+        let mut tokenizer = None;
+        let tokenizer_path = Path::new(&path).parent().unwrap().join("tokenizer.json");
+        if tokenizer_path.exists() {
+            tokenizer = Some(GajeTokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?);
+            println!("[+] Tokenizador detectado e integrado.");
+        }
+
+        _impl::io::loader::save_genomic_model(&out, &model, &config, tokenizer.as_ref())?;
+        println!("[+] Importación completada exitosamente.");
+        return Ok(());
+    }
+
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect]");
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect] [--import path.gguf --output path.gaje]");
         return Ok(());
     }
 
