@@ -5,6 +5,7 @@
 - **Carga Zero-Copy (mmap):** Refactorización del lector GGUF para utilizar mapeo de memoria (`memmap2`), permitiendo el acceso instantáneo a tensores sin copias en RAM.
 - **Refactorización de Inmutabilidad:** Optimización de los cargadores de modelos para operar con referencias inmutables, mejorando la seguridad de hilos y el rendimiento de carga.
 - **Limpieza de Utilidades Legacy (Fase 1):** Eliminación de scripts de Python redundantes (`inspect_gaje`, `hatch_gold_embryo`, etc.) en favor de subcomandos nativos en `gaje-cli`.
+- **Eliminación de Exportadores Legacy (Fase 3):** Remoción de `export_smollm.py`, `distill_smollm.py` y la lógica de genomización en Python (`genomize.py`). Rust es ahora el único encargado de la transformación de formatos.
 
 ## [0.9.5] - 2026-05-22
 ### Added
