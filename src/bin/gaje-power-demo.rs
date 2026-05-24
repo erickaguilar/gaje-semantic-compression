@@ -1,5 +1,4 @@
 use _impl::compute::power::{PowerManager, CpuCluster};
-use std::thread;
 use std::time::Instant;
 
 fn main() {

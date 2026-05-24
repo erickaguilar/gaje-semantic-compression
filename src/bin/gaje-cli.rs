@@ -108,7 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let model = loader.load_genomic_llm(config.clone(), -1.0)?;
         let tokenizer_path = Path::new(&model_path).parent().unwrap().join("tokenizer.json");
         let tokenizer = if tokenizer_path.exists() { GajeTokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())? }
-        else { return Err(format!("tokenizer.json not found").into()); };
+        else { return Err("tokenizer.json not found".to_string().into()); };
         (model, tokenizer, config)
     } else {
         let loader = NativeLoader::new(&model_path)?;
@@ -156,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let layer_name = layers.choose(&mut rng).unwrap();
             let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
             let mut candidate_model = model.clone();
-            if let Ok(_) = candidate_model.mutate_layer_core(layer_name, current_scale) {
+            if candidate_model.mutate_layer_core(layer_name, current_scale).is_ok() {
                 let fitness = evaluate(&mut candidate_model, &tokens);
                 if fitness > best_fitness {
                     model = candidate_model; best_fitness = fitness;
@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(ref dataset_path) = train_target {
         println!("[*] Iniciando Entrenamiento Born-Genomic Nativo (Resonancia: {:.3})", resonance_weight);
-        let text = std::fs::read_to_string(&dataset_path).unwrap_or_else(|_| dataset_path.clone());
+        let text = std::fs::read_to_string(dataset_path).unwrap_or_else(|_| dataset_path.clone());
         let dataset: Vec<Vec<usize>> = text.lines().map(|l| l.trim()).filter(|l| l.len() > 5).map(|l| {
             tokenizer.encode(l, false).unwrap_or_default().into_iter().map(|id| id as usize).collect()
         }).filter(|tokens: &Vec<usize>| tokens.len() >= 2).collect();
@@ -179,7 +179,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[+] Entrenamiento completado.");
     }
 
-    if let Some(ref path) = save_path { _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tokenizer))?; println!("[+] Modelo guardado exitosamente."); }
+    if let Some(ref path) = save_path { _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?; println!("[+] Modelo guardado exitosamente."); }
 
     if let Some(prompt) = prompt_arg { generate(&mut model, &tokenizer, &prompt, 50)?; } 
     else if evolve_target.is_none() && train_target.is_none() { println!("\n[!] Modo interactivo no disponible en TTY reducido. Use --prompt."); }

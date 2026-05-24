@@ -1,5 +1,4 @@
 use _impl::nn::spiking::layer::GajeNeuromorphicLayer;
-use _impl::compute::scheduler::NeuromorphicScheduler;
 use std::collections::HashMap;
 use std::time::Instant;
 

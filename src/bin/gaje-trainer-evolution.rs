@@ -19,7 +19,7 @@ impl RecurrentMicroOrganism {
         let mut rng = rand::thread_rng();
         let centroids = [-1.5, -0.5, 0.5, 1.5];
         let mut init_dna = |rows: usize, cols: usize| {
-            let n_bytes = (rows * cols + 3) / 4;
+            let n_bytes = (rows * cols).div_ceil(4);
             let mut dna = vec![0u8; n_bytes];
             rng.fill(&mut dna[..]);
             dna
@@ -38,7 +38,7 @@ impl RecurrentMicroOrganism {
     fn matmul_2bit(&self, dna: &[u8], input: &[f32], rows: usize, cols: usize) -> Vec<f32> {
         let mut output = vec![0.0f32; rows];
         let stride = cols / 4;
-        for i in 0..rows {
+        for (i, out_val) in output.iter_mut().enumerate().take(rows) {
             let mut sum = 0.0f32;
             let row_start = i * stride;
             for j in 0..stride {
@@ -48,7 +48,7 @@ impl RecurrentMicroOrganism {
                     sum += input[j * 4 + k] * self.centroids[bits as usize];
                 }
             }
-            output[i] = sum;
+            *out_val = sum;
         }
         output
     }

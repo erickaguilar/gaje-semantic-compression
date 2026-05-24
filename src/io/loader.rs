@@ -6,8 +6,6 @@ use std::sync::Arc;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-#[cfg(not(feature = "python"))]
-use crate::pyo3_shim::*;
 
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -126,7 +124,7 @@ impl GGUFLoader {
         let f32_data: Vec<f32> = match info.tensor_type {
             GGMLType::F32 => data.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect(),
             GGMLType::F16 => { let count = data.len() / 2; let mut res = vec![0.0f32; count]; let ptr = data.as_ptr() as *const half::f16; for i in 0..count { unsafe { res[i] = (*ptr.add(i)).to_f32(); } } res }
-            GGMLType::Q8_0 => crate::compute::math::dequantize_q8_0_core(data, out_features, in_features),
+            GGMLType::Q8_0 => crate::compute::math::dequantize_q8_0_native(data.to_vec(), out_features, in_features).unwrap(),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unsupported tensor type")),
         };
         let (dna, centroids, anchors_u8) = crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None);
@@ -136,15 +134,15 @@ impl GGUFLoader {
 
 pub struct NativeLoader { pub db: Arc<Database> }
 impl NativeLoader {
-    pub fn new(path: &str) -> std::io::Result<Self> { Ok(NativeLoader { db: crate::core::db::get_or_create_db(path, false).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))? }) }
+    pub fn new(path: &str) -> std::io::Result<Self> { Ok(NativeLoader { db: crate::core::db::get_or_create_db(path, false).map_err(std::io::Error::other)? }) }
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
-        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let json_str = table.get("config").map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "config not found"))?;
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
+        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let json_str = table.get("config").map_err(|e| std::io::Error::other(e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "config not found"))?;
         Ok(serde_json::from_str(json_str.value())?)
     }
     pub fn load_llm(&self) -> std::io::Result<GenomicLLM> {
-        let config = self.load_config()?; let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let config = self.load_config()?; let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
         let block_size = 32; let vocab_size = config.vocab_size.unwrap_or_else(|| { let dna = Self::get_tensor(&read_txn, "token_embd.dna"); dna.len() * 4 / config.n_embd });
         let embeddings = self.get_linear(&read_txn, "token_embd", config.n_embd, vocab_size, block_size);
         let lm_head = self.get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size);
@@ -177,17 +175,17 @@ impl NativeLoader {
         GenomicLinear::new(dna, anchors, centroids, o_f, i_f, b_s, Vec::new(), 1e-6, mask, Vec::new(), Vec::new(), Vec::new(), Vec::new(), bias)
     }
     pub fn load_tokenizer(&self) -> std::io::Result<GajeTokenizer> {
-        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let json_str = table.get("tokenizer").map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "tokenizer not found"))?;
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
+        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::other(e.to_string()))?;
+        let json_str = table.get("tokenizer").map_err(|e| std::io::Error::other(e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "tokenizer not found"))?;
         GajeTokenizer::from_bytes(json_str.value().as_bytes()).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
     pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
-        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
         if let Ok(table) = read_txn.open_table(crate::core::db::MUTATIONS_TABLE) {
             let mut res = Vec::new();
-            for item in table.iter().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))? {
-                if let Ok((ts, val)) = item { res.push((ts.value(), val.value().to_vec())); }
+            for (ts, val) in table.iter().map_err(|e| std::io::Error::other(e.to_string()))?.flatten() {
+                res.push((ts.value(), val.value().to_vec()));
             }
             Ok(res)
         } else { Ok(Vec::new()) }
@@ -195,8 +193,8 @@ impl NativeLoader {
 }
 
 pub fn save_genomic_model(path: &str, model: &GenomicLLM, config: &ModelConfig, tokenizer: Option<&GajeTokenizer>) -> std::io::Result<()> {
-    let mut writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    let mut batch = writer.begin_batch().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let mut writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
+    let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;
     batch.write_metadata("config", &serde_json::to_string(config).unwrap()).unwrap();
     if let Some(tok) = tokenizer { batch.write_metadata("tokenizer", &tok.to_string(true).unwrap()).unwrap(); }
     let compress = |d: &[u8]| lz4_flex::compress_prepend_size(d);
@@ -240,7 +238,7 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
 }
 
 #[cfg(feature = "python")]
-#[pyfunction] #[pyo3(name = "save_genomic_model")]
+#[pyfunction] #[pyo3(name = "save_genomic_model", signature = (path, model, config, tokenizer_path=None))]
 pub fn save_genomic_model_py(path: &str, model: &crate::nn::llm::GenomicLLM, config: &ModelConfig, tokenizer_path: Option<&str>) -> PyResult<()> {
     let tok = if let Some(p) = tokenizer_path { Some(GajeTokenizer::from_file(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?) } else { None };
     save_genomic_model(path, model, config, tok.as_ref()).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))

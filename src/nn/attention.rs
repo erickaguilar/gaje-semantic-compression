@@ -84,6 +84,6 @@ impl GenomicAttention {
     pub fn py_new(n_head: usize, n_head_kv: usize, head_dim: usize, rmsnorm_weight: Vec<f32>, eps: f32, rope_base: f32, rope_style: String) -> Self {
         GenomicAttention::new(n_head, n_head_kv, head_dim, rmsnorm_weight, eps, rope_base, rope_style)
     }
-    pub fn forward_attention(&mut self, q: Vec<f32>, k: Vec<f32>, v: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> { self.forward_attention_core(q, k, v, pos).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
+    pub fn forward_attention(&mut self, q: Vec<f32>, k: Vec<f32>, v: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> { self.forward_attention_core(q, k, v, pos).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn clear_cache(&mut self) -> PyResult<()> { self.clear_cache_core(); Ok(()) }
 }

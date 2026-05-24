@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read};
 use memmap2::Mmap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -3,8 +3,6 @@ use std::time::Instant;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-#[cfg(not(feature = "python"))]
-use crate::pyo3_shim::*;
 
 /// Núcleo del entrenador genómico (Pure Rust)
 pub struct GenomicTrainerCore {
@@ -163,6 +161,6 @@ impl NativeGenomicTrainer {
         dataset: Vec<Vec<usize>>,
         epochs: usize,
     ) -> PyResult<()> {
-        self.inner.fit(model, &dataset, epochs).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
+        self.inner.fit(model, &dataset, epochs).map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

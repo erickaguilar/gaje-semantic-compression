@@ -19,6 +19,11 @@ use rayon::prelude::*;
 // dot_product — Producto punto vectorizado universal
 // =============================================================================
 
+/// # Safety
+/// Esta función es unsafe porque utiliza instrucciones intrínsecas SIMD y realiza
+/// acceso directo a memoria mediante punteros. El llamador debe asegurar que:
+/// 1. Los slices `a` y `b` tengan la misma longitud.
+/// 2. Los punteros derivados de los slices sean válidos para lectura.
 #[inline(always)]
 pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
     #[cfg(target_arch = "aarch64")]
@@ -85,6 +90,8 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 }
 
 // Alias para compatibilidad con rama windows
+/// # Safety
+/// Ver `dot_product`.
 #[inline(always)]
 pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     dot_product(a, b)
@@ -94,6 +101,11 @@ pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
 // rms_norm — Normalización RMS vectorizada universal
 // =============================================================================
 
+/// # Safety
+/// Esta función es unsafe porque utiliza instrucciones intrínsecas SIMD y realiza
+/// acceso directo a memoria mediante punteros. El llamador debe asegurar que:
+/// 1. Los slices `x` y `weight` tengan la misma longitud.
+/// 2. El slice `out` (interno) tenga el tamaño suficiente.
 #[inline(always)]
 pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     let n = x.len();
@@ -191,6 +203,8 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
 }
 
 // Alias para compatibilidad con rama windows
+/// # Safety
+/// Ver `rms_norm`.
 #[inline(always)]
 pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     rms_norm(x, weight, eps)
@@ -256,7 +270,7 @@ pub fn geglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
         .for_each(|((o, &g), &u)| {
             // Estabilización de GeGLU
             let g_safe = g.clamp(-20.0, 20.0);
-            let tanh_inner = 0.79788456f32 * (g_safe + 0.044715f32 * g_safe * g_safe * g_safe);
+            let tanh_inner = 0.7978846f32 * (g_safe + 0.044715f32 * g_safe * g_safe * g_safe);
             let gelu = 0.5f32 * g_safe * (1.0f32 + tanh_inner.tanh());
             *o = (gelu * u).clamp(-128.0, 128.0);
         });
@@ -279,6 +293,10 @@ pub fn relu_glu(gate: &[f32], up: &[f32], out: &mut [f32]) {
 static mut SHUFFLE_MASK_TABLE: [[u8; 16]; 256] = [[0; 16]; 256];
 static mut SHUFFLE_TABLE_INITIALIZED: bool = false;
 
+/// # Safety
+/// Esta función accede y modifica variables estáticas globales mutables sin sincronización.
+/// Debe ser llamada una sola vez durante la inicialización del programa o garantizando
+/// que no haya condiciones de carrera.
 pub unsafe fn init_shuffle_table() {
     if SHUFFLE_TABLE_INITIALIZED { return; }
     for b in 0..256usize {
@@ -298,6 +316,9 @@ pub unsafe fn init_shuffle_table() {
 // genomic_dot_product — Producto punto genómico universal
 // =============================================================================
 
+/// # Safety
+/// Esta función es unsafe porque utiliza instrucciones intrínsecas SIMD, accede a
+/// tablas de shuffle estáticas y realiza aritmética de punteros sin comprobación de límites.
 #[inline(always)]
 pub unsafe fn genomic_dot_product(
     weights: &[u8],
@@ -389,6 +410,8 @@ pub unsafe fn genomic_dot_product(
 }
 
 // Alias para compatibilidad con rama windows
+/// # Safety
+/// Ver `genomic_dot_product`.
 #[inline(always)]
 pub unsafe fn genomic_dot_product_neon(
     weights: &[u8],
@@ -400,6 +423,10 @@ pub unsafe fn genomic_dot_product_neon(
     genomic_dot_product(weights, input, centroids, stride, n_blocks, &[])
 }
 
+/// # Safety
+/// Esta función utiliza `get_unchecked` y aritmética de punteros para maximizar
+/// el rendimiento. El llamador debe garantizar que los tamaños de los slices
+/// sean coherentes con `n_blocks` y `stride`.
 #[inline(always)]
 pub unsafe fn genomic_dot_product_scalar(
     weights: &[u8],
@@ -443,6 +470,9 @@ pub unsafe fn genomic_dot_product_scalar(
 // calculate_distance_lut — Distancia LUT universal
 // =============================================================================
 
+/// # Safety
+/// Esta función realiza accesos directos a memoria mediante `get_unchecked` (implícito en la lógica nativa)
+/// y asume que todos los strands y máscaras tienen longitudes coherentes con `n_dims`.
 #[inline(always)]
 pub unsafe fn calculate_distance_lut(
     lut_base: &[f32],
@@ -525,6 +555,8 @@ pub unsafe fn calculate_distance_lut(
 }
 
 // Alias para compatibilidad con rama windows
+/// # Safety
+/// Ver `calculate_distance_lut`.
 #[inline(always)]
 pub unsafe fn calculate_distance_lut_neon(
     lut_base: &[f32],

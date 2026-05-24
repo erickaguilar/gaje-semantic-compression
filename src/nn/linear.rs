@@ -50,7 +50,9 @@ impl GenomicLinear {
         let mut epi_cols = Vec::new(); let mut tri_cols = Vec::new();
         if !precision_mask.is_empty() {
             for j in 0..n_blocks { for k in 0..stride {
-                let m = precision_mask[j * stride + k]; if m >= 1 { epi_cols.push((j, k)); } if m >= 2 { tri_cols.push((j, k)); }
+                let m = precision_mask[j * stride + k];
+                if m >= 1 { epi_cols.push((j, k)); }
+                if m >= 2 { tri_cols.push((j, k)); }
             }}
         }
         let mut epi_strands = Vec::new(); let mut tri_strands = Vec::new();
@@ -207,8 +209,8 @@ impl GenomicLinear {
     pub fn py_new(database: Vec<u8>, anchors_u8: Vec<u8>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize, rmsnorm_weight: Vec<f32>, eps: f32, precision_mask: Vec<u8>, epigenetic_database: Vec<u8>, epigenetic_centroids: Vec<f32>, triplet_database: Vec<u8>, triplet_centroids: Vec<f32>, bias: Vec<f32>) -> Self {
         GenomicLinear::new(database, anchors_u8, centroids, out_features, in_features, block_size, rmsnorm_weight, eps, precision_mask, epigenetic_database, epigenetic_centroids, triplet_database, triplet_centroids, bias)
     }
-    pub fn forward(&self, input: Vec<f32>) -> PyResult<Vec<f32>> { self.forward_core(input).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
-    pub fn get_row(&self, idx: usize) -> PyResult<Vec<f32>> { self.get_row_core(idx).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
-    pub fn backward(&self, d_output: Vec<f32>) -> PyResult<Vec<f32>> { self.backward_core(d_output).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
-    pub fn refine_with_grads(&mut self, input: Vec<f32>, grads: Vec<f32>, lr: f32) -> PyResult<()> { self.refine_with_grads_core(input, grads, lr).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
+    pub fn forward(&self, input: Vec<f32>) -> PyResult<Vec<f32>> { self.forward_core(input).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn get_row(&self, idx: usize) -> PyResult<Vec<f32>> { self.get_row_core(idx).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn backward(&self, d_output: Vec<f32>) -> PyResult<Vec<f32>> { self.backward_core(d_output).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn refine_with_grads(&mut self, input: Vec<f32>, grads: Vec<f32>, lr: f32) -> PyResult<()> { self.refine_with_grads_core(input, grads, lr).map_err(pyo3::exceptions::PyValueError::new_err) }
 }

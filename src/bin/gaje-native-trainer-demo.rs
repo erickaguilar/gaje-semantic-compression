@@ -43,7 +43,7 @@ fn main() {
         }
 
         // Refinar Capa 0: Queremos que la capa oculta responda al input
-        let mut layer0_deltas = vec![1.0; hidden_dim];
+        let layer0_deltas = vec![1.0; hidden_dim];
         layers[0].refine_step(input_id, layer0_deltas, learning_rate);
 
         // Homeostasis para estabilidad

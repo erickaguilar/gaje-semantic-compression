@@ -1,5 +1,4 @@
 use _impl::nn::spiking::layer::GajeNeuromorphicLayer;
-use _impl::compute::scheduler::NeuromorphicScheduler;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -31,7 +30,7 @@ fn main() {
     let centroides = [-1.5, -0.5, 0.5, 1.5];
     let l0 = GajeNeuromorphicLayer::new(hidden_dim, vocab_size, 0.5, 0.8);
     let l1 = GajeNeuromorphicLayer::new(vocab_size, hidden_dim, 0.5, 0.8);
-    let mut layers = vec![l0, l1];
+    let mut layers = [l0, l1];
 
     // 3. Bucle de Entrenamiento Supervisado Nativo
     let epochs = 500; // Más épocas para estabilidad en 2-bits

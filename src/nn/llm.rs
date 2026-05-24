@@ -170,7 +170,7 @@ impl GenomicLLM {
     pub fn py_new(embeddings: GenomicLinear, blocks: Vec<RustGenomicBlock>, output_norm: Vec<f32>, lm_head: GenomicLinear, eps: f32) -> Self {
         GenomicLLM { embeddings, blocks, output_norm, lm_head, eps }
     }
-    pub fn forward(&mut self, token_id: usize, clear_cache: bool) -> PyResult<Vec<f32>> { self.forward_core(token_id, clear_cache).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
-    pub fn train_on_sequence(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> { self.train_on_sequence_core(tokens, lr).map_err(|e| pyo3::exceptions::PyValueError::new_err(e)) }
+    pub fn forward(&mut self, token_id: usize, clear_cache: bool) -> PyResult<Vec<f32>> { self.forward_core(token_id, clear_cache).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn train_on_sequence(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> { self.train_on_sequence_core(tokens, lr).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn clear_cache_py(&mut self) -> PyResult<()> { self.clear_cache_core(); Ok(()) }
 }
