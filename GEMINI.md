@@ -29,12 +29,11 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 5.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
 5.  **Benchmarking Interactivo y No Bloqueante:** Las herramientas de benchmarking y evaluación deben estar diseñadas para aceptar entrada de texto (simulando flujos de chat) y no deben quedar en espera infinita de procesos externos. Deben implementar timeouts y manejo asíncrono para garantizar que el flujo de trabajo (especialmente en Monte Carlo) no se interrumpa. El uso de las demos en `examples/core_demos/` es obligatorio para validar la experiencia de usuario.
 
-## 3. Estado Técnico y Metas (v0.9.0)
+## 3. Estado Técnico y Metas (v0.9.7)
 
-- **Soberanía Nativa Alcanzada:** El motor es 100% Rust. (Ver `docs/plans/MASTER_STRATEGY_v1.0.md`).
-- **Arquitectura SoA:** Implementada para máximo throughput SIMD NEON.
-- **Rendimiento Validado:** >200,000 registros/seg en búsqueda asimétrica (ADC) en ARM.
-- **Compresión Extrema:** 2 bits por peso con refinamiento epigenético (4/6-bit).
+- **Soberanía Nativa Total Alcanzada:** El motor es 100% independiente de Python (Inferencia, Entrenamiento, Administración).
+- **Arquitectura Zero-GIL:** Uso obligatorio de feature gating (`python`) y métodos `_core` para preservar la estabilidad de binarios nativos.
+- **Rendimiento Nativo:** Entrenamiento integrado en `gaje-cli` con latencias <100ms por secuencia en ARM.
 
 ## 4. Estilo de Commits
 

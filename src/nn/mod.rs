@@ -8,4 +8,4 @@ pub mod spiking;
 pub use attention::GenomicAttention;
 pub use block::RustGenomicBlock;
 pub use linear::GenomicLinear;
-pub use llm::RustGenomicLLM;
+pub use llm::GenomicLLM;

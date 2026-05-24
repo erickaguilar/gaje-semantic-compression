@@ -1,3 +1,14 @@
+## [0.9.7-alpha] - 2026-05-24
+### Added
+- **TRUE Native Sovereignty**: Motor GAJE-Flow 100% independiente de Python mediante arquitectura decoupled (Zero-GIL).
+- **Native Genomic Trainer**: Implementación en Rust de entrenamiento por Resonancia Semántica y Entropía de Shannon integrado en el CLI.
+- **gaje-cli v0.7.5**: Nuevos subcomandos `--train` y `--init --preset` para gestión autónoma de organismos.
+- **PyO3 Shim**: Capa de abstracción para permitir la compilación de binarios nativos puros sin dependencias de tiempo de ejecución de Python.
+
+### Fixed
+- **GIL Panic Fix**: Refactorización estructural que elimina los fallos de inicialización del intérprete en contextos nativos.
+- **Core Stability**: Consolidación de métodos `_core` para garantizar la integridad del flujo de datos en Rust.
+
 ## [0.9.6-alpha] - 2026-05-23
 ### Added
 - **Soberanía Nativa End-to-End:** Eliminación total de dependencias de Python en el flujo de inferencia. El motor ahora es autónomo para cargar, tokenizar y ejecutar LLMs.
