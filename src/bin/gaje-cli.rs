@@ -27,12 +27,20 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut scale = 0.02;
     let mut save_path = None;
     let mut init_path = None;
+    let mut init_preset = "default".to_string();
     let mut tokenize_text = None;
+    let mut inspect_model = false;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i+1].clone();
             i += 2;
+        } else if args[i] == "--preset" && i + 1 < args.len() {
+            init_preset = args[i+1].clone();
+            i += 2;
+        } else if args[i] == "--inspect" {
+            inspect_model = true;
+            i += 1;
         } else if args[i] == "--init" && i + 1 < args.len() {
             init_path = Some(args[i+1].clone());
             i += 2;
@@ -74,29 +82,36 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if let Some(path) = init_path {
-        println!("[*] Creando nuevo organismo genómico 100% nativo en: {}", path);
+        println!("[*] Creando nuevo organismo genómico 100% nativo en: {} (Preset: {})", path, init_preset);
+        
+        let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
+            "gold_embryo" => (384, 8, 6, 16384),
+            "micro_organism" => (128, 2, 4, 1024),
+            _ => (768, 6, 12, 49152),
+        };
+
         let config = _impl::io::loader::ModelConfig {
             config: _impl::io::loader::ArchConfig {
-                name: "GAJE-Pure-Organism".to_string(),
+                name: format!("GAJE-{}-Organism", init_preset),
                 version: "0.9.5".to_string(),
                 tokenizer_id: "tokenizer".to_string(),
                 rope_base: 1000000.0,
                 ffn_act: "swiglu".to_string(),
-                use_genomic_norm: false,
+                use_genomic_norm: true,
                 rope_style: "split".to_string(),
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
                 unpermute_weights: false,
                 apply_smollm_rope_patch: false,
             },
-            n_embd: 768,
-            n_head: 12,
-            n_head_kv: 12,
-            n_blocks: 6,
-            vocab_size: Some(49152),
+            n_embd,
+            n_head,
+            n_head_kv: n_head,
+            n_blocks,
+            vocab_size: Some(vocab_size),
             eps: 1e-6,
         };
-        let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), 49152)?;
+        let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), vocab_size)?;
         
         if Path::new("models/core/tokenizer.json").exists() {
             let tok = GajeTokenizer::from_file("models/core/tokenizer.json").map_err(|e| e.to_string())?;
@@ -109,7 +124,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje]");
+        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect]");
+        return Ok(());
+    }
+
+    if inspect_model {
+        let loader = NativeLoader::new(&model_path)?;
+        let config = loader.load_config()?;
+        println!("--- Metadata for {} ---", model_path);
+        println!("{}", serde_json::to_string_pretty(&config).unwrap());
         return Ok(());
     }
 

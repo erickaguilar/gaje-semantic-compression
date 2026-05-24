@@ -23,7 +23,10 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 3.  **Mandato de Estabilidad de Memoria:**
     - Prohibidas las pre-asignaciones masivas de tensores `f32` en el `forward`.
     - Priorizar el uso de punteros y memoria compartida (`Arc<Vec<u8>>`).
-4.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
+4.  **Soberanía del Tooling (Anti-Python):**
+    - PROHIBIDO crear nuevos scripts de utilidad en Python para tareas de inspección, diagnóstico o mantenimiento.
+    - Cualquier funcionalidad administrativa o de utilidad debe ser implementada como un subcomando en `gaje-cli`.
+5.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
 5.  **Benchmarking Interactivo y No Bloqueante:** Las herramientas de benchmarking y evaluación deben estar diseñadas para aceptar entrada de texto (simulando flujos de chat) y no deben quedar en espera infinita de procesos externos. Deben implementar timeouts y manejo asíncrono para garantizar que el flujo de trabajo (especialmente en Monte Carlo) no se interrumpa. El uso de las demos en `examples/core_demos/` es obligatorio para validar la experiencia de usuario.
 
 ## 3. Estado Técnico y Metas (v0.9.0)
