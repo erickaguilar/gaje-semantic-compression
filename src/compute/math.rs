@@ -70,7 +70,7 @@ pub fn genomize_f32_core(
                 };
 
                 let residual = val - c_val;
-                if residual.abs() > anchor_threshold {
+                if anchor_threshold >= 0.0 && residual.abs() > anchor_threshold {
                     anchors[start + k * 4 + s] = half::f16::from_f32(residual);
                 }
                 byte = (byte << 2) | bits;
@@ -149,7 +149,7 @@ pub fn genomize_f16_core(
                 };
 
                 let residual = val - c_val;
-                if residual.abs() > anchor_threshold {
+                if anchor_threshold >= 0.0 && residual.abs() > anchor_threshold {
                     anchors[start + k * 4 + s] = half::f16::from_f32(residual);
                 }
                 byte = (byte << 2) | bits;

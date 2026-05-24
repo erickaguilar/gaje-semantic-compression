@@ -1,6 +1,7 @@
 use _impl::io::loader::NativeLoader;
 use _impl::nn::llm::RustGenomicLLM;
 use _impl::compute::kernels;
+use _impl::core::tokenizer::GajeTokenizer;
 use std::env;
 use std::path::Path;
 use std::time::Instant;
@@ -98,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), 49152)?;
         
         if Path::new("models/core/tokenizer.json").exists() {
-            let tok = tokenizers::Tokenizer::from_file("models/core/tokenizer.json").map_err(|e| e.to_string())?;
+            let tok = GajeTokenizer::from_file("models/core/tokenizer.json").map_err(|e| e.to_string())?;
             _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
             println!("[+] Tokenizador 'models/core/tokenizer.json' integrado en el organismo.");
         }
@@ -117,14 +118,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut gaje_loader_opt = None;
     
     let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
-        let mut loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
+        let loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
         let config = loader.infer_config()?;
         println!("[+] GGUF Config Inferred: {} layers, {} dim", config.n_blocks, config.n_embd);
-        
+
         let model = loader.load_genomic_llm(config.clone(), -1.0)?;
+
         let tokenizer_path = Path::new(&model_path).parent().unwrap().join("tokenizer.json");
         let tokenizer = if tokenizer_path.exists() {
-             tokenizers::Tokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?
+             GajeTokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?
         } else {
              return Err(format!("tokenizer.json not found in {}", Path::new(&model_path).parent().unwrap().display()).into());
         };
@@ -143,11 +145,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(text) = tokenize_text {
         println!("[*] Tokenizando texto de forma nativa: \"{}\"", text);
-        let encoding = tokenizer.encode(text, true).map_err(|e| e.to_string())?;
-        let ids = encoding.get_ids();
+        let ids = tokenizer.encode(&text, true).map_err(|e| e.to_string())?;
         println!("    IDs de Tokens: {:?}", ids);
         println!("    Fragmentación:");
-        for &id in ids {
+        for &id in &ids {
             let piece = tokenizer.decode(&[id], true).map_err(|e| e.to_string())?;
             println!("      [{:>6}] -> \"{}\"", id, piece);
         }
@@ -156,8 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(ref target_text) = evolve_target {
         println!("[*] Iniciando Crianza por Integración de Caminos (Poblacional) para: '{}'", target_text);
-        let encoding = tokenizer.encode(target_text.clone(), false).map_err(|e| e.to_string())?;
-        let tokens = encoding.get_ids();
+        let tokens = tokenizer.encode(target_text, false).map_err(|e| e.to_string())?;
 
         if tokens.len() < 2 {
             return Err("Target text too short for evolution".into());
@@ -181,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             total_log_prob
         };
 
-        let mut best_fitness = evaluate(&mut model, tokens);
+        let mut best_fitness = evaluate(&mut model, &tokens);
         println!("[Gen 0] Log-Fitness Inicial: {:.4}", best_fitness);
 
         use rand::seq::SliceRandom;
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
             let results: Vec<Option<(Vec<f32>, f32)>> = population.into_par_iter().map(|mut p_model| {
                 if let Ok(delta) = p_model.mutate_layer(layer_name, current_scale) {
-                    let fitness = evaluate(&mut p_model, tokens);
+                    let fitness = evaluate(&mut p_model, &tokens);
                     if fitness > best_fitness {
                         return Some((delta, fitness));
                     }
@@ -225,7 +225,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 for k in 0..n_integrate {
                     model.apply_weighted_layer_mutation(layer_name, paths[k].0.clone(), weight).unwrap();
                 }
-                best_fitness = evaluate(&mut model, tokens);
+                best_fitness = evaluate(&mut model, &tokens);
                 if gen % 10 == 0 || best_fitness > -10.0 {
                     println!("[Gen {}] Camino Integrado en {}: Fitness = {:.4} ({} caminos)", gen, layer_name, best_fitness, n_integrate);
                 }
@@ -242,8 +242,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[*] Iniciando Auto-Grad Nativo con texto: {}", dataset_path);
         let start_train = Instant::now();
         let text = std::fs::read_to_string(&dataset_path).unwrap_or_else(|_| dataset_path.clone());
-        let encoding = tokenizer.encode(text, false).map_err(|e| e.to_string())?;
-        let tokens = encoding.get_ids();
+        let tokens = tokenizer.encode(&text, false).map_err(|e| e.to_string())?;
 
         if tokens.len() < 2 {
             return Err("Dataset too short for training".into());
@@ -356,7 +355,7 @@ fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> 
     }
 }
 
-fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn generate(model: &mut RustGenomicLLM, tokenizer: &GajeTokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Implementación básica de ChatML si detectamos un prompt que no sea crudo
     let formatted_prompt = if !prompt.contains("<|im_start|>") && prompt.len() < 200 {
         format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt)
@@ -364,8 +363,7 @@ fn generate(model: &mut RustGenomicLLM, tokenizer: &tokenizers::Tokenizer, promp
         prompt.to_string()
     };
 
-    let encoding = tokenizer.encode(formatted_prompt, false).map_err(|e| e.to_string())?;
-    let tokens = encoding.get_ids();
+    let tokens = tokenizer.encode(&formatted_prompt, false).map_err(|e| e.to_string())?;
     model.clear_cache().unwrap();
     let mut current_tokens = tokens.to_vec();
     if current_tokens.is_empty() { return Ok(()); }

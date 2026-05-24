@@ -261,7 +261,7 @@ impl GGUFLoader {
     }
 
     pub fn load_genomic_llm(
-        &mut self,
+        &self,
         config: ModelConfig,
         anchor_threshold: f32,
     ) -> std::io::Result<RustGenomicLLM> {
@@ -360,7 +360,7 @@ impl GGUFLoader {
         ))
     }
 
-    fn load_f32_tensor(&mut self, name: &str) -> std::io::Result<Vec<f32>> {
+    fn load_f32_tensor(&self, name: &str) -> std::io::Result<Vec<f32>> {
         println!("    [~] Cargando tensor de precisión: {}...", name);
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
@@ -397,7 +397,7 @@ impl GGUFLoader {
     }
 
     fn genomize_tensor(
-        &mut self,
+        &self,
         name: &str,
         block_size: usize,
         anchor_threshold: f32,
@@ -479,7 +479,7 @@ pub fn save_genomic_model_py(
     tokenizer_path: Option<&str>,
 ) -> PyResult<()> {
     let tok = if let Some(p) = tokenizer_path {
-        Some(tokenizers::Tokenizer::from_file(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?)
+        Some(GajeTokenizer::from_file(p).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?)
     } else {
         None
     };
@@ -491,7 +491,7 @@ pub fn save_genomic_model(
     path: &str,
     model: &RustGenomicLLM,
     config: &ModelConfig,
-    tokenizer: Option<&tokenizers::Tokenizer>,
+    tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
     let mut writer = crate::core::db::GajeDatabaseWriter::new(path)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
@@ -622,6 +622,8 @@ pub fn save_genomic_model(
     Ok(())
 }
 
+use crate::core::tokenizer::GajeTokenizer;
+
 impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
         let db = crate::core::db::get_or_create_db(path, false)
@@ -647,7 +649,7 @@ impl NativeLoader {
         Ok(config)
     }
 
-    pub fn load_tokenizer(&self) -> std::io::Result<tokenizers::Tokenizer> {
+    pub fn load_tokenizer(&self) -> std::io::Result<GajeTokenizer> {
         let read_txn = self
             .db
             .begin_read()
@@ -666,7 +668,7 @@ impl NativeLoader {
                 )
             })?;
 
-        tokenizers::Tokenizer::from_bytes(json_str.value().as_bytes())
+        GajeTokenizer::from_bytes(json_str.value().as_bytes())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
 

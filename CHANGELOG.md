@@ -1,3 +1,10 @@
+## [0.9.6-alpha] - 2026-05-23
+### Added
+- **Soberanía Nativa End-to-End:** Eliminación total de dependencias de Python en el flujo de inferencia. El motor ahora es autónomo para cargar, tokenizar y ejecutar LLMs.
+- **Tokenizador BPE Nativo (`GajeTokenizer`):** Implementación de un motor de procesamiento de texto en Rust puro basado en `tokenizers`, integrado directamente en el formato `.gaje`.
+- **Carga Zero-Copy (mmap):** Refactorización del lector GGUF para utilizar mapeo de memoria (`memmap2`), permitiendo el acceso instantáneo a tensores sin copias en RAM.
+- **Refactorización de Inmutabilidad:** Optimización de los cargadores de modelos para operar con referencias inmutables, mejorando la seguridad de hilos y el rendimiento de carga.
+
 ## [0.9.5] - 2026-05-22
 ### Added
 - **Genomic Training Nativo:** Implementación de `refine_step` en `GajeNeuromorphicLayer` para aprendizaje supervisado local mediante refuerzo/inhibición de bits.

@@ -71,14 +71,36 @@ def export_smollm(gguf_path, output_path):
         "rope_base": model.rope_base,
         "eps": model.eps,
         "config": {
-            "name": "llama",
+            "name": model.config.name,
+            "version": model.config.version,
+            "tokenizer_id": model.config.tokenizer_id,
             "rope_base": model.rope_base,
-            "rope_style": "split",
-            "ffn_act": "swiglu"
+            "rope_style": model.config.rope_style,
+            "ffn_act": model.config.ffn_act,
+            "use_genomic_norm": model.config.use_genomic_norm
         }
     }
     batch.write_metadata("config", json.dumps(config_meta))
     
+    # 4. Save Tokenizer Soberano
+    if hasattr(model, "tokenizer") and model.tokenizer is not None:
+        try:
+            # Intentar obtener la representación JSON del tokenizador
+            if hasattr(model.tokenizer, "is_fast") and model.tokenizer.is_fast:
+                # Si es un tokenizador rápido de transformers
+                import tempfile
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    model.tokenizer.save_pretrained(tmpdir)
+                    tok_json = os.path.join(tmpdir, "tokenizer.json")
+                    if os.path.exists(tok_json):
+                        with open(tok_json, "r") as f:
+                            batch.write_metadata("tokenizer", f.read())
+            else:
+                # Fallback: solo el ID
+                pass
+        except Exception as e:
+            print(f"[!] Warning: Could not save tokenizer metadata: {e}")
+
     # Commit changes
     batch.commit()
     

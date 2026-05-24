@@ -1,25 +1,25 @@
 # 🧬 Protocolo GAJE: Inteligencia Genómica Evolutiva
 
-[![Version](https://img.shields.io/badge/version-0.9.0--alpha-purple)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.9.6--alpha-purple)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) con solo **2 bits por peso**, utilizando un alfabeto de 4 bases nitrogenadas digitales (A, C, G, T).
 
-## 🚀 Industrialización v0.9.0-alpha: Alto Rendimiento
-GAJE v0.9.0-alpha introduce la arquitectura **SoA (Structure of Arrays)** y el algoritmo de **Timing Wheel**, transformando el prototipo en un motor industrial capaz de procesar contextos masivos con eficiencia SIMD.
+## 🚀 Soberanía Nativa v0.9.6-alpha
+GAJE v0.9.6-alpha alcanza la **Soberanía de Extremo a Extremo**, eliminando completamente la dependencia de Python en el flujo de inferencia. El motor ahora es un sistema autónomo, ultra-eficiente y portátil.
 
 | Característica | Impacto | Estado |
 | :--- | :---: | :--- |
+| **Soberanía Nativa** | **Independencia de Python** | ✅ **Alcanzada** |
+| **Tokenizador Nativo** | **Procesamiento de Texto Local** | ✅ Implementado |
+| **Carga Zero-Copy (mmap)**| **Carga Instantánea** | ✅ Implementado |
 | **Arquitectura SoA** | **Optimización SIMD/Caché** | ✅ Implementado |
-| **Timing Wheel O(1)** | **1M+ Context Support** | ✅ Implementado |
-| **Rayon Parallelism** | **Massive Training** | ✅ Implementado |
-| **Zero-Mult Engine** | **Eficiencia Energética** | ✅ Validado |
 
 ## 🛠️ Innovaciones Tecnológicas
-- **Diseño SoA (Structure of Arrays)**: Los datos de las neuronas se almacenan en vectores planos contiguos, eliminando la dispersión de memoria y permitiendo que la CPU procese múltiples potenciales de membrana en un solo ciclo (AVX2/NEON).
-- **Timing Wheel Industrial**: Buffer circular para la gestión de eventos neuromórficos con costo estrictamente constante $O(1)$, eliminando el overhead de las colas de prioridad tradicionales.
-- **Bitwise Evolution (Rayon)**: Motor evolutivo paralelo que opera directamente sobre el ADN de 2-bits, permitiendo el entrenamiento de modelos en milisegundos mediante paralelismo masivo.
-- **Emulador Neuromórfico**: Motor nativo en Rust que utiliza neuronas **Leaky Integrate-and-Fire (LIF)** para eliminar las multiplicaciones en favor de sumas directas de centroides.
+- **Soberanía Total (Rust 100%)**: El ecosistema GAJE es ahora un binario único que integra cargador, tokenizador BPE nativo y motor de inferencia, sin dependencias externas.
+- **Carga Zero-Copy (memmap2)**: Uso de archivos mapeados en memoria para acceder a los tensores GGUF instantáneamente, eliminando el overhead de copia en la RAM.
+- **Diseño SoA (Structure of Arrays)**: Los datos de las neuronas se almacenan en vectores planos contiguos, permitiendo que la CPU procese múltiples potenciales de membrana en un solo ciclo (NEON/AVX2).
+- **Timing Wheel Industrial**: Buffer circular para la gestión de eventos neuromórficos con costo estrictamente constante $O(1)$, ideal para contextos masivos de 1M+ tokens.
 
 ## 📈 Benchmarks Industriales
 | Métrica | Inferencia Densa (f16) | GAJE Industrial (2-bit) | Ganancia |

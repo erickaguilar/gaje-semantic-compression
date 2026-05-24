@@ -85,10 +85,10 @@ impl GenomicAttention {
         v: Vec<f32>,
         pos: usize,
     ) -> PyResult<Vec<f32>> {
-        let head_dim = self.head_dim;
+        let head_dim = self.head_dim.max(1);
         let n_head = self.n_head;
-        let n_head_kv = self.n_head_kv;
-        let n_groups = n_head / n_head_kv;
+        let n_head_kv = self.n_head_kv.max(1);
+        let n_groups = (n_head / n_head_kv).max(1);
         let scale = 1.0 / (head_dim as f32).sqrt();
         let rope_base = self.rope_base;
         let is_split = self.rope_style == "split";

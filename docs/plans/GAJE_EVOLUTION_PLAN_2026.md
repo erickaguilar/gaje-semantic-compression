@@ -39,7 +39,7 @@ Potenciar el motor de "crianza" de modelos.
 ## 📈 Hitos de Éxito (KPIs 2026)
 | Objetivo | Métrica Actual | Meta v1.0 |
 | :--- | :--- | :--- |
-| **Independencia** | Depende de Python | 100% Rust Bin |
+| **Independencia** | **100% Rust Bin (v0.9.6)** | **Soberanía Total** |
 | **Tamaño (Full)** | 116 MB | < 10 MB |
 | **Latencia** | ~300ms/token | < 30ms/token |
 | **Coherencia (PPL)**| 500+ (en 2-bit raw) | < 2.0 (Evolucionado) |

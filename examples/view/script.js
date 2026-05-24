@@ -77,7 +77,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function sendMessage() {
         const text = userInput.value.trim();
         const modelSelect = document.getElementById('model-select');
+        const modelValue = modelSelect.value;
+
         if (!text) return;
+        if (!modelValue || modelValue === 'none' || modelValue === '') {
+            addMessage('Por favor, selecciona un modelo válido.', 'bot');
+            return;
+        }
 
         addMessage(text, 'user');
         userInput.value = '';
