@@ -31,12 +31,13 @@ Para combatir la deriva semántica sin inflar el modelo, se propuso tratar los c
 
 ## 4. Conclusiones Técnicas y Próximos Pasos
 
-La Fase 4.0 ha sido declarada **técnicamente viable**. Hemos comprobado que es posible "injertar" conocimiento relacional en un genoma de 2 bits mediante matrices externas ultraligeras.
+La Fase 4.0 ha sido declarada **técnicamente viable**, pero con un ajuste estratégico fundamental: **el objetivo del Embrión de Oro se eleva a 10 MB**. Hemos comprobado que la compresión a 4MB es demasiado restrictiva para la coherencia semántica compleja.
 
-**Hoja de Ruta Inmediata:**
-1.  **Refinamiento de Modulación:** Evolucionar el *Relational Bias* para que module centroides específicos en lugar de aplicar un factor global al vector oculto.
-2.  **Entrenamiento Guiado por Grafo:** Iniciar el *Entrenamiento por Resonancia* sobre `dataset_es.txt` con el objetivo de reducir la perplejidad basal de **~50k a < 1k**.
-3.  **Loader de Topología Nativo:** Implementar un cargador optimizado en `src/io/loader.rs` para gestionar los mapas JSON como memoria compartida (`Arc<Vec<f32>>`).
+**Hoja de Ruta Inmediata (Pivot 10MB):**
+1.  **Scaffolding v2.0:** Inicializar el nuevo organismo de 10MB con 12 bloques y vocabulario de 32k.
+2.  **Refinamiento de Modulación:** Evolucionar el *Relational Bias* para que module centroides específicos en lugar de aplicar un factor global al vector oculto.
+3.  **Entrenamiento Guiado por Grafo:** Iniciar el *Entrenamiento por Resonancia* sobre `dataset_es_ext.txt` con el objetivo de reducir la perplejidad basal de **~50k a < 500**.
+4.  **Loader de Topología Nativo:** Implementar un cargador optimizado en `src/io/loader.rs` para gestionar los mapas JSON como memoria compartida (`Arc<Vec<f32>>`).
 
 ---
 *Este documento marca el final de la exploración teórica de la Fase 4.0 y el inicio de su refinamiento arquitectónico.*
