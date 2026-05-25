@@ -6,6 +6,9 @@
 ## 1. Justificación del Reinicio (Clean Slate)
 Tras validar que la compresión extrema a 4MB genera un *Semantic Drift* inmanejable para tareas de coherencia compleja, la Fase 5.0 propone una arquitectura de **10 MB** diseñada con **Soberanía Algebraica**. Partir desde cero elimina el ruido acumulado en experimentos previos y garantiza una simetría perfecta entre el vocabulario, las dimensiones y la profundidad del modelo.
 
+**Referencia Matemática:** 
+[Remarks on the Disproof of the Unit Distance Conjecture (OpenAI)](https://cdn.openai.com/pdf/74c24085-19b0-4534-9c90-465b8e29ad73/unit-distance-remarks.pdf) - Este paper justifica el uso de campos de números algebraicos para maximizar la densidad relacional en espacios de alta dimensión.
+
 ## 2. Especificaciones de la Nueva Estructura (v2.0)
 *   **Nombre en Clave:** Silver Fetus (Feto de Plata)
 *   **Capacidad:** 12.5 Millones de Parámetros (2-bit).
