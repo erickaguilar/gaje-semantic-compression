@@ -266,8 +266,25 @@ pub fn save_genomic_model(path: &str, model: &GenomicLLM, config: &ModelConfig, 
 use crate::core::tokenizer::GajeTokenizer;
 
 pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usize) -> std::io::Result<GenomicLLM> {
-    let b_s = 32; let init_l = |i: usize, o: usize| {
-        let n = i * o; let (dna, c, a) = crate::compute::math::genomize_f32_core(&vec![0.0f32; n], b_s, -1.0, None);
+    let b_s = 32; 
+    
+    // Intento cargar centroides algebraicos (OpenAI Insight - Fase 5.0)
+    let algebraic_c = if let Ok(f) = std::fs::File::open("models/core/algebraic_codebook.json") {
+        let val: serde_json::Value = serde_json::from_reader(f).unwrap_or(serde_json::Value::Null);
+        val.get("centroids").and_then(|c| c.as_array()).and_then(|arr| {
+            if arr.len() == 4 {
+                Some([
+                    arr[0].as_f64()? as f32,
+                    arr[1].as_f64()? as f32,
+                    arr[2].as_f64()? as f32,
+                    arr[3].as_f64()? as f32,
+                ])
+            } else { None }
+        })
+    } else { None };
+
+    let init_l = |i: usize, o: usize| {
+        let n = i * o; let (dna, c, a) = crate::compute::math::genomize_f32_core(&vec![0.0f32; n], b_s, -1.0, algebraic_c);
         GenomicLinear::new(dna, a, c, o, i, b_s, Vec::new(), 1e-6, Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
     };
     let embeddings = init_l(config.n_embd, vocab_size); let mut blocks = Vec::new(); let head_dim = config.n_embd / config.n_head;
