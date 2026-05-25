@@ -164,12 +164,18 @@ impl NativeLoader {
         self.load_llm().map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
-    pub fn new(path: &str) -> std::io::Result<Self> { Ok(NativeLoader { db: crate::core::db::get_or_create_db(path, false).map_err(std::io::Error::other)? }) }
+    pub fn new(path: &str) -> std::io::Result<Self> { 
+        Self::new_with_mode(path, true) 
+    }
+
+    pub fn new_with_mode(path: &str, read_only: bool) -> std::io::Result<Self> {
+        Ok(NativeLoader { db: crate::core::db::get_or_create_db(path, read_only).map_err(std::io::Error::other)? })
+    }
+
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
-        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::other(e.to_string()))?;
-        let json_str = table.get("config").map_err(|e| std::io::Error::other(e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "config not found"))?;
-        Ok(serde_json::from_str(json_str.value())?)
+        let reader = crate::core::db::GajeDatabaseReader { db: self.db.clone() };
+        let json_str = reader.read_metadata_core("config").map_err(std::io::Error::other)?;
+        Ok(serde_json::from_str(&json_str)?)
     }
     pub fn load_llm(&self) -> std::io::Result<GenomicLLM> {
         let config = self.load_config()?; let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -205,10 +211,9 @@ impl NativeLoader {
         GenomicLinear::new(dna, anchors, centroids, o_f, i_f, b_s, Vec::new(), 1e-6, mask, Vec::new(), Vec::new(), Vec::new(), Vec::new(), bias)
     }
     pub fn load_tokenizer(&self) -> std::io::Result<GajeTokenizer> {
-        let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| std::io::Error::other(e.to_string()))?;
-        let json_str = table.get("tokenizer").map_err(|e| std::io::Error::other(e.to_string()))?.ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "tokenizer not found"))?;
-        GajeTokenizer::from_bytes(json_str.value().as_bytes()).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+        let reader = crate::core::db::GajeDatabaseReader { db: self.db.clone() };
+        let json_str = reader.read_metadata_core("tokenizer").map_err(std::io::Error::other)?;
+        GajeTokenizer::from_bytes(json_str.as_bytes()).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
     }
     pub fn list_mutations(&self) -> std::io::Result<Vec<(u64, Vec<u8>)>> {
         let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;

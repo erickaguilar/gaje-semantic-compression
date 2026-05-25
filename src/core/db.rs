@@ -30,18 +30,32 @@ impl GajeDatabaseReader {
 
     #[cfg(feature = "python")]
     pub fn read_metadata(&self, key: &str) -> PyResult<String> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Metadata key {} not found", key)))?;
+        self.read_metadata_core(key).map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    pub fn read_metadata_core(&self, key: &str) -> Result<String, String> {
+        let read_txn = self.db.begin_read().map_err(|e| e.to_string())?;
+        let table = match read_txn.open_table(METADATA_TABLE) {
+            Ok(t) => t,
+            Err(e) => return Err(format!("Error opening metadata table: {}", e)),
+        };
+        let val = table.get(key).map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Metadata key {} not found", key))?;
         Ok(val.value().to_string())
     }
 
     #[cfg(feature = "python")]
     pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        self.has_metadata_core(key).map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    pub fn has_metadata_core(&self, key: &str) -> Result<bool, String> {
+        let read_txn = self.db.begin_read().map_err(|e| e.to_string())?;
+        let table = match read_txn.open_table(METADATA_TABLE) {
+            Ok(t) => t,
+            Err(_) => return Ok(false),
+        };
+        let val = table.get(key).map_err(|e| e.to_string())?;
         Ok(val.is_some())
     }
 
