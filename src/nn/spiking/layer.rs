@@ -193,6 +193,12 @@ impl GajeNeuromorphicLayer {
         let mut rng = rand::thread_rng();
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_index * row_size;
+        
+        // Verificación de seguridad para evitar pánicos por OOB
+        if start_byte + row_size > self.packed_weights.len() {
+            return;
+        }
+
         for (i, &delta) in deltas.iter().enumerate() {
             if i >= self.num_neurons || delta.abs() < 1e-5 { continue; }
             if rng.gen::<f32>() > learning_rate { continue; }
