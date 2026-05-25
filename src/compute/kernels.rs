@@ -326,32 +326,27 @@ pub unsafe fn genomic_dot_product(
     centroids: &[f32],
     stride: usize,
     n_blocks: usize,
-    anchors: &[half::f16],
+    modulation: &[f32; 4],
 ) -> f32 {
     #[cfg(target_arch = "aarch64")]
     {
         let mut sum_v = vdupq_n_f32(0.0);
-        let has_anchors = !anchors.is_empty();
+        let m_v = vld1q_f32(modulation.as_ptr());
         #[allow(static_mut_refs)]
         let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
         for j in 0..n_blocks {
-            let c_v = vld1q_u8(centroids.as_ptr().add(j * 4) as *const u8);
+            // Cargar centroides y aplicar modulación granular
+            let raw_c = vld1q_f32(centroids.as_ptr().add(j * 4));
+            let c_mod = vmulq_f32(raw_c, m_v);
+            let c_v = vreinterpretq_u8_f32(c_mod);
+
             let input_block_ptr = input.as_ptr().add(j * stride * 4);
             let weights_block_ptr = weights.as_ptr().add(j * stride);
             for k in 0..stride {
                 let byte = *weights_block_ptr.add(k);
                 let mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
                 let v_vals = vqtbl1q_u8(c_v, mask);
-                let mut v_weights = vreinterpretq_f32_u8(v_vals);
-                
-                if has_anchors {
-                    let a_ptr = anchors.as_ptr().add(j * stride * 4 + k * 4);
-                    // Optimized f16 -> f32 conversion using NEON
-                    let a_v16 = vld1_u16(a_ptr as *const u16);
-                    let v_anchors = vcvt_f32_f16(vreinterpret_f16_u16(a_v16));
-                    v_weights = vaddq_f32(v_weights, v_anchors);
-                }
-
+                let v_weights = vreinterpretq_f32_u8(v_vals);
                 sum_v = vfmaq_f32(sum_v, v_weights, vld1q_f32(input_block_ptr.add(k * 4)));
             }
         }
@@ -364,31 +359,19 @@ pub unsafe fn genomic_dot_product(
             #[allow(static_mut_refs)]
             let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
             let mut acc = _mm_setzero_ps();
-            let has_anchors = !anchors.is_empty();
-            let has_f16c = is_x86_feature_detected!("f16c");
+            let m_v = _mm_loadu_ps(modulation.as_ptr());
 
             for j in 0..n_blocks {
-                let c_v = _mm_loadu_si128(centroids.as_ptr().add(j * 4) as *const __m128i);
+                let raw_c = _mm_loadu_ps(centroids.as_ptr().add(j * 4));
+                let c_mod = _mm_mul_ps(raw_c, m_v);
+                let c_v = _mm_castps_si128(c_mod);
+
                 let input_block_ptr = input.as_ptr().add(j * stride * 4);
                 let weights_block_ptr = weights.as_ptr().add(j * stride);
                 for k in 0..stride {
                     let byte = *weights_block_ptr.add(k);
                     let mask = _mm_loadu_si128(table_ptr.add(byte as usize) as *const __m128i);
-                    let mut v_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(c_v, mask));
-                    
-                    if has_anchors {
-                        let a_ptr = anchors.as_ptr().add(j * stride * 4 + k * 4);
-                        if has_f16c {
-                            // F16C optimization
-                            let v_anchors = _mm_cvtph_ps(_mm_loadl_epi64(a_ptr as *const __m128i));
-                            v_vals_f = _mm_add_ps(v_vals_f, v_anchors);
-                        } else {
-                            let mut a_f32 = [0.0f32; 4];
-                            for s in 0..4 { a_f32[s] = (*a_ptr.add(s)).to_f32(); }
-                            v_vals_f = _mm_add_ps(v_vals_f, _mm_loadu_ps(a_f32.as_ptr()));
-                        }
-                    }
-
+                    let v_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(c_v, mask));
                     let v_in = _mm_loadu_ps(input_block_ptr.add(k * 4));
                     if is_x86_feature_detected!("fma") { acc = _mm_fmadd_ps(v_vals_f, v_in, acc); }
                     else { acc = _mm_add_ps(acc, _mm_mul_ps(v_vals_f, v_in)); }
@@ -399,15 +382,16 @@ pub unsafe fn genomic_dot_product(
             let shuf2 = _mm_movehl_ps(sums, sums);
             _mm_cvtss_f32(_mm_add_ss(sums, shuf2))
         } else {
-            genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, anchors)
+            genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
         }
     }
 
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     {
-        genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, anchors)
+        genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
     }
 }
+
 
 // Alias para compatibilidad con rama windows
 /// # Safety
@@ -420,7 +404,7 @@ pub unsafe fn genomic_dot_product_neon(
     stride: usize,
     n_blocks: usize,
 ) -> f32 {
-    genomic_dot_product(weights, input, centroids, stride, n_blocks, &[])
+    genomic_dot_product(weights, input, centroids, stride, n_blocks, &[1.0; 4])
 }
 
 /// # Safety
@@ -434,10 +418,9 @@ pub unsafe fn genomic_dot_product_scalar(
     centroids: &[f32],
     stride: usize,
     n_blocks: usize,
-    anchors: &[half::f16],
+    modulation: &[f32; 4],
 ) -> f32 {
     let mut sum = 0.0f32;
-    let has_anchors = !anchors.is_empty();
 
     for j in 0..n_blocks {
         let input_block_ptr = input.as_ptr().add(j * stride * 4);
@@ -446,19 +429,13 @@ pub unsafe fn genomic_dot_product_scalar(
         
         for k in 0..stride {
             let byte = *weights_block_ptr.add(k);
-            let anchor_offset = j * stride * 4 + k * 4;
             
             for b in 0..4usize {
                 let shift = (3 - b) * 2;
                 let bits = (byte >> shift) & 0b11;
                 let c_idx = (bits ^ (bits >> 1)) as usize;
                 
-                let mut weight_val = *centroids_ptr.add(c_idx);
-                
-                if has_anchors {
-                    weight_val += (*anchors.get_unchecked(anchor_offset + b)).to_f32();
-                }
-                
+                let weight_val = *centroids_ptr.add(c_idx) * modulation[c_idx];
                 sum += weight_val * *input_block_ptr.add(k * 4 + b);
             }
         }

@@ -1,6 +1,6 @@
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use crate::core::db::{GajeDatabaseWriter, METADATA_TABLE, TENSOR_TABLE};
-use redb::{ReadTransaction, ReadableTable};
+use redb::ReadTransaction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

@@ -1,4 +1,4 @@
-use crate::core::db::{METADATA_TABLE, TENSOR_TABLE};
+use crate::core::db::TENSOR_TABLE;
 use crate::nn::{GenomicAttention, GenomicLinear, RustGenomicBlock, GenomicLLM};
 use redb::{Database, ReadTransaction, ReadableTable};
 use serde::{Deserialize, Serialize};

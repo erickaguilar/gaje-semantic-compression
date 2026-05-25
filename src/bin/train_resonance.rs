@@ -7,12 +7,12 @@ use std::fs::File;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = "models/checkpoints/gold_embryo.gaje";
     let topology_path = "models/core/topology_es.json";
-    let dataset_path = "data/datasets/dataset_es.txt";
+    let dataset_path = "data/datasets/dataset_es_ext.txt";
     let output_path = "models/checkpoints/gold_embryo_guided.gaje";
-    let epochs = 5;
-    let lr = 0.001;
+    let epochs = 100;
+    let lr = 0.0005;
 
-    println!("🧬 GAJE Native Resonance Training (Phase 4.1)");
+    println!("🧬 GAJE Large-Scale Native Resonance Training (Phase 4.2)");
     println!("[*] Loading model from: {}", model_path);
 
     let loader = NativeLoader::new(model_path)?;

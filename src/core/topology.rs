@@ -13,6 +13,23 @@ impl CentroidGraph {
         self.topology.get(&layer_idx.to_string())
     }
 
+    pub fn get_modulation_factors(&self, layer_idx: usize, current_state: usize, alpha: f32) -> [f32; 4] {
+        let mut factors = [1.0f32; 4];
+        if let Some(matrix) = self.get_transition_matrix(layer_idx) {
+            if current_state < matrix.len() {
+                let probs = &matrix[current_state];
+                for (s, &p) in probs.iter().enumerate().take(4) {
+                    // Modulación por estado: 
+                    // 0, 1 -> Inhibición (0.9 a 1.0)
+                    // 2, 3 -> Excitación (1.0 a 1.15)
+                    let base = if s < 2 { -0.1 } else { 0.15 };
+                    factors[s] = 1.0 + (base * p * alpha).clamp(-0.2, 0.3);
+                }
+            }
+        }
+        factors
+    }
+
     pub fn apply_relational_bias(&self, layer_idx: usize, current_state: usize, hidden: &mut [f32], alpha: f32) {
         if let Some(matrix) = self.get_transition_matrix(layer_idx) {
             if current_state < matrix.len() {

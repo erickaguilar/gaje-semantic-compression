@@ -24,10 +24,14 @@ impl GenomicLLM {
         if clear_cache { self.clear_cache_core(); }
         let pos = if self.blocks.is_empty() { 0 } else { self.blocks[0].attn.k_cache_len() };
         if token_id >= self.embeddings.out_features { return Err(format!("Token id {} out of bounds", token_id)); }
+        
+        // Modulación granular para la capa de salida (usamos la última capa como referencia)
+        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
+        
         let mut h = self.embeddings.get_row_core(token_id)?;
         for block in &mut self.blocks { h = block.forward_core(h, pos)?; }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        self.lm_head.forward_core(h_norm)
+        self.lm_head.forward_core(h_norm, modulation)
     }
 
     pub fn load_topology_core(&mut self, path: &str) -> Result<(), String> {
@@ -44,16 +48,22 @@ impl GenomicLLM {
         if clear_cache { self.clear_cache_core(); }
         let pos = if self.blocks.is_empty() { 0 } else { self.blocks[0].attn.k_cache_len() };
         if token_id >= self.embeddings.out_features { return Err(format!("Token id {} out of bounds", token_id)); }
+        
+        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
+
         let mut h = self.embeddings.get_row_core(token_id)?;
         for block in &mut self.blocks { h = block.forward_core(h, pos)?; }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        let logits = self.lm_head.forward_core(h_norm.clone())?;
+        let logits = self.lm_head.forward_core(h_norm.clone(), modulation)?;
         Ok((logits, h_norm))
     }
 
     pub fn forward_phase_gaje_core(&mut self, token_id: usize, k_wta: usize) -> Result<Vec<f32>, String> {
         let (_, h_norm) = self.forward_with_hidden_core(token_id, false)?;
-        let excitation = self.lm_head.forward_core(h_norm)?;
+        
+        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
+        let excitation = self.lm_head.forward_core(h_norm, modulation)?;
+        
         let n_tokens = excitation.len();
         let max_excitation = excitation.iter().fold(0.0f32, |a, &b| a.max(b));
         let threshold = (max_excitation * 0.7).max(0.1);
@@ -86,6 +96,9 @@ impl GenomicLLM {
     pub fn train_on_sequence_core(&mut self, tokens: Vec<usize>, lr: f32) -> Result<f32, String> {
         if tokens.len() < 2 { return Ok(0.0); }
         let mut total_loss = 0.0; self.clear_cache_core();
+        
+        let _modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
+
         for i in 0..tokens.len() - 1 {
             let (logits, h_final) = self.forward_with_hidden_core(tokens[i], false)?;
             let target = tokens[i+1];

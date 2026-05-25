@@ -69,15 +69,20 @@ impl GenomicLinear {
         }
     }
 
-    pub fn forward_core(&self, mut input: Vec<f32>) -> Result<Vec<f32>, String> {
+    pub fn forward_core(&self, mut input: Vec<f32>, modulation_factors: Option<[f32; 4]>) -> Result<Vec<f32>, String> {
         if !self.rmsnorm_weight.is_empty() { input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) }; }
         let n_blocks = self.in_features / self.block_size;
         let has_bias = !self.bias.is_empty(); let has_epi = !self.epi_strands.is_empty(); let has_tri = !self.tri_strands.is_empty();
+        
+        let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
+
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let row_off = i * n_blocks * self.stride;
             let weights = &self.database[row_off..row_off + n_blocks * self.stride];
             let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
-            let mut sum = unsafe { genomic_dot_product(weights, &input, row_centroids, self.stride, n_blocks, &[]) };
+            
+            // Aplicamos modulación granular directamente en el producto punto si se provee
+            let mut sum = unsafe { genomic_dot_product(weights, &input, row_centroids, self.stride, n_blocks, &m_factors) };
             let a_s = self.anchor_row_ptrs[i]; let a_e = self.anchor_row_ptrs[i + 1];
             for k in a_s..a_e { sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32(); }
             if has_epi {
@@ -209,7 +214,7 @@ impl GenomicLinear {
     pub fn py_new(database: Vec<u8>, anchors_u8: Vec<u8>, centroids: Vec<f32>, out_features: usize, in_features: usize, block_size: usize, rmsnorm_weight: Vec<f32>, eps: f32, precision_mask: Vec<u8>, epigenetic_database: Vec<u8>, epigenetic_centroids: Vec<f32>, triplet_database: Vec<u8>, triplet_centroids: Vec<f32>, bias: Vec<f32>) -> Self {
         GenomicLinear::new(database, anchors_u8, centroids, out_features, in_features, block_size, rmsnorm_weight, eps, precision_mask, epigenetic_database, epigenetic_centroids, triplet_database, triplet_centroids, bias)
     }
-    pub fn forward(&self, input: Vec<f32>) -> PyResult<Vec<f32>> { self.forward_core(input).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn forward(&self, input: Vec<f32>) -> PyResult<Vec<f32>> { self.forward_core(input, None).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn get_row(&self, idx: usize) -> PyResult<Vec<f32>> { self.get_row_core(idx).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn backward(&self, d_output: Vec<f32>) -> PyResult<Vec<f32>> { self.backward_core(d_output).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn refine_with_grads(&mut self, input: Vec<f32>, grads: Vec<f32>, lr: f32) -> PyResult<()> { self.refine_with_grads_core(input, grads, lr).map_err(pyo3::exceptions::PyValueError::new_err) }

@@ -504,6 +504,7 @@ pub fn dna_similarity_search_adc(
 
 #[cfg_attr(feature = "python", pyfunction)]
 #[cfg_attr(feature = "python", pyo3(signature = (query, database, centroids=None, k=10)))]
+#[allow(unused_variables)]
 pub fn dna_similarity_search(
     query: PyObject,
     database: Vec<Vec<u8>>,

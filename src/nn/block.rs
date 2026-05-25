@@ -35,13 +35,24 @@ impl RustGenomicBlock {
     }
 
     pub fn forward_core(&mut self, x: Vec<f32>, pos: usize) -> Result<Vec<f32>, String> {
+        // Obtener factores de modulación granular del grafo de centroides
+        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.idx, 2, 0.5));
+
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() { unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) } } else { x.clone() };
-        let q = self.q_gen.forward_core(x_norm.clone())?; let k = self.k_gen.forward_core(x_norm.clone())?; let v = self.v_gen.forward_core(x_norm)?;
+        
+        let q = self.q_gen.forward_core(x_norm.clone(), modulation)?; 
+        let k = self.k_gen.forward_core(x_norm.clone(), modulation)?; 
+        let v = self.v_gen.forward_core(x_norm, modulation)?;
+        
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        let projected_attn = self.w_o.forward_core(attn_out)?;
+        let projected_attn = self.w_o.forward_core(attn_out, modulation)?;
+        
         let mut x_post = x; x_post.par_iter_mut().zip(projected_attn.par_iter()).for_each(|(xi, &ai)| *xi += ai);
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone())?; let up = self.up_gen.forward_core(x_ffn_n)?;
+        
+        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation)?; 
+        let up = self.up_gen.forward_core(x_ffn_n, modulation)?;
+        
         let mut ffn_out = vec![0.0f32; gate.len()];
         match self.act_fn.as_str() {
             "swiglu" => { crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale); }
@@ -51,14 +62,8 @@ impl RustGenomicBlock {
             let rms = (ffn_out.par_iter().map(|&v| v * v).sum::<f32>() / ffn_out.len() as f32 + self.eps).sqrt();
             if rms > self.h_scale { let s = self.h_scale / rms; ffn_out.par_iter_mut().for_each(|out| *out *= s); }
         }
-        let projected_ffn = self.w_down.forward_core(ffn_out)?;
+        let projected_ffn = self.w_down.forward_core(ffn_out, modulation)?;
         let mut final_out = x_post; final_out.par_iter_mut().zip(projected_ffn.par_iter()).for_each(|(fi, &pi)| *fi += pi);
-        
-        // Aplicar Bias Relacional si la topología está disponible para esta capa
-        if let Some(ref topo) = self.topology {
-            // Simplificación: usamos estado 2 como baseline de activación
-            topo.apply_relational_bias(self.idx, 2, &mut final_out, 0.5);
-        }
         
         Ok(final_out)
     }
@@ -66,13 +71,22 @@ impl RustGenomicBlock {
     pub fn clear_cache_core(&mut self) { self.attn.clear_cache_core(); }
 
     pub fn refine_with_grads_core(&mut self, x: Vec<f32>, d_hidden: Vec<f32>, pos: usize, lr: f32) -> Result<Vec<f32>, String> {
+        // Obtener factores de modulación (consistencia con forward)
+        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.idx, 2, 0.5));
+
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() { unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) } } else { x.clone() };
-        let q = self.q_gen.forward_core(x_norm.clone())?; let k = self.k_gen.forward_core(x_norm.clone())?; let v = self.v_gen.forward_core(x_norm.clone())?;
+        let q = self.q_gen.forward_core(x_norm.clone(), modulation)?; 
+        let k = self.k_gen.forward_core(x_norm.clone(), modulation)?; 
+        let v = self.v_gen.forward_core(x_norm.clone(), modulation)?;
+        
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        let proj_attn = self.w_o.forward_core(attn_out.clone())?;
+        let proj_attn = self.w_o.forward_core(attn_out.clone(), modulation)?;
+        
         let mut x_post_attn = x.clone(); for i in 0..x.len() { x_post_attn[i] += proj_attn[i]; }
         let x_ffn_n = unsafe { rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone())?; let up = self.up_gen.forward_core(x_ffn_n.clone())?;
+        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation)?; 
+        let up = self.up_gen.forward_core(x_ffn_n.clone(), modulation)?;
+        
         let d_ffn_out = self.w_down.backward_core(d_hidden.clone())?;
         let mut d_gate = vec![0.0f32; gate.len()]; let mut d_up = vec![0.0f32; up.len()];
         for i in 0..gate.len() {
