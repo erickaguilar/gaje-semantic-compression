@@ -2,6 +2,7 @@ use crate::compute::kernels::rms_norm;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
 use crate::core::topology::CentroidGraph;
+use std::sync::Arc;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -15,7 +16,7 @@ pub struct GenomicLLM {
     pub output_norm: Vec<f32>,
     pub lm_head: GenomicLinear,
     pub eps: f32,
-    pub topology: Option<CentroidGraph>,
+    pub topology: Option<Arc<CentroidGraph>>,
 }
 
 impl GenomicLLM {
@@ -25,16 +26,18 @@ impl GenomicLLM {
         if token_id >= self.embeddings.out_features { return Err(format!("Token id {} out of bounds", token_id)); }
         let mut h = self.embeddings.get_row_core(token_id)?;
         for block in &mut self.blocks { h = block.forward_core(h, pos)?; }
-        let mut h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        
-        // Aplicar Bias Relacional al vector oculto si la topología está cargada
-        if let Some(ref topo) = self.topology {
-            // Usamos la última capa como referencia para el estado actual
-            // Simplificación: estado 2 (vibración media) como base
-            topo.apply_relational_bias(self.blocks.len(), 2, &mut h_norm, 0.5);
-        }
-        
+        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
         self.lm_head.forward_core(h_norm)
+    }
+
+    pub fn load_topology_core(&mut self, path: &str) -> Result<(), String> {
+        let topo = crate::io::loader::load_topology(path).map_err(|e| e.to_string())?;
+        let shared_topo = Arc::new(topo);
+        self.topology = Some(shared_topo.clone());
+        for block in &mut self.blocks {
+            block.topology = Some(shared_topo.clone());
+        }
+        Ok(())
     }
 
     pub fn forward_with_hidden_core(&mut self, token_id: usize, clear_cache: bool) -> Result<(Vec<f32>, Vec<f32>), String> {
@@ -182,9 +185,7 @@ impl GenomicLLM {
     }
     
     pub fn load_topology(&mut self, json_path: &str) -> PyResult<()> {
-        let file = std::fs::File::open(json_path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let topo: CentroidGraph = serde_json::from_reader(file).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        self.topology = Some(topo);
+        self.load_topology_core(json_path).map_err(pyo3::exceptions::PyValueError::new_err)?;
         println!("[*] Topología Relacional inyectada desde: {}", json_path);
         Ok(())
     }

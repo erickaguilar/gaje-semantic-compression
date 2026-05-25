@@ -192,6 +192,13 @@ impl NativeLoader {
     }
 }
 
+pub fn load_topology(path: &str) -> std::io::Result<crate::core::topology::CentroidGraph> {
+    let file = std::fs::File::open(path)?;
+    let topo: crate::core::topology::CentroidGraph = serde_json::from_reader(file)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+    Ok(topo)
+}
+
 pub fn save_genomic_model(path: &str, model: &GenomicLLM, config: &ModelConfig, tokenizer: Option<&GajeTokenizer>) -> std::io::Result<()> {
     let mut writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
     let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;

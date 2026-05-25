@@ -1,6 +1,8 @@
 use crate::compute::kernels::rms_norm;
 use crate::nn::attention::GenomicAttention;
 use crate::nn::linear::GenomicLinear;
+use crate::core::topology::CentroidGraph;
+use std::sync::Arc;
 use rayon::prelude::*;
 
 #[cfg(feature = "python")]
@@ -24,11 +26,12 @@ pub struct RustGenomicBlock {
     pub act_fn: String,
     pub use_genomic_norm: bool,
     pub h_scale: f32,
+    pub topology: Option<Arc<CentroidGraph>>,
 }
 
 impl RustGenomicBlock {
     pub fn new(idx: usize, attn: GenomicAttention, q_gen: GenomicLinear, k_gen: GenomicLinear, v_gen: GenomicLinear, w_o: GenomicLinear, gate_gen: GenomicLinear, up_gen: GenomicLinear, w_down: GenomicLinear, ffn_norm: Vec<f32>, eps: f32, act_fn: String, use_genomic_norm: bool, h_scale: f32) -> Self {
-        RustGenomicBlock { idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn, use_genomic_norm, h_scale }
+        RustGenomicBlock { idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn, use_genomic_norm, h_scale, topology: None }
     }
 
     pub fn forward_core(&mut self, x: Vec<f32>, pos: usize) -> Result<Vec<f32>, String> {
@@ -50,6 +53,13 @@ impl RustGenomicBlock {
         }
         let projected_ffn = self.w_down.forward_core(ffn_out)?;
         let mut final_out = x_post; final_out.par_iter_mut().zip(projected_ffn.par_iter()).for_each(|(fi, &pi)| *fi += pi);
+        
+        // Aplicar Bias Relacional si la topología está disponible para esta capa
+        if let Some(ref topo) = self.topology {
+            // Simplificación: usamos estado 2 como baseline de activación
+            topo.apply_relational_bias(self.idx, 2, &mut final_out, 0.5);
+        }
+        
         Ok(final_out)
     }
 

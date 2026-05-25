@@ -17,7 +17,8 @@ impl CentroidGraph {
         if let Some(matrix) = self.get_transition_matrix(layer_idx) {
             if current_state < matrix.len() {
                 let probs = &matrix[current_state];
-                // Encontrar el estado de destino más probable
+                
+                // Encontrar el estado de destino más probable y su confianza (probabilidad)
                 let mut best_state = 0;
                 let mut max_p = 0.0;
                 for (s, &p) in probs.iter().enumerate() {
@@ -27,19 +28,35 @@ impl CentroidGraph {
                     }
                 }
 
-                // Modificar el vector oculto para "empujarlo" hacia el centroide del estado más probable
-                // Como no tenemos los centroides globales aquí, usamos el bias como una 
-                // modulación de fase: si el estado es alto (2 o 3), aumentamos la amplitud de la señal.
-                let multiplier = match best_state {
-                    0 => 0.8, // Inhibición
-                    1 => 0.9, // Neutro-bajo
-                    2 => 1.1, // Excitación-media
-                    3 => 1.3, // Excitación-fuerte
-                    _ => 1.0,
+                // Modulación Relacional Refinada (No Lineal)
+                // En lugar de un multiplicador global, aplicamos una función que modula 
+                // la intensidad de la señal basándose en la "certeza" de la topología.
+                // best_state 0,1: Tendencia a la inhibición (estabilización)
+                // best_state 2,3: Tendencia a la excitación (procesamiento activo)
+                
+                let base_modulation = match best_state {
+                    0 => -0.15, // Inhibición fuerte
+                    1 => -0.05, // Inhibición leve
+                    2 => 0.05,  // Excitación leve
+                    3 => 0.15,  // Excitación fuerte
+                    _ => 0.0,
                 };
 
+                // Aplicar modulación con suavizado sigmoidal para evitar explosión de gradientes
+                let confidence_factor = alpha * max_p;
+                let final_bias = base_modulation * confidence_factor;
+
                 for val in hidden.iter_mut() {
-                    *val *= multiplier * (1.0 + alpha * max_p);
+                    // Usamos una función de transferencia suave para aplicar el bias
+                    // Esto permite que el grafo "guíe" la señal sin destruirla
+                    let current = *val;
+                    if final_bias > 0.0 {
+                        // Excitación: aumenta los valores positivos, refuerza la señal
+                        *val = current + (current.abs() * final_bias);
+                    } else {
+                        // Inhibición: atenúa la señal
+                        *val = current * (1.0 + final_bias);
+                    }
                 }
             }
         }
