@@ -22,13 +22,23 @@ Se han ejecutado las primeras fases del plan de validación avanzada sobre el or
     *   El modelo es **bilingüe-estable**, lo que significa que la compresión a 2 bits no ha sesgado el espacio latente hacia un idioma específico.
     *   La PPL extremadamente alta confirma que el modelo está en un estado de **entropía alta (Nacimiento)**, coherente con el `Gold Embryo` inicial que aún no ha pasado por un entrenamiento de refinamiento masivo.
 
+### Fase 3.1: Needle in a Haystack (Neuromórfica)
+*   **Estado:** Completada (Falla Técnica Esperada).
+*   **Métricas:**
+    *   **Tasa de Recuperación:** **0.00%**
+    *   **Comportamiento:** El modelo genera tokens repetitivos (ej. "Optical", "popular") ante la pregunta.
+*   **Diagnóstico de Estrés:** 
+    *   **Semantic Drift Crítico:** La alta entropía basal del `gold_embryo` (confirmada en Fase 2.1) impide que el mecanismo de atención destaque la "aguja" sobre el ruido del pajar.
+    *   **Saturación de KV-Cache:** El modelo sufre de un colapso de atención prematuro. En este estado de "infancia genómica", el modelo aún no posee los pesos de atención necesarios para filtrar información relevante.
+
 ## 3. Hallazgos Técnicos y Correcciones
 1.  **Soberanía de Librerías:** Se detectó la falta del módulo `gaje.utils.quantization`, el cual fue restaurado para permitir la carga de pesos GGUF Q8_0 y la correcta de-permutación de RoPE.
 2.  **Robustez de Inferencia:** Se identificó un desajuste de vocabulario en `smollm2_native.gaje` que causa pánicos de memoria en Rust. El `gold_embryo.gaje` es estable y se recomienda como base para futuros experimentos.
 3.  **Compatibilidad Termux:** Se reemplazó el uso de `scipy.special.softmax` por implementaciones manuales en `numpy` para garantizar la ejecución en dispositivos móviles.
+4.  **Límite de Contexto:** El motor nativo procesa ~500 tokens en 52 segundos en hardware móvil. Aunque el ahorro de RAM es efectivo (KV-Cache DNA), se requiere optimización en los kernels de atención para contextos masivos.
 
 ## 4. Próximos Pasos
-- [ ] Ejecutar **Fase 3.1 (Needle in a Haystack)** para medir la deriva semántica en contextos largos.
+- [x] Ejecutar **Fase 3.1 (Needle in a Haystack)** para medir la deriva semántica en contextos largos.
 - [ ] Iniciar entrenamiento por resonancia sobre `data/datasets/dataset_es.txt` para reducir la PPL de 50k a < 1k.
 
 ---
