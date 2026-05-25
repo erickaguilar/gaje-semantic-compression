@@ -1,12 +1,13 @@
 use crate::compute::kernels::rms_norm;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
+use crate::core::topology::CentroidGraph;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 /// Núcleo del Modelo de Lenguaje Genómico (Pure Rust)
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(name = "RustGenomicLLM"))]
 #[derive(Clone)]
 pub struct GenomicLLM {
     pub embeddings: GenomicLinear,
@@ -14,6 +15,7 @@ pub struct GenomicLLM {
     pub output_norm: Vec<f32>,
     pub lm_head: GenomicLinear,
     pub eps: f32,
+    pub topology: Option<CentroidGraph>,
 }
 
 impl GenomicLLM {
@@ -23,7 +25,15 @@ impl GenomicLLM {
         if token_id >= self.embeddings.out_features { return Err(format!("Token id {} out of bounds", token_id)); }
         let mut h = self.embeddings.get_row_core(token_id)?;
         for block in &mut self.blocks { h = block.forward_core(h, pos)?; }
-        let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
+        let mut h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
+        
+        // Aplicar Bias Relacional al vector oculto si la topología está cargada
+        if let Some(ref topo) = self.topology {
+            // Usamos la última capa como referencia para el estado actual
+            // Simplificación: estado 2 (vibración media) como base
+            topo.apply_relational_bias(self.blocks.len(), 2, &mut h_norm, 0.5);
+        }
+        
         self.lm_head.forward_core(h_norm)
     }
 
@@ -168,8 +178,17 @@ impl GenomicLLM {
 impl GenomicLLM {
     #[new]
     pub fn py_new(embeddings: GenomicLinear, blocks: Vec<RustGenomicBlock>, output_norm: Vec<f32>, lm_head: GenomicLinear, eps: f32) -> Self {
-        GenomicLLM { embeddings, blocks, output_norm, lm_head, eps }
+        GenomicLLM { embeddings, blocks, output_norm, lm_head, eps, topology: None }
     }
+    
+    pub fn load_topology(&mut self, json_path: &str) -> PyResult<()> {
+        let file = std::fs::File::open(json_path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let topo: CentroidGraph = serde_json::from_reader(file).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        self.topology = Some(topo);
+        println!("[*] Topología Relacional inyectada desde: {}", json_path);
+        Ok(())
+    }
+
     pub fn forward(&mut self, token_id: usize, clear_cache: bool) -> PyResult<Vec<f32>> { self.forward_core(token_id, clear_cache).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn train_on_sequence(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> { self.train_on_sequence_core(tokens, lr).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn clear_cache_py(&mut self) -> PyResult<()> { self.clear_cache_core(); Ok(()) }

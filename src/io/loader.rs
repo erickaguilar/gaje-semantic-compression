@@ -106,7 +106,7 @@ impl GGUFLoader {
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
         let lm_head_name = if self.reader.tensors.contains_key("output.weight") { "output.weight" } else { "token_embd.weight" };
         let lm_head = self.genomize_tensor(lm_head_name, block_size, anchor_threshold)?;
-        Ok(GenomicLLM { embeddings: embd_dna, blocks, output_norm, lm_head, eps: config.eps })
+        Ok(GenomicLLM { embeddings: embd_dna, blocks, output_norm, lm_head, eps: config.eps, topology: None })
     }
 
     fn load_f32_tensor(&self, name: &str) -> std::io::Result<Vec<f32>> {
@@ -164,7 +164,7 @@ impl NativeLoader {
             let attn = GenomicAttention::new(config.n_head, config.n_head_kv, head_dim, attn_norm, config.eps, config.config.rope_base, config.config.rope_style.clone());
             blocks.push(RustGenomicBlock::new(i, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, h_scale));
         }
-        Ok(GenomicLLM { embeddings, blocks, output_norm, lm_head, eps: config.eps })
+        Ok(GenomicLLM { embeddings, blocks, output_norm, lm_head, eps: config.eps, topology: None })
     }
     fn get_tensor(txn: &ReadTransaction, key: &str) -> Vec<u8> { if let Ok(t) = txn.open_table(TENSOR_TABLE) { if let Ok(Some(v)) = t.get(key) { return lz4_flex::decompress_size_prepended(v.value()).unwrap_or_else(|_| v.value().to_vec()); } } Vec::new() }
     fn get_tensor_f32(txn: &ReadTransaction, key: &str) -> Vec<f32> { let b = Self::get_tensor(txn, key); if b.is_empty() { return Vec::new(); } let mut r = vec![0.0f32; b.len() / 4]; unsafe { std::ptr::copy_nonoverlapping(b.as_ptr(), r.as_mut_ptr() as *mut u8, b.len()); } r }
@@ -233,7 +233,7 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
         let attn = GenomicAttention::new(config.n_head, config.n_head_kv, head_dim, vec![1.0; config.n_embd], config.eps, config.config.rope_base, config.config.rope_style.clone());
         blocks.push(RustGenomicBlock::new(i, attn, init_l(config.n_embd, config.n_head * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_head * head_dim, config.n_embd), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd * 4, config.n_embd), vec![1.0; config.n_embd], config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, 1.0));
     }
-    let model = GenomicLLM { embeddings, blocks, output_norm: vec![1.0; config.n_embd], lm_head: init_l(config.n_embd, vocab_size), eps: config.eps };
+    let model = GenomicLLM { embeddings, blocks, output_norm: vec![1.0; config.n_embd], lm_head: init_l(config.n_embd, vocab_size), eps: config.eps, topology: None };
     save_genomic_model(path, &model, &config, None)?; Ok(model)
 }
 

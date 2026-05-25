@@ -29,11 +29,43 @@ impl GajeDatabaseReader {
     }
 
     #[cfg(feature = "python")]
-    pub fn get_metadata(&self, key: &str) -> PyResult<Option<String>> {
+    pub fn read_metadata(&self, key: &str) -> PyResult<String> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Metadata key {} not found", key)))?;
+        Ok(val.value().to_string())
+    }
+
+    #[cfg(feature = "python")]
+    pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
         let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         let table = read_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(val.map(|v| v.value().to_string()))
+        Ok(val.is_some())
+    }
+
+    #[cfg(feature = "python")]
+    pub fn read_tensor(&self, key: &str) -> PyResult<Vec<u8>> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Tensor key {} not found", key)))?;
+        
+        // Intentar descompresión LZ4
+        let data = val.value();
+        match lz4_flex::decompress_size_prepended(data) {
+            Ok(decompressed) => Ok(decompressed),
+            Err(_) => Ok(data.to_vec()) // Si no está comprimido, devolver crudo
+        }
+    }
+
+    #[cfg(feature = "python")]
+    pub fn has_tensor(&self, key: &str) -> PyResult<bool> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(val.is_some())
     }
 }
 
@@ -55,6 +87,18 @@ impl GajeDatabaseWriter {
         {
             let mut table = write_txn.open_table(METADATA_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
             table.insert(key, value).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        }
+        write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    #[cfg(feature = "python")]
+    pub fn write_tensor_compressed(&self, key: &str, data: &[u8]) -> PyResult<()> {
+        let write_txn = self.db.begin_write().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        {
+            let mut table = write_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+            let compressed = lz4_flex::compress_prepend_size(data);
+            table.insert(key, compressed.as_slice()).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         }
         write_txn.commit().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(())
