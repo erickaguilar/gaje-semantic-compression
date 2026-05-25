@@ -28,35 +28,36 @@ impl CentroidGraph {
                     }
                 }
 
-                // Modulación Relacional Refinada (No Lineal)
-                // En lugar de un multiplicador global, aplicamos una función que modula 
-                // la intensidad de la señal basándose en la "certeza" de la topología.
-                // best_state 0,1: Tendencia a la inhibición (estabilización)
-                // best_state 2,3: Tendencia a la excitación (procesamiento activo)
-                
+                // Modulación Relacional Refinada (No Lineal) con Estabilización
                 let base_modulation = match best_state {
-                    0 => -0.15, // Inhibición fuerte
-                    1 => -0.05, // Inhibición leve
-                    2 => 0.05,  // Excitación leve
-                    3 => 0.15,  // Excitación fuerte
+                    0 => -0.05, // Inhibición leve (reducido de -0.15 para estabilidad)
+                    1 => -0.02, 
+                    2 => 0.02,  
+                    3 => 0.05,  // Excitación leve (reducido de 0.15)
                     _ => 0.0,
                 };
 
-                // Aplicar modulación con suavizado sigmoidal para evitar explosión de gradientes
                 let confidence_factor = alpha * max_p;
                 let final_bias = base_modulation * confidence_factor;
 
+                // Calcular norma para evitar explosión
+                let mut sum_sq = 0.0f32;
+                for &val in hidden.iter() { sum_sq += val * val; }
+                let norm = (sum_sq / hidden.len() as f32 + 1e-6).sqrt();
+
                 for val in hidden.iter_mut() {
-                    // Usamos una función de transferencia suave para aplicar el bias
-                    // Esto permite que el grafo "guíe" la señal sin destruirla
                     let current = *val;
                     if final_bias > 0.0 {
-                        // Excitación: aumenta los valores positivos, refuerza la señal
-                        *val = current + (current.abs() * final_bias);
+                        // Excitación controlada
+                        *val = current + (current.abs() * final_bias).min(norm * 0.1);
                     } else {
-                        // Inhibición: atenúa la señal
-                        *val = current * (1.0 + final_bias);
+                        // Inhibición controlada
+                        *val = current * (1.0 + final_bias).max(0.9);
                     }
+                    
+                    // Clamping final de seguridad
+                    if val.is_nan() { *val = 0.0; }
+                    else if val.is_infinite() { *val = val.signum() * 10.0; }
                 }
             }
         }

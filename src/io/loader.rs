@@ -10,16 +10,27 @@ use pyo3::prelude::*;
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
+    #[serde(default = "default_name")]
     pub name: String,
+    #[serde(default = "default_version")]
     pub version: String,
+    #[serde(default = "default_tokenizer")]
     pub tokenizer_id: String,
+    #[serde(default = "default_rope_base")]
     pub rope_base: f32,
+    #[serde(default = "default_ffn_act")]
     pub ffn_act: String,
+    #[serde(default = "default_false")]
     pub use_genomic_norm: bool,
+    #[serde(default = "default_rope_style")]
     pub rope_style: String,
+    #[serde(default = "default_anchor_threshold")]
     pub anchor_threshold: f32,
+    #[serde(default = "default_anchor_threshold")]
     pub ffn_anchor_threshold: f32,
+    #[serde(default = "default_false")]
     pub unpermute_weights: bool,
+    #[serde(default = "default_false")]
     pub apply_smollm_rope_patch: bool,
 }
 
@@ -132,8 +143,27 @@ impl GGUFLoader {
     }
 }
 
+#[cfg_attr(feature = "python", pyclass)]
 pub struct NativeLoader { pub db: Arc<Database> }
+
+#[cfg_attr(feature = "python", pymethods)]
 impl NativeLoader {
+    #[cfg(feature = "python")]
+    #[new]
+    pub fn py_new(path: &str) -> PyResult<Self> {
+        Self::new(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[cfg(feature = "python")]
+    pub fn py_load_config(&self) -> PyResult<ModelConfig> {
+        self.load_config().map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[cfg(feature = "python")]
+    pub fn py_load_llm(&self) -> PyResult<GenomicLLM> {
+        self.load_llm().map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
     pub fn new(path: &str) -> std::io::Result<Self> { Ok(NativeLoader { db: crate::core::db::get_or_create_db(path, false).map_err(std::io::Error::other)? }) }
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
         let read_txn = self.db.begin_read().map_err(|e| std::io::Error::other(e.to_string()))?;

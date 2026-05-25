@@ -55,7 +55,7 @@ impl GenomicTrainerCore {
                 *p /= sum_exp + 1e-12;
             }
 
-            let ce_loss = -(probs[target_id] + 1e-12).ln();
+            let ce_loss = -(probs[target_id].max(1e-10)).ln();
             
             let mut entropy = 0.0f32;
             for &p in &probs {
@@ -66,19 +66,17 @@ impl GenomicTrainerCore {
             let norm_entropy = entropy / (logits.len() as f32).ln();
             
             let loss = ce_loss + self.resonance_weight * norm_entropy;
-            total_loss += loss;
+            if !loss.is_nan() && !loss.is_infinite() {
+                total_loss += loss;
+            }
 
             let mut d_logits = probs;
             d_logits[target_id] -= 1.0;
 
             for j in 0..d_logits.len() {
-                let p = d_logits[j] + (if j == target_id { 1.0 } else { 0.0 });
-                let grad_ent = if p > 1e-12 {
-                    p * (-p.ln() - entropy)
-                } else {
-                    0.0
-                };
-                d_logits[j] += self.resonance_weight * grad_ent;
+                let p = (d_logits[j] + (if j == target_id { 1.0 } else { 0.0 })).max(1e-12);
+                let grad_ent = p * (-p.ln() - entropy);
+                d_logits[j] = (d_logits[j] + self.resonance_weight * grad_ent).clamp(-1.0, 1.0);
             }
 
             model.lm_head.refine_with_grads_core(h_norm, d_logits, self.lr)?;

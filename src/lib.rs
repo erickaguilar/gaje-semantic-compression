@@ -27,6 +27,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::compute::event_queue::SpikeEvent>()?;
     m.add_class::<crate::nn::block::RustGenomicBlock>()?;
     m.add_class::<crate::nn::llm::GenomicLLM>()?;
+    m.add_class::<crate::io::loader::NativeLoader>()?;
     m.add_class::<crate::core::db::GajeDatabaseWriter>()?;
     m.add_class::<crate::core::db::GajeDatabaseReader>()?;
     m.add_class::<crate::io::loader::ModelConfig>()?;
