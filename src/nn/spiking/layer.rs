@@ -79,11 +79,20 @@ impl GajeNeuromorphicLayer {
     pub fn new(num_neurons: usize, weights_per_neuron: usize, threshold: f32, decay: f32) -> Self {
         let row_size = (num_neurons + 3) / 4;
         let packed_size = weights_per_neuron * row_size;
+
+        // Inicialización de alta entropía (Ruido blanco genómico)
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let mut packed_weights = vec![0u8; packed_size];
+        for byte in packed_weights.iter_mut() {
+            *byte = rng.gen();
+        }
+
         Self {
             membrane_potentials: vec![0.0; num_neurons],
             thresholds: vec![threshold; num_neurons],
             decays: vec![decay; num_neurons],
-            packed_weights: vec![0; packed_size],
+            packed_weights,
             num_neurons,
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),

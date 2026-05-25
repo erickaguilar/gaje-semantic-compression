@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(path) = init_path {
         println!("[*] Creando nuevo organismo genómico 100% nativo en: {} (Preset: {})", path, init_preset);
         let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
-            "gold_embryo" => (384, 8, 6, 16384), "micro_organism" => (128, 2, 4, 1024), _ => (768, 6, 12, 49152),
+            "gold_embryo" => (384, 8, 6, 49152), "micro_organism" => (128, 2, 4, 1024), _ => (768, 6, 12, 49152),
         };
         let config = _impl::io::loader::ModelConfig {
             config: _impl::io::loader::ArchConfig {
