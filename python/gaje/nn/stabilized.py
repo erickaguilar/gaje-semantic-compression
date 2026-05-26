@@ -786,7 +786,10 @@ class GenomicLLM:
         spiking_decay=0.8,
     ):
         tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
-        generated_tokens = tokens.copy()
+        if hasattr(tokens, "ids"):
+            tokens = tokens.ids
+            
+        generated_tokens = list(tokens)
 
         # Inferencia inicial (prompt)
         # Para el prompt, procesamos token por token
@@ -800,6 +803,18 @@ class GenomicLLM:
             )
         else:
             next_token_logits = self.forward(tokens, clear_cache=True)[-1]
+
+        eos_token_id = getattr(self.tokenizer, "eos_token_id", None)
+        if eos_token_id is None:
+            # Try to find by common names
+            for name in ["<|im_end|>", "<|endoftext|>", "</s>"]:
+                try:
+                    id_ = self.tokenizer.token_to_id(name)
+                    if id_ is not None:
+                        eos_token_id = id_
+                        break
+                except:
+                    continue
 
         for _ in range(max_new_tokens):
             # Debug: Check for numeric stability
@@ -816,10 +831,10 @@ class GenomicLLM:
 
             # Muestreo Top-P
             next_id = dna_semantic_compression.sample_top_p(
-                penalized_logits, temperature, top_p
+                penalized_logits, top_p, temperature
             )
 
-            if next_id == self.tokenizer.eos_token_id:
+            if eos_token_id is not None and next_id == eos_token_id:
                 break
 
             generated_tokens.append(next_id)
@@ -831,7 +846,8 @@ class GenomicLLM:
                     next_id, spiking_steps, spiking_threshold, spiking_decay
                 )
             else:
-                next_token_logits = self.forward([next_id], clear_cache=False)[-1]
+                next_token_logits = self.rust_llm.forward(next_id, False) # Direct call to rust_llm
+
 
     def save(self, output_path):
         """Saves the entire genomic organism to a single .gaje database."""
