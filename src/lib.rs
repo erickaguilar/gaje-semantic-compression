@@ -33,6 +33,9 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::io::loader::ModelConfig>()?;
     m.add_class::<crate::io::loader::ArchConfig>()?;
     m.add_class::<crate::nn::trainer::NativeGenomicTrainer>()?;
+    m.add_class::<crate::nn::distiller::Teacher>()?;
+    m.add_class::<crate::nn::distiller::CouncilOfTeachers>()?;
+    m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
     m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::io::loader::save_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_embedding_py, m)?)?;

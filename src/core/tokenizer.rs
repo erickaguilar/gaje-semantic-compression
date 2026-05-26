@@ -6,6 +6,7 @@ use std::error::Error;
 use pyo3::prelude::*;
 
 #[cfg_attr(feature = "python", pyclass)]
+#[derive(Clone)]
 pub struct GajeTokenizer {
     inner: Tokenizer,
 }

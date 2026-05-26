@@ -4,6 +4,7 @@ pub mod linear;
 pub mod llm;
 pub mod trainer;
 pub mod spiking;
+pub mod distiller;
 
 pub use attention::GenomicAttention;
 pub use block::RustGenomicBlock;
