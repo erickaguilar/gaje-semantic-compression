@@ -28,19 +28,23 @@ class ConsensusDistiller:
         Aggregates logits from all teachers for a full sequence.
         Returns a list of probability distributions (one per token).
         """
+        # 1. Tokenizar texto para cada maestro
         all_teacher_probs = []
         
         for t_name, teacher in self.teachers.items():
             tokens = teacher.tokenizer.encode(text, add_special_tokens=False)
             if hasattr(tokens, "ids"): tokens = tokens.ids
             
+            # Forward del maestro para toda la secuencia
             logits_seq = teacher.forward(tokens, clear_cache=True)
             
+            # Convertir a probabilidades y mapear al estudiante
             mapped_seq_probs = []
             for logits in logits_seq:
                 probs = np.exp(logits - np.max(logits))
                 probs /= probs.sum()
                 
+                # Mapeo optimizado (Top 50 es suficiente para destilación)
                 student_probs = np.zeros(self.tokenizer.get_vocab_size())
                 top_indices = np.argsort(probs)[-50:]
                 for idx in top_indices:
@@ -49,13 +53,16 @@ class ConsensusDistiller:
                     if student_id is not None:
                         student_probs[student_id] = probs[idx]
                 
+                # Normalizar mapeo
                 s = student_probs.sum()
                 if s > 0: student_probs /= s
                 else: student_probs = np.ones_like(student_probs) / len(student_probs)
+                
                 mapped_seq_probs.append(student_probs)
             
             all_teacher_probs.append(mapped_seq_probs)
             
+        # Promediar entre maestros (Consenso)
         num_teachers = len(all_teacher_probs)
         seq_len = len(all_teacher_probs[0])
         consensus_seq = []
@@ -77,25 +84,35 @@ class ConsensusDistiller:
         
         if len(tokens) < 2: return 0.0
         
+        # 1. Obtener Consenso del Consejo para TODA la secuencia (O(N))
         teacher_consensus_seq = self.get_consensus_sequence_probs(text)
+        
         self.student.rust_llm.clear_cache_py()
         total_loss = 0.0
+        
+        # Sincronizar longitudes (por si hay diferencias de tokenización mínimas)
         n_steps = min(len(tokens) - 1, len(teacher_consensus_seq))
         
         for i in range(n_steps):
             target_id = tokens[i+1]
             teacher_probs = teacher_consensus_seq[i]
+            
+            # 2. Inferencia del Estudiante
             logits_s, h_norm = self.student.rust_llm.forward_with_hidden(tokens[i], False)
             
+            # 3. Cálculo de Gradiente (Híbrido)
             student_probs = np.exp(logits_s - np.max(logits_s))
             student_probs /= student_probs.sum()
             
             grad_ce = student_probs.copy()
             grad_ce[target_id] -= 1.0
+            
             grad_kl = student_probs - teacher_probs
             
-            distill_weight = 0.5
+            distill_weight = 0.5 # Aumentamos peso de destilación
             grad_final = (1.0 - distill_weight) * grad_ce + distill_weight * grad_kl
+            
+            # 4. Refinamiento Nativo (LM Head)
             self.student.rust_llm.refine_lm_head(h_norm, grad_final.tolist(), lr)
             
             loss = -np.log(student_probs[target_id] + 1e-12)
@@ -104,7 +121,7 @@ class ConsensusDistiller:
         return total_loss / n_steps
 
 def main():
-    print("🚀 Iniciando Protocolo 'Council of Teachers' (Stage 3 - Optimized) 🚀")
+    print("🚀 Iniciando Protocolo 'Council of Teachers' (Stage 4 - Relational) 🚀")
     print("-" * 60)
 
     # 1. Cargar Estudiante (Silver Fetus v1)
@@ -121,6 +138,15 @@ def main():
     
     student_path = "models/checkpoints/silverfetus-v1/model.gaje"
     rust_llm = init_born_genomic_model(student_path, config, vocab_size)
+    
+    # --- STAGE 4: INYECTAR TOPOLOGÍA ES ---
+    topology_path = "models/core/topology_es.json"
+    if os.path.exists(topology_path):
+        print(f"[*] Inyectando Topología Relacional (CAM) desde {topology_path}...")
+        rust_llm.load_topology(topology_path)
+    else:
+        print(f"⚠️ Advertencia: No se encontró topología en {topology_path}")
+
     tokenizer = Tokenizer.from_file(tokenizer_path)
     
     student = GenomicLLM(None, config=config.config, n_embd=config.n_embd, num_blocks=config.n_blocks)
@@ -143,29 +169,30 @@ def main():
     # 4. Bucle de Destilación
     distiller = ConsensusDistiller(student, teachers, tokenizer)
     lr = 0.005
-    epochs = 2
+    epochs = 4
     
-    print(f"[*] Iniciando Crianza por Consenso ({epochs} épocas)...")
+    print(f"[*] Iniciando Crianza con Guía Topológica ({epochs} épocas)...")
     for epoch in range(epochs):
         start_time = time.time()
         epoch_loss = 0.0
         count = 0
         
-        for text in lines[:30]: 
+        samples = lines[:40]
+        for text in samples: 
             loss = distiller.distill_step(text, None, lr)
             epoch_loss += loss
             count += 1
-            if count % 5 == 0:
-                print(f"    - Muestra {count}/{len(lines[:30])} | Loss: {loss:.4f} | {time.time()-start_time:.1f}s")
+            if count % 10 == 0:
+                print(f"    - Muestra {count}/{len(samples)} | Loss: {loss:.4f} | {time.time()-start_time:.1f}s")
         
         duration = time.time() - start_time
         avg_loss = epoch_loss / count if count > 0 else 0
         print(f"✅ Época {epoch+1} completada | Loss Promedio: {avg_loss:.4f} | Total: {duration:.2f}s")
 
     # 5. Guardar Modelo Destilado
-    output_path = "models/checkpoints/silverfetus-distilled.gaje"
+    output_path = "models/checkpoints/silverfetus-distilled-cam.gaje"
     save_genomic_model(output_path, student.rust_llm, config, tokenizer_path)
-    print(f"✨ Silver Fetus destilado y guardado en {output_path}")
+    print(f"✨ Silver Fetus (Relational) destilado y guardado en {output_path}")
 
 if __name__ == "__main__":
     main()

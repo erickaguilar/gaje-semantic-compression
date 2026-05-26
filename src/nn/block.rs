@@ -35,8 +35,20 @@ impl RustGenomicBlock {
     }
 
     pub fn forward_core(&mut self, x: Vec<f32>, pos: usize) -> Result<Vec<f32>, String> {
-        // Obtener factores de modulación granular del grafo de centroides
-        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.idx, 2, 0.5));
+        // --- STAGE 4: DINAMIC STATE ESTIMATION ---
+        let (current_state, modulation) = if let Some(ref topo) = self.topology {
+            let mut sum_sq = 0.0f32;
+            for &val in x.iter() { sum_sq += val * val; }
+            let rms = (sum_sq / x.len() as f32 + 1e-6).sqrt();
+            
+            // Estimar estado basado en h_scale (homeostasis)
+            let ratio = rms / self.h_scale.max(0.01);
+            let state = if ratio < 0.5 { 0 } else if ratio < 1.0 { 1 } else if ratio < 1.5 { 2 } else { 3 };
+            
+            (state, Some(topo.get_modulation_factors(self.idx, state, 0.5)))
+        } else {
+            (2, None)
+        };
 
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() { unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) } } else { x.clone() };
         
@@ -65,14 +77,28 @@ impl RustGenomicBlock {
         let projected_ffn = self.w_down.forward_core(ffn_out, modulation)?;
         let mut final_out = x_post; final_out.par_iter_mut().zip(projected_ffn.par_iter()).for_each(|(fi, &pi)| *fi += pi);
         
+        // Inyectar Bias Relacional al final del bloque
+        if let Some(ref topo) = self.topology {
+            topo.apply_relational_bias(self.idx, current_state, &mut final_out, 0.5);
+        }
+        
         Ok(final_out)
     }
 
     pub fn clear_cache_core(&mut self) { self.attn.clear_cache_core(); }
 
     pub fn refine_with_grads_core(&mut self, x: Vec<f32>, d_hidden: Vec<f32>, pos: usize, lr: f32) -> Result<Vec<f32>, String> {
-        // Obtener factores de modulación (consistencia con forward)
-        let modulation = self.topology.as_ref().map(|t| t.get_modulation_factors(self.idx, 2, 0.5));
+        // --- STAGE 4: DINAMIC STATE ESTIMATION (Training consistency) ---
+        let (_current_state, modulation) = if let Some(ref topo) = self.topology {
+            let mut sum_sq = 0.0f32;
+            for &val in x.iter() { sum_sq += val * val; }
+            let rms = (sum_sq / x.len() as f32 + 1e-6).sqrt();
+            let ratio = rms / self.h_scale.max(0.01);
+            let state = if ratio < 0.5 { 0 } else if ratio < 1.0 { 1 } else if ratio < 1.5 { 2 } else { 3 };
+            (state, Some(topo.get_modulation_factors(self.idx, state, 0.5)))
+        } else {
+            (2, None)
+        };
 
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() { unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) } } else { x.clone() };
         let q = self.q_gen.forward_core(x_norm.clone(), modulation)?; 
