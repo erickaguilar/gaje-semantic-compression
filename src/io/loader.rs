@@ -135,7 +135,7 @@ impl GGUFLoader {
         let f32_data: Vec<f32> = match info.tensor_type {
             GGMLType::F32 => data.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect(),
             GGMLType::F16 => { let count = data.len() / 2; let mut res = vec![0.0f32; count]; let ptr = data.as_ptr() as *const half::f16; for i in 0..count { unsafe { res[i] = (*ptr.add(i)).to_f32(); } } res }
-            GGMLType::Q8_0 => crate::compute::math::dequantize_q8_0_native(data.to_vec(), out_features, in_features).unwrap(),
+            GGMLType::Q8_0 => crate::compute::math::dequantize_q8_0_core(&data, out_features, in_features),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Unsupported tensor type")),
         };
         let (dna, centroids, anchors_u8) = crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None);
