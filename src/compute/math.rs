@@ -413,12 +413,11 @@ pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> 
     Ok(entropies)
 }
 
-#[cfg_attr(feature = "python", pyfunction)]
-pub fn dequantize_q8_0_native(
-    data_u8: Vec<u8>,
+pub fn dequantize_q8_0_core(
+    data_u8: &[u8],
     out_features: usize,
     in_features: usize,
-) -> PyResult<Vec<f32>> {
+) -> Vec<f32> {
     let n_blocks = in_features / 32;
     let block_size = 34;
     let mut results = vec![0.0f32; out_features * in_features];
@@ -432,7 +431,7 @@ pub fn dequantize_q8_0_native(
                 if offset + 2 > data_u8.len() {
                     break;
                 }
-                let delta = f16::from_le_bytes([data_u8[offset], data_u8[offset + 1]]).to_f32();
+                let delta = half::f16::from_le_bytes([data_u8[offset], data_u8[offset + 1]]).to_f32();
                 for j in 0..32 {
                     if offset + 2 + j >= data_u8.len() {
                         break;
@@ -441,7 +440,17 @@ pub fn dequantize_q8_0_native(
                 }
             }
         });
-    Ok(results)
+    results
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+pub fn dequantize_q8_0_native(
+    data_u8: Vec<u8>,
+    out_features: usize,
+    in_features: usize,
+) -> PyResult<Vec<f32>> {
+    Ok(dequantize_q8_0_core(&data_u8, out_features, in_features))
 }
 
 #[cfg_attr(feature = "python", pyfunction)]

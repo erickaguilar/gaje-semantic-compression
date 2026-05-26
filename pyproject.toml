@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "dna-semantic-compression"
-version = "0.9.5-alpha"
+version = "0.9.7-alpha"
 description = "Genomic Semantic Compression Protocol (GAJE) for high-density vector storage."
 authors = [{name = "Erick Aguilar"}]
 license = {text = "MIT"}
@@ -12,6 +12,13 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "numpy>=1.20.0",
+    "tokenizers>=0.13.0",
+    "transformers>=4.25.0",
+    "scipy>=1.7.0",
+    "tqdm>=4.60.0",
+    "sentence-transformers>=2.2.0",
+    "requests>=2.25.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -21,15 +28,8 @@ dev = [
     "bumpversion",
     "gradio",
     "maturin",
-    "sentence-transformers",
     "gguf",
-    "tokenizers",
-    "transformers",
-    "scikit-learn",
-    "scipy",
-    "tqdm",
-    "pyyaml",
-    "requests"
+    "scikit-learn"
 ]
 
 [project.scripts]
