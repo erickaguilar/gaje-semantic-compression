@@ -44,7 +44,7 @@ class GenomicTrainer:
         Executes a single training step with Semantic Resonance Loss and Phase-aware refinement.
         """
         seq_len = len(input_ids)
-        self.model.rust_llm.clear_cache()
+        self.model.rust_llm.clear_cache_py()
         loss_total = 0.0
         
         # Para fases avanzadas (2 y 3), usamos el optimizador nativo de secuencias en Rust

@@ -204,6 +204,15 @@ impl GenomicLLM {
     }
 
     pub fn forward(&mut self, token_id: usize, clear_cache: bool) -> PyResult<Vec<f32>> { self.forward_core(token_id, clear_cache).map_err(pyo3::exceptions::PyValueError::new_err) }
+
+    pub fn forward_with_hidden(&mut self, token_id: usize, clear_cache: bool) -> PyResult<(Vec<f32>, Vec<f32>)> {
+        self.forward_with_hidden_core(token_id, clear_cache).map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    pub fn refine_lm_head(&mut self, hidden_state: Vec<f32>, grad_logits: Vec<f32>, lr: f32) -> PyResult<()> {
+        self.lm_head.refine_with_grads_core(hidden_state, grad_logits, lr).map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
     pub fn train_on_sequence(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> { self.train_on_sequence_core(tokens, lr).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn clear_cache_py(&mut self) -> PyResult<()> { self.clear_cache_core(); Ok(()) }
 }

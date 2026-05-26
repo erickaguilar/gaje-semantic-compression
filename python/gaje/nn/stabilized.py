@@ -763,7 +763,7 @@ class GenomicLLM:
 
     def forward(self, tokens, clear_cache=True):
         if clear_cache:
-            self.rust_llm.clear_cache()
+            self.rust_llm.clear_cache_py()
 
         all_logits = []
         # Process each token sequentially to build KV cache correctly

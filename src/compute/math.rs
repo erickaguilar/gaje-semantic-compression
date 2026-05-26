@@ -413,8 +413,8 @@ pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> 
     Ok(entropies)
 }
 
-#[cfg_attr(feature = "python", pyfunction)]
-#[cfg_attr(feature = "python", pyo3(signature = (data_u8, out_features, in_features)))]
+#[cfg(feature = "python")]
+#[pyfunction]
 pub fn dequantize_q8_0_native(
     data_u8: Vec<u8>,
     out_features: usize,

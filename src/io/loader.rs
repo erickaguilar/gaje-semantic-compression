@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {
     #[serde(default = "default_name")]
@@ -53,7 +53,7 @@ fn default_false() -> bool { false }
 fn default_rope_style() -> String { "split".to_string() }
 fn default_anchor_threshold() -> f32 { 0.1 }
 
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ModelConfig {
     pub config: ArchConfig,
@@ -107,7 +107,7 @@ impl GGUFLoader {
             let v_gen = self.genomize_tensor(&format!("{}attn_v.weight", p), block_size, anchor_threshold)?;
             let o_gen = self.genomize_tensor(&format!("{}attn_output.weight", p), block_size, anchor_threshold)?;
             let gate_gen = self.genomize_tensor(&format!("{}ffn_gate.weight", p), block_size, anchor_threshold)?;
-            let up_gen = self.genomize_tensor(&format!("{}ffn_up.weight", p), block_size, anchor_threshold)?;
+            let up_gen = self.genomize_tensor(&format!("{}ffn_up", p), block_size, anchor_threshold)?;
             let down_gen = self.genomize_tensor(&format!("{}ffn_down.weight", p), block_size, anchor_threshold)?;
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;
@@ -163,7 +163,9 @@ impl NativeLoader {
     pub fn py_load_llm(&self) -> PyResult<GenomicLLM> {
         self.load_llm().map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
+}
 
+impl NativeLoader {
     pub fn new(path: &str) -> std::io::Result<Self> { 
         Self::new_with_mode(path, true) 
     }
@@ -284,7 +286,12 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
     } else { None };
 
     let init_l = |i: usize, o: usize| {
-        let n = i * o; let (dna, c, a) = crate::compute::math::genomize_f32_core(&vec![0.0f32; n], b_s, -1.0, algebraic_c);
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let n = i * o; 
+        let mut data = vec![0.0f32; n];
+        for val in data.iter_mut() { *val = rng.gen_range(-0.02..0.02); }
+        let (dna, c, a) = crate::compute::math::genomize_f32_core(&data, b_s, -1.0, algebraic_c);
         GenomicLinear::new(dna, a, c, o, i, b_s, Vec::new(), 1e-6, Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())
     };
     let embeddings = init_l(config.n_embd, vocab_size); let mut blocks = Vec::new(); let head_dim = config.n_embd / config.n_head;

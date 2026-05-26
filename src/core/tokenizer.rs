@@ -2,8 +2,27 @@ use tokenizers::Tokenizer;
 use std::path::Path;
 use std::error::Error;
 
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
+
+#[cfg_attr(feature = "python", pyclass)]
 pub struct GajeTokenizer {
     inner: Tokenizer,
+}
+
+#[cfg_attr(feature = "python", pymethods)]
+impl GajeTokenizer {
+    #[cfg(feature = "python")]
+    #[staticmethod]
+    pub fn py_from_file(path: &str) -> PyResult<Self> {
+        Self::from_file(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[cfg(feature = "python")]
+    #[staticmethod]
+    pub fn py_from_bytes(bytes: &[u8]) -> PyResult<Self> {
+        Self::from_bytes(bytes).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
 }
 
 impl GajeTokenizer {

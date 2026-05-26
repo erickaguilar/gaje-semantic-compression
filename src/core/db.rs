@@ -30,9 +30,38 @@ impl GajeDatabaseReader {
 
     #[cfg(feature = "python")]
     pub fn read_metadata(&self, key: &str) -> PyResult<String> {
-        self.read_metadata_core(key).map_err(pyo3::exceptions::PyValueError::new_err)
+        self.read_metadata_core(key).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
+    #[cfg(feature = "python")]
+    pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
+        self.has_metadata_core(key).map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+    }
+
+    #[cfg(feature = "python")]
+    pub fn read_tensor(&self, key: &str) -> PyResult<Vec<u8>> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Tensor key {} not found", key)))?;
+        
+        let data = val.value();
+        match lz4_flex::decompress_size_prepended(data) {
+            Ok(decompressed) => Ok(decompressed),
+            Err(_) => Ok(data.to_vec())
+        }
+    }
+
+    #[cfg(feature = "python")]
+    pub fn has_tensor(&self, key: &str) -> PyResult<bool> {
+        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(val.is_some())
+    }
+}
+
+impl GajeDatabaseReader {
     pub fn read_metadata_core(&self, key: &str) -> Result<String, String> {
         let read_txn = self.db.begin_read().map_err(|e| e.to_string())?;
         let table = match read_txn.open_table(METADATA_TABLE) {
@@ -44,11 +73,6 @@ impl GajeDatabaseReader {
         Ok(val.value().to_string())
     }
 
-    #[cfg(feature = "python")]
-    pub fn has_metadata(&self, key: &str) -> PyResult<bool> {
-        self.has_metadata_core(key).map_err(pyo3::exceptions::PyValueError::new_err)
-    }
-
     pub fn has_metadata_core(&self, key: &str) -> Result<bool, String> {
         let read_txn = self.db.begin_read().map_err(|e| e.to_string())?;
         let table = match read_txn.open_table(METADATA_TABLE) {
@@ -56,29 +80,6 @@ impl GajeDatabaseReader {
             Err(_) => return Ok(false),
         };
         let val = table.get(key).map_err(|e| e.to_string())?;
-        Ok(val.is_some())
-    }
-
-    #[cfg(feature = "python")]
-    pub fn read_tensor(&self, key: &str) -> PyResult<Vec<u8>> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err(format!("Tensor key {} not found", key)))?;
-        
-        // Intentar descompresión LZ4
-        let data = val.value();
-        match lz4_flex::decompress_size_prepended(data) {
-            Ok(decompressed) => Ok(decompressed),
-            Err(_) => Ok(data.to_vec()) // Si no está comprimido, devolver crudo
-        }
-    }
-
-    #[cfg(feature = "python")]
-    pub fn has_tensor(&self, key: &str) -> PyResult<bool> {
-        let read_txn = self.db.begin_read().map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let table = read_txn.open_table(TENSOR_TABLE).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        let val = table.get(key).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
         Ok(val.is_some())
     }
 }

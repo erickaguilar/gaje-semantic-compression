@@ -119,7 +119,7 @@ impl RustGenomicBlock {
     #[new]
     #[pyo3(signature = (idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn = "swiglu".to_string(), use_genomic_norm = false, h_scale = 1.0))]
     pub fn py_new(idx: usize, attn: GenomicAttention, q_gen: GenomicLinear, k_gen: GenomicLinear, v_gen: GenomicLinear, w_o: GenomicLinear, gate_gen: GenomicLinear, up_gen: GenomicLinear, w_down: GenomicLinear, ffn_norm: Vec<f32>, eps: f32, act_fn: String, use_genomic_norm: bool, h_scale: f32) -> Self {
-        RustGenomicBlock { idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn, use_genomic_norm, h_scale }
+        RustGenomicBlock { idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn, use_genomic_norm, h_scale, topology: None }
     }
     pub fn forward(&mut self, x: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> { self.forward_core(x, pos).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn clear_cache(&mut self) -> PyResult<()> { self.clear_cache_core(); Ok(()) }
