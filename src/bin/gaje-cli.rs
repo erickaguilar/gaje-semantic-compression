@@ -52,7 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
             "gold_embryo" => (384, 8, 6, 49152), 
             "micro_organism" => (128, 2, 4, 1024),
-            "silver_fetus" => (512, 12, 8, 32768), // Fase 5.0: 10MB High-Fidelity
+            "silver_fetus" => (512, 12, 8, 32768), 
+            "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
             _ => (768, 6, 12, 49152),
         };
         let config = _impl::io::loader::ModelConfig {

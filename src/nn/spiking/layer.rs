@@ -239,6 +239,25 @@ impl GajeNeuromorphicLayer {
             }
         }
     }
+
+    /// Aplica Inhibición Lateral Temporal (K-WTA).
+    /// Reduce el potencial de todas las neuronas basado en la intensidad de los ganadores.
+    pub fn apply_lateral_inhibition(&mut self, winners: &[(usize, f32, u8)], inhibition_factor: f32) {
+        if winners.is_empty() { return; }
+        
+        // Calcular la fuerza total de inhibición basada en el ganador más rápido/fuerte
+        let total_inhibition = winners.iter().map(|w| w.1).sum::<f32>() * inhibition_factor;
+        let decay = (1.0 - total_inhibition).max(0.1);
+
+        for i in 0..self.num_neurons {
+            // No inhibir a los ganadores (ya fueron reseteados o están en periodo refractario)
+            let is_winner = winners.iter().any(|w| w.0 == i);
+            if !is_winner {
+                self.membrane_potentials_real[i] *= decay;
+                self.membrane_potentials_imag[i] *= decay;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

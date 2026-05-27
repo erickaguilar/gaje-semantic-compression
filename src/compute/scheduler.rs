@@ -84,13 +84,21 @@ impl NeuromorphicScheduler {
             let layer = &mut *layers[layer_id];
             let mut layer_spikes = layer.check_spikes();
             if layer_spikes.is_empty() { continue; }
+            
+            // Ordenar por fase (latencia) y luego por intensidad
             layer_spikes.sort_by(|a, b| {
                 let res = a.2.cmp(&b.2);
                 if res == std::cmp::Ordering::Equal { b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal) } else { res }
             });
+            
             let num_winners = layer_spikes.len().min(layer.k_wta);
+            let winners = &layer_spikes[..num_winners];
+            
+            // Aplicar Inhibición Lateral: Los ganadores inhiben al resto de la capa
+            layer.apply_lateral_inhibition(winners, 0.1);
+
             for i in 0..num_winners {
-                let (neuron_idx, intensity, phase) = layer_spikes[i];
+                let (neuron_idx, intensity, phase) = winners[i];
                 let next_layer_id = layer_id + 1;
                 if next_layer_id < layers.len() {
                     let new_event = SpikeEvent { timestamp: self.wheel.current_tick + self.delay_per_layer, phase_offset: phase, intensity, source_neuron_id: neuron_idx, target_layer_id: next_layer_id, target_neuron_id: 0 };
