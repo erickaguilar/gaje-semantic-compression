@@ -107,7 +107,7 @@ impl GGUFLoader {
             let v_gen = self.genomize_tensor(&format!("{}attn_v.weight", p), block_size, anchor_threshold)?;
             let o_gen = self.genomize_tensor(&format!("{}attn_output.weight", p), block_size, anchor_threshold)?;
             let gate_gen = self.genomize_tensor(&format!("{}ffn_gate.weight", p), block_size, anchor_threshold)?;
-            let up_gen = self.genomize_tensor(&format!("{}ffn_up", p), block_size, anchor_threshold)?;
+            let up_gen = self.genomize_tensor(&format!("{}ffn_up.weight", p), block_size, anchor_threshold)?;
             let down_gen = self.genomize_tensor(&format!("{}ffn_down.weight", p), block_size, anchor_threshold)?;
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;

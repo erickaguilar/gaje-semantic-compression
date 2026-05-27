@@ -33,9 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Cargar Estudiante (Silver Fetus v1)
     println!("[*] Cargando Estudiante: {}...", student_path);
-    let loader = GGUFLoader::new(student_path)?;
-    let config = loader.infer_config()?;
-    let student_llm = loader.load_genomic_llm(config, 1.0)?;
+    let loader = _impl::io::loader::NativeLoader::new(student_path)?;
+    let student_llm = loader.load_llm()?;
 
     // 4. Configurar el Consejo de Maestros
     println!("[*] Configurando Consejo de Maestros...");
