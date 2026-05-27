@@ -26,7 +26,19 @@ pub fn genomize_f32_core(
 
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    let mut anchors = vec![half::f16::ZERO; n_elements];
+    
+    // Si anchor_threshold > 0 y < 1.0, lo interpretamos como densidad (ej: 0.01 = 1%)
+    let mut actual_threshold = anchor_threshold;
+    if anchor_threshold > 0.0 && anchor_threshold < 1.0 {
+        let mut abs_vals: Vec<f32> = f32_data.iter().map(|v| v.abs()).collect();
+        abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        let top_idx = (n_elements as f32 * anchor_threshold) as usize;
+        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+    }
+
+    let mut anchor_indices = Vec::new();
+    let mut anchor_values = Vec::new();
+    let mut anchor_row_ptrs = vec![0u64; 1]; // Temporal, se ajustará después si es multidimensional
 
     let base_c = custom_base_c.unwrap_or([-1.510f32, -0.4528, 0.4528, 1.510]);
 
@@ -35,16 +47,11 @@ pub fn genomize_f32_core(
         let block_f32 = &f32_data[start..start + block_size];
 
         let mut sum = 0.0f32;
-        for &val in block_f32 {
-            sum += val;
-        }
+        for &val in block_f32 { sum += val; }
         let mean = sum / block_size as f32;
 
         let mut var_sum = 0.0f32;
-        for &val in block_f32 {
-            let diff = val - mean;
-            var_sum += diff * diff;
-        }
+        for &val in block_f32 { let diff = val - mean; var_sum += diff * diff; }
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
 
         let t = [mean - std, mean, mean + std];
@@ -58,41 +65,41 @@ pub fn genomize_f32_core(
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
             for s in 0..4 {
-                let val = block_f32[k * 4 + s];
-                let bits = if val < t[0] {
-                    0b00
-                } else if val < t[1] {
-                    0b01
-                } else if val < t[2] {
-                    0b11
-                } else {
-                    0b10
-                };
+                let idx = k * 4 + s;
+                let val = block_f32[idx];
+                let bits = if val < t[0] { 0b00 } else if val < t[1] { 0b01 } else if val < t[2] { 0b11 } else { 0b10 };
 
                 let c_val = match bits {
-                    0b00 => c[0],
-                    0b01 => c[1],
-                    0b11 => c[2],
-                    0b10 => c[3],
-                    _ => 0.0,
+                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0,
                 };
 
                 let residual = val - c_val;
-                if residual.abs() > anchor_threshold {
-                    anchors[start + k * 4 + s] = half::f16::from_f32(residual);
+                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                    anchor_indices.push((start + idx) as u32);
+                    anchor_values.push(half::f16::from_f32(residual));
                 }
                 byte = (byte << 2) | bits;
             }
             dna_database.push(byte);
         }
-        for &cv in &c {
-            all_centroids.push(cv);
-        }
+        for &cv in &c { all_centroids.push(cv); }
     }
 
-    let anchors_u8 = unsafe {
-        std::slice::from_raw_parts(anchors.as_ptr() as *const u8, anchors.len() * 2).to_vec()
-    };
+    // Empaquetar en formato "GAJE"
+    let mut anchors_u8 = Vec::new();
+    if !anchor_indices.is_empty() {
+        anchors_u8.extend_from_slice(b"GAJE");
+        let count = anchor_indices.len() as u32;
+        anchors_u8.extend_from_slice(&count.to_le_bytes());
+        for &idx in &anchor_indices { anchors_u8.extend_from_slice(&idx.to_le_bytes()); }
+        for &val in &anchor_values { anchors_u8.extend_from_slice(&val.to_le_bytes()); }
+        // Para genomize simple, asumimos una sola fila virtual o dejamos row_ptrs para el llamador
+        // NOTA: GenomicLinear::new espera row_ptrs de tamaño out_features + 1.
+        // Aquí genomize_f32_core no conoce out_features directamente (solo n_elements).
+        // Por ahora, pondremos [0, count] asumiendo una fila, pero lo ideal es que el llamador lo gestione.
+        anchors_u8.extend_from_slice(&0u64.to_le_bytes());
+        anchors_u8.extend_from_slice(&(count as u64).to_le_bytes());
+    }
 
     (dna_database, all_centroids, anchors_u8)
 }
@@ -107,7 +114,18 @@ pub fn genomize_f16_core(
     let n_blocks = n_elements / block_size;
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    let mut anchors = vec![half::f16::ZERO; n_elements];
+
+    let mut actual_threshold = anchor_threshold;
+    if anchor_threshold > 0.0 && anchor_threshold < 1.0 {
+        let mut abs_vals: Vec<f32> = f16_data.iter().map(|v| v.to_f32().abs()).collect();
+        abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        let top_idx = (n_elements as f32 * anchor_threshold) as usize;
+        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+    }
+
+    let mut anchor_indices = Vec::new();
+    let mut anchor_values = Vec::new();
+
     let base_c = custom_base_c.unwrap_or([-1.510f32, -0.4528, 0.4528, 1.510]);
     for i in 0..n_blocks {
         let start = i * block_size;
@@ -121,10 +139,7 @@ pub fn genomize_f16_core(
         }
         let mean = sum / block_size as f32;
         let mut var_sum = 0.0f32;
-        for &val in &block_f32 {
-            let diff = val - mean;
-            var_sum += diff * diff;
-        }
+        for &val in &block_f32 { let diff = val - mean; var_sum += diff * diff; }
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
         let t = [mean - std, mean, mean + std];
         let c = [
@@ -137,41 +152,36 @@ pub fn genomize_f16_core(
         for k in 0..(block_size / 4) {
             let mut byte = 0u8;
             for s in 0..4 {
-                let val = block_f32[k * 4 + s];
-                let bits = if val < t[0] {
-                    0b00
-                } else if val < t[1] {
-                    0b01
-                } else if val < t[2] {
-                    0b11
-                } else {
-                    0b10
-                };
+                let idx = k * 4 + s;
+                let val = block_f32[idx];
+                let bits = if val < t[0] { 0b00 } else if val < t[1] { 0b01 } else if val < t[2] { 0b11 } else { 0b10 };
 
                 let c_val = match bits {
-                    0b00 => c[0],
-                    0b01 => c[1],
-                    0b11 => c[2],
-                    0b10 => c[3],
-                    _ => 0.0,
+                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0,
                 };
 
                 let residual = val - c_val;
-                if residual.abs() > anchor_threshold {
-                    anchors[start + k * 4 + s] = half::f16::from_f32(residual);
+                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                    anchor_indices.push((start + idx) as u32);
+                    anchor_values.push(half::f16::from_f32(residual));
                 }
                 byte = (byte << 2) | bits;
             }
             dna_database.push(byte);
         }
-        for &cv in &c {
-            all_centroids.push(cv);
-        }
+        for &cv in &c { all_centroids.push(cv); }
     }
 
-    let anchors_u8 = unsafe {
-        std::slice::from_raw_parts(anchors.as_ptr() as *const u8, anchors.len() * 2).to_vec()
-    };
+    let mut anchors_u8 = Vec::new();
+    if !anchor_indices.is_empty() {
+        anchors_u8.extend_from_slice(b"GAJE");
+        let count = anchor_indices.len() as u32;
+        anchors_u8.extend_from_slice(&count.to_le_bytes());
+        for &idx in &anchor_indices { anchors_u8.extend_from_slice(&idx.to_le_bytes()); }
+        for &val in &anchor_values { anchors_u8.extend_from_slice(&val.to_le_bytes()); }
+        anchors_u8.extend_from_slice(&0u64.to_le_bytes());
+        anchors_u8.extend_from_slice(&(count as u64).to_le_bytes());
+    }
 
     (dna_database, all_centroids, anchors_u8)
 }

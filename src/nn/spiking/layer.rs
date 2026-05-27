@@ -12,6 +12,10 @@ pub struct GajeNeuromorphicLayer {
     pub decays: Vec<f32>,
     /// Pesos empaquetados: 4 pesos de 2-bits por byte.
     pub packed_weights: Vec<u8>, 
+    /// Anclas de Estabilidad: Pesos de alta precisión (F16) para núcleos semánticos.
+    pub anchor_indices: Vec<u32>,
+    pub anchor_values: Vec<half::f16>,
+    pub anchor_row_ptrs: Vec<usize>,
     pub num_neurons: usize,
     pub weights_per_neuron: usize,
     pub k_wta: usize,
@@ -73,10 +77,44 @@ impl GajeNeuromorphicLayer {
             thresholds: vec![threshold; num_neurons],
             decays: vec![decay; num_neurons],
             packed_weights,
+            anchor_indices: Vec::new(),
+            anchor_values: Vec::new(),
+            anchor_row_ptrs: vec![0; num_neurons + 1],
             num_neurons,
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),
             rms_ema: 1.0,
+        }
+    }
+
+    pub fn anchors_sparse_buffer(&self) -> Vec<u8> {
+        let mut out = Vec::new(); out.extend_from_slice(b"GAJE");
+        let count = self.anchor_indices.len(); out.extend_from_slice(&(count as u32).to_le_bytes());
+        for &idx in self.anchor_indices.iter() { out.extend_from_slice(&idx.to_le_bytes()); }
+        for &val in self.anchor_values.iter() { out.extend_from_slice(&val.to_le_bytes()); }
+        for &ptr in self.anchor_row_ptrs.iter() { out.extend_from_slice(&(ptr as u64).to_le_bytes()); }
+        out
+    }
+
+    pub fn load_anchors_from_u8(&mut self, anchors_u8: &[u8]) {
+        if anchors_u8.len() >= 4 && &anchors_u8[0..4] == b"GAJE" {
+            let count = u32::from_le_bytes(anchors_u8[4..8].try_into().unwrap()) as usize;
+            let mut indices = Vec::with_capacity(count); 
+            let mut values = Vec::with_capacity(count); 
+            let mut row_ptrs = vec![0; self.num_neurons + 1];
+            let idx_s = 8; 
+            let val_s = idx_s + count * 4; 
+            let ptr_s = val_s + count * 2;
+            for i in 0..count {
+                indices.push(u32::from_le_bytes(anchors_u8[idx_s + i * 4..idx_s + i * 4 + 4].try_into().unwrap()));
+                values.push(half::f16::from_le_bytes(anchors_u8[val_s + i * 2..val_s + i * 2 + 2].try_into().unwrap()));
+            }
+            for i in 0..=self.num_neurons { 
+                row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_s + i * 8..ptr_s + i * 8 + 8].try_into().unwrap()) as usize; 
+            }
+            self.anchor_indices = indices;
+            self.anchor_values = values;
+            self.anchor_row_ptrs = row_ptrs;
         }
     }
 
@@ -147,6 +185,23 @@ impl GajeNeuromorphicLayer {
                 let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
                 self.membrane_potentials_real[i] += (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
                 self.membrane_potentials_imag[i] += centroides_imag[weight_bits as usize] * intensity;
+            }
+        }
+        
+        // Inyectar Anclas de Estabilidad (Residuales de alta precisión)
+        // Solo inyectamos si el input_index (peso de entrada) tiene anclas registradas
+        // Nota: En SoA, anchor_indices almacena el índice global del peso (neurona_idx * num_inputs + input_idx)
+        // Pero para simplificar y dar estabilidad local, buscaremos anclas asociadas a este input_index
+        // si el mapeo es (neurona, input).
+        for i in 0..self.num_neurons {
+            // Buscamos si hay un ancla para el par (i, input_index)
+            // Para optimizar, las anclas están ordenadas por fila (neurona) en anchor_row_ptrs
+            let a_s = self.anchor_row_ptrs[i];
+            let a_e = self.anchor_row_ptrs[i + 1];
+            for k in a_s..a_e {
+                if self.anchor_indices[k] as usize == input_index {
+                    self.membrane_potentials_real[i] += self.anchor_values[k].to_f32() * intensity;
+                }
             }
         }
     }

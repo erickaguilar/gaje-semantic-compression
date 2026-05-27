@@ -41,6 +41,7 @@ pub fn save_smg1_model(
         batch.write_tensor(&format!("{}.potentials_imag", p), &compress(f32_u8(&layer.membrane_potentials_imag))).unwrap();
         batch.write_tensor(&format!("{}.thresholds", p), &compress(f32_u8(&layer.thresholds))).unwrap();
         batch.write_tensor(&format!("{}.decays", p), &compress(f32_u8(&layer.decays))).unwrap();
+        batch.write_tensor(&format!("{}.anchors", p), &compress(&layer.anchors_sparse_buffer())).unwrap();
     }
 
     batch.commit().map_err(std::io::Error::other)?;
@@ -94,18 +95,24 @@ pub fn load_smg1_model(path: &str) -> std::io::Result<(Smg1Model, Smg1Config)> {
 
         let thresholds = get_tensor_f32(&read_txn, &format!("{}.thresholds", p));
         let decays = get_tensor_f32(&read_txn, &format!("{}.decays", p));
+        let anchors_u8 = get_tensor(&read_txn, &format!("{}.anchors", p));
 
-        layers.push(GajeNeuromorphicLayer {
+        let mut layer = GajeNeuromorphicLayer {
             membrane_potentials_real,
             membrane_potentials_imag,
             thresholds,
             decays,
             packed_weights,
+            anchor_indices: Vec::new(),
+            anchor_values: Vec::new(),
+            anchor_row_ptrs: vec![0; num_neurons + 1],
             num_neurons,
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),
             rms_ema: 1.0,
-        });
+        };
+        layer.load_anchors_from_u8(&anchors_u8);
+        layers.push(layer);
     }
 
     Ok((Smg1Model { layers, word_to_id, id_to_word }, config))
