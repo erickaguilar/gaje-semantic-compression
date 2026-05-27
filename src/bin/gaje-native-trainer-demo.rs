@@ -25,7 +25,7 @@ fn main() {
     let start = Instant::now();
 
     for epoch in 1..=epochs {
-        let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
+        let mut scheduler = NeuromorphicScheduler::new(centroides, [0.0; 4], 1);
         scheduler.inject_spike(0, input_id, 0, 0, 1.0);
         
         let output_events = scheduler.run_to_completion(&mut layers);
@@ -59,7 +59,7 @@ fn main() {
     println!("\n✅ Entrenamiento completado en {:?}", start.elapsed());
     
     // Verificación final
-    let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
+    let mut scheduler = NeuromorphicScheduler::new(centroides, [0.0; 4], 1);
     scheduler.inject_spike(0, input_id, 0, 0, 1.0);
     let final_outputs = scheduler.run_to_completion(&mut layers);
     let success = final_outputs.iter().any(|e| e.source_neuron_id == target_output);

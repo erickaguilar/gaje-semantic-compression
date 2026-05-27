@@ -8,7 +8,8 @@ use std::io::{self, Write};
 
 fn main() {
     let dataset_path = "data/datasets/dataset_born_2000.txt";
-    let centroides = [-1.5, -0.5, 0.5, 1.5];
+    let c_r = [-1.5, -0.5, 0.5, 1.5];
+    let c_im = [0.0, 0.0, 0.0, 0.0];
 
     println!("🧬 GAJE-Flow: Iniciando Crianza Just-In-Time (JIT) para el Chat...");
     
@@ -42,7 +43,7 @@ fn main() {
     let l1 = GajeNeuromorphicLayer::new(id_counter, hidden_dim, 0.05, 0.8);
     let mut layers = vec![l0, l1];
 
-    let mut engine = SpikingEvolutionEngine::new(layers.clone(), 64, centroides, 0.1);
+    let mut engine = SpikingEvolutionEngine::new(layers.clone(), 64, c_r, c_im, 0.1);
     
     let input_spikes: Vec<(usize, usize)> = sequences.iter()
         .take(100)
@@ -80,7 +81,7 @@ fn main() {
         
         // Inferencia Autoregresiva Genómica
         for _ in 0..15 { // Generar hasta 15 palabras
-            let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
+            let mut scheduler = NeuromorphicScheduler::new(c_r, c_im, 1);
             
             // Inyectar contexto (última palabra)
             if let Some(last_word) = words.last() {

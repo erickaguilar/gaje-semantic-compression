@@ -35,7 +35,8 @@ fn main() {
 
     // 3. Configuración del Motor Industrial (SoA)
     let dim = 128; 
-    let centroides = [-1.0, -0.2, 0.2, 1.0];
+    let c_r = [-1.0, -0.2, 0.2, 1.0];
+    let c_im = [0.0, 0.0, 0.0, 0.0];
     
     // Crear capas SoA
     // L0 ahora es una capa densa que recibe el ID de la palabra como un spike broadcast
@@ -43,7 +44,7 @@ fn main() {
     let l1 = GajeNeuromorphicLayer::new(dim, id_counter, 0.05, 0.8);
     let layers = vec![l0, l1];
 
-    let mut engine = SpikingEvolutionEngine::new(layers, 200, centroides, 0.3);
+    let mut engine = SpikingEvolutionEngine::new(layers, 200, c_r, c_im, 0.3);
 
     // 4. Evolución Intensiva
     println!("\n🚀 Evolución Intensiva (Población: 200, Gen: 500) buscando 1.00 Fitness...");
@@ -74,7 +75,7 @@ fn main() {
     let best_organism = &mut engine.population[0];
     
     for word in &["rust", "el", "gaje"] {
-        let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
+        let mut scheduler = NeuromorphicScheduler::new(c_r, c_im, 1);
         let id = *word_to_id.get(*word).unwrap();
         
         // En SoA, el id de la palabra activa una neurona específica de la capa de entrada

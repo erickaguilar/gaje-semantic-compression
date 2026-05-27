@@ -7,7 +7,6 @@ use crate::core::tokenizer::GajeTokenizer;
 use rand::Rng;
 use rayon::prelude::*;
 use std::sync::Arc;
-use std::time::Instant;
 
 /// Representa un "Organismo" Neuromórfico o LLM en la población evolutiva.
 #[derive(Clone)]
@@ -130,7 +129,8 @@ impl IslandModelEngine {
         initial_model: Vec<GajeNeuromorphicLayer>,
         num_islands: usize,
         pop_per_island: usize,
-        centroides: [f32; 4],
+        centroides_real: [f32; 4],
+        centroides_imag: [f32; 4],
         mutation_rate: f32,
         migration_rate: usize,
         topology_map: Option<Arc<CentroidGraph>>,
@@ -140,7 +140,8 @@ impl IslandModelEngine {
             islands.push(SpikingEvolutionEngine::new(
                 initial_model.clone(),
                 pop_per_island,
-                centroides,
+                centroides_real,
+                centroides_imag,
                 mutation_rate,
             ));
         }
@@ -307,7 +308,8 @@ impl IslandModelEngine {
 /// Motor de Evolución para el Emulador Neuromórfico Industrial.
 pub struct SpikingEvolutionEngine {
     pub population: Vec<NeuromorphicOrganism>,
-    pub centroides: [f32; 4],
+    pub centroides_real: [f32; 4],
+    pub centroides_imag: [f32; 4],
     pub mutation_rate: f32,
 }
 
@@ -315,7 +317,8 @@ impl SpikingEvolutionEngine {
     pub fn new(
         initial_model: Vec<GajeNeuromorphicLayer>,
         pop_size: usize,
-        centroides: [f32; 4],
+        centroides_real: [f32; 4],
+        centroides_imag: [f32; 4],
         mutation_rate: f32,
     ) -> Self {
         let mut population = Vec::with_capacity(pop_size);
@@ -324,7 +327,7 @@ impl SpikingEvolutionEngine {
             organism.mutate(mutation_rate); 
             population.push(organism);
         }
-        Self { population, centroides, mutation_rate }
+        Self { population, centroides_real, centroides_imag, mutation_rate }
     }
 
     /// Crea un motor de evolución específico para LLMs.
@@ -341,15 +344,17 @@ impl SpikingEvolutionEngine {
         }
         Self { 
             population, 
-            centroides: [0.0; 4], 
+            centroides_real: [0.0; 4], 
+            centroides_imag: [0.0; 4], 
             mutation_rate 
         }
     }
 
     pub fn evaluate(&mut self, input_spikes: &[(usize, usize)], target_frequencies: &[f32]) {
-        let centroides = self.centroides;
+        let c_r = self.centroides_real;
+        let c_im = self.centroides_imag;
         self.population.par_iter_mut().for_each(|organism| {
-            let mut scheduler = NeuromorphicScheduler::new(centroides, 1);
+            let mut scheduler = NeuromorphicScheduler::new(c_r, c_im, 1);
             for &(layer_id, neuron_id) in input_spikes {
                 scheduler.inject_spike(layer_id, neuron_id, 0, 0, 1.0);
             }
@@ -391,13 +396,14 @@ mod tests {
 
     #[test]
     fn test_evolution_flow_soa() {
-        let centroides = [0.0, 0.5, 0.8, 1.2];
+        let c_r = [0.0, 0.5, 0.8, 1.2];
+        let c_im = [0.0, 0.0, 0.0, 0.0];
         
         // Crear modelo base SoA: 1 capa, 1 neurona, 1 input
         let layer = GajeNeuromorphicLayer::new(1, 1, 1.0, 0.9);
         let layers = vec![layer];
 
-        let mut engine = SpikingEvolutionEngine::new(layers, 10, centroides, 0.1);
+        let mut engine = SpikingEvolutionEngine::new(layers, 10, c_r, c_im, 0.1);
         
         // Evaluar
         engine.evaluate(&[(0, 0)], &[1.0]);

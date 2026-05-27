@@ -375,6 +375,91 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
+pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
+    let n = real.len();
+    let mut packed = Vec::with_capacity((n + 3) / 4);
+    for i in (0..n).step_by(4) {
+        let mut byte = 0u8;
+        for j in 0..4 {
+            if i + j < n {
+                let r = real[i + j];
+                let im = imag[i + j];
+                // atan2 returns values in (-PI, PI]
+                let angle = im.atan2(r);
+                
+                let bits = if angle >= 0.0 && angle < std::f32::consts::FRAC_PI_2 {
+                    0b00 // Quadrant I: 0 to 90 deg (A)
+                } else if angle >= std::f32::consts::FRAC_PI_2 && angle <= std::f32::consts::PI {
+                    0b01 // Quadrant II: 90 to 180 deg (C)
+                } else if angle >= -std::f32::consts::PI && angle < -std::f32::consts::FRAC_PI_2 {
+                    0b11 // Quadrant III: 180 to 270 deg (G)
+                } else {
+                    0b10 // Quadrant IV: 270 to 360 deg (T)
+                };
+                byte = (byte << 2) | bits;
+            }
+        }
+        packed.push(byte);
+    }
+    packed
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+#[cfg_attr(feature = "python", pyo3(signature = (real, imag)))]
+pub fn quantize_phase_native(
+    real: Vec<f32>,
+    imag: Vec<f32>,
+    _py: Python<'_>,
+) -> PyResult<PyObject> {
+    if real.len() != imag.len() {
+        return Err(PyValueError::new_err("Real and Imaginary parts must have the same length"));
+    }
+    let _packed = quantize_phase_core(&real, &imag);
+    #[cfg(feature = "python")]
+    { Ok(PyBytes::new(_py, &_packed).into()) }
+    #[cfg(not(feature = "python"))]
+    { Err("Python not enabled".to_string()) }
+}
+
+pub fn dequantize_phase_core(dna_packed: &[u8], dims: usize) -> (Vec<f32>, Vec<f32>) {
+    let mut real = Vec::with_capacity(dims);
+    let mut imag = Vec::with_capacity(dims);
+    let mut dp = 0;
+    for &byte in dna_packed {
+        for j in 0..4 {
+            if dp >= dims { break; }
+            let s = (3 - j) * 2;
+            let bits = (byte >> s) & 0b11;
+            let (r, im) = match bits {
+                0b00 => (1.0, 0.0),  // A: 0 deg
+                0b01 => (0.0, 1.0),  // C: 90 deg
+                0b11 => (-1.0, 0.0), // G: 180 deg
+                0b10 => (0.0, -1.0), // T: 270 deg
+                _ => (0.0, 0.0),
+            };
+            real.push(r);
+            imag.push(im);
+            dp += 1;
+        }
+    }
+    (real, imag)
+}
+
+#[inline(always)]
+pub fn complex_add(r1: f32, i1: f32, r2: f32, i2: f32) -> (f32, f32) {
+    (r1 + r2, i1 + i2)
+}
+
+#[inline(always)]
+pub fn complex_mul(r1: f32, i1: f32, r2: f32, i2: f32) -> (f32, f32) {
+    (r1 * r2 - i1 * i2, r1 * i2 + i1 * r2)
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn dequantize_phase_native(dna_packed: Vec<u8>, dims: usize) -> PyResult<(Vec<f32>, Vec<f32>)> {
+    Ok(dequantize_phase_core(&dna_packed, dims))
+}
+
 pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> PyResult<Vec<f32>> {
     if data_u8.is_empty() || rows == 0 || cols == 0 {
         return Ok(vec![]);

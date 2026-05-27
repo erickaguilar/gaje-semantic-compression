@@ -141,13 +141,13 @@ fn main() {
                 let input_id = word_to_id[words[i]];
                 let target_id = word_to_id[words[i+1]];
                 
-                for layer in &mut layers { layer.membrane_potentials.fill(0.0); }
+                for layer in &mut layers { layer.reset_potentials(); }
                 
                 let l0_n = layers[0].num_neurons;
                 let mut l0_deltas = vec![-0.5; l0_n];
                 for j in 0..32 { l0_deltas[(input_id * 17 + j) % l0_n] = 1.5; }
                 layers[0].refine_step(input_id, l0_deltas, 1.0);
-                layers[0].integrate_batch(input_id, centroides, 1.0);
+                layers[0].integrate_batch(input_id, centroides, [0.0; 4], 1.0);
                 let mut s0 = layers[0].check_spikes();
                 s0.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
                 let s0 = if s0.len() > 8 { s0[..8].to_vec() } else { s0 };
@@ -156,7 +156,7 @@ fn main() {
                 let mut l1_deltas = vec![-0.5; l1_n];
                 for j in 0..16 { l1_deltas[(input_id * 13 + j) % l1_n] = 1.5; }
                 for &(idx, _, _) in &s0 { layers[1].refine_step(idx, l1_deltas.clone(), 1.0); }
-                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, centroides, intensity); }
+                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, centroides, [0.0; 4], intensity); }
                 let mut s1 = layers[1].check_spikes();
                 s1.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
                 let s1 = if s1.len() > 8 { s1[..8].to_vec() } else { s1 };
@@ -164,7 +164,7 @@ fn main() {
                 let mut l2_deltas = vec![-1.0; vocab_size];
                 l2_deltas[target_id] = 2.0;
                 for &(idx, _, _) in &s1 { layers[2].refine_step(idx, l2_deltas.clone(), 1.0); }
-                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, centroides, intensity); }
+                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, centroides, [0.0; 4], intensity); }
                 let mut s2 = layers[2].check_spikes();
                 s2.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
                 let s2 = if s2.len() > 4 { s2[..4].to_vec() } else { s2 };

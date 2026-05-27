@@ -25,7 +25,8 @@ impl From<u8> for GajeWeight2Bit {
 /// Diseñada para procesamiento de 2-bits sin multiplicaciones.
 #[derive(Clone)]
 pub struct SpikingNeuron {
-    pub membrane_potential: f32,    // El "voltaje" acumulado (Potencial de membrana)
+    pub membrane_potential_real: f32,    // El "voltaje" acumulado (Real)
+    pub membrane_potential_imag: f32,    // El "voltaje" acumulado (Imaginario)
     pub threshold: f32,             // Umbral de disparo (Ancla FFN)
     pub decay: f32,                 // Factor de fuga (Leaky) entre 0.0 y 1.0
     pub weights: Vec<u8>,           // Pesos empaquetados (4 pesos de 2-bits por u8)
@@ -38,7 +39,8 @@ impl SpikingNeuron {
         // Calculamos cuántos u8 necesitamos para num_weights (4 pesos por byte)
         let packed_size = (num_weights + 3) / 4;
         Self {
-            membrane_potential: 0.0,
+            membrane_potential_real: 0.0,
+            membrane_potential_imag: 0.0,
             threshold,
             decay,
             weights: vec![0; packed_size],
@@ -68,21 +70,25 @@ impl SpikingNeuron {
 
     /// Integra un impulso eléctrico (Spike) entrante.
     /// ¡Cero Multiplicaciones!: Solo suma el valor del centroide correspondiente.
-    pub fn integrate(&mut self, input_index: usize, centroides: &[f32; 4]) {
+    pub fn integrate(&mut self, input_index: usize, centroides_real: &[f32; 4], centroides_imag: &[f32; 4]) {
         let weight = self.get_weight(input_index);
-        self.membrane_potential += centroides[weight as usize];
+        self.membrane_potential_real += centroides_real[weight as usize];
+        self.membrane_potential_imag += centroides_imag[weight as usize];
     }
 
     /// Verifica si la neurona debe disparar.
     /// Si dispara, el potencial se resetea. Si no, se aplica la fuga (decay).
     pub fn check_spike(&mut self) -> bool {
-        if self.membrane_potential >= self.threshold {
-            self.membrane_potential = 0.0; // Reset (Periodo refractario implícito)
+        let magnitude = (self.membrane_potential_real.powi(2) + self.membrane_potential_imag.powi(2)).sqrt();
+        if magnitude >= self.threshold {
+            self.membrane_potential_real = 0.0;
+            self.membrane_potential_imag = 0.0;
             true
         } else {
-            // Aplicar fuga solo si hay potencial positivo, para evitar extinción inmediata
-            if self.membrane_potential > 0.0 {
-                self.membrane_potential *= self.decay;
+            // Aplicar fuga
+            if magnitude > 0.0 {
+                self.membrane_potential_real *= self.decay;
+                self.membrane_potential_imag *= self.decay;
             }
             false
         }
@@ -96,26 +102,26 @@ mod tests {
     #[test]
     fn test_neuron_integration_and_spike() {
         let mut neuron = SpikingNeuron::new(1.0, 0.9, 4);
-        let centroides = [-0.1, 0.2, 0.5, 0.8];
+        let c_r = [-0.1, 0.2, 0.5, 0.8];
+        let c_im = [0.0, 0.0, 0.0, 0.0];
 
         // Configurar pesos
         neuron.set_weight(0, GajeWeight2Bit::State11); // 0.8
         neuron.set_weight(1, GajeWeight2Bit::State01); // 0.2
 
         // Integrar primer peso: 0.8 (No debería disparar aún)
-        neuron.integrate(0, &centroides);
+        neuron.integrate(0, &c_r, &c_im);
         assert!(!neuron.check_spike());
         
-        // El potencial ahora es 0.8 * 0.9 = 0.72 tras el decay del check_spike fallido
-        // Integrar segundo peso: 0.2 -> 0.72 + 0.2 = 0.92 (Sigue sin disparar, umbral es 1.0)
-        neuron.integrate(1, &centroides);
+        // Integrar segundo peso
+        neuron.integrate(1, &c_r, &c_im);
         assert!(!neuron.check_spike());
 
-        // Forzar disparo integrando otro State11: 0.828 (tras decay) + 0.8 = 1.628
+        // Forzar disparo
         neuron.set_weight(2, GajeWeight2Bit::State11);
-        neuron.integrate(2, &centroides);
+        neuron.integrate(2, &c_r, &c_im);
         assert!(neuron.check_spike());
-        assert_eq!(neuron.membrane_potential, 0.0);
+        assert_eq!(neuron.membrane_potential_real, 0.0);
     }
 
     #[test]

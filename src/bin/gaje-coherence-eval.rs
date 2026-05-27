@@ -47,8 +47,8 @@ fn main() {
             let target_id = word_to_id[words[i+1]];
             
             // RESET potentials for clean step
-            layers[0].membrane_potentials.fill(0.0);
-            layers[1].membrane_potentials.fill(0.0);
+            layers[0].reset_potentials();
+            layers[1].reset_potentials();
 
             // 1. Reforzar asociación Input -> Hidden (Capa 0)
             // Asignamos neuronas ocultas específicas a cada input para evitar colisiones
@@ -58,11 +58,11 @@ fn main() {
             layers[0].refine_step(input_id, l0_deltas, 1.0);
             
             // 2. Forward pass para obtener spikes
-            layers[0].integrate_batch(input_id, centroides, 1.0);
+            layers[0].integrate_batch(input_id, centroides, [0.0; 4], 1.0);
             let l0_spikes = layers[0].check_spikes();
             
             for &(idx, intensity, _) in &l0_spikes {
-                layers[1].integrate_batch(idx, centroides, intensity);
+                layers[1].integrate_batch(idx, centroides, [0.0; 4], intensity);
             }
             let l1_spikes = layers[1].check_spikes();
             
@@ -94,14 +94,14 @@ fn main() {
     
     for _ in 0..words.len() {
         // Simular dinámica exacta del entrenamiento
-        layers[0].membrane_potentials.fill(0.0);
-        layers[1].membrane_potentials.fill(0.0);
+        layers[0].reset_potentials();
+        layers[1].reset_potentials();
         
-        layers[0].integrate_batch(current_id, centroides, 1.0);
+        layers[0].integrate_batch(current_id, centroides, [0.0; 4], 1.0);
         let l0_spikes = layers[0].check_spikes();
         
         for &(idx, intensity, _) in &l0_spikes {
-            layers[1].integrate_batch(idx, centroides, intensity);
+            layers[1].integrate_batch(idx, centroides, [0.0; 4], intensity);
         }
         let l1_spikes = layers[1].check_spikes();
         
@@ -112,10 +112,10 @@ fn main() {
             }
         } else {
             // Intento de recuperación si no hay spikes directos (búsqueda de potencial máximo)
-            if let Some((max_idx, _)) = layers[1].membrane_potentials.iter().enumerate()
+            if let Some((max_idx, _)) = layers[1].membrane_potentials_real.iter().enumerate()
                 .max_by(|a, b| a.1.partial_cmp(b.1).unwrap()) 
             {
-                if max_idx < vocab_size && layers[1].membrane_potentials[max_idx] > 0.0 {
+                if max_idx < vocab_size && layers[1].membrane_potentials_real[max_idx] > 0.0 {
                     print!(" [{}]", id_to_word[max_idx]);
                     current_id = max_idx;
                 } else {

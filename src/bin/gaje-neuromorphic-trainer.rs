@@ -70,7 +70,7 @@ fn main() {
                 total_tokens += 1;
 
                 // Forward/Refinement Step (SMG-1 Logic)
-                for layer in &mut layers { layer.membrane_potentials.fill(0.0); }
+                for layer in &mut layers { layer.reset_potentials(); }
 
                 // REFORZAR L0
                 let mut l0_deltas = vec![-0.1; dim_latent];
@@ -78,7 +78,7 @@ fn main() {
                 for j in 0..16 { l0_deltas[(offset_l0 + j) % dim_latent] = 1.0; }
                 layers[0].refine_step(input_id, l0_deltas, 1.0);
 
-                layers[0].integrate_batch(input_id, centroides, 1.0);
+                layers[0].integrate_batch(input_id, centroides, [0.0; 4], 1.0);
                 let s0 = layers[0].check_spikes();
 
                 // REFORZAR L1
@@ -87,7 +87,7 @@ fn main() {
                 for j in 0..8 { l1_deltas[(offset_l1 + j) % dim_logic] = 1.0; }
                 for &(idx, _, _) in &s0 { layers[1].refine_step(idx, l1_deltas.clone(), 1.0); }
 
-                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, centroides, intensity); }
+                for &(idx, intensity, _) in &s0 { layers[1].integrate_batch(idx, centroides, [0.0; 4], intensity); }
                 let s1 = layers[1].check_spikes();
 
                 // REFORZAR L2 (Output)
@@ -95,7 +95,7 @@ fn main() {
                 l2_deltas[target_id] = 1.0;
                 for &(idx, _, _) in &s1 { layers[2].refine_step(idx, l2_deltas.clone(), lr); }
 
-                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, centroides, intensity); }
+                for &(idx, intensity, _) in &s1 { layers[2].integrate_batch(idx, centroides, [0.0; 4], intensity); }
                 let s2 = layers[2].check_spikes();
 
                 if s2.iter().any(|&(idx, _, _)| idx == target_id) {

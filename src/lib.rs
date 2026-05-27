@@ -42,6 +42,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_q8_0_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::genomize_f32_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::genomize_f16_native, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::quantize_phase_native, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_phase_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::apply_repetition_penalty, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::sample_top_p, m)?)?;
     Ok(())

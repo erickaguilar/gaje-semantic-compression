@@ -37,7 +37,8 @@ pub fn save_smg1_model(
     for (i, layer) in model.layers.iter().enumerate() {
         let p = format!("layer.{}", i);
         batch.write_tensor(&format!("{}.weights", p), &compress(&layer.packed_weights)).unwrap();
-        batch.write_tensor(&format!("{}.potentials", p), &compress(f32_u8(&layer.membrane_potentials))).unwrap();
+        batch.write_tensor(&format!("{}.potentials_real", p), &compress(f32_u8(&layer.membrane_potentials_real))).unwrap();
+        batch.write_tensor(&format!("{}.potentials_imag", p), &compress(f32_u8(&layer.membrane_potentials_imag))).unwrap();
         batch.write_tensor(&format!("{}.thresholds", p), &compress(f32_u8(&layer.thresholds))).unwrap();
         batch.write_tensor(&format!("{}.decays", p), &compress(f32_u8(&layer.decays))).unwrap();
     }
@@ -80,12 +81,23 @@ pub fn load_smg1_model(path: &str) -> std::io::Result<(Smg1Model, Smg1Config)> {
         let p = format!("layer.{}", i);
         
         let packed_weights = get_tensor(&read_txn, &format!("{}.weights", p));
-        let membrane_potentials = get_tensor_f32(&read_txn, &format!("{}.potentials", p));
+        let mut membrane_potentials_real = get_tensor_f32(&read_txn, &format!("{}.potentials_real", p));
+        let mut membrane_potentials_imag = get_tensor_f32(&read_txn, &format!("{}.potentials_imag", p));
+        
+        // Fallback para modelos antiguos
+        if membrane_potentials_real.is_empty() {
+            membrane_potentials_real = get_tensor_f32(&read_txn, &format!("{}.potentials", p));
+        }
+        if membrane_potentials_imag.is_empty() {
+            membrane_potentials_imag = vec![0.0; num_neurons];
+        }
+
         let thresholds = get_tensor_f32(&read_txn, &format!("{}.thresholds", p));
         let decays = get_tensor_f32(&read_txn, &format!("{}.decays", p));
 
         layers.push(GajeNeuromorphicLayer {
-            membrane_potentials,
+            membrane_potentials_real,
+            membrane_potentials_imag,
             thresholds,
             decays,
             packed_weights,

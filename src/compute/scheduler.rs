@@ -9,7 +9,8 @@ use std::collections::HashSet;
 #[cfg_attr(feature = "python", pyclass)]
 pub struct NeuromorphicScheduler {
     pub wheel: TimingWheel,
-    pub centroides: [f32; 4],
+    pub centroides_real: [f32; 4],
+    pub centroides_imag: [f32; 4],
     pub delay_per_layer: u64, // Retardo Δt entre capas en ticks
 }
 
@@ -17,8 +18,9 @@ pub struct NeuromorphicScheduler {
 impl NeuromorphicScheduler {
     #[cfg(feature = "python")]
     #[new]
-    pub fn new_py(centroides: [f32; 4], delay_per_layer: u64) -> Self {
-        Self::new(centroides, delay_per_layer)
+    #[pyo3(signature = (centroides_real, centroides_imag, delay_per_layer))]
+    pub fn new_py(centroides_real: [f32; 4], centroides_imag: [f32; 4], delay_per_layer: u64) -> Self {
+        Self::new(centroides_real, centroides_imag, delay_per_layer)
     }
 
     /// Inyecta un estímulo inicial con precisión de fase e intensidad.
@@ -58,10 +60,11 @@ impl NeuromorphicScheduler {
 }
 
 impl NeuromorphicScheduler {
-    pub fn new(centroides: [f32; 4], delay_per_layer: u64) -> Self {
+    pub fn new(centroides_real: [f32; 4], centroides_imag: [f32; 4], delay_per_layer: u64) -> Self {
         Self {
             wheel: TimingWheel::new(1024),
-            centroides,
+            centroides_real,
+            centroides_imag,
             delay_per_layer,
         }
     }
@@ -73,7 +76,7 @@ impl NeuromorphicScheduler {
         let mut affected_layers = HashSet::new();
         for event in &events {
             if event.target_layer_id < layers.len() {
-                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, self.centroides, event.intensity);
+                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, self.centroides_real, self.centroides_imag, event.intensity);
                 affected_layers.insert(event.target_layer_id);
             }
         }
@@ -119,8 +122,9 @@ mod tests {
     use crate::nn::spiking::neuron::GajeWeight2Bit;
     #[test]
     fn test_scheduler_propagation_soa() {
-        let centroides = [0.0, 0.5, 0.8, 1.2];
-        let mut scheduler = NeuromorphicScheduler::new(centroides, 2);
+        let c_r = [0.0, 0.5, 0.8, 1.2];
+        let c_im = [0.0, 0.0, 0.0, 0.0];
+        let mut scheduler = NeuromorphicScheduler::new(c_r, c_im, 2);
         let mut layer0 = GajeNeuromorphicLayer::new(1, 1, 1.0, 1.0);
         layer0.set_weight(0, 0, GajeWeight2Bit::State11 as u8);
         let mut layer1 = GajeNeuromorphicLayer::new(1, 1, 1.0, 1.0);
