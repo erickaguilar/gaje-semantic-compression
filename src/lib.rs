@@ -38,6 +38,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
     m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::io::loader::save_genomic_model_py, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::nn::merger::merge_models_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_embedding_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::quantize_embedding, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::quantize_pq, m)?)?;

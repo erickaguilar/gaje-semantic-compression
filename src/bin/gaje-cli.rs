@@ -181,12 +181,45 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tokenizer.encode(l, false).unwrap_or_default().into_iter().map(|id| id as usize).collect()
         }).filter(|tokens: &Vec<usize>| tokens.len() >= 2).collect();
         if dataset.is_empty() { return Err("Dataset empty or too short".into()); }
+        
         let trainer = _impl::nn::trainer::GenomicTrainerCore::new(scale, resonance_weight);
-        trainer.fit(&mut model, &dataset, train_epochs).map_err(|e| e.to_string())?;
+        let p1_end = (train_epochs as f32 * 0.2) as usize;
+        let p2_end = (train_epochs as f32 * 0.7) as usize;
+
+        for epoch in 0..train_epochs {
+            let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
+            
+            // Entrenar época con callback de guardado intra-época (cada 100 muestras)
+            let s_path = save_path.clone();
+            let cfg = config.clone();
+            let tok = tokenizer.clone();
+
+            trainer.fit_epoch(&mut model, &dataset, epoch, train_epochs, phase, |m, count, loss| {
+                if let Some(ref path) = s_path {
+                    _impl::io::loader::save_genomic_model(path, m, &cfg, Some(&tok)).map_err(|e| e.to_string())?;
+                    println!("      [Intra-Epoch Checkpoint] {} muestras procesadas | Loss: {:.4}", count, loss);
+                }
+                Ok(())
+            }).map_err(|e| e.to_string())?;
+            
+            // Checkpoint final de época
+            if let Some(ref path) = save_path {
+                _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?;
+                println!("    [Final-Epoch Checkpoint] Época {} completada y guardada.", epoch + 1);
+            }
+        }
         println!("[+] Entrenamiento completado.");
     }
 
-    if let Some(ref path) = save_path { _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?; println!("[+] Modelo guardado exitosamente."); }
+    // Guardado final (por si no se guardó en el bucle o para confirmar éxito total)
+    if let Some(ref path) = save_path { 
+        if train_target.is_none() {
+            _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?; 
+            println!("[+] Modelo guardado exitosamente."); 
+        } else {
+            println!("[+] Entrenamiento y guardado final exitoso en: {}", path);
+        }
+    }
 
     if let Some(prompt) = prompt_arg { generate(&mut model, &tokenizer, &prompt, 50)?; } 
     else if evolve_target.is_none() && train_target.is_none() { println!("\n[!] Modo interactivo no disponible en TTY reducido. Use --prompt."); }

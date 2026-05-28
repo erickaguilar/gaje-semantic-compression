@@ -85,6 +85,57 @@ impl GenomicTrainerCore {
         Ok(total_loss / seq_len as f32)
     }
 
+    pub fn fit_epoch<F>(
+        &self,
+        model: &mut GenomicLLM,
+        dataset: &[Vec<usize>],
+        epoch: usize,
+        total_epochs: usize,
+        phase: u8,
+        mut on_step: F,
+    ) -> Result<f32, String> 
+    where F: FnMut(&mut GenomicLLM, usize, f32) -> Result<(), String>
+    {
+        let phase_name = match phase {
+            1 => "Base (LM Head)",
+            2 => "IQAT (Deep)",
+            _ => "Evol (Homeostatic)",
+        };
+
+        let start = Instant::now();
+        let mut epoch_loss = 0.0;
+        let mut count = 0;
+
+        for (_idx, seq) in dataset.iter().enumerate() {
+            if seq.len() < 2 { continue; }
+            let input = &seq[0..seq.len()-1];
+            let target = &seq[1..seq.len()];
+            
+            match self.train_step(model, input, target, phase) {
+                Ok(loss) => {
+                    epoch_loss += loss;
+                    count += 1;
+                    // Callback cada 100 muestras (intra-epoch save)
+                    if count % 100 == 0 {
+                        on_step(model, count, epoch_loss / count as f32)?;
+                    }
+                },
+                Err(e) => println!("    [!] Error en secuencia: {}", e),
+            }
+        }
+
+        if count > 0 {
+            let avg_loss = epoch_loss / count as f32;
+            println!(
+                "    - Época {}/{} [{}] | Loss: {:.4} | PPL: {:.2} | {:?}",
+                epoch + 1, total_epochs, phase_name, avg_loss, avg_loss.exp(), start.elapsed()
+            );
+            Ok(avg_loss)
+        } else {
+            Err("No valid samples in dataset".to_string())
+        }
+    }
+
     pub fn fit(
         &self,
         model: &mut GenomicLLM,
@@ -98,37 +149,7 @@ impl GenomicTrainerCore {
 
         for epoch in 0..epochs {
             let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
-            let phase_name = match phase {
-                1 => "Base (LM Head)",
-                2 => "IQAT (Deep)",
-                _ => "Evol (Homeostatic)",
-            };
-
-            let start = Instant::now();
-            let mut epoch_loss = 0.0;
-            let mut count = 0;
-
-            for seq in dataset {
-                if seq.len() < 2 { continue; }
-                let input = &seq[0..seq.len()-1];
-                let target = &seq[1..seq.len()];
-                
-                match self.train_step(model, input, target, phase) {
-                    Ok(loss) => {
-                        epoch_loss += loss;
-                        count += 1;
-                    },
-                    Err(e) => println!("    [!] Error en secuencia: {}", e),
-                }
-            }
-
-            if count > 0 {
-                let avg_loss = epoch_loss / count as f32;
-                println!(
-                    "    - Época {}/{} [{}] | Loss: {:.4} | PPL: {:.2} | {:?}",
-                    epoch + 1, epochs, phase_name, avg_loss, avg_loss.exp(), start.elapsed()
-                );
-            }
+            self.fit_epoch(model, dataset, epoch, epochs, phase, |_, _, _| Ok(()))?;
         }
         Ok(())
     }

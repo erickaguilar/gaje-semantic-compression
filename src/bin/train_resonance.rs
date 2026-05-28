@@ -44,10 +44,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let trainer = GenomicTrainerCore::new(lr, 0.05);
     println!("[*] Starting Resonance phase...");
     
-    trainer.fit(&mut model, &dataset_ref, epochs).map_err(|e| e.to_string())?;
+    let p1_end = (epochs as f32 * 0.2) as usize;
+    let p2_end = (epochs as f32 * 0.7) as usize;
 
-    println!("[*] Saving refined model to: {}", output_path);
-    save_genomic_model(output_path, &model, &config, Some(&tokenizer))?;
+    for epoch in 0..epochs {
+        let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
+        trainer.fit_epoch(&mut model, &dataset_ref, epoch, epochs, phase).map_err(|e| e.to_string())?;
+        
+        // Checkpoint: Sobre-escribir el archivo de salida en cada época
+        save_genomic_model(output_path, &model, &config, Some(&tokenizer))?;
+        println!("    [Checkpoint] Progreso guardado en: {}", output_path);
+    }
 
     println!("✨ Training completed successfully.");
     Ok(())
