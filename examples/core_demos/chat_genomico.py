@@ -16,21 +16,21 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="models/gguf/smollm2-135m-q8_0.gguf",
-        help="Path to the GGUF model",
+        default="models/silver_adult_anchored.gaje",
+        help="Path to the GAJE model",
     )
     parser.add_argument(
         "--blocks", type=int, default=None, help="Number of transformer blocks to load"
     )
     parser.add_argument(
-        "--tokens", type=int, default=100, help="Max new tokens to generate"
+        "--tokens", type=int, default=128, help="Max new tokens to generate"
     )
     parser.add_argument(
-        "--temperature", type=float, default=0.3, help="Sampling temperature"
+        "--temperature", type=float, default=0.4, help="Sampling temperature"
     )
-    parser.add_argument("--top-p", type=float, default=0.8, help="Top-P sampling")
+    parser.add_argument("--top-p", type=float, default=0.9, help="Top-P sampling")
     parser.add_argument(
-        "--penalty", type=float, default=1.15, help="Repetition penalty"
+        "--penalty", type=float, default=1.2, help="Repetition penalty"
     )
     parser.add_argument(
         "--prompt",
@@ -40,7 +40,7 @@ def main():
     )
     args = parser.parse_args()
 
-    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.7.0 (Modernizado)")
+    print("🧬 GAJE PROTOCOL: GENOMIC CHAT v0.7.1 (Estabilizado)")
     print("=" * 60)
 
     model_path = args.model
@@ -57,21 +57,17 @@ def main():
                 model_path = p
                 break
         else:
-            print(f"❌ Error: El modelo GGUF no se encuentra en {model_path}.")
-            print("Por favor, proporciona una ruta válida usando --model.")
+            print(f"❌ Error: El modelo no se encuentra en {model_path}.")
             return
 
     # Cargamos el motor estabilizado
     print(f"[*] Inicializando GenomicLLM con {model_path}...")
-    if model_path.endswith(".gaje"):
-        llm = GenomicLLM.load_genomic(model_path)
-    else:
-        llm = GenomicLLM(model_path, num_blocks=args.blocks)
+    llm = GenomicLLM.load_genomic(model_path)
 
-    # Modo No-Interactivo (para automatización/Gemini CLI)
+    # Modo No-Interactivo
     if args.prompt or not sys.stdin.isatty():
         user_input = args.prompt or "Hola, preséntate brevemente."
-        print(f"\n👤 Usuario (No-Interactivo): {user_input}")
+        print(f"\n👤 Usuario: {user_input}")
 
         prompt = f"<|im_start|>user\n{user_input}<|im_end|>\n<|im_start|>assistant\n"
         print("\n🤖 GAJE: ", end="", flush=True)
@@ -84,12 +80,11 @@ def main():
             repetition_penalty=args.penalty,
         ):
             print(token_text, end="", flush=True)
-        print("\n\n[!] Proceso finalizado (Modo No-Interactivo).")
+        print("\n\n[!] Proceso finalizado.")
         return
 
     print("\n✨ SISTEMA LISTO. Escribe '/exit' para salir.")
     print("-" * 60)
-    # Initialize chat history for templating
     chat_history = []
 
     while True:
@@ -132,24 +127,12 @@ def main():
             duration = time.time() - start_time
             tps = token_count / duration if duration > 0 else 0
 
-            # Detect if mixed precision was actually used (experimental)
-            pm_status = (
-                "Activa"
-                if any(b.q_gen.precision_mask for b in llm.rust_llm.blocks)
-                else "Inactiva"
-            )
-
-            print(
-                f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s | Precision Mixta: {pm_status}]"
-            )
+            print(f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s]")
 
         except KeyboardInterrupt:
             break
         except Exception as e:
             print(f"\n⚠️ Error durante la inferencia: {e}")
-            import traceback
-
-            traceback.print_exc()
 
     print("\n[!] Organismo Genómico hibernando. Adiós.")
 

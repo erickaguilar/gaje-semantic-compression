@@ -22,6 +22,7 @@ class ArchitectureConfig:
     
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
+    dni: bool = False  # Direct Neural Ingestion support
 
 
 # Registry of known architectures

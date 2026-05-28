@@ -22,8 +22,20 @@ def get_model(model_name):
     if model_name in loaded_models:
         return loaded_models[model_name]
     
-    model_path = os.path.join(PROJECT_ROOT, "models", "checkpoints", model_name)
-    if not os.path.exists(model_path):
+    # Buscar en múltiples ubicaciones
+    possible_paths = [
+        os.path.join(PROJECT_ROOT, "models", model_name),
+        os.path.join(PROJECT_ROOT, "models", "checkpoints", model_name),
+        os.path.join(PROJECT_ROOT, "models", "archive", model_name)
+    ]
+    
+    model_path = None
+    for p in possible_paths:
+        if os.path.exists(p):
+            model_path = p
+            break
+            
+    if not model_path:
         return None
         
     print(f"🧬 Cargando modelo real: {model_path}")
@@ -41,16 +53,24 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/api/models':
-            checkpoints_dir = os.path.join(PROJECT_ROOT, "models", "checkpoints")
+            search_dirs = [
+                os.path.join(PROJECT_ROOT, "models"),
+                os.path.join(PROJECT_ROOT, "models", "checkpoints"),
+                os.path.join(PROJECT_ROOT, "models", "archive")
+            ]
             models = []
-            if os.path.exists(checkpoints_dir):
-                for f in os.listdir(checkpoints_dir):
-                    if f.endswith('.gaje'):
-                        fpath = os.path.join(checkpoints_dir, f)
-                        mtime = os.path.getmtime(fpath)
-                        from datetime import datetime
-                        date_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
-                        models.append({"name": f, "date": date_str})
+            seen_models = set()
+            
+            for d in search_dirs:
+                if os.path.exists(d):
+                    for f in os.listdir(d):
+                        if f.endswith('.gaje') and f not in seen_models:
+                            fpath = os.path.join(d, f)
+                            mtime = os.path.getmtime(fpath)
+                            from datetime import datetime
+                            date_str = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M')
+                            models.append({"name": f, "date": date_str})
+                            seen_models.add(f)
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')

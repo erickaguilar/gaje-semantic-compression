@@ -39,6 +39,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::io::loader::save_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_embedding_py, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::quantize_embedding, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::quantize_pq, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_q8_0_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::genomize_f32_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::genomize_f16_native, m)?)?;

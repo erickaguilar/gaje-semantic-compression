@@ -1,1 +1,4 @@
-from ._impl import *
+try:
+    from . import _impl
+except ImportError:
+    import _impl

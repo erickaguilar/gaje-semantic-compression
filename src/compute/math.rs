@@ -384,7 +384,6 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
     Ok(probs[0].0)
 }
 
-#[cfg_attr(feature = "python", pyfunction)]
 pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
     let n = real.len();
     let mut packed = Vec::with_capacity((n + 3) / 4);

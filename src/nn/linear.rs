@@ -57,10 +57,22 @@ impl GenomicLinear {
         }
         let mut epi_strands = Vec::new(); let mut tri_strands = Vec::new();
         if !epigenetic_database.is_empty() && !epi_cols.is_empty() {
-            for i in 0..out_features { let off = i * n_blocks * stride; for &(j, k) in &epi_cols { epi_strands.push(epigenetic_database[off + j * stride + k]); } }
+            for i in 0..out_features { 
+                let off = i * n_blocks * stride; 
+                for &(j, k) in &epi_cols { 
+                    let idx = off + j * stride + k;
+                    epi_strands.push(*epigenetic_database.get(idx).unwrap_or(&0)); 
+                } 
+            }
         }
         if !triplet_database.is_empty() && !tri_cols.is_empty() {
-            for i in 0..out_features { let off = i * n_blocks * stride; for &(j, k) in &tri_cols { tri_strands.push(triplet_database[off + j * stride + k]); } }
+            for i in 0..out_features { 
+                let off = i * n_blocks * stride; 
+                for &(j, k) in &tri_cols { 
+                    let idx = off + j * stride + k;
+                    tri_strands.push(*triplet_database.get(idx).unwrap_or(&0)); 
+                } 
+            }
         }
         GenomicLinear {
             database: Arc::new(database), epi_strands: Arc::new(epi_strands), tri_strands: Arc::new(tri_strands), epi_cols: Arc::new(epi_cols), tri_cols: Arc::new(tri_cols),

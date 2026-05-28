@@ -9,7 +9,7 @@ from gaje.nn.stabilized import GenomicLLM
 
 def main():
     parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: NEUROMORPHIC CHAT")
-    parser.add_argument("--model", type=str, default="models/checkpoints/test_organism.gaje", help="Path to the GAJE model")
+    parser.add_argument("--model", type=str, default="models/silver_adult_anchored.gaje", help="Path to the GAJE model")
     parser.add_argument("--prompt", type=str, default="Hola", help="Prompt de usuario")
     parser.add_argument("--steps", type=int, default=32, help="Neuromorphic simulation steps")
     parser.add_argument("--threshold", type=float, default=0.8, help="Spiking threshold")
