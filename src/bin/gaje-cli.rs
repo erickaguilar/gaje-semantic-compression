@@ -5,10 +5,21 @@ use _impl::core::tokenizer::GajeTokenizer;
 use std::env;
 use std::path::Path;
 use std::io::{self, Write};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use rand::distributions::{Distribution, WeightedIndex};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe { kernels::init_shuffle_table(); }
+
+    // Manejador de interrupción (Graceful Shutdown)
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        println!("\n[!] Interrupción detectada (Ctrl+C). Finalizando de forma segura...");
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error configurando el manejador de señales");
+
     let args: Vec<String> = env::args().collect();
     let mut model_path = String::new();
     let mut prompt_arg = None;
@@ -51,7 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[*] Creando nuevo organismo genómico 100% nativo en: {} (Preset: {})", path, init_preset);
         let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
             "gold_embryo" => (384, 8, 6, 49152), 
-            "micro_organism" => (128, 2, 4, 1024),
+            "micro_organism" => (128, 2, 4, 32768),
             "silver_fetus" => (512, 12, 8, 32768), 
             "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
             _ => (768, 6, 12, 49152),
@@ -62,6 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 rope_base: 1000000.0, ffn_act: "swiglu".to_string(), use_genomic_norm: true, rope_style: "split".to_string(),
                 anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false,
                 dni: String::new(), // Se generará automáticamente
+                state: "born".to_string(),
             },
             n_embd, n_head, n_head_kv: n_head, n_blocks, vocab_size: Some(vocab_size), eps: 1e-6,
         };
@@ -160,6 +172,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut rng = rand::thread_rng();
 
         for gen in 1..=generations {
+            if !running.load(Ordering::SeqCst) {
+                println!("    [!] Evolución interrumpida por el usuario.");
+                break;
+            }
+
             let layer_name = layers.choose(&mut rng).unwrap();
             let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
             let mut candidate_model = model.clone();
@@ -186,21 +203,40 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let p1_end = (train_epochs as f32 * 0.2) as usize;
         let p2_end = (train_epochs as f32 * 0.7) as usize;
 
-        for epoch in 0..train_epochs {
+        'epoch_loop: for epoch in 0..train_epochs {
+            if !running.load(Ordering::SeqCst) {
+                println!("    [!] Entrenamiento interrumpido por el usuario antes de la época {}.", epoch + 1);
+                break 'epoch_loop;
+            }
+
             let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
             
             // Entrenar época con callback de guardado intra-época (cada 100 muestras)
             let s_path = save_path.clone();
             let cfg = config.clone();
             let tok = tokenizer.clone();
+            let run_flag = running.clone();
 
-            trainer.fit_epoch(&mut model, &dataset, epoch, train_epochs, phase, |m, count, loss| {
+            let res = trainer.fit_epoch(&mut model, &dataset, epoch, train_epochs, phase, |m, count, loss| {
+                if !run_flag.load(Ordering::SeqCst) {
+                    return Err("INTERRUPTED".to_string());
+                }
+
                 if let Some(ref path) = s_path {
                     _impl::io::loader::save_genomic_model(path, m, &cfg, Some(&tok)).map_err(|e| e.to_string())?;
                     println!("      [Intra-Epoch Checkpoint] {} muestras procesadas | Loss: {:.4}", count, loss);
                 }
                 Ok(())
-            }).map_err(|e| e.to_string())?;
+            });
+
+            if let Err(e) = res {
+                if e == "INTERRUPTED" {
+                    println!("    [!] Abortando época {} por interrupción.", epoch + 1);
+                    break 'epoch_loop;
+                } else {
+                    return Err(e.into());
+                }
+            }
             
             // Checkpoint final de época
             if let Some(ref path) = save_path {
@@ -208,17 +244,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 println!("    [Final-Epoch Checkpoint] Época {} completada y guardada.", epoch + 1);
             }
         }
-        println!("[+] Entrenamiento completado.");
+        println!("[+] Ciclo de entrenamiento finalizado.");
     }
 
     // Guardado final (por si no se guardó en el bucle o para confirmar éxito total)
     if let Some(ref path) = save_path { 
-        if train_target.is_none() {
-            _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?; 
-            println!("[+] Modelo guardado exitosamente."); 
-        } else {
-            println!("[+] Entrenamiento y guardado final exitoso en: {}", path);
-        }
+        println!("[*] Ejecutando guardado final de seguridad en: {}", path);
+        _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?; 
+        println!("[+] Proceso completado exitosamente."); 
     }
 
     if let Some(prompt) = prompt_arg { generate(&mut model, &tokenizer, &prompt, 50)?; } 

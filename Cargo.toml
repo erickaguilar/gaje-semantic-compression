@@ -26,6 +26,7 @@ numpy = { version = "0.23.0", optional = true }
 rayon = "1.10.0"
 # Generación de números aleatorios
 rand = "0.8.5"
+ctrlc = "3.4"
 libc = "0.2"
 half = { version = "2.4.1", features = ["num-traits", "zerocopy"] }
 serde = { version = "1.0", features = ["derive"] }
