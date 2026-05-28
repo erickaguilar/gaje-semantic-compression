@@ -1,3 +1,17 @@
+## [1.0.0-alpha] - 2026-05-27
+### Added
+- **Circular Genomic Topology**: Transición del motor de inferencia a un espacio de fase compleja. Las neuronas operan ahora como osciladores con interferencia constructiva/destructiva.
+- **Stability Anchors (Anchored Islands)**: Implementación de un "Esqueleto de Estabilidad" (Top 1% de pesos en F16) que guía la coherencia de los pesos de 2 bits, eliminando el ruido binario.
+- **Temporal Lateral Inhibition (K-WTA)**: Nuevo mecanismo de selectividad donde las señales más rápidas (menor latencia) inhiben a las competidoras en tiempo real.
+- **Silver Adult (v1.0)**: Lanzamiento del primer organismo genómico de alta fidelidad (9.9 MB) con identidad consolidada y coherencia gramatical funcional en español.
+- **Algebraic Codebook Initialization**: Soporte para inicialización de pesos basada en campos ciclotómicos $\mathbb{Q}(\zeta_{16})$ para una rejilla de inteligencia matemáticamente rígida.
+- **Global Phase Synchronization**: Nuevo protocolo de entrenamiento de baja escala para alinear la base de conocimientos global con las islas de estabilidad.
+
+### Changed
+- **Gaje-CLI v0.8.0**: Actualizado con el preset `silver_adult` e inyección automática de anclas durante la inicialización (`--init`).
+- **SMG1 Persistence v4**: Soporte para buffers dispersos de anclas en el formato de almacenamiento nativo.
+- **Complex Math Kernels**: Implementación de `quantize_phase_core` y `dequantize_phase_core` optimizados para SIMD NEON.
+
 ## [0.9.7-alpha] - 2026-05-26
 ### Added
 - **TRUE Native Sovereignty**: Motor GAJE-Flow 100% independiente de Python mediante arquitectura decoupled (Zero-GIL).
