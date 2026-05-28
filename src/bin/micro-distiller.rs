@@ -19,10 +19,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }).expect("Error configurando el manejador de señales");
 
     // 1. Configuración de Rutas
-    let student_path = "models/micro_circular_test.gaje";
+    let student_path = "models/micro_distilled_coherence.gaje";
     let teacher_model_path = "models/gguf/smollm2-135m-f16.gguf";
     let tokenizer_path = "models/core/tokenizer.json";
-    let dataset_path = "data/datasets/micro_test.txt"; // Usaremos este como base pero más repetido o uno mayor
+    let dataset_path = "data/datasets/mosaic_dataset.txt";
     let output_path = "models/micro_distilled_coherence.gaje";
 
     // 2. Cargar Recursos
@@ -36,10 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .filter(|s| s.len() > 10)
         .collect();
     
-    // Duplicar samples para simular un dataset mayor si es necesario
-    let mut dataset = Vec::new();
-    for _ in 0..5 { dataset.extend(samples.clone()); }
-    println!("📊 Dataset preparado: {} muestras.", dataset.len());
+    println!("📊 Dataset preparado: {} muestras (Mosaic Balanceado).", samples.len());
 
     // 3. Cargar Estudiante
     println!("[*] Cargando Estudiante (Micro-Organismo)...");
@@ -47,8 +44,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut student = loader.load_llm()?;
     let config = loader.load_config()?;
 
-    // 4. Configurar Consejo de Profesores
-    println!("[*] Configurando Profesor (SmolLM2)...");
+    // 4. Configurar Profesor Único (SmolLM2-Master)
+    println!("[*] Configurando Profesor (SmolLM2-Instruct)...");
     let mut council = CouncilOfTeachers::new();
     let teacher = Teacher::new(
         "SmolLM2-Master".to_string(),
@@ -60,17 +57,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Configurar Destilador
     let distiller = GenomicDistiller::new(council, (*tokenizer).clone());
-    let epochs = 20;
+    let epochs = 15; // Aumentamos épocas para consolidar el nuevo conocimiento
     let lr = 0.001;
 
-    println!("\n🚀 Iniciando Ciclo de Destilación ({} épocas)...", epochs);
+    println!("\n🚀 Iniciando Ciclo de Crianza Equilibrada ({} épocas)...", epochs);
     
     'training_loop: for epoch in 0..epochs {
         let start = Instant::now();
         let mut epoch_loss = 0.0;
         let mut count = 0;
 
-        for text in &dataset {
+        for text in &samples {
             if !running.load(Ordering::SeqCst) {
                 println!("    [!] Abortando entrenamiento por interrupción de usuario.");
                 break 'training_loop;
