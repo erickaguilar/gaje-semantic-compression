@@ -56,14 +56,17 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
             _ => (768, 6, 12, 49152),
         };
-        let config = _impl::io::loader::ModelConfig {
+        let mut config = _impl::io::loader::ModelConfig {
             config: _impl::io::loader::ArchConfig {
-                name: format!("GAJE-{}-Organism", init_preset), version: "0.9.5".to_string(), tokenizer_id: "tokenizer".to_string(),
+                name: format!("GAJE-{}-Organism", init_preset), version: "1.0.0-alpha".to_string(), tokenizer_id: "tokenizer".to_string(),
                 rope_base: 1000000.0, ffn_act: "swiglu".to_string(), use_genomic_norm: true, rope_style: "split".to_string(),
                 anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false,
+                dni: String::new(), // Se generará automáticamente
             },
             n_embd, n_head, n_head_kv: n_head, n_blocks, vocab_size: Some(vocab_size), eps: 1e-6,
         };
+        // Forzar generación de DNI
+        config.config.dni = _impl::io::loader::py_new_dni();
         let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), vocab_size)?;
         if Path::new("models/core/tokenizer.json").exists() {
             let tok = GajeTokenizer::from_file("models/core/tokenizer.json").map_err(|e| e.to_string())?;
@@ -104,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Ok(());
     }
 
-    println!("🧬 GAJE Native Runtime (v0.7.0)");
+    println!("🧬 GAJE Native Runtime (v1.0.0-alpha)");
     
     let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
         let loader = _impl::io::loader::GGUFLoader::new(&model_path)?;

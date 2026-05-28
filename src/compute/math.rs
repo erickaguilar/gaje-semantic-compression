@@ -38,7 +38,7 @@ pub fn genomize_f32_core(
 
     let mut anchor_indices = Vec::new();
     let mut anchor_values = Vec::new();
-    let mut anchor_row_ptrs = vec![0u64; 1]; // Temporal, se ajustará después si es multidimensional
+    let _anchor_row_ptrs = vec![0u64; 1]; // Temporal, se ajustará después si es multidimensional
 
     let base_c = custom_base_c.unwrap_or([-1.510f32, -0.4528, 0.4528, 1.510]);
 

@@ -32,26 +32,39 @@ pub struct ArchConfig {
     pub unpermute_weights: bool,
     #[serde(default = "default_false")]
     pub apply_smollm_rope_patch: bool,
+    #[serde(default = "default_dni")]
+    pub dni: String,
 }
 
 #[cfg_attr(feature = "python", pymethods)]
 impl ArchConfig {
     #[cfg(feature = "python")]
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "0.9.5".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false))]
-    pub fn py_new(name: String, version: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool, rope_style: String, anchor_threshold: f32, ffn_anchor_threshold: f32, unpermute_weights: bool, apply_smollm_rope_patch: bool) -> Self {
-        ArchConfig { name, version, tokenizer_id, rope_base, ffn_act, use_genomic_norm, rope_style, anchor_threshold, ffn_anchor_threshold, unpermute_weights, apply_smollm_rope_patch }
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string()))]
+    pub fn py_new(name: String, version: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool, rope_style: String, anchor_threshold: f32, ffn_anchor_threshold: f32, unpermute_weights: bool, apply_smollm_rope_patch: bool, dni: String) -> Self {
+        let actual_dni = if dni.is_empty() { default_dni() } else { dni };
+        ArchConfig { name, version, tokenizer_id, rope_base, ffn_act, use_genomic_norm, rope_style, anchor_threshold, ffn_anchor_threshold, unpermute_weights, apply_smollm_rope_patch, dni: actual_dni }
     }
 }
 
 fn default_name() -> String { "GAJE-Model".to_string() }
-fn default_version() -> String { "0.9.5".to_string() }
+fn default_version() -> String { "1.0.0-alpha".to_string() }
 fn default_tokenizer() -> String { "gpt2".to_string() }
 fn default_rope_base() -> f32 { 10000.0 }
 fn default_ffn_act() -> String { "swiglu".to_string() }
 fn default_false() -> bool { false }
 fn default_rope_style() -> String { "split".to_string() }
 fn default_anchor_threshold() -> f32 { 0.1 }
+
+fn default_dni() -> String {
+    use chrono::Utc;
+    use rand::Rng;
+    let now = Utc::now().format("%Y%m%d%H%M%S").to_string();
+    let rand_id: u32 = rand::thread_rng().gen();
+    format!("GAJE-DNI-{}-{:08X}", now, rand_id)
+}
+
+pub fn py_new_dni() -> String { default_dni() }
 
 #[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -94,7 +107,7 @@ impl GGUFLoader {
         let n_blocks = self.get_metadata_u32(&format!("{}block_count", p)).or_else(|| self.get_metadata_u32("llama.block_count")).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "block_count not found"))? as usize;
         let eps = self.get_metadata_f32(&format!("{}attention.layer_norm_rms_epsilon", p)).unwrap_or(1e-6);
         let rope_base = self.get_metadata_f32(&format!("{}rope.freq_base", p)).unwrap_or(10000.0);
-        Ok(ModelConfig { config: ArchConfig { name: self.get_metadata_string("general.name").unwrap_or_else(|| "GGUF-Model".to_string()), version: "0.9.5".to_string(), tokenizer_id: "tokenizer".to_string(), rope_base, ffn_act: "swiglu".to_string(), use_genomic_norm: false, rope_style: "split".to_string(), anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false }, n_embd, n_head, n_head_kv, n_blocks, vocab_size: None, eps })
+        Ok(ModelConfig { config: ArchConfig { name: self.get_metadata_string("general.name").unwrap_or_else(|| "GGUF-Model".to_string()), version: "1.0.0-alpha".to_string(), tokenizer_id: "tokenizer".to_string(), rope_base, ffn_act: "swiglu".to_string(), use_genomic_norm: false, rope_style: "split".to_string(), anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false, dni: default_dni() }, n_embd, n_head, n_head_kv, n_blocks, vocab_size: None, eps })
     }
 
     pub fn load_genomic_llm(&self, config: ModelConfig, anchor_threshold: f32) -> std::io::Result<GenomicLLM> {
