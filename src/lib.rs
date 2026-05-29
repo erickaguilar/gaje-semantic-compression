@@ -6,8 +6,8 @@
     clippy::non_canonical_partial_ord_impl,
     clippy::manual_div_ceil
 )]
-pub mod core;
 pub mod compute;
+pub mod core;
 pub mod io;
 pub mod nn;
 pub mod pyo3_shim;

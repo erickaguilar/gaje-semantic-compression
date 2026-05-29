@@ -1,6 +1,6 @@
 use rand::Rng;
-use std::time::Instant;
 use rayon::prelude::*;
+use std::time::Instant;
 
 /// Representa una base de ADN digital (2 bits)
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,7 +79,7 @@ impl MicroOrganism {
             let byte_idx = rng.gen_range(0..n_bytes);
             let bit_shift = rng.gen_range(0..4) * 2;
             let new_base = rng.gen_range(0..4) as u8;
-            
+
             // Limpiar bits viejos y poner los nuevos
             self.dna[byte_idx] &= !(0b11 << bit_shift);
             self.dna[byte_idx] |= new_base << bit_shift;
@@ -96,19 +96,19 @@ fn softmax(x: &[f32]) -> Vec<f32> {
 
 fn main() {
     println!("🧬 Iniciando Evolución del Micro-Organismo GAJE...");
-    
+
     // Configuración: 128 entradas -> 4 salidas (Logits para H, o, l, a)
     let in_dim = 128;
     let out_dim = 4;
     let mut organism = MicroOrganism::new(in_dim, out_dim);
-    
+
     // El "Estimulo" de entrada (Trigger)
     let input = vec![1.0f32; in_dim];
-    
+
     // El "Objetivo" (Deseamos que la salida máxima sea 'H' en la primera iteración, etc.)
     // Para simplificar, buscaremos que el primer logit sea el mayor (Representando coherencia)
     let target_idx = 0; // Queremos que el organismo aprenda a activar el canal 0
-    
+
     let iterations = 20000;
     let mut best_fitness = f32::NEG_INFINITY;
     let start_time = Instant::now();
@@ -124,12 +124,15 @@ fn main() {
         }
 
         // Evaluar la población en paralelo usando todos los núcleos (AVX2 implícito)
-        let results: Vec<(f32, MicroOrganism)> = paths.into_par_iter().map(|path| {
-            let logits = path.forward(&input);
-            let probs = softmax(&logits);
-            let fitness = probs[target_idx]; // Nuestra función de aptitud es la probabilidad del objetivo
-            (fitness, path)
-        }).collect();
+        let results: Vec<(f32, MicroOrganism)> = paths
+            .into_par_iter()
+            .map(|path| {
+                let logits = path.forward(&input);
+                let probs = softmax(&logits);
+                let fitness = probs[target_idx]; // Nuestra función de aptitud es la probabilidad del objetivo
+                (fitness, path)
+            })
+            .collect();
 
         // Encontrar el camino más exitoso (Selección Natural)
         let mut best_path_fitness = f32::NEG_INFINITY;
@@ -145,7 +148,10 @@ fn main() {
         if best_path_fitness > best_fitness {
             best_fitness = best_path_fitness;
             organism = best_path_organism.unwrap();
-            println!("[Gen {}] Mejor Fitness (Probabilidad): {:.4}", gen, best_fitness);
+            println!(
+                "[Gen {}] Mejor Fitness (Probabilidad): {:.4}",
+                gen, best_fitness
+            );
         }
 
         if best_fitness > 0.99 {

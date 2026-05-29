@@ -1,6 +1,6 @@
 use rand::Rng;
-use std::time::Instant;
 use rayon::prelude::*;
+use std::time::Instant;
 
 /// Representa una base de ADN digital (2 bits)
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -28,7 +28,7 @@ impl RecurrentMicroOrganism {
     fn new(in_dim: usize, hidden_dim: usize, out_dim: usize) -> Self {
         let mut rng = rand::thread_rng();
         let centroids = [-1.5, -0.5, 0.5, 1.5];
-        
+
         let mut init_dna = |rows: usize, cols: usize| -> Vec<u8> {
             let n_bytes = (rows * cols + 3) / 4;
             let mut dna = vec![0u8; n_bytes];
@@ -69,12 +69,12 @@ impl RecurrentMicroOrganism {
         // h_t = tanh(W_ih * x_t + W_hh * h_{t-1})
         let ih = self.matmul_2bit(&self.dna_ih, input, self.hidden_dim, self.in_dim);
         let hh = self.matmul_2bit(&self.dna_hh, hidden, self.hidden_dim, self.hidden_dim);
-        
+
         let mut new_hidden = vec![0.0f32; self.hidden_dim];
         for i in 0..self.hidden_dim {
             new_hidden[i] = (ih[i] + hh[i]).tanh();
         }
-        
+
         // y_t = W_ho * h_t
         let output = self.matmul_2bit(&self.dna_ho, &new_hidden, self.out_dim, self.hidden_dim);
         (output, new_hidden)
@@ -110,9 +110,9 @@ fn main() {
     let mut vocab: Vec<char> = chars.clone();
     vocab.sort();
     vocab.dedup();
-    
+
     let char_to_idx = |c: char| vocab.iter().position(|&x| x == c).unwrap();
-    
+
     println!("🧬 Evolucionando Memoria Secuencial: '{}'", target_text);
     println!("   Vocabulario: {:?}", vocab);
 
@@ -136,23 +136,26 @@ fn main() {
         }
 
         // Evaluar la población en paralelo usando todos los núcleos (AVX2 implícito)
-        let results: Vec<(f32, RecurrentMicroOrganism)> = paths.into_par_iter().map(|path| {
-            let mut total_prob = 1.0f32;
-            let mut current_hidden = vec![0.0f32; hidden_dim];
-            
-            for i in 0..chars.len() - 1 {
-                let mut input = vec![0.0f32; in_dim];
-                input[char_to_idx(chars[i])] = 1.0;
-                
-                let (output, next_hidden) = path.step(&input, &current_hidden);
-                let probs = softmax(&output);
-                
-                let target_char = chars[i+1];
-                total_prob *= probs[char_to_idx(target_char)];
-                current_hidden = next_hidden;
-            }
-            (total_prob, path)
-        }).collect();
+        let results: Vec<(f32, RecurrentMicroOrganism)> = paths
+            .into_par_iter()
+            .map(|path| {
+                let mut total_prob = 1.0f32;
+                let mut current_hidden = vec![0.0f32; hidden_dim];
+
+                for i in 0..chars.len() - 1 {
+                    let mut input = vec![0.0f32; in_dim];
+                    input[char_to_idx(chars[i])] = 1.0;
+
+                    let (output, next_hidden) = path.step(&input, &current_hidden);
+                    let probs = softmax(&output);
+
+                    let target_char = chars[i + 1];
+                    total_prob *= probs[char_to_idx(target_char)];
+                    current_hidden = next_hidden;
+                }
+                (total_prob, path)
+            })
+            .collect();
 
         // Encontrar el camino más exitoso (Selección Natural)
         let mut best_path_prob = 0.0f32;
@@ -168,7 +171,10 @@ fn main() {
         if best_path_prob > best_total_fitness {
             best_total_fitness = best_path_prob;
             organism = best_path_organism.unwrap();
-            println!("[Gen {}] Mejor Probabilidad de Secuencia: {:.6}", gen, best_total_fitness);
+            println!(
+                "[Gen {}] Mejor Probabilidad de Secuencia: {:.6}",
+                gen, best_total_fitness
+            );
         }
 
         if best_total_fitness > 0.95 {
@@ -178,7 +184,7 @@ fn main() {
     }
 
     println!("\n✅ Completado en {:?}", start_time.elapsed());
-    
+
     // Verificación Final
     println!("--- PRUEBA DE MEMORIA ---");
     let mut current_hidden = vec![0.0f32; hidden_dim];
@@ -188,7 +194,12 @@ fn main() {
         input[char_to_idx(chars[i])] = 1.0;
         let (output, next_hidden) = organism.step(&input, &current_hidden);
         let probs = softmax(&output);
-        let best_idx = probs.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
+        let best_idx = probs
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .unwrap()
+            .0;
         print!("{}", vocab[best_idx]);
         current_hidden = next_hidden;
     }

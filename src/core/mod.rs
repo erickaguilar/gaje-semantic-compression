@@ -1,5 +1,5 @@
-pub mod db;
 pub mod archive;
+pub mod db;
 pub mod index;
 pub mod tokenizer;
 pub mod evolution_bitwise;
