@@ -162,7 +162,9 @@ impl CouncilOfTeachers {
                             for (t_id, &p) in probs.iter().enumerate() {
                                 if p > 1e-6 {
                                     if let Some(s_id) = teacher.vocab_mapping.get(t_id).and_then(|&id| id) {
-                                        student_probs[s_id] += p;
+                                        if let Some(slot) = student_probs.get_mut(s_id) {
+                                            *slot += p;
+                                        }
                                     }
                                 }
                             }
@@ -286,6 +288,11 @@ impl GenomicDistiller {
             }
             let token_id = tokens[i] as usize;
             let target_id = tokens[i+1] as usize;
+
+            if token_id >= student_vocab_size || target_id >= student_vocab_size {
+                continue;
+            }
+
             let teacher_probs = &consensus_seq[i];
 
             let (logits, h_norm) = student.forward_with_hidden_core(token_id, false)?;
