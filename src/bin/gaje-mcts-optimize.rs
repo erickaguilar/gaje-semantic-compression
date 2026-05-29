@@ -19,8 +19,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("🎲 Iniciando Optimización MCTS-Genómica para: {}", model_path);
 
     // 1. Cargar el modelo
-    let loader = NativeLoader::new(model_path)?;
-    let model = loader.load_llm()?;
+    let model = {
+        let loader = NativeLoader::new(model_path)?;
+        loader.load_llm()?
+    };
     
     // Para la validación del Gold Embryo, optimizaremos los centroides de la capa de embeddings
     // ya que es la base del vocabulario y la más crítica para la coherencia inicial.

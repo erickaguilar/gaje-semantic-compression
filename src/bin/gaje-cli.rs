@@ -203,6 +203,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let p1_end = (train_epochs as f32 * 0.2) as usize;
         let p2_end = (train_epochs as f32 * 0.7) as usize;
 
+        // Recuperar el paso guardado de los metadatos DNI
+        let mut start_step: usize = config.config.dni.parse().unwrap_or(0);
+        let mut current_config = config.clone();
+
         'epoch_loop: for epoch in 0..train_epochs {
             if !running.load(Ordering::SeqCst) {
                 println!("    [!] Entrenamiento interrumpido por el usuario antes de la época {}.", epoch + 1);
@@ -213,21 +217,27 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             
             // Entrenar época con callback de guardado intra-época (cada 100 muestras)
             let s_path = save_path.clone();
-            let cfg = config.clone();
             let tok = tokenizer.clone();
             let run_flag = running.clone();
+            let mut epoch_config = current_config.clone();
 
-            let res = trainer.fit_epoch(&mut model, &dataset, epoch, train_epochs, phase, |m, count, loss| {
+            let res = trainer.fit_epoch(&mut model, &dataset, epoch, train_epochs, phase, start_step, |m, count, loss| {
                 if !run_flag.load(Ordering::SeqCst) {
                     return Err("INTERRUPTED".to_string());
                 }
 
                 if let Some(ref path) = s_path {
-                    _impl::io::loader::save_genomic_model(path, m, &cfg, Some(&tok)).map_err(|e| e.to_string())?;
-                    println!("      [Intra-Epoch Checkpoint] {} muestras procesadas | Loss: {:.4}", count, loss);
+                    // Actualizar el marcador de paso en la config antes de guardar
+                    epoch_config.config.dni = count.to_string();
+                    _impl::io::loader::save_genomic_model(path, m, &epoch_config, Some(&tok)).map_err(|e| e.to_string())?;
+                    println!("      [Intra-Epoch Checkpoint] Muestra #{} | Loss: {:.4}", count, loss);
                 }
                 Ok(())
             });
+
+            // Después de una época completa, reiniciamos el marcador para la siguiente
+            start_step = 0;
+            current_config.config.dni = "0".to_string();
 
             if let Err(e) = res {
                 if e == "INTERRUPTED" {
@@ -240,7 +250,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             
             // Checkpoint final de época
             if let Some(ref path) = save_path {
-                _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?;
+                _impl::io::loader::save_genomic_model(path, &model, &current_config, Some(&tokenizer))?;
                 println!("    [Final-Epoch Checkpoint] Época {} completada y guardada.", epoch + 1);
             }
         }
@@ -260,18 +270,65 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-fn sample_logits(logits: &[f32], temperature: f32, top_k: usize, top_p: f32) -> usize {
-    if temperature == 0.0 { return logits.iter().enumerate().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()).map(|(i, _)| i).unwrap_or(0); }
-    let mut indexed_logits: Vec<(usize, f32)> = logits.iter().enumerate().map(|(i, &l)| (i, l / temperature)).collect();
-    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    if top_k > 0 && top_k < indexed_logits.len() { indexed_logits.truncate(top_k); }
-    let max_logit = indexed_logits[0].1;
-    let mut probs: Vec<(usize, f32)> = indexed_logits.iter().map(|&(i, l)| (i, (l - max_logit).exp())).collect();
+fn sample_logits_mcts(model: &mut GenomicLLM, logits: &[f32], temperature: f32, top_k: usize) -> usize {
+    // 1. Seleccionar Top-K candidatos iniciales
+    let mut indexed_logits: Vec<(usize, f32)> = logits.iter().enumerate()
+        .map(|(i, &l)| (i, l))
+        .collect();
+    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    if top_k > 0 && top_k < indexed_logits.len() {
+        indexed_logits.truncate(top_k);
+    }
+
+    // 2. Simulación Flash (1-step look-ahead) para cada candidato
+    let mut final_candidates = Vec::new();
+    for (token_id, current_score) in indexed_logits {
+        // Guardar estado del cache
+        let mut cache_sizes = Vec::new();
+        for block in &model.blocks {
+            cache_sizes.push(block.attn.k_cache.len());
+        }
+
+        // Simular siguiente paso: ¿Qué tan "estable" es el futuro si elijo este token?
+        let lookahead_resonance = if let Ok(next_logits) = model.forward_phase_gaje_core(token_id, 64) {
+            // Tomamos el valor máximo de la siguiente activación como medida de resonancia
+            next_logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b))
+        } else {
+            -50.0 // Penalización si falla
+        };
+
+        // Restaurar cache (Crucial para no ensuciar la generación real)
+        for (i, block) in model.blocks.iter_mut().enumerate() {
+            block.attn.k_cache.truncate(cache_sizes[i]);
+            block.attn.v_cache.truncate(cache_sizes[i]);
+        }
+
+        // Score combinado: Score actual + Resonancia futura (0.5 es el factor de "visión de futuro")
+        let total_score = current_score + 0.5 * lookahead_resonance;
+        final_candidates.push((token_id, total_score));
+    }
+
+    // 3. Muestreo Probabilístico (Softmax) sobre los candidatos evaluados por MCTS
+    if temperature <= 0.0 {
+        return final_candidates.iter().max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()).map(|(i, _)| *i).unwrap_or(0);
+    }
+
+    let max_score = final_candidates.iter().map(|&(_, s)| s).fold(f32::NEG_INFINITY, f32::max);
+    let mut probs: Vec<(usize, f32)> = final_candidates.iter()
+        .map(|&(i, s)| (i, ((s - max_score) / temperature).exp()))
+        .collect();
     let sum: f32 = probs.iter().map(|&(_, p)| p).sum();
-    for item in &mut probs { item.1 /= sum; }
-    if top_p < 1.0 { let mut cum = 0.0; let mut cutoff = probs.len(); for (idx, &(_, p)) in probs.iter().enumerate() { cum += p; if cum > top_p { cutoff = idx + 1; break; } } probs.truncate(cutoff); }
-    let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
-    if let Ok(dist) = WeightedIndex::new(&weights) { probs[dist.sample(&mut rand::thread_rng())].0 } else { probs[0].0 }
+    
+    let mut rng = rand::thread_rng();
+    if sum > 0.0 {
+        for item in &mut probs { item.1 /= sum; }
+        let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
+        if let Ok(dist) = WeightedIndex::new(&weights) {
+            return probs[dist.sample(&mut rng)].0;
+        }
+    }
+    
+    final_candidates[0].0
 }
 
 fn generate(model: &mut GenomicLLM, tokenizer: &GajeTokenizer, prompt: &str, max_tokens: usize) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -279,12 +336,18 @@ fn generate(model: &mut GenomicLLM, tokenizer: &GajeTokenizer, prompt: &str, max
     model.clear_cache_core();
     let mut logits = Vec::new();
     for &tid in &tokens { logits = model.forward_phase_gaje_core(tid as usize, 64).map_err(|e| e.to_string())?; }
+    
+    println!("\n[*] Generando con MCTS-Light (1-step look-ahead)...");
     for _ in 0..max_tokens {
-        let next_token = sample_logits(&logits, 0.4, 40, 0.9);
+        // Usamos MCTS-Light con Top-5 candidatos para equilibrio entre calidad y velocidad
+        let next_token = sample_logits_mcts(model, &logits, 0.4, 5);
+        
         if next_token == 0 || next_token == 151643 { break; } 
         let decoded = tokenizer.decode(&[next_token as u32], true).map_err(|e| e.to_string())?;
         print!("{}", decoded); io::stdout().flush()?;
+        
         logits = model.forward_phase_gaje_core(next_token, 64).map_err(|e| e.to_string())?;
     }
+    println!();
     Ok(())
 }

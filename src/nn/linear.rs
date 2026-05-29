@@ -173,7 +173,7 @@ impl GenomicLinear {
         let n_blocks = self.in_features / self.block_size;
         self.centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
             if i >= grads.len() { return; }
-            let grad_scale = grads[i] * lr; if grad_scale.abs() > 1e-8 {
+            let grad_scale = grads[i] * lr; if grad_scale.abs() > 1e-12 {
                 let row_off = i * n_blocks * self.stride;
                 for j in 0..n_blocks {
                     let weights = &self.database[row_off + j * self.stride..row_off + (j + 1) * self.stride];

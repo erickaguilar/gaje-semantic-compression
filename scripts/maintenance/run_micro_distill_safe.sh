@@ -24,10 +24,8 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # 2. Verificaciones Previas
-if [ ! -f "$BINARY" ]; then
-    echo -e "${YELLOW}[*] El binario no existe. Compilando...${NC}"
-    cargo build --release --bin micro-distiller
-fi
+echo -e "${YELLOW}[*] Verificando compilación...${NC}"
+cargo build --release --bin micro-distiller || exit 1
 
 # Verificar si termux-api está instalado
 if ! command -v termux-wake-lock &> /dev/null; then

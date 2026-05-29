@@ -122,7 +122,8 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
         }
         let mut sum_sq = vaddvq_f32(sum_v);
         while i < n { sum_sq += x[i] * x[i]; i += 1; }
-        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+        // Suelo de seguridad para evitar NaNs en Android
+        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
         let inv_rms_v = vdupq_n_f32(inv_rms);
         i = 0;
         while i + 4 <= n {
@@ -154,7 +155,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
             while i < n { sum_sq += x[i] * x[i]; i += 1; }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
             let inv_rms_v = _mm256_set1_ps(inv_rms);
             i = 0;
             while i + 8 <= n {
@@ -179,7 +180,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
             while i < n { sum_sq += x[i] * x[i]; i += 1; }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
             let inv_rms_v = _mm_set1_ps(inv_rms);
             i = 0;
             while i + 4 <= n {
@@ -196,7 +197,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
-        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).sqrt();
+        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-12).sqrt();
         for i in 0..n { out[i] = x[i] * inv_rms * weight[i]; }
     }
     out

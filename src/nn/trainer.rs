@@ -92,6 +92,7 @@ impl GenomicTrainerCore {
         epoch: usize,
         total_epochs: usize,
         phase: u8,
+        start_step: usize,
         mut on_step: F,
     ) -> Result<f32, String> 
     where F: FnMut(&mut GenomicLLM, usize, f32) -> Result<(), String>
@@ -106,7 +107,13 @@ impl GenomicTrainerCore {
         let mut epoch_loss = 0.0;
         let mut count = 0;
 
-        for (_idx, seq) in dataset.iter().enumerate() {
+        // Si start_step >= dataset.len(), reiniciamos a 0 para esta época
+        let actual_start = if start_step < dataset.len() { start_step } else { 0 };
+        if actual_start > 0 {
+            println!("    [>] Reanudando desde muestra #{}", actual_start);
+        }
+
+        for (idx, seq) in dataset.iter().enumerate().skip(actual_start) {
             if seq.len() < 2 { continue; }
             let input = &seq[0..seq.len()-1];
             let target = &seq[1..seq.len()];
@@ -117,10 +124,11 @@ impl GenomicTrainerCore {
                     count += 1;
                     // Callback cada 100 muestras (intra-epoch save)
                     if count % 100 == 0 {
-                        on_step(model, count, epoch_loss / count as f32)?;
+                        // El índice absoluto es actual_start + count
+                        on_step(model, actual_start + count, epoch_loss / count as f32)?;
                     }
                 },
-                Err(e) => println!("    [!] Error en secuencia: {}", e),
+                Err(e) => println!("    [!] Error en secuencia {}: {}", idx, e),
             }
         }
 
@@ -149,7 +157,7 @@ impl GenomicTrainerCore {
 
         for epoch in 0..epochs {
             let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
-            self.fit_epoch(model, dataset, epoch, epochs, phase, |_, _, _| Ok(()))?;
+            self.fit_epoch(model, dataset, epoch, epochs, phase, 0, |_, _, _| Ok(()))?;
         }
         Ok(())
     }

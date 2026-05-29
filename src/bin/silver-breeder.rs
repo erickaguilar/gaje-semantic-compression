@@ -30,9 +30,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Cargar Estudiante (Silver Adult)
     println!("[*] Cargando Estudiante: {}...", student_path);
-    let loader = _impl::io::loader::NativeLoader::new(student_path)?;
-    let mut student_llm = loader.load_llm()?;
-    let config = loader.load_config()?;
+    let (mut student_llm, config) = {
+        let loader = _impl::io::loader::NativeLoader::new(student_path)?;
+        let student_llm = loader.load_llm()?;
+        let config = loader.load_config()?;
+        (student_llm, config)
+    };
 
     // 3.1. Aplicar Anclaje Algebraico Q(zeta_16) para estabilización
     let codebook_path = "models/core/algebraic_codebook.json";

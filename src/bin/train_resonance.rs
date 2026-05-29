@@ -15,10 +15,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧬 GAJE Large-Scale Native Resonance Training (Phase 4.2)");
     println!("[*] Loading model from: {}", model_path);
 
-    let loader = NativeLoader::new(model_path)?;
-    let config = loader.load_config()?;
-    let mut model = loader.load_llm()?;
-    let tokenizer = loader.load_tokenizer()?;
+    let (mut model, config, tokenizer) = {
+        let loader = NativeLoader::new(model_path)?;
+        let config = loader.load_config()?;
+        let model = loader.load_llm()?;
+        let tokenizer = loader.load_tokenizer()?;
+        (model, config, tokenizer)
+    };
 
     if Path::new(topology_path).exists() {
         println!("[*] Injecting topology: {}", topology_path);
@@ -49,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for epoch in 0..epochs {
         let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
-        trainer.fit_epoch(&mut model, &dataset_ref, epoch, epochs, phase).map_err(|e| e.to_string())?;
+        trainer.fit_epoch(&mut model, &dataset_ref, epoch, epochs, phase, 0, |_, _, _| Ok(())).map_err(|e| e.to_string())?;
         
         // Checkpoint: Sobre-escribir el archivo de salida en cada época
         save_genomic_model(output_path, &model, &config, Some(&tokenizer))?;

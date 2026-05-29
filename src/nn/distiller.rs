@@ -15,6 +15,7 @@ pub struct Teacher {
     pub model: GenomicLLM,
     pub tokenizer: GajeTokenizer,
     pub vocab_mapping: Vec<Option<usize>>, // teacher_token_id -> student_token_id
+    pub is_identity_vocab: bool,
 }
 
 #[cfg_attr(feature = "python", pymethods)]
@@ -52,19 +53,42 @@ impl Teacher {
         
         let vocab_size = tokenizer.vocab_size();
         let mut vocab_mapping = vec![None; vocab_size];
-        
+
         println!("[*] Pre-calculando mapeo de vocabulario para '{}' (Vocab: {})...", name, vocab_size);
-        for i in 0..vocab_size {
-            if let Ok(token_str) = tokenizer.decode(&[i as u32], true) {
-                if !token_str.is_empty() {
-                    if let Some(student_id) = student_tokenizer.token_to_id(&token_str) {
-                        vocab_mapping[i] = Some(student_id as usize);
-                    }
+
+        // Optimización: Si los tokenizadores son idénticos (basado en el tamaño del vocabulario 
+        // y una prueba rápida de los primeros 100 tokens), podemos usar un mapeo de identidad.
+        let mut is_identity = vocab_size == student_tokenizer.vocab_size();
+        if is_identity {
+            for i in 0..100.min(vocab_size) {
+                if let Ok(t1) = tokenizer.decode(&[i as u32], true) {
+                    if let Some(s_id) = student_tokenizer.token_to_id(&t1) {
+                        if s_id as usize != i { is_identity = false; break; }
+                    } else { is_identity = false; break; }
                 }
             }
         }
-        
-        Ok(Teacher { name, model, tokenizer, vocab_mapping })
+
+        if is_identity {
+            println!("    [+] Detectada identidad de vocabulario. Saltando mapeo exhaustivo.");
+            for i in 0..vocab_size { vocab_mapping[i] = Some(i); }
+        } else {
+            // Paralelizar con Rayon para evitar bloqueos en dispositivos móviles
+            use rayon::prelude::*;
+            let results: Vec<Option<usize>> = (0..vocab_size).into_par_iter().map(|i| {
+                if let Ok(token_str) = tokenizer.decode(&[i as u32], true) {
+                    if !token_str.is_empty() {
+                        return student_tokenizer.token_to_id(&token_str).map(|id| id as usize);
+                    }
+                }
+                None
+            }).collect();
+            vocab_mapping = results;
+            println!("    [✔] Mapeo completado (Rayon).");
+        }
+
+        Ok(Teacher { name, model, tokenizer, vocab_mapping, is_identity_vocab: is_identity })
+
     }
 }
 
@@ -104,15 +128,21 @@ impl CouncilOfTeachers {
 
         let teacher_results: Vec<Vec<Vec<f32>>> = self.teachers.par_iter().map(|teacher| {
             let mut model = teacher.model.clone();
-            let tokens = match teacher.tokenizer.encode(text, false) {
+            let mut tokens = match teacher.tokenizer.encode(text, false) {
                 Ok(t) => t,
                 Err(_) => return Vec::new(),
             };
 
+            // Limitamos a 512 tokens para evitar bloqueos en Android con textos muy largos (Mosaic)
+            if tokens.len() > 512 {
+                tokens.truncate(512);
+            }
+
             let mut seq_probs = Vec::with_capacity(tokens.len());
             model.clear_cache_core();
 
-            for &token_id in &tokens {
+            for &token_id in tokens.iter() {
+                // Feedback silencioso pero útil para depuración interna si fuera necesario
                 match model.forward_core(token_id as usize, false) {
                     Ok(logits) => {
                         let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -125,18 +155,22 @@ impl CouncilOfTeachers {
                         }
                         for p in &mut probs { *p /= sum_exp + 1e-12; }
 
-                        let mut student_probs = vec![0.0f32; student_vocab_size];
-                        for (t_id, &p) in probs.iter().enumerate() {
-                            if p > 0.0001 {
-                                if let Some(s_id) = teacher.vocab_mapping.get(t_id).and_then(|&id| id) {
-                                    student_probs[s_id] += p;
+                        if teacher.is_identity_vocab {
+                            seq_probs.push(probs);
+                        } else {
+                            let mut student_probs = vec![0.0f32; student_vocab_size];
+                            for (t_id, &p) in probs.iter().enumerate() {
+                                if p > 1e-6 {
+                                    if let Some(s_id) = teacher.vocab_mapping.get(t_id).and_then(|&id| id) {
+                                        student_probs[s_id] += p;
+                                    }
                                 }
                             }
-                        }
 
-                        let s: f32 = student_probs.iter().sum();
-                        if s > 0.0 { for p in &mut student_probs { *p /= s; } }
-                        seq_probs.push(student_probs);
+                            let s: f32 = student_probs.iter().sum();
+                            if s > 0.0 { for p in &mut student_probs { *p /= s; } }
+                            seq_probs.push(student_probs);
+                        }
                     },
                     Err(_) => {
                         seq_probs.push(vec![1.0 / student_vocab_size as f32; student_vocab_size]);
@@ -224,10 +258,13 @@ impl GenomicDistiller {
         text: &str,
         lr: f32,
     ) -> Result<f32, String> {
-        let tokens = self.student_tokenizer.encode(text, false)
+        let mut tokens = self.student_tokenizer.encode(text, false)
             .map_err(|e| format!("Error tokenizando estudiante: {}", e))?;
         
         if tokens.len() < 2 { return Ok(0.0); }
+        
+        // Truncar para consistencia con el profesor y velocidad en Android
+        if tokens.len() > 512 { tokens.truncate(512); }
 
         let student_vocab_size = student.lm_head.out_features;
         let consensus_seq = self.council.get_consensus_probs(text, student_vocab_size);
@@ -237,14 +274,22 @@ impl GenomicDistiller {
         student.clear_cache_core();
         let mut total_loss = 0.0;
         let n_steps = (tokens.len() - 1).min(consensus_seq.len());
+        
+        // Feedback granular cada 50 tokens para que el usuario sepa que hay vida
+        let show_progress = n_steps > 100;
 
         for i in 0..n_steps {
+            if show_progress && i % 50 == 0 {
+                print!("."); 
+                use std::io::Write;
+                std::io::stdout().flush().ok();
+            }
             let token_id = tokens[i] as usize;
             let target_id = tokens[i+1] as usize;
             let teacher_probs = &consensus_seq[i];
 
             let (logits, h_norm) = student.forward_with_hidden_core(token_id, false)?;
-
+            
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_exp = 0.0f32;
             let mut student_probs = vec![0.0f32; logits.len()];
