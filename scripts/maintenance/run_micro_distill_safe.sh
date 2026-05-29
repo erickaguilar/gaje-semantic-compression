@@ -80,7 +80,7 @@ if [ "$USE_TERMUX" = true ]; then
     termux-wake-lock
 elif [ "$USE_GNOME" = true ]; then
     echo -e "[*] Entorno Gráfico Fedora (GNOME) detectado. Usando gnome-session-inhibit..."
-    EXEC_CMD="gnome-session-inhibit --app-id=\"gaje.micro.distiller\" --reason=\"Training DNA Semantic Compression\" --mode=\"inhibit-idle:inhibit-suspend\" $BINARY"
+    EXEC_CMD="gnome-session-inhibit --app-id=\"gaje.micro.distiller\" --reason=\"Training DNA Semantic Compression\" --inhibit=idle --inhibit=suspend $BINARY"
 elif [ "$USE_SYSTEMD" = true ]; then
     echo -e "[*] Entorno Linux (Systemd) detectado. Usando systemd-inhibit..."
     EXEC_CMD="systemd-inhibit --what=\"idle:sleep\" --who=\"GAJE Distiller\" --why=\"Training DNA Semantic Compression\" --mode=block $BINARY"
