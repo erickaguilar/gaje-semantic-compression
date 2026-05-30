@@ -13,7 +13,7 @@ Google ha redefinido la IA de borde con **Gemma 4**, introduciendo modelos "Effe
 | :--- | :--- | :--- | :--- |
 | **Parámetros** | ~2.3 Billones | ~2.3 Billones | Paridad |
 | **Tamaño (Disco/RAM)** | ~4.5 GB (Cuantizado) | **~680 MB (2-bit)** | **~7x más ligero** |
-| **Licencia** | Apache 2.0 | Apache 2.0 | Paridad |
+| **Licencia** | Apache 2.0 | AGPL v3 | Diferente |
 | **Ventana Contexto** | 128K tokens | 128K tokens | Paridad |
 | **Hardware Mínimo** | Móvil Gama Alta (2025+) | **Móvil Universal (2022+)** | Ubicuidad Total |
 | **Filosofía** | IA de Aplicación | **IA Invisible (Kernel)** | Integración profunda |
