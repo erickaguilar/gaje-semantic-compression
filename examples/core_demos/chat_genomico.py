@@ -5,10 +5,11 @@ import argparse
 
 # Asegurar que usamos el código local de 'python/'
 sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python"))
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python"))
 )
 
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
+from gaje.core import SessionMemory  # noqa: E402
 
 
 def main():
@@ -64,6 +65,19 @@ def main():
     print(f"[*] Inicializando GenomicLLM con {model_path}...")
     llm = GenomicLLM.load_genomic(model_path)
 
+    # Inicializamos la Capa de Sesión (Ring Buffer)
+    session_memory = SessionMemory(capacity=1024, dim=llm.n_embd)
+    session_file = "session_data.bin"
+
+    # Intentar cargar sesión previa
+    if os.path.exists(session_file):
+        print(f"[*] Recuperando sesión toroidal previa desde {session_file}...")
+        try:
+            session_memory = SessionMemory.load(session_file)
+            print(f"    [+] {len(session_memory)} interacciones recuperadas.")
+        except Exception as e:
+            print(f"    [!] No se pudo cargar la sesión: {e}")
+
     # Modo No-Interactivo
     if args.prompt or not sys.stdin.isatty():
         user_input = args.prompt or "Hola, preséntate brevemente."
@@ -91,15 +105,40 @@ def main():
         try:
             user_input = input("\n👤 Usuario: ")
             if user_input.lower() in ["/exit", "quit", "exit"]:
+                print(f"[*] Guardando sesión en {session_file}...")
+                session_memory.save(session_file)
                 break
 
             if not user_input.strip():
                 continue
 
+            # 1. Recuperación de Memoria Semántica (Toroidal Recall)
+            user_tokens = llm.tokenizer.encode(user_input, add_special_tokens=False)
+            if hasattr(user_tokens, "ids"):
+                user_tokens = user_tokens.ids
+            
+            # Obtenemos el hidden state del último token del input
+            # Usamos forward_with_hidden para capturar la fase semántica
+            _, user_phase = llm.rust_llm.forward_with_hidden(user_tokens[-1], True)
+            
+            # Recuperamos contexto relevante del buffer
+            relevant_context = session_memory.retrieve(user_phase, top_k=2)
+            
+            context_prompt = ""
+            if relevant_context:
+                print(f"    [🔍 Memoria: {len(relevant_context)} fragmentos recuperados]")
+                # Formateamos el contexto para inyectarlo al sistema
+                context_prompt = "--- MEMORIA DE SESIÓN RELEVANTE ---\n"
+                context_prompt += "\n".join(relevant_context)
+                context_prompt += "\n----------------------------------\n"
+
             chat_history.append({"role": "user", "content": user_input})
 
             # Apply chat template (ChatML format)
             prompt = ""
+            if context_prompt:
+                prompt += f"<|im_start|>system\n{context_prompt}<|im_end|>\n"
+                
             for msg in chat_history:
                 prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
             prompt += "<|im_start|>assistant\n"
@@ -122,6 +161,11 @@ def main():
                 full_response += token_text
                 token_count += 1
 
+            # 2. Recirculación: Guardamos la interacción en la memoria
+            # Usamos el par pregunta/respuesta como bloque semántico
+            interaction_text = f"Pregunta: {user_input}\nRespuesta: {full_response.strip()}"
+            session_memory.push(interaction_text, user_phase)
+
             chat_history.append({"role": "assistant", "content": full_response.strip()})
 
             duration = time.time() - start_time
@@ -130,6 +174,8 @@ def main():
             print(f"\n\n   [Métricas: {duration:.2f}s | {tps:.2f} t/s]")
 
         except KeyboardInterrupt:
+            print(f"\n[*] Guardando sesión en {session_file}...")
+            session_memory.save(session_file)
             break
         except Exception as e:
             print(f"\n⚠️ Error durante la inferencia: {e}")

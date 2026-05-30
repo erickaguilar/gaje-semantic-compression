@@ -4,3 +4,5 @@ pub mod index;
 pub mod tokenizer;
 pub mod evolution_bitwise;
 pub mod topology;
+pub mod session_memory;
+pub mod dni;

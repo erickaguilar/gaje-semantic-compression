@@ -37,14 +37,22 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut init_preset = "default".to_string();
     let mut tokenize_text = None;
     let mut inspect_model = false;
+    let mut dni_path = None;
+    let mut dni_intensity = 0.01;
+    let mut dni_pop = 16;
+    let mut anchor_threshold_arg = 0.1;
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() { model_path = args[i+1].clone(); i += 2; }
         else if args[i] == "--import" && i + 1 < args.len() { import_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--output" && i + 1 < args.len() { output_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--threshold" && i + 1 < args.len() { anchor_threshold_arg = args[i+1].parse().unwrap_or(0.1); i += 2; }
         else if args[i] == "--preset" && i + 1 < args.len() { init_preset = args[i+1].clone(); i += 2; }
         else if args[i] == "--inspect" { inspect_model = true; i += 1; }
         else if args[i] == "--init" && i + 1 < args.len() { init_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--dni-ingest" && i + 1 < args.len() { dni_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--dni-intensity" && i + 1 < args.len() { dni_intensity = args[i+1].parse().unwrap_or(0.01); i += 2; }
+        else if args[i] == "--dni-pop" && i + 1 < args.len() { dni_pop = args[i+1].parse().unwrap_or(16); i += 2; }
         else if args[i] == "--tokenize" && i + 1 < args.len() { tokenize_text = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--prompt" && i + 1 < args.len() { prompt_arg = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--evolve" && i + 1 < args.len() { evolve_target = Some(args[i+1].clone()); i += 2; }
@@ -91,10 +99,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(path) = import_path {
         let out = output_path.ok_or("Debe especificar --output <path.gaje> al importar")?;
-        println!("[*] Importando modelo GGUF a formato GAJE nativo...");
+        println!("[*] Importando modelo GGUF a formato GAJE nativo (Threshold: {})...", anchor_threshold_arg);
         let loader = _impl::io::loader::GGUFLoader::new(&path)?;
         let config = loader.infer_config()?;
-        let model = loader.load_genomic_llm(config.clone(), -1.0)?;
+        let model = loader.load_genomic_llm(config.clone(), anchor_threshold_arg)?;
         let mut tokenizer = None;
         let tokenizer_path = Path::new(&path).parent().unwrap().join("tokenizer.json");
         if tokenizer_path.exists() {
@@ -189,6 +197,39 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             if best_fitness > -0.05 { println!("🔥 ¡Propagador de Inteligencia Alcanzado!"); break; }
         }
+    }
+
+    if let Some(path) = dni_path {
+        println!("[*] Iniciando Direct Neural Ingestion (DNI) desde: {}", path);
+        let content = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+            println!("[!] Error: No se pudo leer el archivo DNI {}. Usando como texto plano.", path);
+            path.clone()
+        });
+
+        use _impl::core::dni::DNIEngine;
+        let mut engine = DNIEngine {
+            model: model.clone(),
+            tokenizer: Arc::new(tokenizer.clone()),
+            council: None,
+            intensity: dni_intensity,
+            target_layers: Vec::new(),
+        };
+
+        let start = std::time::Instant::now();
+        // Fragmentar contenido si es muy largo (Cromosomización básica por líneas)
+        for (idx, line) in content.lines().filter(|l| l.trim().len() > 10).enumerate() {
+            if !running.load(Ordering::SeqCst) { break; }
+            print!("    [Ingesta #{}]: \"{}...\" ", idx + 1, &line[..40.min(line.len())]);
+            std::io::stdout().flush()?;
+            
+            match engine.ingest_text(line.to_string(), generations, dni_pop) {
+                Ok(fitness) => println!("-> Fitness: {:.4}", fitness),
+                Err(e) => println!("-> [!] Error: {}", e),
+            }
+        }
+        
+        model = engine.model;
+        println!("[+] Proceso DNI completado en {:?}.", start.elapsed());
     }
 
     if let Some(ref dataset_path) = train_target {

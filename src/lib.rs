@@ -20,6 +20,8 @@ use pyo3::prelude::*;
 fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     unsafe { crate::compute::kernels::init_shuffle_table(); }
     m.add_class::<crate::core::index::GajeIndex>()?;
+    m.add_class::<crate::core::session_memory::SessionBuffer>()?;
+    m.add_class::<crate::core::dni::DNIEngine>()?;
     m.add_class::<crate::nn::attention::GenomicAttention>()?;
     m.add_class::<crate::nn::linear::GenomicLinear>()?;
     m.add_class::<crate::nn::spiking::layer::GajeNeuromorphicLayer>()?;

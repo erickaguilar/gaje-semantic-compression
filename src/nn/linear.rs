@@ -40,10 +40,23 @@ impl GenomicLinear {
             let mut indices = Vec::with_capacity(count); let mut values = Vec::with_capacity(count); let mut row_ptrs = vec![0; out_features + 1];
             let idx_s = 8; let val_s = idx_s + count * 4; let ptr_s = val_s + count * 2;
             for i in 0..count {
-                indices.push(u32::from_le_bytes(anchors_u8[idx_s + i * 4..idx_s + i * 4 + 4].try_into().unwrap()));
-                values.push(f16::from_le_bytes(anchors_u8[val_s + i * 2..val_s + i * 2 + 2].try_into().unwrap()));
+                let idx_b = idx_s + i * 4;
+                let val_b = val_s + i * 2;
+                if idx_b + 4 <= anchors_u8.len() {
+                    indices.push(u32::from_le_bytes(anchors_u8[idx_b..idx_b + 4].try_into().unwrap()));
+                }
+                if val_b + 2 <= anchors_u8.len() {
+                    values.push(f16::from_le_bytes(anchors_u8[val_b..val_b + 2].try_into().unwrap()));
+                }
             }
-            for i in 0..=out_features { row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_s + i * 8..ptr_s + i * 8 + 8].try_into().unwrap()) as usize; }
+            for i in 0..=out_features {
+                let ptr_b = ptr_s + i * 8;
+                if ptr_b + 8 <= anchors_u8.len() {
+                    row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_b..ptr_b + 8].try_into().unwrap()) as usize;
+                } else if i > 0 {
+                    row_ptrs[i] = row_ptrs[i-1];
+                }
+            }
             (indices, values, row_ptrs)
         } else { (Vec::new(), Vec::new(), vec![0; out_features + 1]) };
         let n_blocks = in_features / block_size;
@@ -90,13 +103,23 @@ impl GenomicLinear {
 
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
             let row_off = i * n_blocks * self.stride;
+            if row_off + n_blocks * self.stride > self.database.len() { return 0.0; }
             let weights = &self.database[row_off..row_off + n_blocks * self.stride];
-            let row_centroids = &self.centroids[i * n_blocks * 4..(i + 1) * n_blocks * 4];
+            
+            let c_start = i * n_blocks * 4;
+            let c_end = (i + 1) * n_blocks * 4;
+            if c_end > self.centroids.len() { return 0.0; }
+            let row_centroids = &self.centroids[c_start..c_end];
             
             // Aplicamos modulación granular directamente en el producto punto si se provee
             let mut sum = unsafe { genomic_dot_product(weights, &input, row_centroids, self.stride, n_blocks, &m_factors) };
             let a_s = self.anchor_row_ptrs[i]; let a_e = self.anchor_row_ptrs[i + 1];
-            for k in a_s..a_e { sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32(); }
+            for k in a_s..a_e {
+                let idx = self.anchor_indices[k] as usize;
+                if idx < input.len() {
+                    sum += input[idx] * self.anchor_values[k].to_f32();
+                }
+            }
             if has_epi {
                 let mut e_sum = 0.0f32; let r_epi_off = i * self.epi_cols.len();
                 for (idx, &(j, k)) in self.epi_cols.iter().enumerate() {
