@@ -4,7 +4,7 @@ version = "1.0.0-alpha"
 edition = "2021"
 authors = ["Erick Aguilar"]
 description = "Motor de compresión semántica genómica de alto rendimiento para LLMs en dispositivos móviles."
-license = "MIT"
+license = "Apache-2.0"
 repository = "https://github.com/erickaguilar/gaje-semantic-compression"
 homepage = "https://github.com/erickaguilar/gaje-semantic-compression"
 
