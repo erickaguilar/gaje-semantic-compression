@@ -123,6 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "micro_organism" => (128, 2, 4, 32768),
             "silver_fetus" => (512, 12, 8, 32768),
             "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
+            "platinum" => (768, 24, 12, 32768),     // Fase 5.8: 20-25MB Platinum
             "titan" => (1024, 36, 16, 49152),       // Fase 6.0: 50MB Toroidal (Titan)
             _ => (768, 6, 12, 49152),
         };
