@@ -1,7 +1,7 @@
+use memmap2::Mmap;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Cursor, Read};
-use memmap2::Mmap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GGUFValueType {
@@ -77,18 +77,24 @@ impl GGUFReader {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
         let mut reader = Cursor::new(&mmap);
-        
+
         // 1. Magic
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
         if &magic != b"GGUF" {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Not a GGUF file"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Not a GGUF file",
+            ));
         }
 
         // 2. Version
         let version = Self::read_u32(&mut reader)?;
         if version != 2 && version != 3 {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported GGUF version: {}", version)));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Unsupported GGUF version: {}", version),
+            ));
         }
 
         // 3. Counts
@@ -119,17 +125,25 @@ impl GGUFReader {
                 1 => GGMLType::F16,
                 8 => GGMLType::Q8_0,
                 // Add more as needed
-                _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported tensor type: {}", tensor_type_id))),
+                _ => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Unsupported tensor type: {}", tensor_type_id),
+                    ))
+                }
             };
             let offset = Self::read_u64(&mut reader)?;
-            
-            tensors.insert(name.clone(), GGUFTensorInfo {
-                name,
-                n_dims,
-                shape,
-                tensor_type,
-                offset,
-            });
+
+            tensors.insert(
+                name.clone(),
+                GGUFTensorInfo {
+                    name,
+                    n_dims,
+                    shape,
+                    tensor_type,
+                    offset,
+                },
+            );
         }
 
         let current_pos = reader.position();
@@ -139,7 +153,7 @@ impl GGUFReader {
         } else {
             32u64
         };
-        
+
         let data_offset = (current_pos + alignment - 1) / alignment * alignment;
 
         Ok(GGUFReader {
@@ -151,17 +165,24 @@ impl GGUFReader {
     }
 
     pub fn get_tensor_data(&self, name: &str) -> std::io::Result<&[u8]> {
-        let info = self.tensors.get(name)
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, format!("Tensor not found: {}", name)))?;
-        
+        let info = self.tensors.get(name).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Tensor not found: {}", name),
+            )
+        })?;
+
         let size = self.get_tensor_size_bytes(info);
         let start = (self.data_offset + info.offset) as usize;
         let end = start + size;
-        
+
         if end > self.mmap.len() {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Tensor offset out of bounds"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Tensor offset out of bounds",
+            ));
         }
-        
+
         Ok(&self.mmap[start..end])
     }
 
@@ -200,44 +221,52 @@ impl GGUFReader {
 
     fn read_value<R: Read>(r: &mut R, val_type: u32) -> std::io::Result<GGUFValue> {
         match val_type {
-            0 => { // Uint8
+            0 => {
+                // Uint8
                 let mut buf = [0u8; 1];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Uint8(buf[0]))
             }
-            1 => { // Int8
+            1 => {
+                // Int8
                 let mut buf = [0u8; 1];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Int8(buf[0] as i8))
             }
-            2 => { // Uint16
+            2 => {
+                // Uint16
                 let mut buf = [0u8; 2];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Uint16(u16::from_le_bytes(buf)))
             }
-            3 => { // Int16
+            3 => {
+                // Int16
                 let mut buf = [0u8; 2];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Int16(i16::from_le_bytes(buf)))
             }
             4 => Ok(GGUFValue::Uint32(Self::read_u32(r)?)),
-            5 => { // Int32
+            5 => {
+                // Int32
                 let mut buf = [0u8; 4];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Int32(i32::from_le_bytes(buf)))
             }
-            6 => { // Float32
+            6 => {
+                // Float32
                 let mut buf = [0u8; 4];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Float32(f32::from_le_bytes(buf)))
             }
-            7 => { // Bool
+            7 => {
+                // Bool
                 let mut buf = [0u8; 1];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Bool(buf[0] != 0))
             }
             8 => Ok(GGUFValue::String(Self::read_string(r)?)),
-            9 => { // Array
+            9 => {
+                // Array
                 let item_type = Self::read_u32(r)?;
                 let len = Self::read_u64(r)?;
                 let mut items = Vec::with_capacity(len as usize);
@@ -248,12 +277,16 @@ impl GGUFReader {
             }
             10 => Ok(GGUFValue::Uint64(Self::read_u64(r)?)),
             11 => Ok(GGUFValue::Int64(Self::read_u64(r)? as i64)),
-            12 => { // Float64
+            12 => {
+                // Float64
                 let mut buf = [0u8; 8];
                 r.read_exact(&mut buf)?;
                 Ok(GGUFValue::Float64(f64::from_le_bytes(buf)))
             }
-            _ => Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Unsupported metadata value type: {}", val_type))),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Unsupported metadata value type: {}", val_type),
+            )),
         }
     }
 }

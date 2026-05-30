@@ -194,7 +194,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
         }
     }
 
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    #[cfg(all(not(target_arch = "aarch64"), not(target_arch = "x86_64")))]
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
         let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-12).sqrt();
