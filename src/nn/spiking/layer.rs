@@ -11,7 +11,7 @@ pub struct GajeNeuromorphicLayer {
     pub thresholds: Vec<f32>,
     pub decays: Vec<f32>,
     /// Pesos empaquetados: 4 pesos de 2-bits por byte.
-    pub packed_weights: Vec<u8>, 
+    pub packed_weights: Vec<u8>,
     /// Anclas de Estabilidad: Pesos de alta precisión (F16) para núcleos semánticos.
     pub anchor_indices: Vec<u32>,
     pub anchor_values: Vec<half::f16>,
@@ -26,30 +26,47 @@ pub struct GajeNeuromorphicLayer {
 impl GajeNeuromorphicLayer {
     #[cfg(feature = "python")]
     #[new]
-    pub fn new_py(num_neurons: usize, weights_per_neuron: usize, threshold: f32, decay: f32) -> Self {
+    pub fn new_py(
+        num_neurons: usize,
+        weights_per_neuron: usize,
+        threshold: f32,
+        decay: f32,
+    ) -> Self {
         Self::new(num_neurons, weights_per_neuron, threshold, decay)
     }
 
     #[cfg(feature = "python")]
     #[getter]
-    pub fn get_membrane_potentials_real(&self) -> Vec<f32> { self.membrane_potentials_real.clone() }
+    pub fn get_membrane_potentials_real(&self) -> Vec<f32> {
+        self.membrane_potentials_real.clone()
+    }
 
     #[cfg(feature = "python")]
     #[getter]
-    pub fn get_membrane_potentials_imag(&self) -> Vec<f32> { self.membrane_potentials_imag.clone() }
+    pub fn get_membrane_potentials_imag(&self) -> Vec<f32> {
+        self.membrane_potentials_imag.clone()
+    }
 
     #[cfg(feature = "python")]
     #[getter]
-    pub fn get_packed_weights<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
+    pub fn get_packed_weights<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, pyo3::types::PyBytes>> {
         Ok(pyo3::types::PyBytes::new(py, &self.packed_weights))
     }
 
     #[cfg(feature = "python")]
     pub fn load_packed_weights(&mut self, data: Vec<u8>) -> PyResult<()> {
         if data.len() != self.packed_weights.len() {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!("Weight size mismatch: expected {}, got {}", self.packed_weights.len(), data.len())));
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Weight size mismatch: expected {}, got {}",
+                self.packed_weights.len(),
+                data.len()
+            )));
         }
-        self.packed_weights = data; Ok(())
+        self.packed_weights = data;
+        Ok(())
     }
 
     pub fn reset_potentials(&mut self) {
@@ -88,29 +105,49 @@ impl GajeNeuromorphicLayer {
     }
 
     pub fn anchors_sparse_buffer(&self) -> Vec<u8> {
-        let mut out = Vec::new(); out.extend_from_slice(b"GAJE");
-        let count = self.anchor_indices.len(); out.extend_from_slice(&(count as u32).to_le_bytes());
-        for &idx in self.anchor_indices.iter() { out.extend_from_slice(&idx.to_le_bytes()); }
-        for &val in self.anchor_values.iter() { out.extend_from_slice(&val.to_le_bytes()); }
-        for &ptr in self.anchor_row_ptrs.iter() { out.extend_from_slice(&(ptr as u64).to_le_bytes()); }
+        let mut out = Vec::new();
+        out.extend_from_slice(b"GAJE");
+        let count = self.anchor_indices.len();
+        out.extend_from_slice(&(count as u32).to_le_bytes());
+        for &idx in self.anchor_indices.iter() {
+            out.extend_from_slice(&idx.to_le_bytes());
+        }
+        for &val in self.anchor_values.iter() {
+            out.extend_from_slice(&val.to_le_bytes());
+        }
+        for &ptr in self.anchor_row_ptrs.iter() {
+            out.extend_from_slice(&(ptr as u64).to_le_bytes());
+        }
         out
     }
 
     pub fn load_anchors_from_u8(&mut self, anchors_u8: &[u8]) {
         if anchors_u8.len() >= 4 && &anchors_u8[0..4] == b"GAJE" {
             let count = u32::from_le_bytes(anchors_u8[4..8].try_into().unwrap()) as usize;
-            let mut indices = Vec::with_capacity(count); 
-            let mut values = Vec::with_capacity(count); 
+            let mut indices = Vec::with_capacity(count);
+            let mut values = Vec::with_capacity(count);
             let mut row_ptrs = vec![0; self.num_neurons + 1];
-            let idx_s = 8; 
-            let val_s = idx_s + count * 4; 
+            let idx_s = 8;
+            let val_s = idx_s + count * 4;
             let ptr_s = val_s + count * 2;
             for i in 0..count {
-                indices.push(u32::from_le_bytes(anchors_u8[idx_s + i * 4..idx_s + i * 4 + 4].try_into().unwrap()));
-                values.push(half::f16::from_le_bytes(anchors_u8[val_s + i * 2..val_s + i * 2 + 2].try_into().unwrap()));
+                indices.push(u32::from_le_bytes(
+                    anchors_u8[idx_s + i * 4..idx_s + i * 4 + 4]
+                        .try_into()
+                        .unwrap(),
+                ));
+                values.push(half::f16::from_le_bytes(
+                    anchors_u8[val_s + i * 2..val_s + i * 2 + 2]
+                        .try_into()
+                        .unwrap(),
+                ));
             }
-            for i in 0..=self.num_neurons { 
-                row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_s + i * 8..ptr_s + i * 8 + 8].try_into().unwrap()) as usize; 
+            for i in 0..=self.num_neurons {
+                row_ptrs[i] = u64::from_le_bytes(
+                    anchors_u8[ptr_s + i * 8..ptr_s + i * 8 + 8]
+                        .try_into()
+                        .unwrap(),
+                ) as usize;
             }
             self.anchor_indices = indices;
             self.anchor_values = values;
@@ -118,7 +155,13 @@ impl GajeNeuromorphicLayer {
         }
     }
 
-    pub fn integrate_batch(&mut self, input_index: usize, centroides_real: [f32; 4], centroides_imag: [f32; 4], intensity: f32) {
+    pub fn integrate_batch(
+        &mut self,
+        input_index: usize,
+        centroides_real: [f32; 4],
+        centroides_imag: [f32; 4],
+        intensity: f32,
+    ) {
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_index * row_size;
         let homeostatic_bias = 0.01;
@@ -132,15 +175,22 @@ impl GajeNeuromorphicLayer {
             let weights_ptr = self.packed_weights.as_ptr().add(start_byte);
             let intensity_v = vdupq_n_f32(intensity);
             let bias_v = vdupq_n_f32(homeostatic_bias);
-            
+
             let table_r = vld1q_u8(centroides_real.as_ptr() as *const u8);
             let table_im = vld1q_u8(centroides_imag.as_ptr() as *const u8);
-            
+
             let b0123 = vcreate_u8(0x0302010003020100);
             let offsets = vcombine_u8(b0123, b0123);
-            let masks = vld1q_u8([0x03, 0x03, 0x03, 0x03, 0x0C, 0x0C, 0x0C, 0x0C, 0x30, 0x30, 0x30, 0x30, 0xC0, 0xC0, 0xC0, 0xC0].as_ptr());
-            let shifts = vld1q_s8([2, 2, 2, 2, 0, 0, 0, 0, -2, -2, -2, -2, -4, -4, -4, -4].as_ptr());
-            
+            let masks = vld1q_u8(
+                [
+                    0x03, 0x03, 0x03, 0x03, 0x0C, 0x0C, 0x0C, 0x0C, 0x30, 0x30, 0x30, 0x30, 0xC0,
+                    0xC0, 0xC0, 0xC0,
+                ]
+                .as_ptr(),
+            );
+            let shifts =
+                vld1q_s8([2, 2, 2, 2, 0, 0, 0, 0, -2, -2, -2, -2, -4, -4, -4, -4].as_ptr());
+
             let mut i = 0;
             while i + 4 <= n {
                 let byte_idx = i / 4;
@@ -149,7 +199,7 @@ impl GajeNeuromorphicLayer {
                 let indices_base = vandq_u8(v_b, masks);
                 let indices_scaled = vshlq_u8(indices_base, shifts);
                 let indices = vaddq_u8(indices_scaled, offsets);
-                
+
                 // Real part lookup and integration
                 let lookup_r = vqtbl1q_u8(table_r, indices);
                 let r_v: float32x4_t = std::mem::transmute(lookup_r);
@@ -157,22 +207,24 @@ impl GajeNeuromorphicLayer {
                 p_r = vfmaq_f32(p_r, r_v, intensity_v);
                 p_r = vaddq_f32(p_r, bias_v);
                 vst1q_f32(real_ptr.add(i), p_r);
-                
+
                 // Imaginary part lookup and integration
                 let lookup_im = vqtbl1q_u8(table_im, indices);
                 let im_v: float32x4_t = std::mem::transmute(lookup_im);
                 let mut p_im = vld1q_f32(imag_ptr.add(i));
                 p_im = vfmaq_f32(p_im, im_v, intensity_v);
                 vst1q_f32(imag_ptr.add(i), p_im);
-                
+
                 i += 4;
             }
             while i < n {
                 let byte_idx = i / 4;
                 let bit_shift = (i % 4) * 2;
                 let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials_real[i] += (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
-                self.membrane_potentials_imag[i] += centroides_imag[weight_bits as usize] * intensity;
+                self.membrane_potentials_real[i] +=
+                    (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
+                self.membrane_potentials_imag[i] +=
+                    centroides_imag[weight_bits as usize] * intensity;
                 i += 1;
             }
         }
@@ -183,11 +235,13 @@ impl GajeNeuromorphicLayer {
                 let byte_idx = i / 4;
                 let bit_shift = (i % 4) * 2;
                 let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials_real[i] += (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
-                self.membrane_potentials_imag[i] += centroides_imag[weight_bits as usize] * intensity;
+                self.membrane_potentials_real[i] +=
+                    (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
+                self.membrane_potentials_imag[i] +=
+                    centroides_imag[weight_bits as usize] * intensity;
             }
         }
-        
+
         // Inyectar Anclas de Estabilidad (Residuales de alta precisión)
         // Solo inyectamos si el input_index (peso de entrada) tiene anclas registradas
         // Nota: En SoA, anchor_indices almacena el índice global del peso (neurona_idx * num_inputs + input_idx)
@@ -209,7 +263,7 @@ impl GajeNeuromorphicLayer {
     pub fn check_spikes(&mut self) -> Vec<(usize, f32, u8)> {
         let mut spikes = Vec::new();
         let n = self.num_neurons;
-        
+
         // Calcular RMS basado en magnitud compleja
         let mut sum_sq = 0.0f32;
         for i in 0..n {
@@ -218,24 +272,32 @@ impl GajeNeuromorphicLayer {
             let mag_sq = r * r + im * im;
             sum_sq += mag_sq;
         }
-        
+
         let rms = (sum_sq / n as f32 + 1e-6).sqrt();
         let alpha = 0.15;
         self.rms_ema = (1.0 - alpha) * self.rms_ema + alpha * rms;
-        
+
         for i in 0..n {
             let r = self.membrane_potentials_real[i];
             let im = self.membrane_potentials_imag[i];
             let magnitude = (r * r + im * im).sqrt();
             let threshold = self.thresholds[i];
-            
+
             if magnitude >= threshold {
-                let norm_factor = if self.rms_ema > 1.0 { 1.0 / self.rms_ema } else { 1.0 };
+                let norm_factor = if self.rms_ema > 1.0 {
+                    1.0 / self.rms_ema
+                } else {
+                    1.0
+                };
                 let intensity = (magnitude / threshold) * norm_factor;
                 let excess_ratio = (magnitude - threshold) / threshold;
                 // Phase coding (latencia): mayor magnitud dispara antes (phase_offset menor)
-                let phase = if excess_ratio >= 1.0 { 0 } else { (15.0 * (1.0 - excess_ratio)) as u8 };
-                
+                let phase = if excess_ratio >= 1.0 {
+                    0
+                } else {
+                    (15.0 * (1.0 - excess_ratio)) as u8
+                };
+
                 self.membrane_potentials_real[i] = 0.0;
                 self.membrane_potentials_imag[i] = 0.0;
                 spikes.push((i, intensity, phase));
@@ -261,21 +323,30 @@ impl GajeNeuromorphicLayer {
         let mut rng = rand::thread_rng();
         let row_size = (self.num_neurons + 3) / 4;
         let start_byte = input_index * row_size;
-        
+
         if start_byte + row_size > self.packed_weights.len() {
             return;
         }
 
         for (i, &delta) in deltas.iter().enumerate() {
-            if i >= self.num_neurons || delta.abs() < 1e-5 { continue; }
-            if rng.gen::<f32>() > learning_rate { continue; }
+            if i >= self.num_neurons || delta.abs() < 1e-5 {
+                continue;
+            }
+            if rng.gen::<f32>() > learning_rate {
+                continue;
+            }
             let byte_idx = i / 4;
             let bit_shift = (i % 4) * 2;
             let current_byte = self.packed_weights[start_byte + byte_idx];
             let current_weight = (current_byte >> bit_shift) & 0x03;
             let mut new_weight = current_weight;
-            if delta > 0.0 { if current_weight < 3 { new_weight += 1; } }
-            else if current_weight > 0 { new_weight -= 1; }
+            if delta > 0.0 {
+                if current_weight < 3 {
+                    new_weight += 1;
+                }
+            } else if current_weight > 0 {
+                new_weight -= 1;
+            }
             if new_weight != current_weight {
                 self.packed_weights[start_byte + byte_idx] &= !(0x03 << bit_shift);
                 self.packed_weights[start_byte + byte_idx] |= new_weight << bit_shift;
@@ -287,7 +358,7 @@ impl GajeNeuromorphicLayer {
         for i in 0..self.num_neurons {
             let r = self.membrane_potentials_real[i];
             let im = self.membrane_potentials_imag[i];
-            let mag = (r*r + im*im).sqrt();
+            let mag = (r * r + im * im).sqrt();
             if mag > target_potential {
                 self.membrane_potentials_real[i] *= 0.95;
                 self.membrane_potentials_imag[i] *= 0.95;
@@ -297,9 +368,15 @@ impl GajeNeuromorphicLayer {
 
     /// Aplica Inhibición Lateral Temporal (K-WTA).
     /// Reduce el potencial de todas las neuronas basado en la intensidad de los ganadores.
-    pub fn apply_lateral_inhibition(&mut self, winners: &[(usize, f32, u8)], inhibition_factor: f32) {
-        if winners.is_empty() { return; }
-        
+    pub fn apply_lateral_inhibition(
+        &mut self,
+        winners: &[(usize, f32, u8)],
+        inhibition_factor: f32,
+    ) {
+        if winners.is_empty() {
+            return;
+        }
+
         // Calcular la fuerza total de inhibición basada en el ganador más rápido/fuerte
         let total_inhibition = winners.iter().map(|w| w.1).sum::<f32>() * inhibition_factor;
         let decay = (1.0 - total_inhibition).max(0.1);

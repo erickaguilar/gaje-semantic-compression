@@ -94,7 +94,7 @@ echo -e "------------------------------------------------------------"
 mkdir -p benchmarks/logs
 
 # Ejecutar el comando final redirigiendo salida
-eval "$EXEC_CMD" 2>&1 | tee "$LOG_FILE"
+eval "$EXEC_CMD \"\$@\"" 2>&1 | tee "$LOG_FILE"
 
 # 5. Finalización Exitosa
 echo -e "------------------------------------------------------------"

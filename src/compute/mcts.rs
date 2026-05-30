@@ -14,10 +14,10 @@ pub struct MctsTree {
     pub parents: Vec<usize>,
 }
 
+use crate::compute::math::calculate_genomic_mse;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 use std::cmp::Ordering;
-use crate::compute::math::calculate_genomic_mse;
 
 #[cfg_attr(feature = "python", pyfunction)]
 #[cfg_attr(feature = "python", pyo3(signature = (weights, initial_centroids=None, iterations=5000, c_puct=1.41, noise_scale=0.05)))]
@@ -102,7 +102,7 @@ impl MctsTree {
     pub fn expand(&mut self, node_idx: usize, num_children: usize, noise_scale: f32) {
         use rand::Rng;
         let mut rng = rand::thread_rng();
-        
+
         for _ in 0..num_children {
             let mut new_state = self.nodes[node_idx].state.clone();
             // Aplicar mutación aleatoria (imitando el script de Python)

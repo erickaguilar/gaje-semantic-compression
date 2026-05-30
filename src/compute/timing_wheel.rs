@@ -8,7 +8,7 @@ pub struct TimingWheel {
     pub current_tick: u64,
     pub wheel_size: usize,
     /// Eventos que caen fuera del horizonte actual de la rueda (overflow).
-    pub overflow: Vec<SpikeEvent>, 
+    pub overflow: Vec<SpikeEvent>,
 }
 
 impl TimingWheel {
@@ -64,7 +64,7 @@ impl TimingWheel {
 
         // 2. Extraer los eventos de los 16 sub-slots del tick actual
         let slot_idx = (self.current_tick % self.wheel_size as u64) as usize;
-        
+
         // Optimización: Si no hay eventos en ningún sub-slot, evitar asignaciones
         let mut has_events = false;
         for phase_idx in 0..16 {
@@ -94,7 +94,11 @@ impl TimingWheel {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.overflow.is_empty() && self.slots.iter().all(|sub_slots| sub_slots.iter().all(|v| v.is_empty()))
+        self.overflow.is_empty()
+            && self
+                .slots
+                .iter()
+                .all(|sub_slots| sub_slots.iter().all(|v| v.is_empty()))
     }
 }
 
@@ -105,20 +109,48 @@ mod tests {
     #[test]
     fn test_timing_wheel_basic() {
         let mut wheel = TimingWheel::new(10);
-        
+
         // Evento en el futuro cercano (Tick 2)
-        wheel.push(SpikeEvent { timestamp: 2, phase_offset: 0, intensity: 1.0, source_neuron_id: 1, target_layer_id: 0, target_neuron_id: 1 });
-        
+        wheel.push(SpikeEvent {
+            timestamp: 2,
+            phase_offset: 0,
+            intensity: 1.0,
+            source_neuron_id: 1,
+            target_layer_id: 0,
+            target_neuron_id: 1,
+        });
+
         // Evento en el futuro lejano (Tick 12) -> Overflow inicial
-        wheel.push(SpikeEvent { timestamp: 12, phase_offset: 0, intensity: 1.0, source_neuron_id: 2, target_layer_id: 0, target_neuron_id: 2 });
+        wheel.push(SpikeEvent {
+            timestamp: 12,
+            phase_offset: 0,
+            intensity: 1.0,
+            source_neuron_id: 2,
+            target_layer_id: 0,
+            target_neuron_id: 2,
+        });
 
         // Eventos con Phase Coding en el mismo Tick (Tick 5)
-        wheel.push(SpikeEvent { timestamp: 5, phase_offset: 10, intensity: 1.0, source_neuron_id: 3, target_layer_id: 0, target_neuron_id: 3 });
-        wheel.push(SpikeEvent { timestamp: 5, phase_offset: 2, intensity: 1.0, source_neuron_id: 4, target_layer_id: 0, target_neuron_id: 4 });
+        wheel.push(SpikeEvent {
+            timestamp: 5,
+            phase_offset: 10,
+            intensity: 1.0,
+            source_neuron_id: 3,
+            target_layer_id: 0,
+            target_neuron_id: 3,
+        });
+        wheel.push(SpikeEvent {
+            timestamp: 5,
+            phase_offset: 2,
+            intensity: 1.0,
+            source_neuron_id: 4,
+            target_layer_id: 0,
+            target_neuron_id: 4,
+        });
 
         // Tick 0
         assert!(wheel.pop_active().is_empty());
-        
+
         // Tick 2
         wheel.advance_tick(2);
         let events = wheel.pop_active();

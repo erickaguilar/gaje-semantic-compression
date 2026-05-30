@@ -19,12 +19,23 @@ impl NeuromorphicScheduler {
     #[cfg(feature = "python")]
     #[new]
     #[pyo3(signature = (centroides_real, centroides_imag, delay_per_layer))]
-    pub fn new_py(centroides_real: [f32; 4], centroides_imag: [f32; 4], delay_per_layer: u64) -> Self {
+    pub fn new_py(
+        centroides_real: [f32; 4],
+        centroides_imag: [f32; 4],
+        delay_per_layer: u64,
+    ) -> Self {
         Self::new(centroides_real, centroides_imag, delay_per_layer)
     }
 
     /// Inyecta un estímulo inicial con precisión de fase e intensidad.
-    pub fn inject_spike(&mut self, layer_id: usize, neuron_id: usize, timestamp: u64, phase_offset: u8, intensity: f32) {
+    pub fn inject_spike(
+        &mut self,
+        layer_id: usize,
+        neuron_id: usize,
+        timestamp: u64,
+        phase_offset: u8,
+        intensity: f32,
+    ) {
         self.wheel.push(SpikeEvent {
             timestamp,
             phase_offset,
@@ -39,20 +50,30 @@ impl NeuromorphicScheduler {
     #[cfg(feature = "python")]
     #[pyo3(name = "step")]
     pub fn step_py(&mut self, mut layers: Vec<PyRefMut<GajeNeuromorphicLayer>>) -> Vec<SpikeEvent> {
-        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> = layers.iter_mut().map(|l| &mut **l).collect();
+        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> =
+            layers.iter_mut().map(|l| &mut **l).collect();
         self.step(&mut layers_mut)
     }
 
     /// Pasarela para Python: ejecuta hasta completar.
     #[cfg(feature = "python")]
     #[pyo3(name = "run_to_completion")]
-    pub fn run_to_completion_py(&mut self, mut layers: Vec<PyRefMut<GajeNeuromorphicLayer>>, max_ticks: u64) -> Vec<SpikeEvent> {
-        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> = layers.iter_mut().map(|l| &mut **l).collect();
+    pub fn run_to_completion_py(
+        &mut self,
+        mut layers: Vec<PyRefMut<GajeNeuromorphicLayer>>,
+        max_ticks: u64,
+    ) -> Vec<SpikeEvent> {
+        let mut layers_mut: Vec<&mut GajeNeuromorphicLayer> =
+            layers.iter_mut().map(|l| &mut **l).collect();
         let mut all_output_spikes = Vec::new();
         let mut ticks = 0;
         while !self.wheel.is_empty() && ticks < max_ticks {
             let outputs = self.step(&mut layers_mut);
-            for out in outputs { if out.target_layer_id >= layers_mut.len() { all_output_spikes.push(out); } }
+            for out in outputs {
+                if out.target_layer_id >= layers_mut.len() {
+                    all_output_spikes.push(out);
+                }
+            }
             ticks += 1;
         }
         all_output_spikes
@@ -72,28 +93,42 @@ impl NeuromorphicScheduler {
     pub fn step(&mut self, layers: &mut [&mut GajeNeuromorphicLayer]) -> Vec<SpikeEvent> {
         let mut new_spikes = Vec::new();
         let events = self.wheel.pop_active();
-        if events.is_empty() { self.wheel.advance_tick(1); return new_spikes; }
+        if events.is_empty() {
+            self.wheel.advance_tick(1);
+            return new_spikes;
+        }
         let mut affected_layers = HashSet::new();
         for event in &events {
             if event.target_layer_id < layers.len() {
-                layers[event.target_layer_id].integrate_batch(event.source_neuron_id, self.centroides_real, self.centroides_imag, event.intensity);
+                layers[event.target_layer_id].integrate_batch(
+                    event.source_neuron_id,
+                    self.centroides_real,
+                    self.centroides_imag,
+                    event.intensity,
+                );
                 affected_layers.insert(event.target_layer_id);
             }
         }
         for layer_id in affected_layers {
             let layer = &mut *layers[layer_id];
             let mut layer_spikes = layer.check_spikes();
-            if layer_spikes.is_empty() { continue; }
-            
+            if layer_spikes.is_empty() {
+                continue;
+            }
+
             // Ordenar por fase (latencia) y luego por intensidad
             layer_spikes.sort_by(|a, b| {
                 let res = a.2.cmp(&b.2);
-                if res == std::cmp::Ordering::Equal { b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal) } else { res }
+                if res == std::cmp::Ordering::Equal {
+                    b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    res
+                }
             });
-            
+
             let num_winners = layer_spikes.len().min(layer.k_wta);
             let winners = &layer_spikes[..num_winners];
-            
+
             // Aplicar Inhibición Lateral: Los ganadores inhiben al resto de la capa
             layer.apply_lateral_inhibition(winners, 0.1);
 
@@ -101,10 +136,25 @@ impl NeuromorphicScheduler {
                 let (neuron_idx, intensity, phase) = winners[i];
                 let next_layer_id = layer_id + 1;
                 if next_layer_id < layers.len() {
-                    let new_event = SpikeEvent { timestamp: self.wheel.current_tick + self.delay_per_layer, phase_offset: phase, intensity, source_neuron_id: neuron_idx, target_layer_id: next_layer_id, target_neuron_id: 0 };
-                    self.wheel.push(new_event); new_spikes.push(new_event);
+                    let new_event = SpikeEvent {
+                        timestamp: self.wheel.current_tick + self.delay_per_layer,
+                        phase_offset: phase,
+                        intensity,
+                        source_neuron_id: neuron_idx,
+                        target_layer_id: next_layer_id,
+                        target_neuron_id: 0,
+                    };
+                    self.wheel.push(new_event);
+                    new_spikes.push(new_event);
                 } else {
-                    new_spikes.push(SpikeEvent { timestamp: self.wheel.current_tick, phase_offset: phase, intensity, source_neuron_id: neuron_idx, target_layer_id: next_layer_id, target_neuron_id: 0 });
+                    new_spikes.push(SpikeEvent {
+                        timestamp: self.wheel.current_tick,
+                        phase_offset: phase,
+                        intensity,
+                        source_neuron_id: neuron_idx,
+                        target_layer_id: next_layer_id,
+                        target_neuron_id: 0,
+                    });
                 }
             }
         }
@@ -118,7 +168,11 @@ impl NeuromorphicScheduler {
         let mut all_output_spikes = Vec::new();
         while !self.wheel.is_empty() {
             let outputs = self.step(&mut layers_refs);
-            for out in outputs { if out.target_layer_id >= num_layers { all_output_spikes.push(out); } }
+            for out in outputs {
+                if out.target_layer_id >= num_layers {
+                    all_output_spikes.push(out);
+                }
+            }
         }
         all_output_spikes
     }
@@ -140,6 +194,7 @@ mod tests {
         let mut layers = vec![layer0, layer1];
         scheduler.inject_spike(0, 0, 0, 0, 1.0);
         let outputs = scheduler.run_to_completion(&mut layers);
-        assert_eq!(outputs.len(), 1); assert_eq!(outputs[0].timestamp, 2);
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].timestamp, 2);
     }
 }

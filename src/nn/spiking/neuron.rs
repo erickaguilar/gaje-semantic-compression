@@ -25,12 +25,12 @@ impl From<u8> for GajeWeight2Bit {
 /// Diseñada para procesamiento de 2-bits sin multiplicaciones.
 #[derive(Clone)]
 pub struct SpikingNeuron {
-    pub membrane_potential_real: f32,    // El "voltaje" acumulado (Real)
-    pub membrane_potential_imag: f32,    // El "voltaje" acumulado (Imaginario)
-    pub threshold: f32,             // Umbral de disparo (Ancla FFN)
-    pub decay: f32,                 // Factor de fuga (Leaky) entre 0.0 y 1.0
-    pub weights: Vec<u8>,           // Pesos empaquetados (4 pesos de 2-bits por u8)
-    pub num_weights: usize,         // Número total de pesos individuales
+    pub membrane_potential_real: f32, // El "voltaje" acumulado (Real)
+    pub membrane_potential_imag: f32, // El "voltaje" acumulado (Imaginario)
+    pub threshold: f32,               // Umbral de disparo (Ancla FFN)
+    pub decay: f32,                   // Factor de fuga (Leaky) entre 0.0 y 1.0
+    pub weights: Vec<u8>,             // Pesos empaquetados (4 pesos de 2-bits por u8)
+    pub num_weights: usize,           // Número total de pesos individuales
 }
 
 impl SpikingNeuron {
@@ -62,7 +62,7 @@ impl SpikingNeuron {
         let byte_index = index / 4;
         let bit_shift = (index % 4) * 2;
         let weight_val = weight as u8;
-        
+
         // Limpiamos los 2 bits actuales y ponemos el nuevo valor
         self.weights[byte_index] &= !(0x03 << bit_shift);
         self.weights[byte_index] |= weight_val << bit_shift;
@@ -70,7 +70,12 @@ impl SpikingNeuron {
 
     /// Integra un impulso eléctrico (Spike) entrante.
     /// ¡Cero Multiplicaciones!: Solo suma el valor del centroide correspondiente.
-    pub fn integrate(&mut self, input_index: usize, centroides_real: &[f32; 4], centroides_imag: &[f32; 4]) {
+    pub fn integrate(
+        &mut self,
+        input_index: usize,
+        centroides_real: &[f32; 4],
+        centroides_imag: &[f32; 4],
+    ) {
         let weight = self.get_weight(input_index);
         self.membrane_potential_real += centroides_real[weight as usize];
         self.membrane_potential_imag += centroides_imag[weight as usize];
@@ -79,7 +84,8 @@ impl SpikingNeuron {
     /// Verifica si la neurona debe disparar.
     /// Si dispara, el potencial se resetea. Si no, se aplica la fuga (decay).
     pub fn check_spike(&mut self) -> bool {
-        let magnitude = (self.membrane_potential_real.powi(2) + self.membrane_potential_imag.powi(2)).sqrt();
+        let magnitude =
+            (self.membrane_potential_real.powi(2) + self.membrane_potential_imag.powi(2)).sqrt();
         if magnitude >= self.threshold {
             self.membrane_potential_real = 0.0;
             self.membrane_potential_imag = 0.0;
@@ -112,7 +118,7 @@ mod tests {
         // Integrar primer peso: 0.8 (No debería disparar aún)
         neuron.integrate(0, &c_r, &c_im);
         assert!(!neuron.check_spike());
-        
+
         // Integrar segundo peso
         neuron.integrate(1, &c_r, &c_im);
         assert!(!neuron.check_spike());
@@ -127,7 +133,7 @@ mod tests {
     #[test]
     fn test_bit_packing() {
         let mut neuron = SpikingNeuron::new(1.0, 0.9, 8);
-        
+
         neuron.set_weight(0, GajeWeight2Bit::State00);
         neuron.set_weight(1, GajeWeight2Bit::State01);
         neuron.set_weight(2, GajeWeight2Bit::State10);
@@ -137,8 +143,8 @@ mod tests {
         assert_eq!(neuron.get_weight(1), GajeWeight2Bit::State01);
         assert_eq!(neuron.get_weight(2), GajeWeight2Bit::State10);
         assert_eq!(neuron.get_weight(3), GajeWeight2Bit::State11);
-        
+
         // Verificar que ocupan solo 1 byte (4 pesos x 2 bits)
-        assert_eq!(neuron.weights[0], 0b11100100); 
+        assert_eq!(neuron.weights[0], 0b11100100);
     }
 }

@@ -1,17 +1,20 @@
 use half::f16;
+use rand::Rng;
 use rayon::prelude::*;
 use std::cmp::Ordering;
-use rand::Rng;
 
+#[cfg(feature = "python")]
+use pyo3::exceptions::{PyTypeError, PyValueError};
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::PyBytes;
-#[cfg(feature = "python")]
-use pyo3::exceptions::{PyTypeError, PyValueError};
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::{PyResult, Python, PyObject, exceptions::{PyTypeError, PyValueError}};
+use crate::pyo3_shim::{
+    exceptions::{PyTypeError, PyValueError},
+    PyObject, PyResult, Python,
+};
 
 // --- Lógica Interna Pura (Rust) ---
 
@@ -26,14 +29,18 @@ pub fn genomize_f32_core(
 
     let mut dna_database = Vec::with_capacity(n_elements / 4);
     let mut all_centroids = Vec::with_capacity(n_blocks * 4);
-    
+
     // Si anchor_threshold > 0 y < 1.0, lo interpretamos como densidad (ej: 0.01 = 1%)
     let mut actual_threshold = anchor_threshold;
     if anchor_threshold > 0.0 && anchor_threshold < 1.0 {
         let mut abs_vals: Vec<f32> = f32_data.iter().map(|v| v.abs()).collect();
         abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
         let top_idx = (n_elements as f32 * anchor_threshold) as usize;
-        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+        actual_threshold = if top_idx < n_elements {
+            abs_vals[top_idx]
+        } else {
+            0.0
+        };
     }
 
     let mut anchor_indices = Vec::new();
@@ -47,11 +54,16 @@ pub fn genomize_f32_core(
         let block_f32 = &f32_data[start..start + block_size];
 
         let mut sum = 0.0f32;
-        for &val in block_f32 { sum += val; }
+        for &val in block_f32 {
+            sum += val;
+        }
         let mean = sum / block_size as f32;
 
         let mut var_sum = 0.0f32;
-        for &val in block_f32 { let diff = val - mean; var_sum += diff * diff; }
+        for &val in block_f32 {
+            let diff = val - mean;
+            var_sum += diff * diff;
+        }
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
 
         let t = [mean - std, mean, mean + std];
@@ -67,10 +79,22 @@ pub fn genomize_f32_core(
             for s in 0..4 {
                 let idx = k * 4 + s;
                 let val = block_f32[idx];
-                let bits = if val < t[0] { 0b00 } else if val < t[1] { 0b01 } else if val < t[2] { 0b11 } else { 0b10 };
+                let bits = if val < t[0] {
+                    0b00
+                } else if val < t[1] {
+                    0b01
+                } else if val < t[2] {
+                    0b11
+                } else {
+                    0b10
+                };
 
                 let c_val = match bits {
-                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0,
+                    0b00 => c[0],
+                    0b01 => c[1],
+                    0b11 => c[2],
+                    0b10 => c[3],
+                    _ => 0.0,
                 };
 
                 let residual = val - c_val;
@@ -82,7 +106,9 @@ pub fn genomize_f32_core(
             }
             dna_database.push(byte);
         }
-        for &cv in &c { all_centroids.push(cv); }
+        for &cv in &c {
+            all_centroids.push(cv);
+        }
     }
 
     // Empaquetar en formato "GAJE"
@@ -91,8 +117,12 @@ pub fn genomize_f32_core(
         anchors_u8.extend_from_slice(b"GAJE");
         let count = anchor_indices.len() as u32;
         anchors_u8.extend_from_slice(&count.to_le_bytes());
-        for &idx in &anchor_indices { anchors_u8.extend_from_slice(&idx.to_le_bytes()); }
-        for &val in &anchor_values { anchors_u8.extend_from_slice(&val.to_le_bytes()); }
+        for &idx in &anchor_indices {
+            anchors_u8.extend_from_slice(&idx.to_le_bytes());
+        }
+        for &val in &anchor_values {
+            anchors_u8.extend_from_slice(&val.to_le_bytes());
+        }
         // Para genomize simple, asumimos una sola fila virtual o dejamos row_ptrs para el llamador
         // NOTA: GenomicLinear::new espera row_ptrs de tamaño out_features + 1.
         // Aquí genomize_f32_core no conoce out_features directamente (solo n_elements).
@@ -120,7 +150,11 @@ pub fn genomize_f16_core(
         let mut abs_vals: Vec<f32> = f16_data.iter().map(|v| v.to_f32().abs()).collect();
         abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
         let top_idx = (n_elements as f32 * anchor_threshold) as usize;
-        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+        actual_threshold = if top_idx < n_elements {
+            abs_vals[top_idx]
+        } else {
+            0.0
+        };
     }
 
     let mut anchor_indices = Vec::new();
@@ -139,7 +173,10 @@ pub fn genomize_f16_core(
         }
         let mean = sum / block_size as f32;
         let mut var_sum = 0.0f32;
-        for &val in &block_f32 { let diff = val - mean; var_sum += diff * diff; }
+        for &val in &block_f32 {
+            let diff = val - mean;
+            var_sum += diff * diff;
+        }
         let std = (var_sum / block_size as f32).sqrt() + 1e-6;
         let t = [mean - std, mean, mean + std];
         let c = [
@@ -154,10 +191,22 @@ pub fn genomize_f16_core(
             for s in 0..4 {
                 let idx = k * 4 + s;
                 let val = block_f32[idx];
-                let bits = if val < t[0] { 0b00 } else if val < t[1] { 0b01 } else if val < t[2] { 0b11 } else { 0b10 };
+                let bits = if val < t[0] {
+                    0b00
+                } else if val < t[1] {
+                    0b01
+                } else if val < t[2] {
+                    0b11
+                } else {
+                    0b10
+                };
 
                 let c_val = match bits {
-                    0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0,
+                    0b00 => c[0],
+                    0b01 => c[1],
+                    0b11 => c[2],
+                    0b10 => c[3],
+                    _ => 0.0,
                 };
 
                 let residual = val - c_val;
@@ -169,7 +218,9 @@ pub fn genomize_f16_core(
             }
             dna_database.push(byte);
         }
-        for &cv in &c { all_centroids.push(cv); }
+        for &cv in &c {
+            all_centroids.push(cv);
+        }
     }
 
     let mut anchors_u8 = Vec::new();
@@ -177,8 +228,12 @@ pub fn genomize_f16_core(
         anchors_u8.extend_from_slice(b"GAJE");
         let count = anchor_indices.len() as u32;
         anchors_u8.extend_from_slice(&count.to_le_bytes());
-        for &idx in &anchor_indices { anchors_u8.extend_from_slice(&idx.to_le_bytes()); }
-        for &val in &anchor_values { anchors_u8.extend_from_slice(&val.to_le_bytes()); }
+        for &idx in &anchor_indices {
+            anchors_u8.extend_from_slice(&idx.to_le_bytes());
+        }
+        for &val in &anchor_values {
+            anchors_u8.extend_from_slice(&val.to_le_bytes());
+        }
         anchors_u8.extend_from_slice(&0u64.to_le_bytes());
         anchors_u8.extend_from_slice(&(count as u64).to_le_bytes());
     }
@@ -199,14 +254,28 @@ pub fn dequantize_embedding_core(
     let is_multi = c.len() == dims * 4;
     for &byte in dna_packed {
         for j in 0..4 {
-            if dp >= dims { break; }
+            if dp >= dims {
+                break;
+            }
             let s = (3 - j) * 2;
             let bits = (byte >> s) & 0b11;
             let cent = if is_multi {
                 let b = dp * 4;
-                match bits { 0b00 => c[b], 0b01 => c[b + 1], 0b11 => c[b + 2], 0b10 => c[b + 3], _ => 0.0 }
+                match bits {
+                    0b00 => c[b],
+                    0b01 => c[b + 1],
+                    0b11 => c[b + 2],
+                    0b10 => c[b + 3],
+                    _ => 0.0,
+                }
             } else {
-                match bits { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 }
+                match bits {
+                    0b00 => c[0],
+                    0b01 => c[1],
+                    0b11 => c[2],
+                    0b10 => c[3],
+                    _ => 0.0,
+                }
             };
             rec.push(cent);
             dp += 1;
@@ -222,7 +291,8 @@ pub fn dequantize_embedding_py(
     dims: usize,
     centroids: Option<Vec<f32>>,
 ) -> PyResult<Vec<f32>> {
-    dequantize_embedding_core(&dna_packed, dims, centroids.as_deref()).map_err(PyValueError::new_err)
+    dequantize_embedding_core(&dna_packed, dims, centroids.as_deref())
+        .map_err(PyValueError::new_err)
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
@@ -255,9 +325,13 @@ pub fn quantize_embedding(
         packed.push(byte);
     }
     #[cfg(feature = "python")]
-    { Ok(PyBytes::new(_py, &packed).into()) }
+    {
+        Ok(PyBytes::new(_py, &packed).into())
+    }
     #[cfg(not(feature = "python"))]
-    { Err("Python not enabled".to_string()) }
+    {
+        Err("Python not enabled".to_string())
+    }
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
@@ -284,9 +358,7 @@ pub fn genomize_f32_native(
 
     let base_c_arr = if let Some(c) = custom_base_c {
         if c.len() != 4 {
-            return Err(PyTypeError::new_err(
-                "custom_base_c must have 4 elements",
-            ));
+            return Err(PyTypeError::new_err("custom_base_c must have 4 elements"));
         }
         Some([c[0], c[1], c[2], c[3]])
     } else {
@@ -304,7 +376,9 @@ pub fn genomize_f32_native(
         Ok((dna_py, centroids, anchors_py))
     }
     #[cfg(not(feature = "python"))]
-    { Err("Python not enabled".to_string()) }
+    {
+        Err("Python not enabled".to_string())
+    }
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
@@ -321,9 +395,7 @@ pub fn genomize_f16_native(
 
     let base_c_arr = if let Some(c) = custom_base_c {
         if c.len() != 4 {
-            return Err(PyTypeError::new_err(
-                "custom_base_c must have 4 elements",
-            ));
+            return Err(PyTypeError::new_err("custom_base_c must have 4 elements"));
         }
         Some([c[0], c[1], c[2], c[3]])
     } else {
@@ -341,7 +413,9 @@ pub fn genomize_f16_native(
         Ok((dna_py, centroids, anchors_py))
     }
     #[cfg(not(feature = "python"))]
-    { Err("Python not enabled".to_string()) }
+    {
+        Err("Python not enabled".to_string())
+    }
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
@@ -395,7 +469,7 @@ pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
                 let im = imag[i + j];
                 // atan2 returns values in (-PI, PI]
                 let angle = im.atan2(r);
-                
+
                 let bits = if angle >= 0.0 && angle < std::f32::consts::FRAC_PI_2 {
                     0b00 // Quadrant I: 0 to 90 deg (A)
                 } else if angle >= std::f32::consts::FRAC_PI_2 && angle <= std::f32::consts::PI {
@@ -421,13 +495,19 @@ pub fn quantize_phase_native(
     _py: Python<'_>,
 ) -> PyResult<PyObject> {
     if real.len() != imag.len() {
-        return Err(PyValueError::new_err("Real and Imaginary parts must have the same length"));
+        return Err(PyValueError::new_err(
+            "Real and Imaginary parts must have the same length",
+        ));
     }
     let _packed = quantize_phase_core(&real, &imag);
     #[cfg(feature = "python")]
-    { Ok(PyBytes::new(_py, &_packed).into()) }
+    {
+        Ok(PyBytes::new(_py, &_packed).into())
+    }
     #[cfg(not(feature = "python"))]
-    { Err("Python not enabled".to_string()) }
+    {
+        Err("Python not enabled".to_string())
+    }
 }
 
 pub fn dequantize_phase_core(dna_packed: &[u8], dims: usize) -> (Vec<f32>, Vec<f32>) {
@@ -436,7 +516,9 @@ pub fn dequantize_phase_core(dna_packed: &[u8], dims: usize) -> (Vec<f32>, Vec<f
     let mut dp = 0;
     for &byte in dna_packed {
         for j in 0..4 {
-            if dp >= dims { break; }
+            if dp >= dims {
+                break;
+            }
             let s = (3 - j) * 2;
             let bits = (byte >> s) & 0b11;
             let (r, im) = match bits {
@@ -507,11 +589,7 @@ pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> 
     Ok(entropies)
 }
 
-pub fn dequantize_q8_0_core(
-    data_u8: &[u8],
-    out_features: usize,
-    in_features: usize,
-) -> Vec<f32> {
+pub fn dequantize_q8_0_core(data_u8: &[u8], out_features: usize, in_features: usize) -> Vec<f32> {
     let n_blocks = in_features / 32;
     let block_size = 34;
     let mut results = vec![0.0f32; out_features * in_features];
@@ -525,7 +603,8 @@ pub fn dequantize_q8_0_core(
                 if offset + 2 > data_u8.len() {
                     break;
                 }
-                let delta = half::f16::from_le_bytes([data_u8[offset], data_u8[offset + 1]]).to_f32();
+                let delta =
+                    half::f16::from_le_bytes([data_u8[offset], data_u8[offset + 1]]).to_f32();
                 for j in 0..32 {
                     if offset + 2 + j >= data_u8.len() {
                         break;
@@ -634,8 +713,20 @@ pub fn dna_similarity_search(
                         for j in 0..4 {
                             let s = (3 - j) * 2;
                             let (v1b, v2b) = ((b1 >> s) & 0b11, (b2 >> s) & 0b11);
-                            let v1 = match v1b { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 };
-                            let v2 = match v2b { 0b00 => c[0], 0b01 => c[1], 0b11 => c[2], 0b10 => c[3], _ => 0.0 };
+                            let v1 = match v1b {
+                                0b00 => c[0],
+                                0b01 => c[1],
+                                0b11 => c[2],
+                                0b10 => c[3],
+                                _ => 0.0,
+                            };
+                            let v2 = match v2b {
+                                0b00 => c[0],
+                                0b01 => c[1],
+                                0b11 => c[2],
+                                0b10 => c[3],
+                                _ => 0.0,
+                            };
                             d += (v1 - v2).powi(2);
                         }
                     }
@@ -643,7 +734,9 @@ pub fn dna_similarity_search(
                 })
                 .collect();
             res.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
-            if k > 0 && k < res.len() { res.truncate(k); }
+            if k > 0 && k < res.len() {
+                res.truncate(k);
+            }
             return Ok(res);
         }
     }
@@ -657,7 +750,11 @@ pub fn prune_genomic_database(
     stride: usize,
     active_dims: Vec<usize>,
 ) -> PyResult<(Vec<u8>, usize)> {
-    let n_strands = if stride == 0 { 0 } else { database.len() / stride };
+    let n_strands = if stride == 0 {
+        0
+    } else {
+        database.len() / stride
+    };
     let new_dims = active_dims.len();
     let new_stride = (new_dims + 3) / 4;
     let mut new_database = Vec::with_capacity(n_strands * new_stride);
@@ -684,8 +781,11 @@ pub fn apply_repetition_penalty(
     if let Some(tokens) = last_tokens {
         for &tid in &tokens {
             if tid < out.len() {
-                if out[tid] > 0.0 { out[tid] /= repetition_penalty; }
-                else { out[tid] *= repetition_penalty; }
+                if out[tid] > 0.0 {
+                    out[tid] /= repetition_penalty;
+                } else {
+                    out[tid] *= repetition_penalty;
+                }
             }
         }
     }
@@ -693,12 +793,18 @@ pub fn apply_repetition_penalty(
 }
 
 fn quantile(data: &mut [f32], q: f32) -> f32 {
-    if data.is_empty() { return 0.0; }
+    if data.is_empty() {
+        return 0.0;
+    }
     data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
     let pos = (data.len() - 1) as f32 * q;
     let base = pos.floor() as usize;
     let rest = pos - base as f32;
-    if base + 1 < data.len() { data[base] + rest * (data[base + 1] - data[base]) } else { data[base] }
+    if base + 1 < data.len() {
+        data[base] + rest * (data[base + 1] - data[base])
+    } else {
+        data[base]
+    }
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
@@ -710,7 +816,18 @@ pub fn generate_precision_mask_native(
     let mut data = entropy_per_dim.clone();
     let q_mid = quantile(&mut data, 1.0 - fidelity_level);
     let q_high = quantile(&mut data, 1.0 - (fidelity_level / 2.0));
-    let mask: Vec<u8> = entropy_per_dim.iter().map(|&e| { if e > q_high { 2 } else if e > q_mid { 1 } else { 0 } }).collect();
+    let mask: Vec<u8> = entropy_per_dim
+        .iter()
+        .map(|&e| {
+            if e > q_high {
+                2
+            } else if e > q_mid {
+                1
+            } else {
+                0
+            }
+        })
+        .collect();
     Ok(mask)
 }
 
@@ -720,7 +837,12 @@ pub fn get_active_dimensions_native(
     entropy_per_dim: Vec<f32>,
     threshold: f32,
 ) -> PyResult<Vec<usize>> {
-    let active_dims: Vec<usize> = entropy_per_dim.iter().enumerate().filter(|&(_, &e)| e > threshold).map(|(idx, _)| idx).collect();
+    let active_dims: Vec<usize> = entropy_per_dim
+        .iter()
+        .enumerate()
+        .filter(|&(_, &e)| e > threshold)
+        .map(|(idx, _)| idx)
+        .collect();
     Ok(active_dims)
 }
 
@@ -735,7 +857,15 @@ pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
         for _ in 0..4 {
             let noise = rng.gen_range(-1.0..1.0f32);
             state = state * momentum + noise * (1.0 - momentum);
-            let bits = if state < -0.4 { 0b00 } else if state < 0.0 { 0b01 } else if state < 0.4 { 0b11 } else { 0b10 };
+            let bits = if state < -0.4 {
+                0b00
+            } else if state < 0.0 {
+                0b01
+            } else if state < 0.4 {
+                0b11
+            } else {
+                0b10
+            };
             byte = (byte << 2) | bits;
         }
         dna[i] = byte;
@@ -745,41 +875,82 @@ pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
 
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn calculate_genomic_mse(weights: Vec<f32>, centroids: Vec<f32>) -> f32 {
-    if centroids.len() != 4 { return 1.0; }
-    weights.par_iter().map(|&w| {
-        let mut min_sq_diff = f32::MAX;
-        for &c in &centroids { let diff = w - c; let sq_diff = diff * diff; if sq_diff < min_sq_diff { min_sq_diff = sq_diff; } }
-        min_sq_diff
-    }).sum::<f32>() / (weights.len() as f32).max(1.0)
+    if centroids.len() != 4 {
+        return 1.0;
+    }
+    weights
+        .par_iter()
+        .map(|&w| {
+            let mut min_sq_diff = f32::MAX;
+            for &c in &centroids {
+                let diff = w - c;
+                let sq_diff = diff * diff;
+                if sq_diff < min_sq_diff {
+                    min_sq_diff = sq_diff;
+                }
+            }
+            min_sq_diff
+        })
+        .sum::<f32>()
+        / (weights.len() as f32).max(1.0)
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn calculate_mse_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<f32> {
-    if a.len() != b.len() { return Err(PyValueError::new_err("Vector length mismatch")); }
-    let n = a.len(); if n == 0 { return Ok(0.0); }
-    let sum_sq_diff: f32 = a.par_iter().zip(b.par_iter()).map(|(&va, &vb)| (va - vb).powi(2)).sum();
+    if a.len() != b.len() {
+        return Err(PyValueError::new_err("Vector length mismatch"));
+    }
+    let n = a.len();
+    if n == 0 {
+        return Ok(0.0);
+    }
+    let sum_sq_diff: f32 = a
+        .par_iter()
+        .zip(b.par_iter())
+        .map(|(&va, &vb)| (va - vb).powi(2))
+        .sum();
     Ok(sum_sq_diff / n as f32)
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn calculate_cosine_similarity_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<f32> {
-    if a.len() != b.len() { return Err(PyValueError::new_err("Vector length mismatch")); }
-    let n = a.len(); if n == 0 { return Ok(0.0); }
-    let dot: f32 = a.par_iter().zip(b.par_iter()).map(|(&va, &vb)| va * vb).sum();
+    if a.len() != b.len() {
+        return Err(PyValueError::new_err("Vector length mismatch"));
+    }
+    let n = a.len();
+    if n == 0 {
+        return Ok(0.0);
+    }
+    let dot: f32 = a
+        .par_iter()
+        .zip(b.par_iter())
+        .map(|(&va, &vb)| va * vb)
+        .sum();
     let norm_a: f32 = a.par_iter().map(|&v| v * v).sum::<f32>().sqrt();
     let norm_b: f32 = b.par_iter().map(|&v| v * v).sum::<f32>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 { return Ok(0.0); }
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return Ok(0.0);
+    }
     Ok(dot / (norm_a * norm_b))
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn calculate_distribution_entropy_native(probs: Vec<f32>) -> PyResult<f32> {
-    let entropy: f32 = probs.par_iter().filter(|&&p| p > 1e-12).map(|&p| -p * p.ln() / 2.0f32.ln()).sum();
+    let entropy: f32 = probs
+        .par_iter()
+        .filter(|&&p| p > 1e-12)
+        .map(|&p| -p * p.ln() / 2.0f32.ln())
+        .sum();
     Ok(entropy)
 }
 
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     let mut centroids = Vec::with_capacity(n_blocks * 4);
-    for _ in 0..n_blocks { centroids.push(-1.51); centroids.push(-0.45); centroids.push(0.45); centroids.push(1.51); }
+    for _ in 0..n_blocks {
+        centroids.push(-1.51);
+        centroids.push(-0.45);
+        centroids.push(0.45);
+        centroids.push(1.51);
+    }
     centroids
 }

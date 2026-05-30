@@ -130,7 +130,10 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             i += 4;
         }
         let mut sum_sq = vaddvq_f32(sum_v);
-        while i < n { sum_sq += x[i] * x[i]; i += 1; }
+        while i < n {
+            sum_sq += x[i] * x[i];
+            i += 1;
+        }
         // Suelo de seguridad para evitar NaNs en Android
         let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
         let inv_rms_v = vdupq_n_f32(inv_rms);
@@ -166,7 +169,10 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
-            while i < n { sum_sq += x[i] * x[i]; i += 1; }
+            while i < n {
+                sum_sq += x[i] * x[i];
+                i += 1;
+            }
             let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
             let inv_rms_v = _mm256_set1_ps(inv_rms);
             i = 0;
@@ -194,7 +200,10 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
-            while i < n { sum_sq += x[i] * x[i]; i += 1; }
+            while i < n {
+                sum_sq += x[i] * x[i];
+                i += 1;
+            }
             let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
             let inv_rms_v = _mm_set1_ps(inv_rms);
             i = 0;
@@ -216,7 +225,9 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
         let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-12).sqrt();
-        for i in 0..n { out[i] = x[i] * inv_rms * weight[i]; }
+        for i in 0..n {
+            out[i] = x[i] * inv_rms * weight[i];
+        }
     }
     out
 }
@@ -251,14 +262,14 @@ pub fn swiglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
                 ex / (1.0 + ex)
             };
             let silu = g * sigmoid;
-            
+
             // Clamping adaptativo: reduce la probabilidad de explosión de gradiente/activación
             // en modelos profundos (>24 bloques).
             *o = (silu * u).clamp(-96.0, 96.0);
         });
 }
 
-/// Versión balanceada de SwiGLU que compensa el sesgo (bias) introducido 
+/// Versión balanceada de SwiGLU que compensa el sesgo (bias) introducido
 /// por la cuantización asimétrica de 2 bits.
 #[inline(always)]
 pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) {
@@ -273,8 +284,8 @@ pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) 
                 let ex = g_safe.exp();
                 ex / (1.0 + ex)
             };
-            
-            // Aplicamos h_scale como un factor de temperancia para suavizar 
+
+            // Aplicamos h_scale como un factor de temperancia para suavizar
             // la respuesta ante inputs ruidosos.
             let silu = g * sigmoid;
             *o = (silu * u * h_scale).clamp(-96.0, 96.0);
@@ -416,7 +427,6 @@ pub unsafe fn genomic_dot_product(
     }
 }
 
-
 // Alias para compatibilidad con rama windows
 /// # Safety
 /// Ver `genomic_dot_product`.
@@ -450,15 +460,15 @@ pub unsafe fn genomic_dot_product_scalar(
         let input_block_ptr = input.as_ptr().add(j * stride * 4);
         let weights_block_ptr = weights.as_ptr().add(j * stride);
         let centroids_ptr = centroids.as_ptr().add(j * 4);
-        
+
         for k in 0..stride {
             let byte = *weights_block_ptr.add(k);
-            
+
             for b in 0..4usize {
                 let shift = (3 - b) * 2;
                 let bits = (byte >> shift) & 0b11;
                 let c_idx = (bits ^ (bits >> 1)) as usize;
-                
+
                 let weight_val = *centroids_ptr.add(c_idx) * modulation[c_idx];
                 sum += weight_val * *input_block_ptr.add(k * 4 + b);
             }
