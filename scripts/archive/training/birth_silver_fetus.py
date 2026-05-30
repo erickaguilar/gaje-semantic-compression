@@ -1,16 +1,20 @@
 import os
 import sys
-import argparse
 import time
-import numpy as np
 
 # Asegurar que usamos el código local de 'python/'
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python", "gaje", "core", "_impl")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "python"))
+)
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "python", "gaje", "core", "_impl")
+    ),
+)
 
 from _impl import ArchConfig, ModelConfig, init_born_genomic_model, save_genomic_model
-from gaje.nn.stabilized import GenomicLLM
-from tokenizers import Tokenizer
+
 
 def birth_silver_fetus():
     print("🧬 Iniciando Nacimiento del Silver Fetus (v2.0 - 10MB) 🧬")
@@ -32,9 +36,9 @@ def birth_silver_fetus():
         rope_base=1000000.0,
         ffn_act="swiglu",
         use_genomic_norm=True,
-        rope_style="split"
+        rope_style="split",
     )
-    
+
     config = ModelConfig(
         config=arch,
         n_embd=n_embd,
@@ -42,7 +46,7 @@ def birth_silver_fetus():
         n_head_kv=8,
         n_blocks=n_blocks,
         vocab_size=vocab_size,
-        eps=1e-6
+        eps=1e-6,
     )
 
     model_dir = f"models/checkpoints/{name.lower()}"
@@ -53,16 +57,17 @@ def birth_silver_fetus():
     # El motor de Rust cargará automáticamente models/core/algebraic_codebook.json
     print(f"[*] Creando arquitectura algebraica en {model_path}...")
     start_time = time.time()
-    
+
     rust_llm = init_born_genomic_model(model_path, config, vocab_size)
-    
+
     duration = time.time() - start_time
     print(f"✅ Organismo '{name}' inicializado en {duration:.2f}s.")
     print(f"[*] Estructura: {n_blocks} bloques, {n_embd} embd, {vocab_size} tokens.")
-    
+
     # 3. Verificación de Guardado
     save_genomic_model(model_path, rust_llm, config, tokenizer_path)
-    print(f"✨ Silver Fetus nacido exitosamente. Listo para Destilación CoT.")
+    print("✨ Silver Fetus nacido exitosamente. Listo para Destilación CoT.")
+
 
 if __name__ == "__main__":
     birth_silver_fetus()

@@ -1,10 +1,10 @@
 # ⚓ Estrategia de Protección de Anclas: Evolución 3.5
 
-**Estado:** Propuesta de Mejora (Post-v0.6.3 Analysis)  
+**Estado:** Propuesta de Mejora (Post-v0.6.3 Analysis)
 **Contexto:** Basado en los hallazgos del commit `895bacf`.
 
 ## 1. El Problema: Inestabilidad vs. Memoria
-En la versión v0.6.3 se intentó estabilizar la señal de modelos profundos (30 capas) mediante una "Protección de Anclas" basada en el percentil 10%. 
+En la versión v0.6.3 se intentó estabilizar la señal de modelos profundos (30 capas) mediante una "Protección de Anclas" basada en el percentil 10%.
 
 ### ¿Por qué falló la implementación original?
 La implementación en v0.6.3 causó **OOM (Out of Memory)** porque:

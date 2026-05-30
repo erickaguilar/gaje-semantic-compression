@@ -13,7 +13,7 @@ En lugar de que todos los pesos sean de 2 bits (lo que causa "deriva semántica"
 
 ### Tarea 2.1: Estructura `GenomicLinear`
 *   **Acción:** Asegurar que el campo `anchors` (actualmente experimental) esté plenamente integrado en el flujo de inferencia circular.
-*   **Implementación:** 
+*   **Implementación:**
     *   `anchors: Vec<f32>` o `Vec<u8>` (dependiendo de la densidad).
     *   `anchor_mask: Vec<u8>` (bitmask para identificar qué posiciones son anclas).
 

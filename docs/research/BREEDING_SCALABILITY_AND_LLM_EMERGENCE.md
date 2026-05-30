@@ -1,8 +1,8 @@
 # 🧬 Crianza Evolutiva y Escalabilidad: Hacia la Emergencia de LLMs en 50MB
 
-**Fecha:** 30 de mayo de 2026  
-**Estatus:** Propuesta de Investigación / Especificación Técnica  
-**Clasificación:** Confidencial - Protocolo GAJE-Flow (Hito Silver Adult)  
+**Fecha:** 30 de mayo de 2026
+**Estatus:** Propuesta de Investigación / Especificación Técnica
+**Clasificación:** Confidencial - Protocolo GAJE-Flow (Hito Silver Adult)
 
 ---
 
@@ -95,20 +95,20 @@ graph TD
     INIT[Organismo Base Inicializado gaje-cli] --> |Mutación y Nicho A| ISLA_A[Isla A: Sintaxis y Estructura]
     INIT --> |Mutación y Nicho B| ISLA_B[Isla B: Lógica y Fluidez]
     INIT --> |Mutación y Nicho C| ISLA_C[Isla C: Semántica y Coherencia]
-    
+
     ISLA_A --> |Checkpoints Parciales| MERGER[Fusión de Genomas gaje-merger]
     ISLA_B --> |Checkpoints Parciales| MERGER
     ISLA_C --> |Checkpoints Parciales| MERGER
-    
+
     MERGER --> |Alineación Semántica final| FIN[Modelo Final Refinado]
 ```
 
 ### Algoritmo de Fusión y Alineación de Fase:
 1.  **Aislamiento Genético:** Cada isla evoluciona de manera independiente utilizando un subconjunto del corpus global lingüístico, permitiendo que la población local especialice sus centroides.
 2.  **Fusión por Promediado Algebraico:** Las bases de datos de ADN de 2 bits de cada isla permanecen intactas para preservar la estructura compacta. La fusión se realiza combinando únicamente los centroides de fase y los valores flotantes del esqueleto de anclas F16 en el espacio complejo:
-    
+
     $$\overline{\mathbf{C}} = \frac{1}{M}\sum_{m=1}^{M} \mathbf{C}_m \cdot e^{i\phi_m}$$
-    
+
 3.  **Fase de Alineación Semántica (Post-Fusión):** Para suavizar la transición y re-acoplar el comportamiento dinámico con las anclas fijas, el organismo fusionado se somete a un breve entrenamiento de resonancia global (5 a 10 épocas) con una tasa de aprendizaje ultra-baja ($lr = 0.0005$).
 
 ---

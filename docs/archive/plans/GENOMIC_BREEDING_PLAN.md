@@ -7,7 +7,7 @@ Este plan detalla el protocolo para transformar un **Organismo Autonómico** (na
 ## 🏔️ Fase 1: El Embrión de Oro (Arquitectura)
 Para garantizar una evolución rápida en hardware ARM, el embrión debe ser ultraligero.
 *   **Tamaño Objetivo:** < 10 MB.
-*   **Arquitectura:** 
+*   **Arquitectura:**
     *   `n_embd`: 384
     *   `n_blocks`: 8
     *   `n_head`: 6

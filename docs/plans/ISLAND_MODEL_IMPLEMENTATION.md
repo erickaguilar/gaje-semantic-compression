@@ -38,7 +38,7 @@ pub struct IslandModelEngine {
 Crear un nuevo binario ejecutable (`cargo run --release --bin silver-breeder`) que orqueste la evolución:
 1.  **Fase de Scaffolding:** Inicializa 64 `GenomicLLM` (Silver Fetus v1).
 2.  **Carga de Memoria Compartida:** Carga el `consolidated_silver_dataset.txt` en un buffer `Arc<Vec<u8>>` para que todas las islas lo lean sin duplicar RAM.
-3.  **Bucle de Islas (Rayon):** 
+3.  **Bucle de Islas (Rayon):**
     *   `islands.par_iter_mut().for_each(|isla| isla.evolve(dataset));`
 4.  **Migración (Cross-Over):** Intercambia los mejores pesos (centroides de 2 bits) entre islas.
 5.  **Commit a la Base de Datos:** Guarda el mejor espécimen en `MUTATIONS_TABLE` de RocksDB/LMDB.

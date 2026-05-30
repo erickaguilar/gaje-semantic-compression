@@ -1,6 +1,6 @@
 # Protocolo GAJE: Evolución 4 - Inferencia Nativa Integral
 
-**Fecha:** 11 de Mayo, 2026  
+**Fecha:** 11 de Mayo, 2026
 **Concepto:** Migración del Ciclo de Vida Neuronal a Rust para la Preservación de la Señal (Fuerza Semántica).
 
 ## 1. El Problema: "La Pérdida de Fuerza" (Signal Decay)

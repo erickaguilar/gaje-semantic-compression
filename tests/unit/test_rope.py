@@ -1,7 +1,9 @@
 import sys
 import os
+
 sys.path.insert(0, os.path.abspath("python"))
 import gaje.utils.quantization as q
+
 q.unpermute_to_interleaved = lambda w, *args: w
 
 from gaje.nn.stabilized import GenomicLLM

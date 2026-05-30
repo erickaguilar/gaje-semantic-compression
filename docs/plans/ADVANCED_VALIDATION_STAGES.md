@@ -9,7 +9,7 @@ Este documento detalla las fases de implementación para la suite de pruebas ava
 
 ### Fase 1.1: Alineación de Centroides (Top-K Overlap)
 *   **Acción:** Implementar `scripts/benchmarks/semantic_overlap.py`.
-*   **Procedimiento:** 
+*   **Procedimiento:**
     1.  Extraer Logits de un modelo maestro (ej. SmolLM2-F32).
     2.  Extraer Logits de GAJE (2-bits) ante el mismo prompt.
     3.  Calcular el % de coincidencia en el Top-10 de tokens.

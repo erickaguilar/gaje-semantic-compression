@@ -43,11 +43,11 @@ class GenomicLayer:
         self.balancer = balancer
         self.config = config
         self.custom_base_c = custom_base_c
-        
+
         # Use config defaults if not provided
         if anchor_threshold is None:
             anchor_threshold = self.config.anchor_threshold if self.config else -1.0
-            
+
         is_q_or_k = "attn_q" in name or "attn_k" in name
 
         if hasattr(weights_f32_or_tensor, "tensor_type"):
@@ -130,7 +130,9 @@ class GenomicLayer:
             else:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 rope_style = self.config.rope_style if self.config else "split"
-                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style)
+                weights_f32 = dequantize_q8_0(
+                    tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style
+                )
                 self.out_features, self.in_features = weights_f32.shape
                 self._init_from_f32(
                     weights_f32, block_size, anchor_threshold, custom_base_c
@@ -144,7 +146,13 @@ class GenomicLayer:
                 self.config.unpermute_weights if self.config else False
             )  # Default false for raw
             rope_style = self.config.rope_style if self.config else "split"
-            if unpermute and is_q_or_k and n_head is not None and head_dim is not None and rope_style != "split":
+            if (
+                unpermute
+                and is_q_or_k
+                and n_head is not None
+                and head_dim is not None
+                and rope_style != "split"
+            ):
                 from gaje.utils.quantization import unpermute_to_interleaved
 
                 weights_f32 = unpermute_to_interleaved(weights_f32, n_head, head_dim)
@@ -404,12 +412,14 @@ class GenomicTransformerBlock:
         custom_centroids=None,
     ):
         self.config = config
-        
+
         # Use config defaults if not provided
         if anchor_threshold is None:
             anchor_threshold = self.config.anchor_threshold if self.config else -1.0
         if ffn_anchor_threshold is None:
-            ffn_anchor_threshold = self.config.ffn_anchor_threshold if self.config else -1.0
+            ffn_anchor_threshold = (
+                self.config.ffn_anchor_threshold if self.config else -1.0
+            )
         p = f"blk.{idx}."
         attn_norm_data = loader.get(p + "attn_norm.weight").data.astype(np.float32)
 
@@ -609,17 +619,26 @@ class GenomicLLM:
         if self.config and self.config.tokenizer_id:
             if os.path.exists(self.config.tokenizer_id):
                 if os.path.isdir(self.config.tokenizer_id):
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
                 elif self.config.tokenizer_id.endswith(".json"):
                     from tokenizers import Tokenizer as lib_tokenizer
+
                     self.tokenizer = lib_tokenizer.from_file(self.config.tokenizer_id)
                 else:
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
             else:
                 try:
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
                 except Exception as e:
-                    print(f"[!] Warning: Could not load tokenizer '{self.config.tokenizer_id}': {e}")
+                    print(
+                        f"[!] Warning: Could not load tokenizer '{self.config.tokenizer_id}': {e}"
+                    )
                     self.tokenizer = None
         else:
             self.tokenizer = None
@@ -788,7 +807,7 @@ class GenomicLLM:
         tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
         if hasattr(tokens, "ids"):
             tokens = tokens.ids
-            
+
         generated_tokens = list(tokens)
 
         # Inferencia inicial (prompt)
@@ -824,9 +843,11 @@ class GenomicLLM:
 
             # Repetition penalty
             penalized_logits = dna_semantic_compression.apply_repetition_penalty(
-                next_token_logits.tolist() if hasattr(next_token_logits, "tolist") else list(next_token_logits),
-                repetition_penalty, 
-                generated_tokens[-20:]
+                next_token_logits.tolist()
+                if hasattr(next_token_logits, "tolist")
+                else list(next_token_logits),
+                repetition_penalty,
+                generated_tokens[-20:],
             )
 
             # Muestreo Top-P
@@ -846,8 +867,9 @@ class GenomicLLM:
                     next_id, spiking_steps, spiking_threshold, spiking_decay
                 )
             else:
-                next_token_logits = self.rust_llm.forward(next_id, False) # Direct call to rust_llm
-
+                next_token_logits = self.rust_llm.forward(
+                    next_id, False
+                )  # Direct call to rust_llm
 
     def save(self, output_path):
         """Saves the entire genomic organism to a single .gaje database."""
@@ -1007,40 +1029,44 @@ class GenomicLLM:
             input_path = os.path.join(input_path, "model.gaje")
 
         db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
-        
+
         # Try to read metadata safely
         try:
             meta_str = db_reader.read_metadata(C.META_KEY_CONFIG)
             meta = json.loads(meta_str)
         except Exception:
             # LEGACY FALLBACK: If 'config' is missing, the model is likely SMG1 or older.
-            print(f"⚠️ Warning: Model at {input_path} lacks modern metadata. Applying legacy recovery...")
+            print(
+                f"⚠️ Warning: Model at {input_path} lacks modern metadata. Applying legacy recovery..."
+            )
             meta = {
                 C.META_KEY_CONFIG: {
                     "name": "legacy_recovered",
                     "version": "unknown",
-                    "rope_base": C.DEFAULT_ROPE_BASE
+                    "rope_base": C.DEFAULT_ROPE_BASE,
                 },
-                C.META_KEY_N_EMBD: 256, # Default for old SMG1
+                C.META_KEY_N_EMBD: 256,  # Default for old SMG1
                 C.META_KEY_N_HEAD: 8,
                 C.META_KEY_N_HEAD_KV: 8,
                 C.META_KEY_N_BLOCKS: 2,
-                C.META_KEY_EPS: C.DEFAULT_EPS
+                C.META_KEY_EPS: C.DEFAULT_EPS,
             }
             # Attempt to extract what we can from alternative metadata keys if they exist
             # (Some old models put everything in a single JSON)
             try:
-                raw_meta = json.loads(db_reader.read_metadata("config")) # Re-try if just missing sub-keys
+                raw_meta = json.loads(
+                    db_reader.read_metadata("config")
+                )  # Re-try if just missing sub-keys
             except:
                 raw_meta = {}
-            
+
             meta.update(raw_meta)
 
         # Ensure critical keys exist with defaults
         config_data = meta.get(C.META_KEY_CONFIG, {})
         if "name" not in config_data:
             config_data["name"] = "legacy_recovered"
-            
+
         config = ArchitectureConfig(**config_data)
 
         # Instantiate model directly without `__init__` calling random generation
@@ -1061,22 +1087,26 @@ class GenomicLLM:
             # TENSOR NAME MAPPING LOGIC
             actual_name = name
             is_legacy_packed = False
-            
+
             if not db_reader.has_tensor(f"{name}.dna"):
                 # Try aliases from LEGACY_TENSOR_MAP
                 aliases = C.LEGACY_TENSOR_MAP.get(name, [])
                 for alias in aliases:
-                    if db_reader.has_tensor(f"{alias}.dna") or db_reader.has_tensor(alias):
+                    if db_reader.has_tensor(f"{alias}.dna") or db_reader.has_tensor(
+                        alias
+                    ):
                         actual_name = alias
                         if "packed_weights" in alias or not alias.endswith(".dna"):
                             is_legacy_packed = True
-                        print(f"🔗 Mapped tensor: '{name}' -> '{actual_name}' (Legacy Packed: {is_legacy_packed})")
+                        print(
+                            f"🔗 Mapped tensor: '{name}' -> '{actual_name}' (Legacy Packed: {is_legacy_packed})"
+                        )
                         break
                 else:
                     if "blk." in name and not name.startswith("blk.0"):
                         print(f"⚠️ Skipping non-existent layer in small model: {name}")
                         return None
-            
+
             # Loading Strategy
             if is_legacy_packed:
                 # SMG1 or Legacy packed format
@@ -1086,8 +1116,8 @@ class GenomicLLM:
                 centroids = meta.get("centroides", [-1.5, -0.5, 0.5, 1.5])
                 # Expand centroids for all blocks
                 n_blocks = (out_features * in_features) // 32
-                centroids = (centroids * n_blocks)
-                anchors_u8 = b"" # Legacy didn't have anchors
+                centroids = centroids * n_blocks
+                anchors_u8 = b""  # Legacy didn't have anchors
             else:
                 dna = db_reader.read_tensor(f"{actual_name}.dna")
                 centroids = np.frombuffer(
@@ -1158,12 +1188,8 @@ class GenomicLLM:
             vocab_size = (len(embd_dna) * 4) // model.n_embd
             print(f"[*] Vocab size detectado automáticamente: {vocab_size}")
 
-        model.embeddings = load_linear(
-            "token_embd", vocab_size, model.n_embd
-        )
-        model.lm_head = load_linear(
-            "lm_head", vocab_size, model.n_embd
-        )
+        model.embeddings = load_linear("token_embd", vocab_size, model.n_embd)
+        model.lm_head = load_linear("lm_head", vocab_size, model.n_embd)
 
         output_norm = np.ones(model.n_embd).astype(np.float32).tolist()
         if db_reader.has_tensor("output_norm"):
@@ -1181,7 +1207,9 @@ class GenomicLLM:
             )
             # SAFETY CHECK: If block components are missing, stop reconstruction
             if q_gen is None:
-                print(f"🛑 Stopping block reconstruction at index {i} (Incomplete or missing block)")
+                print(
+                    f"🛑 Stopping block reconstruction at index {i} (Incomplete or missing block)"
+                )
                 break
 
             k_gen = load_linear(
@@ -1203,16 +1231,21 @@ class GenomicLLM:
                 if not db_reader.has_tensor(f"{name}.centroids"):
                     aliases = C.LEGACY_TENSOR_MAP.get(name, [])
                     for alias in aliases:
-                        if db_reader.has_tensor(f"{alias}.centroids") or db_reader.has_tensor(alias):
+                        if db_reader.has_tensor(
+                            f"{alias}.centroids"
+                        ) or db_reader.has_tensor(alias):
                             actual_name = alias
                             break
                     else:
                         return model.n_embd * 4
 
-                if "packed_weights" in actual_name or not actual_name.endswith(".centroids"):
+                if "packed_weights" in actual_name or not actual_name.endswith(
+                    ".centroids"
+                ):
                     # For legacy packed, we can't easily infer shape from size without knowing packing format
                     # SMG1 had fixed sizes: l0(vocab->256), l1(256->128), l2(128->vocab)
-                    if "layer.1" in actual_name: return 128
+                    if "layer.1" in actual_name:
+                        return 128
                     return model.n_embd * 4
 
                 c_bytes = db_reader.read_tensor(f"{actual_name}.centroids")
@@ -1287,7 +1320,7 @@ class GenomicLLM:
             )
             rust_blocks.append(rust_block)
             actual_n_blocks += 1
-            
+
         model.n_blocks = actual_n_blocks
         print(f"✅ Reconstructed {model.n_blocks} transformer blocks.")
 

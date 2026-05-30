@@ -1,6 +1,6 @@
 # Reporte de Estabilización y Optimización GAJE v0.6.1
 
-**Fecha:** 11 de Mayo, 2026  
+**Fecha:** 11 de Mayo, 2026
 **Estado:** Sistema Estabilizado y Optimizado para Edge Computing
 
 ## 🔍 Hallazgos Críticos
@@ -32,7 +32,7 @@ Durante las pruebas de inferencia con el modelo `SmolLM2-135M` en entorno Termux
 
 ## 🛠️ Cambios Realizados en el Código
 
-1.  **`src/nn.rs`**: 
+1.  **`src/nn.rs`**:
     - Cambio de firmas para aceptar `PyReadonlyArray1`.
     - Implementación de `Split RoPE`.
     - Unificación de tipos internos a `f32` para evitar conversiones de precisión en caliente.

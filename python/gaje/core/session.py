@@ -1,8 +1,10 @@
 import time
+
 try:
     from ._impl import SessionBuffer
 except ImportError:
     from _impl import SessionBuffer
+
 
 class SessionMemory:
     """
@@ -10,6 +12,7 @@ class SessionMemory:
     Gestiona la memoria intermedia de la sesión actual usando el núcleo nativo de Rust.
     Implementa el patrón de 'Memoria Semántica Recirculante'.
     """
+
     def __init__(self, capacity=1024, dim=1024, internal_buffer=None):
         """
         Inicializa la memoria de sesión.
@@ -30,7 +33,7 @@ class SessionMemory:
         # Aseguramos que el vector sea una lista para PyO3
         if not isinstance(phase_vector, list):
             phase_vector = list(phase_vector)
-            
+
         self._buffer.push(text, phase_vector, int(time.time()))
 
     def retrieve(self, query_vector, top_k=3):
@@ -42,7 +45,7 @@ class SessionMemory:
         """
         if not isinstance(query_vector, list):
             query_vector = list(query_vector)
-            
+
         return self._buffer.retrieve_relevant(query_vector, top_k)
 
     def save(self, filepath):

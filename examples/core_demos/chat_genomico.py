@@ -30,9 +30,7 @@ def main():
         "--temperature", type=float, default=0.4, help="Sampling temperature"
     )
     parser.add_argument("--top-p", type=float, default=0.9, help="Top-P sampling")
-    parser.add_argument(
-        "--penalty", type=float, default=1.2, help="Repetition penalty"
-    )
+    parser.add_argument("--penalty", type=float, default=1.2, help="Repetition penalty")
     parser.add_argument(
         "--prompt",
         type=str,
@@ -116,17 +114,19 @@ def main():
             user_tokens = llm.tokenizer.encode(user_input, add_special_tokens=False)
             if hasattr(user_tokens, "ids"):
                 user_tokens = user_tokens.ids
-            
+
             # Obtenemos el hidden state del último token del input
             # Usamos forward_with_hidden para capturar la fase semántica
             _, user_phase = llm.rust_llm.forward_with_hidden(user_tokens[-1], True)
-            
+
             # Recuperamos contexto relevante del buffer
             relevant_context = session_memory.retrieve(user_phase, top_k=2)
-            
+
             context_prompt = ""
             if relevant_context:
-                print(f"    [🔍 Memoria: {len(relevant_context)} fragmentos recuperados]")
+                print(
+                    f"    [🔍 Memoria: {len(relevant_context)} fragmentos recuperados]"
+                )
                 # Formateamos el contexto para inyectarlo al sistema
                 context_prompt = "--- MEMORIA DE SESIÓN RELEVANTE ---\n"
                 context_prompt += "\n".join(relevant_context)
@@ -138,7 +138,7 @@ def main():
             prompt = ""
             if context_prompt:
                 prompt += f"<|im_start|>system\n{context_prompt}<|im_end|>\n"
-                
+
             for msg in chat_history:
                 prompt += f"<|im_start|>{msg['role']}\n{msg['content']}<|im_end|>\n"
             prompt += "<|im_start|>assistant\n"
@@ -163,7 +163,9 @@ def main():
 
             # 2. Recirculación: Guardamos la interacción en la memoria
             # Usamos el par pregunta/respuesta como bloque semántico
-            interaction_text = f"Pregunta: {user_input}\nRespuesta: {full_response.strip()}"
+            interaction_text = (
+                f"Pregunta: {user_input}\nRespuesta: {full_response.strip()}"
+            )
             session_memory.push(interaction_text, user_phase)
 
             chat_history.append({"role": "assistant", "content": full_response.strip()})

@@ -32,7 +32,7 @@ fi
 for FOLDER in "${FOLDERS[@]}"; do
     if [ -d "$FOLDER" ]; then
         echo "[>] Sincronizando: $FOLDER..." | tee -a "$LOG_FILE"
-        
+
         # rclone sync: Hace que el destino sea un espejo exacto del origen
         # --drive-chunk-size: Optimizado para subidas grandes (modelos)
         rclone sync "$FOLDER" "$REMOTE_NAME:$REMOTE_PATH/$FOLDER" \

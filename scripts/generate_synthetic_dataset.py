@@ -22,7 +22,7 @@ identidad = [
     "Como organismo digital, mi código es mi ADN y mis pesos son mis genes.",
     "No necesito internet para responderte, todo mi conocimiento reside en tu memoria RAM.",
     "La soberanía nativa significa que el control total de la IA está en tus manos.",
-    "Mi entrenamiento se basa en la integración de caminos y la evolución natural."
+    "Mi entrenamiento se basa en la integración de caminos y la evolución natural.",
 ]
 
 tecnico = [
@@ -45,7 +45,7 @@ tecnico = [
     "SwiGLU es una función de activación que mejora la representación de características.",
     "Los embeddings rotatorios (RoPE) permiten al modelo entender la posición relativa.",
     "La cuantización iterativa (IQAT) reduce el ruido de aproximación en los pesos.",
-    "El formato .gaje es autocontenido y optimizado para carga rápida mediante mmap."
+    "El formato .gaje es autocontenido y optimizado para carga rápida mediante mmap.",
 ]
 
 conocimiento = [
@@ -68,7 +68,7 @@ conocimiento = [
     "La inteligencia artificial generativa puede crear contenido nuevo a partir de patrones.",
     "El ADN contiene las instrucciones genéticas usadas en el desarrollo de los seres vivos.",
     "La computación cuántica utiliza cúbits para realizar cálculos a velocidades asombrosas.",
-    "El cambio climático es uno de los mayores desafíos ambientales de nuestra era."
+    "El cambio climático es uno de los mayores desafíos ambientales de nuestra era.",
 ]
 
 conversacion = [
@@ -91,31 +91,53 @@ conversacion = [
     "He guardado los cambios en el registro epigenético local.",
     "La evolución de los centroides está convergiendo satisfactoriamente.",
     "¿Deseas que profundice en la arquitectura nativa de Rust?",
-    "Es fascinante cómo los 2 bits pueden retener tanta información semántica."
+    "Es fascinante cómo los 2 bits pueden retener tanta información semántica.",
 ]
+
 
 def generar_variaciones(base_list, count):
     expanded = []
-    conectores = ["Además, ", "Por otro lado, ", "Es importante notar que ", "", "Recuerda que ", "Básicamente, ", "Ciertamente, ", "En este sentido, "]
+    conectores = [
+        "Además, ",
+        "Por otro lado, ",
+        "Es importante notar que ",
+        "",
+        "Recuerda que ",
+        "Básicamente, ",
+        "Ciertamente, ",
+        "En este sentido, ",
+    ]
     while len(expanded) < count:
         line = random.choice(base_list)
         prefix = random.choice(conectores)
-        
+
         # Variación de puntuación
         line_var = line
         if random.random() > 0.8:
             line_var = line_var.replace(".", "!")
-        
-        new_line = prefix + line_var[0].lower() + line_var[1:] if prefix and line_var[0].isupper() else prefix + line_var
+
+        new_line = (
+            prefix + line_var[0].lower() + line_var[1:]
+            if prefix and line_var[0].isupper()
+            else prefix + line_var
+        )
         expanded.append(new_line)
     return expanded
+
 
 def generar_dialogos(count):
     dialogos = []
     preguntas = [
-        "¿Quién eres?", "¿Cómo funcionas?", "¿Qué es GAJE?", "¿Por qué 2 bits?", 
-        "¿Quién te creó?", "¿Qué es la soberanía nativa?", "¿Eres inteligente?",
-        "¿Puedes correr en mi teléfono?", "¿Qué es el ADN digital?", "¿Cómo aprendes?"
+        "¿Quién eres?",
+        "¿Cómo funcionas?",
+        "¿Qué es GAJE?",
+        "¿Por qué 2 bits?",
+        "¿Quién te creó?",
+        "¿Qué es la soberanía nativa?",
+        "¿Eres inteligente?",
+        "¿Puedes correr en mi teléfono?",
+        "¿Qué es el ADN digital?",
+        "¿Cómo aprendes?",
     ]
     respuestas = {
         "¿Quién eres?": "Soy un asistente genómico basado en GAJE, diseñado para ser ligero y soberano.",
@@ -127,9 +149,9 @@ def generar_dialogos(count):
         "¿Eres inteligente?": "Mi inteligencia es densa y eficiente, adaptada para funcionar con muy poca memoria.",
         "¿Puedes correr en mi teléfono?": "¡Sí! Estoy optimizado para Termux y procesadores ARM modernos.",
         "¿Qué es el ADN digital?": "Es una forma de representar pesos neuronales usando las bases A, C, G y T.",
-        "¿Cómo aprendes?": "Aprendo mediante refinamiento de centroides y evolución de mutaciones locales."
+        "¿Cómo aprendes?": "Aprendo mediante refinamiento de centroides y evolución de mutaciones locales.",
     }
-    
+
     for _ in range(count):
         pregunta = random.choice(preguntas)
         respuesta = respuestas[pregunta]
@@ -139,28 +161,32 @@ def generar_dialogos(count):
             dialogos.append(f"Usuario: {pregunta} Asistente: {respuesta}")
     return dialogos
 
+
 def main():
     print("🧬 Generando dataset sintético de 2000 líneas (Born-Genomic Phase 1)...")
-    
+
     os.makedirs("data/datasets", exist_ok=True)
-    
+
     # Distribución enriquecida
     ds_identidad = generar_variaciones(identidad, 600)
     ds_tecnico = generar_variaciones(tecnico, 500)
     ds_conocimiento = generar_variaciones(conocimiento, 400)
     ds_conversacion = generar_variaciones(conversacion, 300)
     ds_dialogos = generar_dialogos(200)
-    
-    final_dataset = ds_identidad + ds_tecnico + ds_conocimiento + ds_conversacion + ds_dialogos
+
+    final_dataset = (
+        ds_identidad + ds_tecnico + ds_conocimiento + ds_conversacion + ds_dialogos
+    )
     random.shuffle(final_dataset)
-    
+
     output_path = "data/datasets/dataset_born_2000.txt"
     with open(output_path, "w", encoding="utf-8") as f:
         for line in final_dataset:
             f.write(line.replace("\n", " ") + "\n")
-            
+
     print(f"✅ Dataset generado con éxito en: {output_path}")
     print(f"📊 Líneas totales: {len(final_dataset)}")
+
 
 if __name__ == "__main__":
     main()

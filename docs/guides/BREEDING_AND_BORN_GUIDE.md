@@ -84,7 +84,7 @@ El "nacimiento" es un proceso de entrenamiento formal que utiliza **Autograd Hí
 Para el nacimiento genómico (Born), existen dos enfoques recomendados:
 
 1.  **Texto Plano (.txt):** Ideal para conocimiento general o literatura. El modelo simplemente aprende la probabilidad del siguiente token en un flujo continuo.
-2.  **JSONL (Recomendado para Instrucciones/Código):** Cada línea es un objeto JSON con campos `instruction` y `response`. 
+2.  **JSONL (Recomendado para Instrucciones/Código):** Cada línea es un objeto JSON con campos `instruction` y `response`.
     - *Ventaja:* Permite estructurar el pensamiento del modelo.
     - *Nota:* El cargador actual en `python/gaje/processing/pipeline.py` debe estar configurado para parsear el JSON antes de enviarlo al motor de Rust.
 

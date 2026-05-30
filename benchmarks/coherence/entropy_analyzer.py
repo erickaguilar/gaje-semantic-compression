@@ -74,38 +74,38 @@ class EntropyValidator:
         self.engine.add_batch(dna_batch)
 =======
         self.model_path = model_path
-        
+
         # 1. Identificar Tensor de Referencia
         self.embd_tensor = next(t for t in self.reader.tensors if t.name == "token_embd.weight")
         print(f"    [+] Tensor de Referencia: {self.embd_tensor.name} (Type: {self.embd_tensor.tensor_type})")
-        
+
         # 2. Crear Capa Genomizada (GAJE 2-bit) - Muestreamos una parte para los umbrales
         print("[*] Genomizando capa de referencia (Muestreo para estadísticas)...")
         sample_rows = min(2000, self.embd_tensor.shape[0])
         W_sample = self.dequantize_q8_0(self.embd_tensor.data[:sample_rows], self.hidden_dim)
-        
+
         std = np.std(W_sample)
         mean = np.mean(W_sample)
         self.thresholds = [mean - 0.9816 * std, mean, mean + 0.9816 * std]
         self.centroids = [mean - 1.510 * std, mean - 0.4528 * std, mean + 0.4528 * std, mean + 1.510 * std]
-        
+
         # Para la validación completa, genomizamos por bloques
         print("[*] Construyendo Capa Genómica por bloques...")
         dna_db_list = []
         anchors_list = []
-        
+
         chunk_size = 5000
         for i in range(0, self.embd_tensor.shape[0], chunk_size):
             end = min(i + chunk_size, self.embd_tensor.shape[0])
             W_chunk = self.dequantize_q8_0(self.embd_tensor.data[i:end], self.hidden_dim)
-            
+
             # Usamos genomize_f32_native para obtener ADN y Anclas
             dna_db, _, a_bin = dna_semantic_compression.genomize_f32_native(
                 W_chunk.tobytes(), 32, -1.0 # -1.0 para mantener anclas (opcional)
             )
             dna_db_list.append(bytes(dna_db))
             anchors_list.append(bytes(a_bin))
-            
+
             if i % 25000 == 0:
                 print(f"    [~] Progreso: {i}/{self.embd_tensor.shape[0]} tokens genomizados...")
 
@@ -144,18 +144,18 @@ class EntropyValidator:
 
         # Simular una activación de entrada realista
         x_input = np.random.normal(0, 1.0, (self.hidden_dim,)).astype(np.float32)
-        
+
         # B. Forward Pass Original (F32) - POR BLOQUES para evitar OOM
         print("[*] Calculando Forward Pass F32 (Referencia)...")
         start_orig = time.perf_counter()
         logits_orig = np.zeros(self.embd_tensor.shape[0], dtype=np.float32)
-        
+
         chunk_size = 5000
         for i in range(0, self.embd_tensor.shape[0], chunk_size):
             end = min(i + chunk_size, self.embd_tensor.shape[0])
             W_chunk = self.dequantize_q8_0(self.embd_tensor.data[i:end], self.hidden_dim)
             logits_orig[i:end] = np.dot(W_chunk, x_input)
-            
+
         probs_orig = self.softmax(logits_orig)
         time_orig = (time.perf_counter() - start_orig) * 1000
 

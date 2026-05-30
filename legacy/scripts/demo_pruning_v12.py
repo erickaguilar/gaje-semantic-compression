@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath("python"))
 from gaje.processing.balancer import SignalToNoiseBalancer
 from gaje.core import _impl as dna_core
 
+
 def calculate_shannon_entropy(data):
     """
     Simula el cálculo de entropía de Shannon por dimensión.
@@ -21,56 +22,62 @@ def calculate_shannon_entropy(data):
     entropy *= dead_mask
     return entropy
 
+
 def main():
     print("🧬 GAJE PHASE 12: NEURAL PRUNING DNA TEST")
-    print("="*60)
-    
+    print("=" * 60)
+
     # 1. Crear una matriz de pesos simulada (ej: 1024 x 1024)
     rows, cols = 1024, 1024
     print(f"[*] Matriz Original: {rows}x{cols} (Float32)")
     weights = np.random.normal(0, 0.02, (rows, cols)).astype(np.float32)
-    original_size = weights.nbytes / (1024*1024)
+    original_size = weights.nbytes / (1024 * 1024)
     print(f"    Tamaño en RAM: {original_size:.2f} MB")
-    
+
     # 2. Genomización inicial (2-bit puro)
-    print(f"\n[*] Genomizando a 2 bits (DNA)...")
+    print("\n[*] Genomizando a 2 bits (DNA)...")
     dna_strands = []
-    thresholds = [-0.68, 0.0, 0.68] # Centroides base
+    thresholds = [-0.68, 0.0, 0.68]  # Centroides base
     for row in weights:
         dna = dna_core.quantize_embedding(row.tolist(), thresholds)
         dna_strands.append(dna)
-    
+
     # Flatten database
     database = b"".join(dna_strands)
     stride = len(dna_strands[0])
-    genomic_size = len(database) / (1024*1024)
-    print(f"    Tamaño Genómico (2-bit): {genomic_size:.2f} MB (Reducción {(1 - genomic_size/original_size)*100:.1f}%)")
-    
+    genomic_size = len(database) / (1024 * 1024)
+    print(
+        f"    Tamaño Genómico (2-bit): {genomic_size:.2f} MB (Reducción {(1 - genomic_size/original_size)*100:.1f}%)"
+    )
+
     # 3. Análisis de Entropía (Fase 12)
-    print(f"\n[*] Ejecutando Entropy Analyzer...")
+    print("\n[*] Ejecutando Entropy Analyzer...")
     entropy_per_dim = calculate_shannon_entropy(weights)
-    
+
     # 4. Neural Pruning DNA
     balancer = SignalToNoiseBalancer()
-    print(f"[*] Aplicando Poda Genómica (Neural Pruning)...")
+    print("[*] Aplicando Poda Genómica (Neural Pruning)...")
     start_prune = time.time()
-    
+
     # El balancer usa el core nativo de Rust para repaquetar los bits
-    pruned_db, active_dims = balancer.prune_dimensions(database, stride, entropy_per_dim, threshold=0.05)
-    
+    pruned_db, active_dims = balancer.prune_dimensions(
+        database, stride, entropy_per_dim, threshold=0.05
+    )
+
     end_prune = time.time()
-    pruned_size = len(pruned_db) / (1024*1024)
-    
-    print(f"\n[+] Resultados de la Fase 12:")
+    pruned_size = len(pruned_db) / (1024 * 1024)
+
+    print("\n[+] Resultados de la Fase 12:")
     print(f"    Dimensiones Originales: {cols}")
     print(f"    Dimensiones Activas:    {len(active_dims)}")
     print(f"    Dimensiones Eliminadas: {cols - len(active_dims)}")
     print(f"    Tamaño Final (Pruned):  {pruned_size:.2f} MB")
     print(f"    Ahorro Adicional:       {(1 - pruned_size/genomic_size)*100:.1f}%")
     print(f"    Tiempo de Ejecución:    {(end_prune - start_prune)*1000:.2f} ms")
-    
+
     print("\n✅ TEST COMPLETADO: La poda genómica ha optimizado el organismo.")
-    print("="*60)
+    print("=" * 60)
+
 
 if __name__ == "__main__":
     main()

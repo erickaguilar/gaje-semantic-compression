@@ -3,12 +3,14 @@ try:
 except ImportError:
     from _impl import DNIEngine as RustDNIEngine
 
+
 class DNIEngine:
     """
     🧬 Direct Neural Ingestion (DNI) Engine
     Permite la inyección directa de conocimiento en los pesos del modelo
     mediante evolución genética acelerada.
     """
+
     def __init__(self, model, tokenizer, council=None, intensity=0.01):
         """
         Inicializa el motor DNI.
@@ -20,7 +22,7 @@ class DNIEngine:
         # Necesitamos extraer el objeto rust_llm de la clase GenomicLLM de Python
         # si es que se está pasando el wrapper de Python.
         rust_model = getattr(model, "rust_llm", model)
-        
+
         # Lo mismo para el tokenizer si es un objeto complejo
         # Pero GajeTokenizer suele ser un objeto nativo directo en algunos scripts.
         # Por ahora asumimos que se pasan los objetos nativos o compatibles.

@@ -1,6 +1,6 @@
 # Archivo de Ejemplos Históricos (Legacy)
 
-Este directorio contiene ejemplos y demostraciones correspondientes a las primeras fases (Fase 1 a Fase 11) del desarrollo del protocolo GAJE (DNA Semantic Compression). 
+Este directorio contiene ejemplos y demostraciones correspondientes a las primeras fases (Fase 1 a Fase 11) del desarrollo del protocolo GAJE (DNA Semantic Compression).
 
 Han sido archivados aquí con fines de documentación histórica, ya que las interfaces que utilizan han sido reemplazadas o modernizadas por la actual arquitectura de Inferencia Genómica Nativa y la disposición de memoria Struct-of-Arrays (SoA).
 

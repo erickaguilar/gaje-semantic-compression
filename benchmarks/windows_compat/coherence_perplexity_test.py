@@ -7,10 +7,11 @@ import sys
 import numpy as np
 import time
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, os.path.join(project_root, "python"))
 
-from gaje.core import _impl as dna_semantic_compression
 from gaje.nn.stabilized import GenomicLLM
 
 
@@ -40,7 +41,7 @@ class PerplexityValidator:
             if i == 1:
                 logits_all = self.llm.forward(context_tokens, clear_cache=True)
             else:
-                logits_all = self.llm.forward([tokens[i-1]], clear_cache=False)
+                logits_all = self.llm.forward([tokens[i - 1]], clear_cache=False)
 
             logits = logits_all[-1]
             target_token_id = tokens[i]
@@ -54,7 +55,9 @@ class PerplexityValidator:
             log_likelihoods.append(np.log(max(prob_target, 1e-10)))
 
             if i % 10 == 0:
-                print(f"    [~] Progreso: {i}/{n_tokens} tokens evaluados...", flush=True)
+                print(
+                    f"    [~] Progreso: {i}/{n_tokens} tokens evaluados...", flush=True
+                )
 
         avg_log_likelihood = np.mean(log_likelihoods)
         ppl = np.exp(-avg_log_likelihood)

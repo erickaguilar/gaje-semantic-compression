@@ -1,23 +1,22 @@
+use crate::core::tokenizer::GajeTokenizer;
+use crate::nn::distiller::CouncilOfTeachers;
 /// 🧬 DNIEngine: Motor de Ingestión Neuronal Directa para GAJE-Flow
 /// Permite la inyección granular de conocimiento en los pesos de 2 bits
 /// mediante evolución dirigida ultrarrápida.
-
 use crate::nn::llm::GenomicLLM;
-use crate::core::tokenizer::GajeTokenizer;
-use crate::nn::distiller::CouncilOfTeachers;
 use rand::Rng;
 use rayon::prelude::*;
 use std::sync::Arc;
 
 #[cfg(feature = "python")]
-use pyo3::prelude::*;
-#[cfg(feature = "python")]
 use pyo3::exceptions::{PyIOError, PyValueError};
+#[cfg(feature = "python")]
+use pyo3::prelude::*;
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::*;
-#[cfg(not(feature = "python"))]
 use crate::pyo3_shim::exceptions::{PyIOError, PyValueError};
+#[cfg(not(feature = "python"))]
+use crate::pyo3_shim::*;
 
 #[cfg_attr(feature = "python", pyclass)]
 pub struct DNIEngine {
@@ -52,10 +51,17 @@ impl DNIEngine {
     }
 
     /// Ejecuta un paso de ingestión sobre un fragmento de texto.
-    pub fn ingest_text(&mut self, text: String, generations: usize, pop_size: usize) -> PyResult<f32> {
-        let tokens = self.tokenizer.encode(&text, false)
+    pub fn ingest_text(
+        &mut self,
+        text: String,
+        generations: usize,
+        pop_size: usize,
+    ) -> PyResult<f32> {
+        let tokens = self
+            .tokenizer
+            .encode(&text, false)
             .map_err(|e| PyValueError::new_err(format!("Tokenizer error: {}", e)))?;
-        
+
         if tokens.len() < 2 {
             return Ok(0.0);
         }
@@ -73,7 +79,8 @@ impl DNIEngine {
 
         for gen in 0..generations {
             // Evaluación en paralelo
-            let scores: Vec<(usize, f32)> = population.par_iter_mut()
+            let scores: Vec<(usize, f32)> = population
+                .par_iter_mut()
                 .enumerate()
                 .map(|(idx, mutant)| {
                     let fitness = self.evaluate_mutant(mutant, &tokens);
@@ -82,21 +89,28 @@ impl DNIEngine {
                 .collect();
 
             // Encontrar el mejor de esta generación
-            let (best_idx, fitness) = scores.iter()
+            let (best_idx, fitness) = scores
+                .iter()
                 .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
                 .unwrap();
-            
+
             best_fitness = *fitness;
 
             if gen < generations - 1 {
                 let winner = population[*best_idx].clone();
                 // Evolucionar: El ganador sobrevive y el resto son mutaciones del ganador
-                population.par_iter_mut().enumerate().for_each(|(i, mutant)| {
-                    if i != *best_idx {
-                        *mutant = winner.clone();
-                        self.apply_targeted_mutation(mutant, self.intensity * (1.0 - (gen as f32 / generations as f32)));
-                    }
-                });
+                population
+                    .par_iter_mut()
+                    .enumerate()
+                    .for_each(|(i, mutant)| {
+                        if i != *best_idx {
+                            *mutant = winner.clone();
+                            self.apply_targeted_mutation(
+                                mutant,
+                                self.intensity * (1.0 - (gen as f32 / generations as f32)),
+                            );
+                        }
+                    });
             } else {
                 // Fin de la evolución: El ganador se convierte en el modelo oficial
                 self.model = population[*best_idx].clone();
@@ -116,8 +130,8 @@ impl DNIEngine {
 
         for i in 0..tokens.len() - 1 {
             if let Ok(logits) = mutant.forward_core(tokens[i] as usize, false) {
-                let target = tokens[i+1] as usize;
-                
+                let target = tokens[i + 1] as usize;
+
                 // Softmax rápido
                 let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
                 let mut sum_exp = 0.0f32;
@@ -125,20 +139,24 @@ impl DNIEngine {
                 for &l in &logits {
                     sum_exp += (l - max_l).exp();
                 }
-                
+
                 total_prob += target_exp / (sum_exp + 1e-12);
                 count += 1;
             }
         }
 
-        if count > 0 { total_prob / count as f32 } else { 0.0 }
+        if count > 0 {
+            total_prob / count as f32
+        } else {
+            0.0
+        }
     }
 
     /// Aplica mutación bitwise XOR a las capas seleccionadas (Heurística DNI).
     fn apply_targeted_mutation(&self, mutant: &mut GenomicLLM, rate: f32) {
         let mut rng = rand::thread_rng();
         let n_blocks = mutant.blocks.len();
-        
+
         // Heurística DNI: Mutar principalmente bloques intermedios
         // Evitamos bloques 0-2 (Sintaxis base) y el último (Lógica de salida)
         let start_block = (n_blocks / 10).max(2);
@@ -146,13 +164,9 @@ impl DNIEngine {
 
         for i in start_block..end_block {
             let block = &mut mutant.blocks[i];
-            
+
             // FFN layers suelen ser más plásticas para conocimiento fáctico
-            let layers = [
-                &mut block.gate_gen, 
-                &mut block.up_gen, 
-                &mut block.w_down
-            ];
+            let layers = [&mut block.gate_gen, &mut block.up_gen, &mut block.w_down];
 
             for layer in layers {
                 // Copia y mutación del ADN digital

@@ -1,18 +1,18 @@
+#[cfg(feature = "python")]
+use pyo3::exceptions::{PyIOError, PyValueError};
 /// 🧬 SessionBuffer: Memoria Intermedia Toroidal para GAJE-Flow
 /// Implementa un Ring Buffer basado en SoA (Structure of Arrays) para optimizar
 /// la gestión de memoria en hardware ARM y permitir la recirculación semántica.
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
-#[cfg(feature = "python")]
-use pyo3::exceptions::{PyIOError, PyValueError};
 
-#[cfg(not(feature = "python"))]
-use crate::pyo3_shim::*;
 #[cfg(not(feature = "python"))]
 use crate::pyo3_shim::exceptions::{PyIOError, PyValueError};
+#[cfg(not(feature = "python"))]
+use crate::pyo3_shim::*;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 
@@ -67,7 +67,11 @@ impl SessionBuffer {
             return Ok(Vec::new());
         }
 
-        let limit = if self.is_full { self.capacity } else { self.head };
+        let limit = if self.is_full {
+            self.capacity
+        } else {
+            self.head
+        };
         if limit == 0 {
             return Ok(Vec::new());
         }
@@ -87,7 +91,7 @@ impl SessionBuffer {
             .take(top_k)
             .map(|(i, _)| self.texts[i].clone())
             .collect();
-            
+
         Ok(results)
     }
 
@@ -106,7 +110,8 @@ impl SessionBuffer {
     pub fn load_from_disk(filepath: String) -> PyResult<Self> {
         let file = File::open(filepath).map_err(|e| PyIOError::new_err(e.to_string()))?;
         let reader = BufReader::new(file);
-        let buffer: SessionBuffer = bincode::deserialize_from(reader).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let buffer: SessionBuffer =
+            bincode::deserialize_from(reader).map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(buffer)
     }
 

@@ -1,7 +1,7 @@
 # 🧬 Investigación: Topología Toroidal y Espacio de Fase Circular
 
-**Fecha:** 28 de mayo de 2026  
-**Estatus:** Marco Teórico Avanzado  
+**Fecha:** 28 de mayo de 2026
+**Estatus:** Marco Teórico Avanzado
 **Concepto:** El Toroide como estructura fundamental para la representación semántica en 2 bits.
 
 ---

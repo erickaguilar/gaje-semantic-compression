@@ -16,7 +16,7 @@ Tras la validación del modelo *Gold Embryo* (4.6 MB), se identificó un fallo c
 
 ### B. El Plano Estructural: *Remarks on the Disproof of the Unit Distance Conjecture*
 *   **Concepto:** Uso de **Torres de Golod-Shafarevich** y **Campos CM (Complex Multiplication)**.
-*   **Aplicación en GAJE:** 
+*   **Aplicación en GAJE:**
     *   **Profundidad Estable:** Permite escalar de 8 a 12 bloques Transformer manteniendo el discriminante de raíz acotado (sin acumulación de ruido).
     *   **Centroides Algebraicos:** Los centroides de 2 bits se definen mediante raíces de la unidad, garantizando una magnitud semántica constante e invariante en el espacio latente.
 *   **Referencia:** [https://share.google/HBTPVFs9qynnORxQc](https://share.google/HBTPVFs9qynnORxQc) (Basado en el paper original de OpenAI: [cdn.openai.com/.../unit-distance-remarks.pdf](https://cdn.openai.com/pdf/74c24085-19b0-4534-9c90-465b8e29ad73/unit-distance-remarks.pdf))

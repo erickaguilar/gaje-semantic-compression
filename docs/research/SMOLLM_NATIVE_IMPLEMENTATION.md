@@ -8,7 +8,7 @@ Desplegar **SmolLM-135M** como el "Organismo Genómico Mínimo Viable" (MVNO), o
 ## 🛠️ Arquitectura Técnica
 - **Modelo Base:** SmolLM-135M (Arquitectura tipo Llama).
 - **Protocolo de Compresión:** GAJE v0.6.3 (2-bit base).
-- **Estrategia de Fidelidad:** 
+- **Estrategia de Fidelidad:**
     - **Anchor Cloning:** Protección del Top 1.5% de pesos (3-bit/4-bit).
     - **Entropy Mapping:** Resolución adaptativa basada en la fragilidad de la señal.
 

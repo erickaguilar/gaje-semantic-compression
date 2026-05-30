@@ -15,7 +15,7 @@ El objetivo es pasar del "balbuceo" actual a una comunicación fluida mediante u
 ### Fase 1: Expansión de la Memoria Semántica (Dataset)
 Para que el modelo aprenda a hablar correctamente, necesita una base de datos más rica.
 - **Acción:** Crear un dataset de **1,000 a 2,000 líneas** de diálogo.
-- **Contenido:** 
+- **Contenido:**
     - 40% Diálogos de identidad (¿Quién eres?, ¿Cómo funcionas?).
     - 30% Conocimiento técnico de Rust y GAJE.
     - 30% Lógica conversacional común en español.

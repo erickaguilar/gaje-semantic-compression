@@ -38,10 +38,10 @@ def calculate_ppl_and_show_predictions(model, phrases):
 
 =======
         if len(tokens) < 1: continue
-        
+
         # Forward pass
         logits = model.forward(tokens)[-1]
-        
+
 >>>>>>> origin/develop
         # Softmax y Top-k
         probs = np.exp(logits - np.max(logits))
@@ -63,7 +63,7 @@ def run_precision_test():
 
 =======
     model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-f16.gguf"
-    
+
 >>>>>>> origin/develop
     # Frases de baja entropía
     low_entropy_phrases = [
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     run_precision_test()
 ..")
     model = GenomicLLM(model_path, num_blocks=4)
-    
+
 >>>>>>> origin/develop
     calculate_ppl_and_show_predictions(model, low_entropy_phrases)
 

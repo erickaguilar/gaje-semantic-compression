@@ -1,11 +1,19 @@
 """Benchmark de precision con modelo GGUF local (adaptado para Windows)."""
 import sys, os, numpy as np
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, os.path.join(project_root, "python"))
 from gaje.nn.stabilized import GenomicLLM
 
 model_path = os.path.join(project_root, "models", "SmolLM2-135M-Instruct-Q8_0.gguf")
-phrases = ["2 + 2 =", "Paris is the capital of", "The sun rises in the", "Hello, my name is"]
+phrases = [
+    "2 + 2 =",
+    "Paris is the capital of",
+    "The sun rises in the",
+    "Hello, my name is",
+]
 
 print("=" * 60)
 print("  TEST DE PRECISION: BAJA ENTROPIA (GAJE 2-BIT)")

@@ -5,7 +5,7 @@
 
 ## 1. Introducción: De la Geometría a la Arquitectura Cognitiva
 
-La forma toroidal ($\mathbb{Q}(\zeta_{16})$) en GAJE no es solo una abstracción matemática exótica; representa un **Sistema Dinámico Autoestabilizado**. Los sistemas toroidales exitosos en la naturaleza y la física comparten propiedades vitales para la IA: retroalimentación cerrada, mínima pérdida de energía, estabilidad local y adaptación continua. 
+La forma toroidal ($\mathbb{Q}(\zeta_{16})$) en GAJE no es solo una abstracción matemática exótica; representa un **Sistema Dinámico Autoestabilizado**. Los sistemas toroidales exitosos en la naturaleza y la física comparten propiedades vitales para la IA: retroalimentación cerrada, mínima pérdida de energía, estabilidad local y adaptación continua.
 
 Para el motor "Silver Adult", esto significa abandonar la canalización lineal ("Plain text -> Inferencia -> Respuesta") en favor de un ciclo donde la información, la memoria y la evaluación fluyen circularmente.
 
@@ -19,7 +19,7 @@ Experiencia -> Embeddings -> Compresión DNA -> Recuperación -> Uso -> Recompre
 
 ### Aplicación en Direct Neural Ingestion (DNI):
 En lugar de depender de RAG externos estáticos, el conocimiento fluye a través del sistema:
-- **Flujo Multicapa:** 
+- **Flujo Multicapa:**
   - *Memoria Inmediata* (Contexto local temporal).
   - *Memoria de Sesión* (Sostenida en la caché de inferencia).
   - *Memoria Profunda* (Consolidada en el **DNA Genómico** a largo plazo).

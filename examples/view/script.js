@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             modelsData = data.models;
             modelSelect.innerHTML = '';
-            
+
             if (modelsData.length === 0) {
                 const opt = document.createElement('option');
                 opt.value = 'none';
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     message: text,
                     model: modelSelect.value
                 })

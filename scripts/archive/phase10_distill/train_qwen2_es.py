@@ -10,15 +10,20 @@ from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config
 from gaje.nn.trainer import GenomicTrainer
 
+
 def main():
-    parser = argparse.ArgumentParser(description="🧬 GAJE PROTOCOL: SPANISH ENRICHMENT TRAINING")
-    parser.add_argument("--arch", type=str, default="qwen2", help="Architecture config to use")
+    parser = argparse.ArgumentParser(
+        description="🧬 GAJE PROTOCOL: SPANISH ENRICHMENT TRAINING"
+    )
+    parser.add_argument(
+        "--arch", type=str, default="qwen2", help="Architecture config to use"
+    )
     parser.add_argument("--blocks", type=int, default=4, help="Number of blocks")
     parser.add_argument("--epochs", type=int, default=150, help="Training epochs")
     parser.add_argument("--lr", type=float, default=0.01, help="Learning rate")
     args = parser.parse_args()
 
-    print(f"🧬 GAJE PROTOCOL: SPANISH ENRICHMENT v0.7.0")
+    print("🧬 GAJE PROTOCOL: SPANISH ENRICHMENT v0.7.0")
     print("=" * 60)
 
     # 1. Cargar Dataset (Usando el dataset extendido de 150 frases)
@@ -35,15 +40,15 @@ def main():
     # 2. Inicialización
     config = get_config(args.arch)
     llm = GenomicLLM(model_path=None, num_blocks=args.blocks, config=config)
-    
+
     # 3. Entrenamiento
     trainer = GenomicTrainer(llm, lr=args.lr)
     print(f"[*] Iniciando entrenamiento intensivo ({args.epochs} épocas)...")
-    
+
     start_time = time.time()
     trainer.fit(dataset, epochs=args.epochs)
     duration = time.time() - start_time
-    
+
     print(f"\n[*] Entrenamiento finalizado en {duration:.2f} segundos.")
 
     # 4. Validación Directa
@@ -52,9 +57,9 @@ def main():
         "El ADN es",
         "Rust es un",
         "Yo soy un",
-        "¿Cómo puedo"
+        "¿Cómo puedo",
     ]
-    
+
     print("\n" + "=" * 40)
     print("🧪 RESULTADOS DE LA CRIANZA (DATASET EXTENDIDO)")
     print("=" * 40)
@@ -70,6 +75,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     llm.save(out_dir)
     print(f"\n✅ Organismo 'Políglota ES v2' guardado en {out_dir}")
+
 
 if __name__ == "__main__":
     main()

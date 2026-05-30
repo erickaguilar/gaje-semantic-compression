@@ -14,7 +14,7 @@ Se realizó una prueba de "Identidad Cognitiva" (Identity Cloner) utilizando el 
 
 ## 3. Resultados Tangibles
 - **Convergencia:** El fitness subió de **0.3333** (azar) a **0.6667** (aprendizaje).
-- **Resonancia Detectada:** 
+- **Resonancia Detectada:**
     - Palabra 'el' -> **1 disparo** generado.
     - Palabra 'gaje' -> **1 disparo** generado.
     - Palabra 'rust' -> **0 disparos** (pendiente de optimización).

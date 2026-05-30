@@ -17,9 +17,9 @@ class ArchitectureConfig:
     default_centroids: Dict[str, List[float]] = field(default_factory=dict)
 
     # Quantization Settings
-    anchor_threshold: float = -1.0 # -1.0 means disable by default
+    anchor_threshold: float = -1.0  # -1.0 means disable by default
     ffn_anchor_threshold: float = -1.0
-    
+
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
     dni: bool = False  # Direct Neural Ingestion support

@@ -13,7 +13,7 @@ Demostrar que inyectar una **Topología Relacional** (extraída de un modelo mae
 
 ### Paso 1: Extracción del Mapa Topológico (The Map Maker)
 *   **Acción:** Crear `scripts/research/extract_centroid_topology.py`.
-*   **Procedimiento:** 
+*   **Procedimiento:**
     1.  Pasar un corpus de 10,000 tokens por un modelo maestro (SmolLM2-F32).
     2.  Registrar las secuencias de activación de los centroides por capa.
     3.  Generar una **Matriz de Adyacencia de Centroides (CAM)** que represente las probabilidades de transición.

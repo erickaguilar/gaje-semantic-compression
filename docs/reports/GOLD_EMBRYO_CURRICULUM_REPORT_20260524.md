@@ -19,7 +19,7 @@
 ## 2. Descubrimientos Técnicos y Fixes
 
 ### El Bug de la "Cigüeña" (Expansión de Capas)
-Durante la transición a la Fase B, se detectó un pánico (`index out of bounds`) en la función `refine_step`. 
+Durante la transición a la Fase B, se detectó un pánico (`index out of bounds`) en la función `refine_step`.
 - **Causa:** La expansión del vocabulario no recalculaba correctamente los saltos de memoria (`row_size`) en la estructura empaquetada de 2 bits.
 - **Solución:** Se rediseñó la lógica de copia en `gaje-smg1-trainer.rs` para segmentar por `input_idx` y se añadieron guardas de seguridad en `src/nn/spiking/layer.rs`.
 

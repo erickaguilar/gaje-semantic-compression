@@ -8,7 +8,7 @@
 Tras las pruebas de interacción con el modelo de 37 MB destilado de SmolLM2-135M, se han identificado los siguientes fenómenos:
 
 ### A. Obsesión Técnica (The Rust Loop)
-El modelo muestra una tendencia crítica a traducir cualquier prompt, incluso literario o general, a términos técnicos del protocolo GAJE (ej. *"espacio de fase"*, *"topología circular"*, *"nativo en Rust"*). 
+El modelo muestra una tendencia crítica a traducir cualquier prompt, incluso literario o general, a términos técnicos del protocolo GAJE (ej. *"espacio de fase"*, *"topología circular"*, *"nativo en Rust"*).
 *   **Causa:** Destilación intensiva sobre datasets exclusivamente técnicos durante las fases de validación de resiliencia.
 *   **Efecto:** Alta precisión técnica pero baja utilidad conversacional general.
 

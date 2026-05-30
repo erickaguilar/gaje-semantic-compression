@@ -10,24 +10,24 @@ El ecosistema v0.9.5-alpha no solo utiliza destilación directa, sino un pipelin
 graph TD
     A[Dataset] --> B[Bridge Distillation: Teacher-Student]
     B --> C{Fase de Optimización}
-    
+
     subgraph "Fase 1: Destilación NAtiva (Bridge)"
         B1[Refine Step: Sparse Updates]
         B2[Alineación de Spikes]
     end
-    
+
     subgraph "Fase 2: Optimización Monte Carlo"
         C1[Muestreo Estocástico de Centroides]
         C2[Evolución Bitwise en Rust]
         C3[Búsqueda de Mínimos en Espacio Discreto]
     end
-    
+
     subgraph "Fase 3: Emulación Neuromórfica"
         D1[LIF Neuron Simulation]
         D2[Event-Based Processing]
         D3[Inferencia Sin Multiplicaciones]
     end
-    
+
     B1 --> C1
     C3 --> D1
     D3 --> E[Modelo .gaje Homologado]

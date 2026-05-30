@@ -31,7 +31,7 @@ Si el proceso se interrumpe abruptamente, la pérdida de datos se reduce de "hor
 
 **`src/nn/trainer.rs`**
 ```rust
-pub fn fit_epoch<F>(..., mut on_step: F) -> Result<f32, String> 
+pub fn fit_epoch<F>(..., mut on_step: F) -> Result<f32, String>
 where F: FnMut(&mut GenomicLLM, usize, f32) -> Result<(), String> {
     // ...
     for (idx, seq) in dataset.iter().enumerate() {

@@ -28,8 +28,8 @@ SIGNATURE_QWEN = "qwen2"
 # Legacy Mapping (Old keys -> New Config)
 LEGACY_MAPPING = {
     "dim_latent": "n_embd",
-    "dim_logic": "n_head", # Rough approximation for legacy
-    "type": "name"
+    "dim_logic": "n_head",  # Rough approximation for legacy
+    "type": "name",
 }
 
 # Tensor Name Mapping (Modern Name -> Old Name Aliases)
@@ -41,7 +41,7 @@ LEGACY_TENSOR_MAP = {
     "blk.0.attn_k": ["layer.1.packed_weights", "l1.k", "layers.0.attention.wk"],
     "blk.0.attn_v": ["layer.1.packed_weights", "l1.v", "layers.0.attention.wv"],
     "blk.0.attn_output": ["layer.1.packed_weights", "l1.o", "layers.0.attention.wo"],
-    "blk.0.ffn_gate": ["layer.1.packed_weights", "l1.gate"], 
+    "blk.0.ffn_gate": ["layer.1.packed_weights", "l1.gate"],
     "blk.0.ffn_up": ["layer.1.packed_weights", "l1.up"],
-    "blk.0.ffn_down": ["layer.1.packed_weights", "l1.down"]
+    "blk.0.ffn_down": ["layer.1.packed_weights", "l1.down"],
 }

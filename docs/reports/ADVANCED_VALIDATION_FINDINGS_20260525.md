@@ -18,7 +18,7 @@ Se han ejecutado las primeras fases del plan de validación avanzada sobre el or
     *   **PPL Español:** 53,111.70
     *   **PPL Inglés:** 52,263.28
     *   **Brecha Lingüística:** **1.62%**
-*   **Análisis:** 
+*   **Análisis:**
     *   El modelo es **bilingüe-estable**, lo que significa que la compresión a 2 bits no ha sesgado el espacio latente hacia un idioma específico.
     *   La PPL extremadamente alta confirma que el modelo está en un estado de **entropía alta (Nacimiento)**, coherente con el `Gold Embryo` inicial que aún no ha pasado por un entrenamiento de refinamiento masivo.
 
@@ -27,7 +27,7 @@ Se han ejecutado las primeras fases del plan de validación avanzada sobre el or
 *   **Métricas:**
     *   **Tasa de Recuperación:** **0.00%**
     *   **Comportamiento:** El modelo genera tokens repetitivos (ej. "Optical", "popular") ante la pregunta.
-*   **Diagnóstico de Estrés:** 
+*   **Diagnóstico de Estrés:**
     *   **Semantic Drift Crítico:** La alta entropía basal del `gold_embryo` (confirmada en Fase 2.1) impide que el mecanismo de atención destaque la "aguja" sobre el ruido del pajar.
     *   **Saturación de KV-Cache:** El modelo sufre de un colapso de atención prematuro. En este estado de "infancia genómica", el modelo aún no posee los pesos de atención necesarios para filtrar información relevante.
 

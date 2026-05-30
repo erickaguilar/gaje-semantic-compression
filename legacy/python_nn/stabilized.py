@@ -43,11 +43,11 @@ class GenomicLayer:
         self.balancer = balancer
         self.config = config
         self.custom_base_c = custom_base_c
-        
+
         # Use config defaults if not provided
         if anchor_threshold is None:
             anchor_threshold = self.config.anchor_threshold if self.config else -1.0
-            
+
         is_q_or_k = "attn_q" in name or "attn_k" in name
 
         if hasattr(weights_f32_or_tensor, "tensor_type"):
@@ -130,7 +130,9 @@ class GenomicLayer:
             else:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 rope_style = self.config.rope_style if self.config else "split"
-                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style)
+                weights_f32 = dequantize_q8_0(
+                    tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style
+                )
                 self.out_features, self.in_features = weights_f32.shape
                 self._init_from_f32(
                     weights_f32, block_size, anchor_threshold, custom_base_c
@@ -144,7 +146,13 @@ class GenomicLayer:
                 self.config.unpermute_weights if self.config else False
             )  # Default false for raw
             rope_style = self.config.rope_style if self.config else "split"
-            if unpermute and is_q_or_k and n_head is not None and head_dim is not None and rope_style != "split":
+            if (
+                unpermute
+                and is_q_or_k
+                and n_head is not None
+                and head_dim is not None
+                and rope_style != "split"
+            ):
                 from gaje.utils.quantization import unpermute_to_interleaved
 
                 weights_f32 = unpermute_to_interleaved(weights_f32, n_head, head_dim)
@@ -404,12 +412,14 @@ class GenomicTransformerBlock:
         custom_centroids=None,
     ):
         self.config = config
-        
+
         # Use config defaults if not provided
         if anchor_threshold is None:
             anchor_threshold = self.config.anchor_threshold if self.config else -1.0
         if ffn_anchor_threshold is None:
-            ffn_anchor_threshold = self.config.ffn_anchor_threshold if self.config else -1.0
+            ffn_anchor_threshold = (
+                self.config.ffn_anchor_threshold if self.config else -1.0
+            )
         p = f"blk.{idx}."
         attn_norm_data = loader.get(p + "attn_norm.weight").data.astype(np.float32)
 
@@ -609,17 +619,26 @@ class GenomicLLM:
         if self.config and self.config.tokenizer_id:
             if os.path.exists(self.config.tokenizer_id):
                 if os.path.isdir(self.config.tokenizer_id):
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
                 elif self.config.tokenizer_id.endswith(".json"):
                     from tokenizers import Tokenizer as lib_tokenizer
+
                     self.tokenizer = lib_tokenizer.from_file(self.config.tokenizer_id)
                 else:
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
             else:
                 try:
-                    self.tokenizer = AutoTokenizer.from_pretrained(self.config.tokenizer_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(
+                        self.config.tokenizer_id
+                    )
                 except Exception as e:
-                    print(f"[!] Warning: Could not load tokenizer '{self.config.tokenizer_id}': {e}")
+                    print(
+                        f"[!] Warning: Could not load tokenizer '{self.config.tokenizer_id}': {e}"
+                    )
                     self.tokenizer = None
         else:
             self.tokenizer = None
