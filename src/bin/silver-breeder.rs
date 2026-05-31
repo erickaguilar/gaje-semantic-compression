@@ -1,4 +1,4 @@
-use _impl::core::evolution_bitwise::IslandModelEngine;
+use _impl::core::evolution_bitwise::IslandModel;
 use _impl::core::tokenizer::GajeTokenizer;
 use _impl::core::topology::CentroidGraph;
 use _impl::nn::distiller::{CouncilOfTeachers, Teacher};
@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 6. Inicializar el Island Model Engine
     println!("[*] Inicializando Island Model (4 Islas, 16 individuos cada una)...");
-    let mut engine = IslandModelEngine::new_llm(
+    let mut engine = IslandModel::new_llm(
         student_llm,
         4,     // num_islands
         16,    // pop_per_island

@@ -1,3 +1,5 @@
-El código secreto de la base lunar es GAJE-99-TORO.
-La misión se llama Operación Vórtice Toroidal.
-El comandante al mando es el Coronel Erick Aguilar.
+El Protocolo GAJE-Flow utiliza una topología circular basada en raíces ciclotómicas de la unidad en el plano complejo.
+La Serie Titan de 50MB permite una dimensión de embedding de 1024 y hasta 36 bloques de inteligencia genómica.
+El entrenamiento por lóbulos genómicos permite especializar una fracción del modelo (ej. 8MB) sin degradar el conocimiento base.
+La resonancia toroidal asegura que la información fluya sin fricción y sin pérdida por saturación lineal.
+GAJE-Flow v1.0.0-alpha implementa anclas de estabilidad de 16 bits para guiar pesos de 2 bits.

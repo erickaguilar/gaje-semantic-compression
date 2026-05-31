@@ -64,7 +64,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             i += 1;
         }
     }
-
     if teacher_model_paths.is_empty() {
         teacher_model_paths.push("models/gguf/smollm2-135m-f16.gguf".to_string());
     }
@@ -239,7 +238,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 4. Configurar Consejo de Profesores (Soporte para múltiples maestros)
-    println!("[*] Configurando Consejo de Profesores (Cargando {} maestros)...", teacher_model_paths.len());
+    println!(
+        "[*] Configurando Consejo de Profesores (Cargando {} maestros)...",
+        teacher_model_paths.len()
+    );
     let mut council = CouncilOfTeachers::new();
     for (idx, t_path) in teacher_model_paths.iter().enumerate() {
         let tok_path = if idx < teacher_tokenizer_paths.len() {
@@ -249,12 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         println!("    [>] Cargando maestro #{} desde {}...", idx + 1, t_path);
-        let teacher = Teacher::new(
-            format!("Teacher-{}", idx + 1),
-            t_path,
-            tok_path,
-            &tokenizer,
-        )?;
+        let teacher = Teacher::new(format!("Teacher-{}", idx + 1), t_path, tok_path, &tokenizer)?;
         council.add_teacher(teacher);
     }
 

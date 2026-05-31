@@ -157,8 +157,50 @@ impl DNIEngine {
         let mut rng = rand::thread_rng();
         let n_blocks = mutant.blocks.len();
 
+        // Si hay capas objetivo definidas, las usamos.
+        // De lo contrario, usamos la heurística DNI (bloques intermedios).
+        if !self.target_layers.is_empty() {
+            for layer_pattern in &self.target_layers {
+                // Soportamos patrones simples como "block.10" o "block.11.ffn"
+                for i in 0..n_blocks {
+                    let block_name = format!("block.{}", i);
+                    if layer_pattern.contains(&block_name) {
+                        let block = &mut mutant.blocks[i];
+                        let mut target_weights = Vec::new();
+
+                        if layer_pattern.contains("ffn") || !layer_pattern.contains(".") {
+                            target_weights.push(&mut block.gate_gen);
+                            target_weights.push(&mut block.up_gen);
+                            target_weights.push(&mut block.w_down);
+                        }
+
+                        if layer_pattern.contains("attn") {
+                            target_weights.push(&mut block.q_gen);
+                            target_weights.push(&mut block.k_gen);
+                            target_weights.push(&mut block.v_gen);
+                            target_weights.push(&mut block.w_o);
+                        }
+
+                        for layer in target_weights {
+                            let mut db = (*layer.database).clone();
+                            let mut changed = false;
+                            for byte in &mut db {
+                                if rng.gen::<f32>() < rate {
+                                    *byte ^= rng.gen::<u8>();
+                                    changed = true;
+                                }
+                            }
+                            if changed {
+                                layer.database = Arc::new(db);
+                            }
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
         // Heurística DNI: Mutar principalmente bloques intermedios
-        // Evitamos bloques 0-2 (Sintaxis base) y el último (Lógica de salida)
         let start_block = (n_blocks / 10).max(2);
         let end_block = n_blocks - 1;
 
@@ -169,7 +211,6 @@ impl DNIEngine {
             let layers = [&mut block.gate_gen, &mut block.up_gen, &mut block.w_down];
 
             for layer in layers {
-                // Copia y mutación del ADN digital
                 let mut db = (*layer.database).clone();
                 let mut changed = false;
                 for byte in &mut db {

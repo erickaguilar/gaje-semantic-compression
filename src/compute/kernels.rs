@@ -221,7 +221,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
         }
     }
 
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    #[cfg(all(not(target_arch = "aarch64"), not(target_arch = "x86_64")))]
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
         let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-12).sqrt();
@@ -342,6 +342,33 @@ pub unsafe fn init_shuffle_table() {
         }
     }
     SHUFFLE_TABLE_INITIALIZED = true;
+}
+
+// =============================================================================
+// lateral_inhibition_kwta — El Filtro del "Río Semántico"
+// =============================================================================
+
+/// Implementa la Inhibición Lateral (K-Winners-Take-All).
+///
+/// Este kernel simula cómo las "Islas" de cristalización inhiben el ruido
+/// de la "Materia Oscura" circundante, forzando a la señal a fluir por los
+/// canales de máxima resonancia (El Río Semántico).
+pub fn lateral_inhibition_kwta(scores: &mut [f32], k: usize) {
+    if scores.len() <= k {
+        return;
+    }
+
+    // Encontramos el umbral del k-ésimo ganador
+    let mut sorted_scores = scores.to_vec();
+    sorted_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+    let threshold = sorted_scores[k - 1];
+
+    // Inhibición: las señales por debajo del umbral se extinguen (Materia Oscura)
+    for s in scores.iter_mut() {
+        if *s < threshold {
+            *s = -1e9; // Silencio inhibitorio
+        }
+    }
 }
 
 // =============================================================================
