@@ -83,5 +83,17 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::sample_top_p, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::calculate_mse_native,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::calculate_cosine_similarity_native,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::calculate_distribution_entropy_native,
+        m
+    )?)?;
     Ok(())
 }
