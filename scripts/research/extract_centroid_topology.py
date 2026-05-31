@@ -30,11 +30,13 @@ sys.path.insert(
 
 class TopologyExtractor:
     def __init__(self, model_id):
-        print(f"[*] Cargando Maestro para Extracción: {model_id}")
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"[*] Cargando Maestro para Extracción en {self.device.upper()}: {model_id}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        dtype = torch.float16 if self.device == "cuda" else torch.float32
         self.model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch.float32, output_hidden_states=True
-        )
+            model_id, torch_dtype=dtype, output_hidden_states=True
+        ).to(self.device)
         self.model.eval()
 
     def extract_cam(self, text_corpus, num_samples=100, seq_len=64):
@@ -52,17 +54,17 @@ class TopologyExtractor:
         for text in tqdm(samples, desc="Mapeando activaciones"):
             inputs = self.tokenizer(
                 text, return_tensors="pt", truncation=True, max_length=seq_len
-            )
+            ).to(self.device)
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 # hidden_states: [num_layers + 1][batch, seq, hidden]
-                h_states = outputs.hidden_states
+                h_states = [h[0].cpu().float().numpy() for h in outputs.hidden_states]
 
             # Analizar flujo entre capas
             for i in range(num_layers - 1):
                 # Tomar la activación promedio del bloque de tokens para ver la tendencia de la capa
-                act_i = h_states[i + 1][0].numpy()  # Capa i
-                act_next = h_states[i + 2][0].numpy()  # Capa i+1
+                act_i = h_states[i + 1]      # Capa i: [seq_len, hidden_dim]
+                act_next = h_states[i + 2]   # Capa i+1: [seq_len, hidden_dim]
 
                 # Cuantizar activaciones en 4 niveles (basado en cuantiles para distribución uniforme)
                 def quantize_activations(act):

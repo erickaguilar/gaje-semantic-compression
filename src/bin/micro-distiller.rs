@@ -30,8 +30,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Configuración de Rutas Dinámicas (con soporte para argumentos CLI)
     let args: Vec<String> = std::env::args().collect();
     let mut student_path = "models/micro_distilled_coherence.gaje".to_string();
-    let mut teacher_model_path = "models/gguf/smollm2-135m-f16.gguf".to_string();
-    let mut teacher_tokenizer_path = "models/core/tokenizer.json".to_string();
+    let mut teacher_model_paths = Vec::new();
+    let mut teacher_tokenizer_paths = Vec::new();
     let mut dataset_path = "data/datasets/mosaic_dataset.txt".to_string();
     let mut output_path = "models/micro_distilled_coherence.gaje".to_string();
     let mut epochs = 5;
@@ -43,10 +43,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             student_path = args[i + 1].clone();
             i += 2;
         } else if args[i] == "--teacher" && i + 1 < args.len() {
-            teacher_model_path = args[i + 1].clone();
+            teacher_model_paths.push(args[i + 1].clone());
             i += 2;
         } else if args[i] == "--tokenizer" && i + 1 < args.len() {
-            teacher_tokenizer_path = args[i + 1].clone();
+            teacher_tokenizer_paths.push(args[i + 1].clone());
             i += 2;
         } else if args[i] == "--dataset" && i + 1 < args.len() {
             dataset_path = args[i + 1].clone();
@@ -65,9 +65,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    if teacher_model_paths.is_empty() {
+        teacher_model_paths.push("models/gguf/smollm2-135m-f16.gguf".to_string());
+    }
+    if teacher_tokenizer_paths.is_empty() {
+        teacher_tokenizer_paths.push("models/core/tokenizer.json".to_string());
+    }
+
     // 2. Cargar Tokenizador y Recursos
     println!("[*] Cargando tokenizador...");
-    let tokenizer = Arc::new(GajeTokenizer::from_file(&teacher_tokenizer_path)?);
+    let tokenizer = Arc::new(GajeTokenizer::from_file(&teacher_tokenizer_paths[0])?);
 
     // 3. Cargar Estudiante
     println!("[*] Cargando Estudiante (Micro-Organismo)...");
@@ -231,20 +238,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // 4. Configurar Profesor Único (Versión Ligera Q8)
-    println!("[*] Configurando Profesor (SmolLM2 Q8 - 42MB)...");
+    // 4. Configurar Consejo de Profesores (Soporte para múltiples maestros)
+    println!("[*] Configurando Consejo de Profesores (Cargando {} maestros)...", teacher_model_paths.len());
     let mut council = CouncilOfTeachers::new();
-    let teacher = Teacher::new(
-        "SmolLM2-Master".to_string(),
-        &teacher_model_path,
-        &teacher_tokenizer_path,
-        &tokenizer,
-    )?;
-    println!(
-        "    [+] Vocabulario Profesor: {}",
-        teacher.tokenizer.vocab_size()
-    );
-    council.add_teacher(teacher);
+    for (idx, t_path) in teacher_model_paths.iter().enumerate() {
+        let tok_path = if idx < teacher_tokenizer_paths.len() {
+            &teacher_tokenizer_paths[idx]
+        } else {
+            &teacher_tokenizer_paths[0]
+        };
+
+        println!("    [>] Cargando maestro #{} desde {}...", idx + 1, t_path);
+        let teacher = Teacher::new(
+            format!("Teacher-{}", idx + 1),
+            t_path,
+            tok_path,
+            &tokenizer,
+        )?;
+        council.add_teacher(teacher);
+    }
 
     // 5. Configurar Destilador
     let distiller = GenomicDistiller::new(council, (*tokenizer).clone());
