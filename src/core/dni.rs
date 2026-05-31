@@ -9,12 +9,12 @@ use rayon::prelude::*;
 use std::sync::Arc;
 
 #[cfg(feature = "python")]
-use pyo3::exceptions::{PyIOError, PyValueError};
+use pyo3::exceptions::PyValueError;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::exceptions::{PyIOError, PyValueError};
+use crate::pyo3_shim::exceptions::PyValueError;
 #[cfg(not(feature = "python"))]
 use crate::pyo3_shim::*;
 
