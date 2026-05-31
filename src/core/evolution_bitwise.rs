@@ -115,7 +115,27 @@ impl NeuromorphicOrganism {
 }
 
 /// Motor de Evolución por Poblaciones Paralelas (Island Model).
-pub struct IslandModelEngine {
+/// # 🏝️ Island Model: Ecosistema Evolutivo de Nudos Semánticos
+///
+/// Gestiona múltiples poblaciones independientes ("Islas") que evolucionan en paralelo
+/// sobre el espacio de fase toroidal.
+///
+/// ## Validación Matemática de la Evolución:
+///
+/// *   **Estabilidad de Nudos (Entropía de Shannon):** Se mide la dispersión de los bits
+///     en el genoma de 2 bits. Un nudo estable tiende a una entropía local mínima,
+///     indicando que la información se ha "cristalizado".
+///     $$H(X) = -\sum P(x_i) \log_2 P(x_i)$$
+///
+/// *   **Distancia de Migración (Divergencia KL):** Al intercambiar organismos entre
+///     islas, validamos que la "sorpresa" o ganancia de información no rompa la
+///     resonancia del nudo local.
+///     $$D_{KL}(P || Q) = \sum P(i) \log \frac{P(i)}{Q(i)}$$
+///
+/// *   **Aptitud (Fitness Híbrido):** Combina la coherencia semántica (resonancia con el Maestro)
+///     y la retención de memoria (Needle Test), asegurando que los nudos no solo sean
+///     bellos matemáticamente, sino útiles funcionalmente.
+pub struct IslandModel {
     pub islands: Vec<SpikingEvolutionEngine>,
     pub migration_rate: usize,
     pub topology_map: Option<Arc<CentroidGraph>>,
@@ -124,7 +144,7 @@ pub struct IslandModelEngine {
     pub tokenizer: Option<Arc<GajeTokenizer>>,
 }
 
-impl IslandModelEngine {
+impl IslandModel {
     pub fn new(
         initial_model: Vec<GajeNeuromorphicLayer>,
         num_islands: usize,

@@ -314,6 +314,31 @@ pub unsafe fn init_shuffle_table() {
 }
 
 // =============================================================================
+// lateral_inhibition_kwta — El Filtro del "Río Semántico"
+// =============================================================================
+
+/// Implementa la Inhibición Lateral (K-Winners-Take-All).
+/// 
+/// Este kernel simula cómo las "Islas" de cristalización inhiben el ruido 
+/// de la "Materia Oscura" circundante, forzando a la señal a fluir por los
+/// canales de máxima resonancia (El Río Semántico).
+pub fn lateral_inhibition_kwta(scores: &mut [f32], k: usize) {
+    if scores.len() <= k { return; }
+    
+    // Encontramos el umbral del k-ésimo ganador
+    let mut sorted_scores = scores.to_vec();
+    sorted_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+    let threshold = sorted_scores[k - 1];
+
+    // Inhibición: las señales por debajo del umbral se extinguen (Materia Oscura)
+    for s in scores.iter_mut() {
+        if *s < threshold {
+            *s = -1e9; // Silencio inhibitorio
+        }
+    }
+}
+
+// =============================================================================
 // genomic_dot_product — Producto punto genómico universal
 // =============================================================================
 

@@ -7,6 +7,15 @@ use std::sync::Arc;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
+/// # ⚓ Configuración del Organismo: Anclas de Estabilidad
+///
+/// Define la estructura del modelo, incluyendo la densidad de las **Anclas de Estabilidad**.
+///
+/// ## El Alma de Acero (Inner Threads):
+/// En la arquitectura Silver Adult, las anclas son hilos de alta precisión (F16) que corren
+/// por el núcleo del toroide semántico. Actúan como pozos gravitatorios que guían la
+/// coherencia de los hilos genómicos de 2 bits, evitando la deriva semántica y
+/// permitiendo una identidad estable.
 #[cfg_attr(feature = "python", pyclass(get_all))]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ArchConfig {

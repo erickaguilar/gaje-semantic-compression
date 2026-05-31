@@ -41,6 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut dni_intensity = 0.01;
     let mut dni_pop = 16;
     let mut anchor_threshold_arg = 0.1;
+    let mut target_layers_arg = Vec::new();
 
     while i < args.len() {
         if args[i] == "--model" && i + 1 < args.len() { model_path = args[i+1].clone(); i += 2; }
@@ -53,6 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         else if args[i] == "--dni-ingest" && i + 1 < args.len() { dni_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--dni-intensity" && i + 1 < args.len() { dni_intensity = args[i+1].parse().unwrap_or(0.01); i += 2; }
         else if args[i] == "--dni-pop" && i + 1 < args.len() { dni_pop = args[i+1].parse().unwrap_or(16); i += 2; }
+        else if args[i] == "--target-layers" && i + 1 < args.len() { 
+            target_layers_arg = args[i+1].split(',').map(|s| s.to_string()).collect(); 
+            i += 2; 
+        }
         else if args[i] == "--tokenize" && i + 1 < args.len() { tokenize_text = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--prompt" && i + 1 < args.len() { prompt_arg = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--evolve" && i + 1 < args.len() { evolve_target = Some(args[i+1].clone()); i += 2; }
@@ -212,7 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tokenizer: Arc::new(tokenizer.clone()),
             council: None,
             intensity: dni_intensity,
-            target_layers: Vec::new(),
+            target_layers: target_layers_arg,
         };
 
         let start = std::time::Instant::now();

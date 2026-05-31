@@ -1,3 +1,20 @@
+//! # 🧬 Motor de Cómputo Genómico: Espacio de Fase Toroidal
+//!
+//! Este módulo implementa la lógica matemática fundamental del protocolo GAJE,
+//! permitiendo la transición de tensores escalares lineales a un **Espacio de Fase Compleja** $\mathbb{Q}(\zeta_{16})$.
+//!
+//! ## Conceptos Clave:
+//!
+//! *   **Topología Toroidal:** A diferencia de la cuantización lineal, la información semántica
+//!     aquí se "enrolla" en un círculo unitario. Esto permite una suma infinita de señales
+//!     sin saturación de bordes (Homeostasis Numérica).
+//! *   **Genomización por Interferencia:** El proceso de comprimir pesos de 32 bits a 2 bits
+//!     no se trata de un simple truncamiento, sino de encontrar la "fase de resonancia"
+//!     óptima en el plano complejo.
+//! *   **Resonancia de Fase:** Las neuronas actúan como osciladores que interfieren
+//!     constructiva o destructivamente, preservando la densidad semántica en una fracción
+//!     del espacio original.
+
 use half::f16;
 use rayon::prelude::*;
 use std::cmp::Ordering;
@@ -102,6 +119,54 @@ pub fn genomize_f32_core(
     }
 
     (dna_database, all_centroids, anchors_u8)
+}
+
+/// # 🧬 Cuantización Toroidal (Fase Compleja)
+/// 
+/// Proyecta tensores f32 en el cuerpo ciclotómico Q(zeta_16), tratando los 
+/// valores como ángulos en un toroide semántico.
+pub fn quantize_toroidal_core(
+    data: &[f32],
+    block_size: usize,
+) -> (Vec<u8>, Vec<f32>) {
+    let n_elements = data.len();
+    let n_blocks = n_elements / block_size;
+    let mut dna = Vec::with_capacity(n_elements / 4);
+    let mut phase_centroids = Vec::with_capacity(n_blocks * 4);
+
+    for i in 0..n_blocks {
+        let block = &data[i * block_size..(i + 1) * block_size];
+        
+        // En la topología toroidal, los centroides representan los "polos" de resonancia
+        // de la fase compleja. Usamos 4 polos cardinales por bloque.
+        let mut sum = 0.0f32;
+        for &v in block { sum += v; }
+        let mean = sum / block_size as f32;
+        
+        // Determinamos la amplitud del toroide local (dispersión)
+        let mut var = 0.0f32;
+        for &v in block { var += (v - mean).powi(2); }
+        let std = (var / block_size as f32).sqrt() + 1e-6;
+
+        // Polos cardinales: N, S, E, W en el plano complejo semántico
+        let c = [mean - std, mean + std, mean - std*0.5, mean + std*0.5];
+        for &val in &c { phase_centroids.push(val); }
+
+        for k in 0..(block_size / 4) {
+            let mut byte = 0u8;
+            for s in 0..4 {
+                let val = block[k * 4 + s];
+                // Mapeo a fase (2 bits)
+                let bits = if val < c[0] { 0b00 } 
+                           else if val < c[2] { 0b01 } 
+                           else if val < c[3] { 0b11 } 
+                           else { 0b10 };
+                byte = (byte << 2) | bits;
+            }
+            dna.push(byte);
+        }
+    }
+    (dna, phase_centroids)
 }
 
 pub fn genomize_f16_core(

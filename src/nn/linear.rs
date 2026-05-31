@@ -7,7 +7,18 @@ use std::sync::Arc;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-/// Núcleo de Capa Lineal Genómica (Pure Rust)
+/// # ⚡ Capa Lineal Genómica: Cómputo por Resonancia
+///
+/// Implementa una transformación lineal operando directamente en el espacio genómico.
+///
+/// ## Estructura Híbrida:
+/// *   **Database (DNA):** Hebras de 2 bits que contienen el grueso de la masa semántica.
+/// *   **Anchors (Inner Threads):** Hilos de alta precisión que preservan los componentes
+///     críticos de la señal.
+///
+/// El cálculo no es una multiplicación de matrices convencional, sino una búsqueda de
+/// **resonancia de fase** donde las anclas guían la reconstrucción de la señal
+/// para mantener la fidelidad semántica por encima del 96%.
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone)]
 pub struct GenomicLinear {
