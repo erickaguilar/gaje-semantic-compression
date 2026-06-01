@@ -10,10 +10,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧬 SILVER BREEDER: Laboratorio de Evolución por Poblaciones (Fase 5.0) 🧬");
     println!("-----------------------------------------------------------------------");
 
-    // 1. Configuración de Rutas
-    let student_path = "models/silver_adult_anchored.gaje";
+    let args: Vec<String> = std::env::args().collect();
+    let student_path = if args.len() > 1 {
+        &args[1]
+    } else {
+        "models/silver_adult_anchored.gaje"
+    };
     let tokenizer_path = "models/core/tokenizer.json";
-    let dataset_path = "data/datasets/dataset_es_ext.txt";
+    let dataset_path = if args.len() > 2 {
+        &args[2]
+    } else {
+        "data/datasets/dataset_es_ext.txt"
+    };
     let teacher_model_path = "models/gguf/smollm2-135m-f16.gguf";
     let topology_path = "models/core/topology_es.json";
 

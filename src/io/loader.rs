@@ -41,6 +41,8 @@ pub struct ArchConfig {
     pub unpermute_weights: bool,
     #[serde(default = "default_false")]
     pub apply_smollm_rope_patch: bool,
+    #[serde(default = "default_false")]
+    pub tie_word_embeddings: bool,
     #[serde(default = "default_dni")]
     pub dni: String,
     #[serde(default = "default_state")]
@@ -64,6 +66,7 @@ impl ArchConfig {
         ffn_anchor_threshold: f32,
         unpermute_weights: bool,
         apply_smollm_rope_patch: bool,
+        tie_word_embeddings: bool,
         dni: String,
         state: String,
     ) -> Self {
@@ -80,6 +83,7 @@ impl ArchConfig {
             ffn_anchor_threshold,
             unpermute_weights,
             apply_smollm_rope_patch,
+            tie_word_embeddings,
             dni: actual_dni,
             state,
         }
@@ -243,6 +247,7 @@ impl GGUFLoader {
                 ffn_anchor_threshold: 0.1,
                 unpermute_weights: false,
                 apply_smollm_rope_patch: false,
+                tie_word_embeddings: false,
                 dni: default_dni(),
                 state: "stable".to_string(),
             },
@@ -490,7 +495,11 @@ impl NativeLoader {
             vocab_size,
             block_size,
         );
-        let lm_head = self.get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size);
+        let lm_head = if config.config.tie_word_embeddings {
+            embeddings.clone()
+        } else {
+            self.get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size)
+        };
         let output_norm = {
             let n = Self::get_tensor_f32(&read_txn, "output_norm");
             if n.is_empty() {
@@ -765,7 +774,9 @@ pub fn save_genomic_model(
             .write_tensor(&format!("{}h_scale", p), &compress(f32_u8(&[blk.h_scale])))
             .unwrap();
     }
-    write_l(&mut batch, "lm_head", &model.lm_head);
+    if !config.config.tie_word_embeddings {
+        write_l(&mut batch, "lm_head", &model.lm_head);
+    }
     batch
         .write_tensor("output_norm", &compress(f32_u8(&model.output_norm)))
         .unwrap();
@@ -860,11 +871,17 @@ pub fn init_born_genomic_model(
             1.0,
         ));
     }
+    let lm_head = if config.config.tie_word_embeddings {
+        embeddings.clone()
+    } else {
+        init_l(config.n_embd, vocab_size)
+    };
+
     let model = GenomicLLM {
         embeddings,
         blocks,
         output_norm: vec![1.0; config.n_embd],
-        lm_head: init_l(config.n_embd, vocab_size),
+        lm_head,
         eps: config.eps,
         topology: None,
     };

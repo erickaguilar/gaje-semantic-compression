@@ -145,6 +145,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 ffn_anchor_threshold: 0.1,
                 unpermute_weights: false,
                 apply_smollm_rope_patch: false,
+                tie_word_embeddings: init_preset == "silver_adult_32m"
+                    || init_preset == "silver_adult",
                 dni: String::new(), // Se generará automáticamente
                 state: "born".to_string(),
             },
