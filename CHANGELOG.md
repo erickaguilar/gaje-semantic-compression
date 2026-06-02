@@ -1,3 +1,17 @@
+## [1.2.0-alpha] - 2026-06-02
+### Added
+- **Native SDK "GAJE-Core"**: Implementación de la fachada `GajeSession` en Rust, eliminando la dependencia de Python en el flujo de inferencia de chat.
+- **Toroidal Sampler (Pilar 1)**: Muestreo basado en física lagrangiana y inercia de fase. Implementado "Frenado Lagrangiano" para guiar la generación de tokens mediante trayectorias de mínima acción.
+- **Dynamic RNA Strands (Pilar 2)**: Activación adaptativa de precisión (2/4 bits) basada en la entropía de Shannon de las activaciones en tiempo real.
+- **C-FFI Interoperability**: Bindings de tipo `extern "C"` para permitir el uso del motor GAJE desde aplicaciones Android (JNI), iOS (Swift) y C++.
+- **Zero-GIL Inerence**: Eliminación del cuello de botella del intérprete de Python, permitiendo inferencia asíncrona pura en Rust.
+- **Native Chat Binary**: Nueva herramienta de terminal `gaje-native-chat` que demuestra la soberanía total del motor.
+
+### Changed
+- **Kernel Optimization**: Refactorización de `GenomicLinear` para soportar la activación condicional de hebras epigenéticas.
+- **Stable Sampling**: Mejora en la estabilidad numérica del sampler mediante escalado dinámico de logits.
+- **Unified Math Core**: Uso de `pyo3_shim` para permitir la compilación nativa sin la feature `python`.
+
 ## [1.1.0-alpha] - 2026-06-01
 ### Added
 - **Euler-Lagrange Inference Engine**: Integración de las leyes de la física clásica en el núcleo de Rust. La inferencia se modela ahora como un sistema mecánico conservativo donde la información sigue trayectorias de mínima acción.
