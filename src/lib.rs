@@ -11,6 +11,7 @@ pub mod compute;
 pub mod io;
 pub mod nn;
 pub mod pyo3_shim;
+pub mod ffi;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -30,6 +31,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::compute::event_queue::SpikeEvent>()?;
     m.add_class::<crate::nn::block::RustGenomicBlock>()?;
     m.add_class::<crate::nn::llm::GenomicLLM>()?;
+    m.add_class::<crate::compute::sampler::ToroidalSampler>()?;
     m.add_class::<crate::io::loader::NativeLoader>()?;
     m.add_class::<crate::core::db::GajeDatabaseWriter>()?;
     m.add_class::<crate::core::db::GajeDatabaseReader>()?;

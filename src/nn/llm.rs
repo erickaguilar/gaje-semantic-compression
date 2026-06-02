@@ -39,12 +39,19 @@ impl GenomicLLM {
             .as_ref()
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
 
+        // Embeddings: Usamos activación completa para máxima estabilidad inicial
         let mut h = self.embeddings.get_row_core(token_id)?;
         for block in &mut self.blocks {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        self.lm_head.forward_core(h_norm, modulation)
+        
+        // LM Head: Activación dinámica basada en la entropía del estado final
+        let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
+        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
+        
+        self.lm_head.forward_core(h_norm, modulation, activate_rna)
     }
 
     pub fn load_topology_core(&mut self, path: &str) -> Result<(), String> {
@@ -84,7 +91,12 @@ impl GenomicLLM {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        let logits = self.lm_head.forward_core(h_norm.clone(), modulation)?;
+        
+        let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
+        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
+        
+        let logits = self.lm_head.forward_core(h_norm.clone(), modulation, activate_rna)?;
         Ok((logits, h_norm))
     }
 
@@ -99,7 +111,12 @@ impl GenomicLLM {
             .topology
             .as_ref()
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
-        let excitation = self.lm_head.forward_core(h_norm, modulation)?;
+        
+        let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
+        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
+
+        let excitation = self.lm_head.forward_core(h_norm, modulation, activate_rna)?;
 
         let n_tokens = excitation.len();
         let max_excitation = excitation.iter().fold(0.0f32, |a, &b| a.max(b));

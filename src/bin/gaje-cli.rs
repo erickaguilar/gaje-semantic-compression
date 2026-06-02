@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             config: _impl::io::loader::ArchConfig {
                 name: format!("GAJE-{}-Organism", init_preset), version: "1.0.0-alpha".to_string(), tokenizer_id: "tokenizer".to_string(),
                 rope_base: 1000000.0, ffn_act: "swiglu".to_string(), use_genomic_norm: true, rope_style: "split".to_string(),
-                anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false,
+                anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, rna_threshold: 0.5, unpermute_weights: false, apply_smollm_rope_patch: false,
                 dni: String::new(), // Se generará automáticamente
                 state: "born".to_string(),
             },

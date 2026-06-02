@@ -6,3 +6,4 @@ pub mod power;
 pub mod mcts;
 pub mod timing_wheel;
 pub mod lagrangian;
+pub mod sampler;

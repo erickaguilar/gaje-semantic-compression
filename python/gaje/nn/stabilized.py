@@ -472,6 +472,7 @@ class GenomicTransformerBlock:
         # Reference to the Rust block
         act_fn = config.ffn_act if config else "swiglu"
         use_gen_norm = config.use_genomic_norm if config else False
+        rna_threshold = config.rna_threshold if config else 0.5
         self.rust_block = dna_semantic_compression.RustGenomicBlock(
             idx,
             self.attn_layer.attn,
@@ -486,6 +487,8 @@ class GenomicTransformerBlock:
             self.eps,
             act_fn,
             use_gen_norm,
+            1.0, # h_scale default
+            rna_threshold,
         )
 
     def forward(self, x, pos):
@@ -784,12 +787,20 @@ class GenomicLLM:
         spiking_steps=24,
         spiking_threshold=0.5,
         spiking_decay=0.8,
+        use_toroidal=True,
+        toroidal_mass=1.0,
+        toroidal_curvature=0.1,
     ):
         tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
         if hasattr(tokens, "ids"):
             tokens = tokens.ids
-            
+
         generated_tokens = list(tokens)
+        
+        # Inicializar Sampler Toroidal si se solicita
+        toroidal_sampler = None
+        if use_toroidal and not use_spiking:
+            toroidal_sampler = dna_semantic_compression.ToroidalSampler(toroidal_mass, toroidal_curvature)
 
         # Inferencia inicial (prompt)
         # Para el prompt, procesamos token por token
@@ -825,14 +836,19 @@ class GenomicLLM:
             # Repetition penalty
             penalized_logits = dna_semantic_compression.apply_repetition_penalty(
                 next_token_logits.tolist() if hasattr(next_token_logits, "tolist") else list(next_token_logits),
-                repetition_penalty, 
+                repetition_penalty,
                 generated_tokens[-20:]
             )
 
-            # Muestreo Top-P
-            next_id = dna_semantic_compression.sample_top_p(
-                penalized_logits, top_p, temperature
-            )
+            # Muestreo: Toroidal o Top-P tradicional
+            if toroidal_sampler:
+                next_id = toroidal_sampler.sample(
+                    penalized_logits, temperature, top_p
+                )
+            else:
+                next_id = dna_semantic_compression.sample_top_p(
+                    penalized_logits, top_p, temperature
+                )
 
             if eos_token_id is not None and next_id == eos_token_id:
                 break

@@ -25,10 +25,10 @@ use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::PyBytes;
 #[cfg(feature = "python")]
-use pyo3::exceptions::{PyTypeError, PyValueError};
+use pyo3::exceptions::{PyTypeError, PyValueError, PyIOError};
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::{PyResult, Python, PyObject, exceptions::{PyTypeError, PyValueError}};
+use crate::pyo3_shim::{PyResult, Python, PyObject, exceptions::{PyTypeError, PyValueError, PyIOError}};
 
 // --- Lógica Interna Pura (Rust) ---
 
@@ -409,9 +409,7 @@ pub fn genomize_f16_native(
     { Err("Python not enabled".to_string()) }
 }
 
-#[cfg_attr(feature = "python", pyfunction)]
-#[cfg_attr(feature = "python", pyo3(signature = (logits, temperature=1.0, top_p=0.9)))]
-pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+pub fn sample_top_p_core(logits: Vec<f32>, temperature: f32, top_p: f32) -> Result<usize, String> {
     if logits.is_empty() {
         return Ok(0);
     }
@@ -422,6 +420,9 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
         .map(|(i, &l)| (i, ((l - max_logit) / temperature).exp()))
         .collect();
     let sum_exp: f32 = probs.iter().map(|(_, p)| p).sum();
+    if sum_exp <= 0.0 {
+        return Ok(0);
+    }
     for p in &mut probs {
         p.1 /= sum_exp;
     }
@@ -447,6 +448,12 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
         }
     }
     Ok(probs[0].0)
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+#[cfg_attr(feature = "python", pyo3(signature = (logits, temperature=1.0, top_p=0.9)))]
+pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+    sample_top_p_core(logits, temperature, top_p).map_err(PyValueError::new_err)
 }
 
 pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
@@ -803,6 +810,26 @@ pub fn calculate_cosine_similarity_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<
 pub fn calculate_distribution_entropy_native(probs: Vec<f32>) -> PyResult<f32> {
     let entropy: f32 = probs.par_iter().filter(|&&p| p > 1e-12).map(|&p| -p * p.ln() / 2.0f32.ln()).sum();
     Ok(entropy)
+}
+
+/// # Detección de Incertidumbre Semántica
+/// 
+/// Calcula una aproximación rápida de la entropía de un vector de activaciones.
+/// Se utiliza para decidir si activar las hebras de ARN (precisión adaptativa).
+pub fn calculate_activation_entropy(input: &[f32]) -> f32 {
+    if input.is_empty() { return 0.0; }
+    let n = input.len() as f32;
+    let mean = input.iter().sum::<f32>() / n;
+    let variance = input.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / n;
+    
+    // Usamos la varianza como proxy de entropía para activaciones normalizadas (RMSNorm)
+    // Alta varianza -> Alta incertidumbre/Complejidad
+    variance.sqrt()
+}
+
+/// Decide si se deben activar las hebras de ARN basándose en un umbral de entropía.
+pub fn should_activate_rna(entropy: f32, threshold: f32) -> bool {
+    entropy > threshold
 }
 
 /// # Analizador de Entropía de Shannon (Sovereign Information Density)

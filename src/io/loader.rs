@@ -37,6 +37,8 @@ pub struct ArchConfig {
     pub anchor_threshold: f32,
     #[serde(default = "default_anchor_threshold")]
     pub ffn_anchor_threshold: f32,
+    #[serde(default = "default_rna_threshold")]
+    pub rna_threshold: f32,
     #[serde(default = "default_false")]
     pub unpermute_weights: bool,
     #[serde(default = "default_false")]
@@ -51,10 +53,10 @@ pub struct ArchConfig {
 impl ArchConfig {
     #[cfg(feature = "python")]
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
-    pub fn py_new(name: String, version: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool, rope_style: String, anchor_threshold: f32, ffn_anchor_threshold: f32, unpermute_weights: bool, apply_smollm_rope_patch: bool, dni: String, state: String) -> Self {
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, rna_threshold = 0.5, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
+    pub fn py_new(name: String, version: String, tokenizer_id: String, rope_base: f32, ffn_act: String, use_genomic_norm: bool, rope_style: String, anchor_threshold: f32, ffn_anchor_threshold: f32, rna_threshold: f32, unpermute_weights: bool, apply_smollm_rope_patch: bool, dni: String, state: String) -> Self {
         let actual_dni = if dni.is_empty() { default_dni() } else { dni };
-        ArchConfig { name, version, tokenizer_id, rope_base, ffn_act, use_genomic_norm, rope_style, anchor_threshold, ffn_anchor_threshold, unpermute_weights, apply_smollm_rope_patch, dni: actual_dni, state }
+        ArchConfig { name, version, tokenizer_id, rope_base, ffn_act, use_genomic_norm, rope_style, anchor_threshold, ffn_anchor_threshold, rna_threshold, unpermute_weights, apply_smollm_rope_patch, dni: actual_dni, state }
     }
 }
 
@@ -66,6 +68,7 @@ fn default_ffn_act() -> String { "swiglu".to_string() }
 fn default_false() -> bool { false }
 fn default_rope_style() -> String { "split".to_string() }
 fn default_anchor_threshold() -> f32 { 0.1 }
+fn default_rna_threshold() -> f32 { 0.5 }
 fn default_state() -> String { "stable".to_string() }
 
 fn default_dni() -> String {
@@ -119,7 +122,8 @@ impl GGUFLoader {
         let n_blocks = self.get_metadata_u32(&format!("{}block_count", p)).or_else(|| self.get_metadata_u32("llama.block_count")).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "block_count not found"))? as usize;
         let eps = self.get_metadata_f32(&format!("{}attention.layer_norm_rms_epsilon", p)).unwrap_or(1e-6);
         let rope_base = self.get_metadata_f32(&format!("{}rope.freq_base", p)).unwrap_or(10000.0);
-        Ok(ModelConfig { config: ArchConfig { name: self.get_metadata_string("general.name").unwrap_or_else(|| "GGUF-Model".to_string()), version: "1.0.0-alpha".to_string(), tokenizer_id: "tokenizer".to_string(), rope_base, ffn_act: "swiglu".to_string(), use_genomic_norm: false, rope_style: "split".to_string(), anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, unpermute_weights: false, apply_smollm_rope_patch: false, dni: default_dni(), state: "stable".to_string() }, n_embd, n_head, n_head_kv, n_blocks, vocab_size: None, eps })
+        Ok(ModelConfig { config: ArchConfig { name: self.get_metadata_string("general.name").unwrap_or_else(|| "GGUF-Model".to_string()), version: "1.0.0-alpha".to_string(), tokenizer_id: "tokenizer".to_string(), rope_base, ffn_act: "swiglu".to_string(), use_genomic_norm: false, rope_style: "split".to_string(), anchor_threshold: 0.1, ffn_anchor_threshold: 0.1, rna_threshold: 0.5, unpermute_weights: false, apply_smollm_rope_patch: false, dni: default_dni(), state: "stable".to_string() }, n_embd, n_head, n_head_kv, n_blocks, vocab_size: None, eps })
+
     }
 
     pub fn load_genomic_llm(&self, config: ModelConfig, anchor_threshold: f32) -> std::io::Result<GenomicLLM> {
@@ -137,7 +141,8 @@ impl GGUFLoader {
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;
             let attn = GenomicAttention::new(config.n_head, config.n_head_kv, head_dim, attn_norm, config.eps, config.config.rope_base, config.config.rope_style.clone());
-            blocks.push(RustGenomicBlock::new(i, attn, q_gen, k_gen, v_gen, o_gen, gate_gen, up_gen, down_gen, ffn_norm, config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, 1.0));
+            blocks.push(RustGenomicBlock::new(i, attn, q_gen, k_gen, v_gen, o_gen, gate_gen, up_gen, down_gen, ffn_norm, config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, 1.0, config.config.rna_threshold));
+
         }
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
         let lm_head_name = if self.reader.tensors.contains_key("output.weight") { "output.weight" } else { "token_embd.weight" };
@@ -225,7 +230,8 @@ impl NativeLoader {
             let ffn_norm = { let n = Self::get_tensor_f32(&read_txn, &format!("{}ffn_norm", p)); if n.is_empty() { vec![1.0f32; config.n_embd] } else { n } };
             let h_scale = { let s = Self::get_tensor_f32(&read_txn, &format!("{}h_scale", p)); if s.is_empty() { 1.0f32 } else { s[0] } };
             let attn = GenomicAttention::new(config.n_head, config.n_head_kv, head_dim, attn_norm, config.eps, config.config.rope_base, config.config.rope_style.clone());
-            blocks.push(RustGenomicBlock::new(i, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, h_scale));
+            blocks.push(RustGenomicBlock::new(i, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, h_scale, config.config.rna_threshold));
+
         }
         Ok(GenomicLLM { embeddings, blocks, output_norm, lm_head, eps: config.eps, topology: None })
     }
@@ -322,7 +328,7 @@ pub fn init_born_genomic_model(path: &str, config: ModelConfig, vocab_size: usiz
     let embeddings = init_l(config.n_embd, vocab_size); let mut blocks = Vec::new(); let head_dim = config.n_embd / config.n_head;
     for i in 0..config.n_blocks {
         let attn = GenomicAttention::new(config.n_head, config.n_head_kv, head_dim, vec![1.0; config.n_embd], config.eps, config.config.rope_base, config.config.rope_style.clone());
-        blocks.push(RustGenomicBlock::new(i, attn, init_l(config.n_embd, config.n_head * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_head * head_dim, config.n_embd), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd * 4, config.n_embd), vec![1.0; config.n_embd], config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, 1.0));
+        blocks.push(RustGenomicBlock::new(i, attn, init_l(config.n_embd, config.n_head * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_embd, config.n_head_kv * head_dim), init_l(config.n_head * head_dim, config.n_embd), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd, config.n_embd * 4), init_l(config.n_embd * 4, config.n_embd), vec![1.0; config.n_embd], config.eps, config.config.ffn_act.clone(), config.config.use_genomic_norm, 1.0, config.config.rna_threshold));
     }
     let model = GenomicLLM { embeddings, blocks, output_norm: vec![1.0; config.n_embd], lm_head: init_l(config.n_embd, vocab_size), eps: config.eps, topology: None };
     save_genomic_model(path, &model, &config, None)?; Ok(model)

@@ -26,6 +26,7 @@ pub struct RustGenomicBlock {
     pub act_fn: String,
     pub use_genomic_norm: bool,
     pub h_scale: f32,
+    pub rna_threshold: f32,
     pub topology: Option<Arc<CentroidGraph>>,
 }
 
@@ -45,6 +46,7 @@ impl RustGenomicBlock {
         act_fn: String,
         use_genomic_norm: bool,
         h_scale: f32,
+        rna_threshold: f32,
     ) -> Self {
         RustGenomicBlock {
             idx,
@@ -61,11 +63,16 @@ impl RustGenomicBlock {
             act_fn,
             use_genomic_norm,
             h_scale,
+            rna_threshold,
             topology: None,
         }
     }
 
     pub fn forward_core(&mut self, x: Vec<f32>, pos: usize) -> Result<Vec<f32>, String> {
+        // --- STAGE 1: ENTROPY ANALYSIS (Pilar 2) ---
+        let entropy = crate::compute::math::calculate_activation_entropy(&x);
+        let activate_rna = crate::compute::math::should_activate_rna(entropy, self.rna_threshold);
+
         // --- STAGE 4: DINAMIC STATE ESTIMATION ---
         let (current_state, modulation) = if let Some(ref topo) = self.topology {
             let mut sum_sq = 0.0f32;
@@ -100,12 +107,12 @@ impl RustGenomicBlock {
             x.clone()
         };
 
-        let q = self.q_gen.forward_core(x_norm.clone(), modulation)?;
-        let k = self.k_gen.forward_core(x_norm.clone(), modulation)?;
-        let v = self.v_gen.forward_core(x_norm, modulation)?;
+        let q = self.q_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+        let k = self.k_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+        let v = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        let projected_attn = self.w_o.forward_core(attn_out, modulation)?;
+        let projected_attn = self.w_o.forward_core(attn_out, modulation, activate_rna)?;
 
         let mut x_post = x;
         x_post
@@ -114,8 +121,8 @@ impl RustGenomicBlock {
             .for_each(|(xi, &ai)| *xi += ai);
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
 
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation)?;
-        let up = self.up_gen.forward_core(x_ffn_n, modulation)?;
+        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
+        let up = self.up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
 
         let mut ffn_out = vec![0.0f32; gate.len()];
         match self.act_fn.as_str() {
@@ -135,7 +142,7 @@ impl RustGenomicBlock {
                 ffn_out.par_iter_mut().for_each(|out| *out *= s);
             }
         }
-        let projected_ffn = self.w_down.forward_core(ffn_out, modulation)?;
+        let projected_ffn = self.w_down.forward_core(ffn_out, modulation, activate_rna)?;
         let mut final_out = x_post;
         final_out
             .par_iter_mut()
@@ -191,20 +198,20 @@ impl RustGenomicBlock {
         } else {
             x.clone()
         };
-        let q = self.q_gen.forward_core(x_norm.clone(), modulation)?;
-        let k = self.k_gen.forward_core(x_norm.clone(), modulation)?;
-        let v = self.v_gen.forward_core(x_norm.clone(), modulation)?;
+        let q = self.q_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let k = self.k_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let v = self.v_gen.forward_core(x_norm.clone(), modulation, true)?;
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        let proj_attn = self.w_o.forward_core(attn_out.clone(), modulation)?;
+        let proj_attn = self.w_o.forward_core(attn_out.clone(), modulation, true)?;
 
         let mut x_post_attn = x.clone();
         for i in 0..x.len() {
             x_post_attn[i] += proj_attn[i];
         }
         let x_ffn_n = unsafe { rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation)?;
-        let up = self.up_gen.forward_core(x_ffn_n.clone(), modulation)?;
+        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation, true)?;
+        let up = self.up_gen.forward_core(x_ffn_n.clone(), modulation, true)?;
 
         let d_ffn_out = self.w_down.backward_core(d_hidden.clone())?;
         let mut d_gate = vec![0.0f32; gate.len()];
@@ -252,7 +259,7 @@ impl RustGenomicBlock {
 #[pymethods]
 impl RustGenomicBlock {
     #[new]
-    #[pyo3(signature = (idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn = "swiglu".to_string(), use_genomic_norm = false, h_scale = 1.0))]
+    #[pyo3(signature = (idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, eps, act_fn = "swiglu".to_string(), use_genomic_norm = false, h_scale = 1.0, rna_threshold = 0.5))]
     pub fn py_new(
         idx: usize,
         attn: GenomicAttention,
@@ -268,6 +275,7 @@ impl RustGenomicBlock {
         act_fn: String,
         use_genomic_norm: bool,
         h_scale: f32,
+        rna_threshold: f32,
     ) -> Self {
         RustGenomicBlock {
             idx,
@@ -284,6 +292,7 @@ impl RustGenomicBlock {
             act_fn,
             use_genomic_norm,
             h_scale,
+            rna_threshold,
             topology: None,
         }
     }
