@@ -38,6 +38,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::nn::distiller::Teacher>()?;
     m.add_class::<crate::nn::distiller::CouncilOfTeachers>()?;
     m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
+    m.add_class::<crate::nn::iqat::NativeIQATEngine>()?;
     m.add_function(wrap_pyfunction!(crate::io::loader::init_born_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::io::loader::save_genomic_model_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::nn::merger::merge_models_py, m)?)?;
@@ -49,6 +50,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(crate::compute::math::genomize_f16_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::quantize_phase_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_phase_native, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::calculate_shannon_entropy, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::apply_repetition_penalty, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::sample_top_p, m)?)?;
     Ok(())

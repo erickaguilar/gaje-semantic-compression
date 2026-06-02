@@ -1,3 +1,15 @@
+## [1.1.0-alpha] - 2026-06-01
+### Added
+- **Euler-Lagrange Inference Engine**: Integración de las leyes de la física clásica en el núcleo de Rust. La inferencia se modela ahora como un sistema mecánico conservativo donde la información sigue trayectorias de mínima acción.
+- **Lagrangian Logic (L = T - V)**: Implementación de la Energía Cinética (T, velocidad de disparo) y Energía Potencial (V, resistencia semántica de las anclas).
+- **Geodesic Acceleration**: Nuevo mecanismo de ajuste de integración basado en la fuerza semántica negativa, permitiendo que la coherencia gramatical actúe como una restricción geométrica.
+- **Lagrangian Timing Delay**: Los disparos en la *Timing Wheel* se retrasan dinámicamente según la resistencia semántica, permitiendo que la inhibición lateral (K-WTA) fulmine automáticamente el ruido incoherente.
+- **Símbolos de Christoffel**: Implementación inicial de la conexión geométrica para modelar la curvatura del espacio de fase en el toroide semántico $\mathbb{Q}(\zeta_{16})$.
+
+### Changed
+- **SpikingNeuron v2**: Actualizada con `integrate_lagrangian` y `check_spike_lagrangian` para soportar la optimización física nativa.
+- **Motor de Cómputo**: Extensión de `src/compute` con el módulo `lagrangian.rs` para centralizar la física del protocolo GAJE.
+
 ## [1.0.0-alpha] - 2026-05-27
 ### Added
 - **Circular Genomic Topology**: Transición del motor de inferencia a un espacio de fase compleja. Las neuronas operan ahora como osciladores con interferencia constructiva/destructiva.

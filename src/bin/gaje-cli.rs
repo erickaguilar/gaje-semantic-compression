@@ -8,6 +8,7 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use rand::distributions::{Distribution, WeightedIndex};
+use indicatif::{ProgressBar, ProgressStyle};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe { kernels::init_shuffle_table(); }
@@ -30,30 +31,40 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut resonance_weight = 0.05;
-    let mut save_path = None;
-    let mut init_path = None;
-    let mut import_path = None;
-    let mut output_path = None;
+    let mut save_path: Option<String> = None;
+    let mut init_path: Option<String> = None;
+    let mut import_path: Option<String> = None;
+    let mut output_path: Option<String> = None;
     let mut init_preset = "default".to_string();
-    let mut tokenize_text = None;
+    let mut tokenize_text: Option<String> = None;
     let mut inspect_model = false;
-    let mut dni_path = None;
+    let mut dni_path: Option<String> = None;
     let mut dni_intensity = 0.01;
     let mut dni_pop = 16;
     let mut anchor_threshold_arg = 0.1;
     let mut target_layers_arg = Vec::new();
+    let mut is_ingest_mode = false;
+    let mut teacher_path = None;
+    let mut teacher_tok_path = None;
+    let mut do_iqat = false;
+    let mut iqat_lr = 0.001;
 
     while i < args.len() {
-        if args[i] == "--model" && i + 1 < args.len() { model_path = args[i+1].clone(); i += 2; }
+        if args[i] == "ingest" { is_ingest_mode = true; i += 1; }
+        else if args[i] == "--model" && i + 1 < args.len() { model_path = args[i+1].clone(); i += 2; }
+        else if (args[i] == "--file" || args[i] == "--dni-ingest") && i + 1 < args.len() { dni_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--teacher" && i + 1 < args.len() { teacher_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--teacher-tok" && i + 1 < args.len() { teacher_tok_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--iqat" { do_iqat = true; i += 1; }
+        else if args[i] == "--iqat-lr" && i + 1 < args.len() { iqat_lr = args[i+1].parse().unwrap_or(0.001); i += 2; }
+        else if (args[i] == "--output" || args[i] == "--save") && i + 1 < args.len() { save_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--import" && i + 1 < args.len() { import_path = Some(args[i+1].clone()); i += 2; }
-        else if args[i] == "--output" && i + 1 < args.len() { output_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--threshold" && i + 1 < args.len() { anchor_threshold_arg = args[i+1].parse().unwrap_or(0.1); i += 2; }
         else if args[i] == "--preset" && i + 1 < args.len() { init_preset = args[i+1].clone(); i += 2; }
         else if args[i] == "--inspect" { inspect_model = true; i += 1; }
         else if args[i] == "--init" && i + 1 < args.len() { init_path = Some(args[i+1].clone()); i += 2; }
-        else if args[i] == "--dni-ingest" && i + 1 < args.len() { dni_path = Some(args[i+1].clone()); i += 2; }
-        else if args[i] == "--dni-intensity" && i + 1 < args.len() { dni_intensity = args[i+1].parse().unwrap_or(0.01); i += 2; }
-        else if args[i] == "--dni-pop" && i + 1 < args.len() { dni_pop = args[i+1].parse().unwrap_or(16); i += 2; }
+        else if (args[i] == "--intensity" || args[i] == "--dni-intensity") && i + 1 < args.len() { dni_intensity = args[i+1].parse().unwrap_or(0.01); i += 2; }
+        else if (args[i] == "--pop" || args[i] == "--dni-pop") && i + 1 < args.len() { dni_pop = args[i+1].parse().unwrap_or(16); i += 2; }
         else if args[i] == "--target-layers" && i + 1 < args.len() { 
             target_layers_arg = args[i+1].split(',').map(|s| s.to_string()).collect(); 
             i += 2; 
@@ -66,7 +77,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         else if args[i] == "--gens" && i + 1 < args.len() { generations = args[i+1].parse().unwrap_or(2000); i += 2; }
         else if args[i] == "--scale" && i + 1 < args.len() { scale = args[i+1].parse().unwrap_or(0.02); i += 2; }
         else if args[i] == "--resonance" && i + 1 < args.len() { resonance_weight = args[i+1].parse().unwrap_or(0.05); i += 2; }
-        else if args[i] == "--save" && i + 1 < args.len() { save_path = Some(args[i+1].clone()); i += 2; }
         else if model_path.is_empty() { if !args[i].starts_with("--") { model_path = args[i].clone(); } i += 1; }
         else { i += 1; }
     }
@@ -119,8 +129,14 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Ok(());
     }
 
+    if is_ingest_mode && (dni_path.is_none() || model_path.is_empty()) {
+        println!("Usage: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>] [--intensity 0.01] [--pop 16] [--gens 2000]");
+        return Ok(());
+    }
+
     if model_path.is_empty() {
         println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect] [--import path.gguf --output path.gaje]");
+        println!("Or: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>]");
         return Ok(());
     }
 
@@ -204,12 +220,17 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    if let Some(path) = dni_path {
-        println!("[*] Iniciando Direct Neural Ingestion (DNI) desde: {}", path);
-        let content = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-            println!("[!] Error: No se pudo leer el archivo DNI {}. Usando como texto plano.", path);
-            path.clone()
-        });
+    if let Some(path) = dni_path.clone() {
+        println!("[*] Iniciando Direct Neural Ingestion (DNI) Scalable: {}", path);
+        let paths = if Path::new(&path).is_dir() {
+            std::fs::read_dir(&path)?
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.is_file())
+                .collect::<Vec<_>>()
+        } else {
+            vec![Path::new(&path).to_path_buf()]
+        };
 
         use _impl::core::dni::DNIEngine;
         let mut engine = DNIEngine {
@@ -218,23 +239,45 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             council: None,
             intensity: dni_intensity,
             target_layers: target_layers_arg,
+            validation_tokens: Vec::new(),
+            original_dna_hash: Vec::new(),
         };
+        engine.initialize_original_hash();
+        engine.set_validation_text("Hola, soy una inteligencia artificial basada en GAJE. ¿En qué puedo ayudarte?".to_string());
 
         let start = std::time::Instant::now();
-        // Fragmentar contenido si es muy largo (Cromosomización básica por líneas)
-        for (idx, line) in content.lines().filter(|l| l.trim().len() > 10).enumerate() {
-            if !running.load(Ordering::SeqCst) { break; }
-            print!("    [Ingesta #{}]: \"{}...\" ", idx + 1, &line[..40.min(line.len())]);
-            std::io::stdout().flush()?;
-            
-            match engine.ingest_text(line.to_string(), generations, dni_pop) {
-                Ok(fitness) => println!("-> Fitness: {:.4}", fitness),
-                Err(e) => println!("-> [!] Error: {}", e),
+        for p in paths {
+            println!("  [+] Inyectando: {:?}", p);
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                match engine.ingest_document(content, generations, dni_pop) {
+                    Ok(fitness) => println!("    - Completado. Fitness Final: {:.4}", fitness),
+                    Err(e) => println!("    [!] Error en {:?}: {}", p, e),
+                }
             }
         }
         
         model = engine.model;
-        println!("[+] Proceso DNI completado en {:?}.", start.elapsed());
+        println!("[+] Proceso DNI finalizado en {:?}.", start.elapsed());
+    }
+
+    if do_iqat {
+        let t_path = teacher_path.ok_or("Debe especificar --teacher <path.gguf> para IQAT")?;
+        let t_tok = teacher_tok_path.ok_or("Debe especificar --teacher-tok <tokenizer.json> para IQAT")?;
+        let teacher = _impl::nn::distiller::Teacher::new("Master".to_string(), &t_path, &t_tok, &tokenizer).map_err(|e| e.to_string())?;
+        
+        println!("[*] Iniciando Refinamiento IQAT (Activation Drift) bloque a bloque...");
+        let texts = if let Some(ref d_path) = dni_path {
+            if Path::new(d_path).is_file() {
+                vec![std::fs::read_to_string(d_path).unwrap_or_default()]
+            } else {
+                vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
+            }
+        } else {
+            vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
+        };
+
+        let iqat = _impl::nn::iqat::IQATEngine::new(iqat_lr);
+        iqat.run_iqat_cycle(&mut model, &teacher, &texts, train_epochs).map_err(|e| e.to_string())?;
     }
 
     if let Some(ref dataset_path) = train_target {

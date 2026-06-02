@@ -1,6 +1,8 @@
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
+use crate::compute::lagrangian::LagrangianEngine;
+
 /// Estructura de Capa Neuromórfica Industrial (SoA - Structure of Arrays).
 /// Optimizada para localidad de datos, caché y SIMD.
 #[cfg_attr(feature = "python", pyclass)]
@@ -20,6 +22,7 @@ pub struct GajeNeuromorphicLayer {
     pub weights_per_neuron: usize,
     pub k_wta: usize,
     pub rms_ema: f32,
+    pub lagrangian: LagrangianEngine, // Motor de física semántica
 }
 
 #[cfg_attr(feature = "python", pymethods)]
@@ -84,6 +87,7 @@ impl GajeNeuromorphicLayer {
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),
             rms_ema: 1.0,
+            lagrangian: LagrangianEngine::new(1.0),
         }
     }
 
@@ -206,6 +210,50 @@ impl GajeNeuromorphicLayer {
         }
     }
 
+    /// Integra un lote de impulsos usando el Principio de Mínima Acción.
+    pub fn integrate_batch_lagrangian(
+        &mut self, 
+        input_index: usize, 
+        centroides_real: [f32; 4], 
+        centroides_imag: [f32; 4], 
+        intensity: f32,
+        semantic_resistance: f32
+    ) {
+        let row_size = (self.num_neurons + 3) / 4;
+        let start_byte = input_index * row_size;
+        
+        // Aceleración geodésica frena el avance si hay resistencia
+        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance);
+
+        for i in 0..self.num_neurons {
+            let byte_idx = i / 4;
+            let bit_shift = (i % 4) * 2;
+            let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
+            
+            let delta_r = centroides_real[weight_bits as usize];
+            let delta_im = centroides_imag[weight_bits as usize];
+            let velocity = (delta_r.powi(2) + delta_im.powi(2)).sqrt();
+            
+            let velocity_adjusted = (velocity + acceleration).max(0.0);
+            if velocity > 0.0 {
+                let scale = (velocity_adjusted / velocity) * intensity;
+                self.membrane_potentials_real[i] += delta_r * scale;
+                self.membrane_potentials_imag[i] += delta_im * scale;
+            }
+        }
+        
+        // Inyectar Anclas (siempre con máxima fidelidad)
+        for i in 0..self.num_neurons {
+            let a_s = self.anchor_row_ptrs[i];
+            let a_e = self.anchor_row_ptrs[i + 1];
+            for k in a_s..a_e {
+                if self.anchor_indices[k] as usize == input_index {
+                    self.membrane_potentials_real[i] += self.anchor_values[k].to_f32() * intensity;
+                }
+            }
+        }
+    }
+
     pub fn check_spikes(&mut self) -> Vec<(usize, f32, u8)> {
         let mut spikes = Vec::new();
         let n = self.num_neurons;
@@ -235,6 +283,40 @@ impl GajeNeuromorphicLayer {
                 let excess_ratio = (magnitude - threshold) / threshold;
                 // Phase coding (latencia): mayor magnitud dispara antes (phase_offset menor)
                 let phase = if excess_ratio >= 1.0 { 0 } else { (15.0 * (1.0 - excess_ratio)) as u8 };
+                
+                self.membrane_potentials_real[i] = 0.0;
+                self.membrane_potentials_imag[i] = 0.0;
+                spikes.push((i, intensity, phase));
+            } else if magnitude > 0.0 {
+                self.membrane_potentials_real[i] *= self.decays[i];
+                self.membrane_potentials_imag[i] *= self.decays[i];
+            }
+        }
+        spikes
+    }
+
+    /// Verifica disparos aplicando el retraso Lagrangiano (fricción semántica).
+    pub fn check_spikes_physical(&mut self, semantic_resistance: f32) -> Vec<(usize, f32, u8)> {
+        let mut spikes = Vec::new();
+        let n = self.num_neurons;
+        
+        // Retraso físico basado en la resistencia (Energía Potencial)
+        let lagrangian_delay = self.lagrangian.calculate_timing_delay(semantic_resistance);
+        let phase_delay_base = (lagrangian_delay * 16.0) as u8;
+
+        for i in 0..n {
+            let r = self.membrane_potentials_real[i];
+            let im = self.membrane_potentials_imag[i];
+            let magnitude = (r * r + im * im).sqrt();
+            let threshold = self.thresholds[i];
+            
+            if magnitude >= threshold {
+                let intensity = magnitude / threshold;
+                let excess_ratio = (magnitude - threshold) / threshold;
+                
+                // Phase coding original (latencia por magnitud) + Retraso Lagrangiano
+                let base_phase = if excess_ratio >= 1.0 { 0 } else { (15.0 * (1.0 - excess_ratio)) as u8 };
+                let phase = (base_phase + phase_delay_base).min(15);
                 
                 self.membrane_potentials_real[i] = 0.0;
                 self.membrane_potentials_imag[i] = 0.0;
@@ -323,6 +405,9 @@ mod tests {
     #[test]
     fn test_refine_step() {
         let mut layer = GajeNeuromorphicLayer::new(4, 1, 1.0, 0.9);
+        // Inicializar pesos a 0 para determinismo
+        layer.packed_weights.fill(0);
+        
         let deltas = vec![1.0, 0.0, 1.0, 0.0];
         layer.refine_step(0, deltas, 1.0);
         assert_eq!(layer.packed_weights[0] & 0x03, 1);
@@ -334,9 +419,12 @@ mod tests {
 
     #[test]
     fn test_soa_integration() {
-        let c_r = [-1.0, -0.2, 0.2, 1.0];
+        let c_r = [0.0, -0.2, 0.2, 1.0]; // State 00 es neutral
         let c_im = [0.0, 0.0, 0.0, 0.0];
         let mut layer = GajeNeuromorphicLayer::new(10, 5, 0.5, 0.9);
+        // Inicializar pesos a 0 para determinismo
+        layer.packed_weights.fill(0);
+        
         layer.set_weight(2, 0, GajeWeight2Bit::State11 as u8);
         layer.integrate_batch(0, c_r, c_im, 2.0);
         assert!(layer.membrane_potentials_real[2] > 2.0);
@@ -346,5 +434,23 @@ mod tests {
         assert!(spikes[0].1 > 4.0);
         assert_eq!(spikes[0].2, 0);
         assert_eq!(layer.membrane_potentials_real[2], 0.0);
+    }
+
+    #[test]
+    fn test_soa_lagrangian_integration() {
+        let c_r = [0.0, 0.0, 0.0, 2.0];
+        let c_im = [0.0, 0.0, 0.0, 0.0];
+        let mut layer = GajeNeuromorphicLayer::new(10, 5, 0.5, 0.9);
+        layer.packed_weights.fill(0);
+        layer.set_weight(5, 0, GajeWeight2Bit::State11 as u8);
+
+        // Sin resistencia
+        layer.integrate_batch_lagrangian(0, c_r, c_im, 1.0, 0.0);
+        assert!(layer.membrane_potentials_real[5] > 1.9); // 2.0 - epsilon
+
+        // Con resistencia que bloquea
+        layer.reset_potentials();
+        layer.integrate_batch_lagrangian(0, c_r, c_im, 1.0, 2.1); 
+        assert_eq!(layer.membrane_potentials_real[5], 0.0);
     }
 }

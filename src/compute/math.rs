@@ -534,44 +534,6 @@ pub fn dequantize_phase_native(dna_packed: Vec<u8>, dims: usize) -> PyResult<(Ve
     Ok(dequantize_phase_core(&dna_packed, dims))
 }
 
-pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> PyResult<Vec<f32>> {
-    if data_u8.is_empty() || rows == 0 || cols == 0 {
-        return Ok(vec![]);
-    }
-    let f32_data: &[f32] =
-        unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
-    let entropies: Vec<f32> = (0..cols)
-        .into_par_iter()
-        .map(|d_idx| {
-            let mut values = Vec::with_capacity(rows);
-            for r in 0..rows {
-                values.push(f32_data[r * cols + d_idx]);
-            }
-            let min = values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
-            let max = values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-            let range = max - min;
-            if range < 1e-6 {
-                return 0.0f32;
-            }
-            let n_bins = 64;
-            let mut bins = vec![0usize; n_bins];
-            for &v in &values {
-                let bin_idx = (((v - min) / range) * (n_bins - 1) as f32) as usize;
-                bins[bin_idx.min(n_bins - 1)] += 1;
-            }
-            let mut entropy = 0.0f32;
-            for &count in &bins {
-                if count > 0 {
-                    let p = count as f32 / rows as f32;
-                    entropy -= p * (p.ln() / 2.0f32.ln());
-                }
-            }
-            entropy
-        })
-        .collect();
-    Ok(entropies)
-}
-
 pub fn dequantize_q8_0_core(
     data_u8: &[u8],
     out_features: usize,
@@ -841,6 +803,66 @@ pub fn calculate_cosine_similarity_native(a: Vec<f32>, b: Vec<f32>) -> PyResult<
 pub fn calculate_distribution_entropy_native(probs: Vec<f32>) -> PyResult<f32> {
     let entropy: f32 = probs.par_iter().filter(|&&p| p > 1e-12).map(|&p| -p * p.ln() / 2.0f32.ln()).sum();
     Ok(entropy)
+}
+
+/// # Analizador de Entropía de Shannon (Sovereign Information Density)
+/// 
+/// Calcula la entropía informativa por dimensión para un tensor dado.
+/// Esto permite identificar qué dimensiones son ricas en información (alta entropía)
+/// y cuáles son ruido o redundantes (baja entropía).
+pub fn calculate_shannon_entropy_core(
+    data: &[f32],
+    rows: usize,
+    cols: usize,
+    bins: usize,
+) -> Vec<f32> {
+    (0..cols)
+        .into_par_iter()
+        .map(|col_idx| {
+            let mut col_data = Vec::with_capacity(rows);
+            for r in 0..rows {
+                col_data.push(data[r * cols + col_idx]);
+            }
+
+            let min = col_data.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+            let max = col_data.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let range = max - min;
+
+            if range < 1e-7 {
+                return 0.0;
+            }
+
+            let mut histogram = vec![0usize; bins];
+            for &val in &col_data {
+                let bin_idx = (((val - min) / range) * (bins - 1) as f32) as usize;
+                histogram[bin_idx.min(bins - 1)] += 1;
+            }
+
+            let mut entropy = 0.0;
+            let n = rows as f32;
+            for &count in &histogram {
+                if count > 0 {
+                    let p = count as f32 / n;
+                    entropy -= p * p.log2();
+                }
+            }
+            entropy
+        })
+        .collect()
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+#[cfg_attr(feature = "python", pyo3(signature = (data_u8, rows, cols, bins=64)))]
+pub fn calculate_shannon_entropy(
+    data_u8: Vec<u8>,
+    rows: usize,
+    cols: usize,
+    bins: usize,
+) -> PyResult<Vec<f32>> {
+    let data_f32: &[f32] = unsafe {
+        std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4)
+    };
+    Ok(calculate_shannon_entropy_core(data_f32, rows, cols, bins))
 }
 
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {

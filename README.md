@@ -1,7 +1,7 @@
 # 🧬 Protocolo GAJE: Inteligencia Genómica Evolutiva
 
 [![Version](https://img.shields.io/badge/version-1.0.0--alpha-purple)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) con solo **2 bits por peso**, utilizando un alfabeto de 4 bases nitrogenadas digitales (A, C, G, T) operando en una **Topología Circular de Fase**.
 
@@ -60,6 +60,9 @@ maturin develop
 - [**Emulador Neuromórfico**](docs/research/SPIKING_NEUROMORPHIC_EMULATOR.md): La ciencia detrás de los spikes.
 - [**Plan de Entrenamiento Nativo**](docs/plans/NATIVE_GAJE_TRAINING_PLAN.md): El fin de la dependencia de Python.
 - [**Visión Estratégica v0.8.0**](docs/plans/NEUROMORPHIC_STRATEGIC_VISION.md): El futuro de la IA de borde.
+
+## ⚖️ Licencia
+Este proyecto está licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Cualquier uso comercial o servicio en la nube (SaaS) derivado de esta tecnología está sujeto a los términos de esta licencia, obligando a liberar el código fuente de toda la plataforma a menos que se adquiera una licencia comercial privada. Para más detalles, consulta el archivo [LICENSE](LICENSE).
 
 ---
 *GAJE-Flow v0.9.7-alpha: Redefiniendo los límites de la computación semántica.*

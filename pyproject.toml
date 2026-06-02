@@ -7,7 +7,7 @@ name = "dna-semantic-compression"
 version = "1.0.0-alpha"
 description = "Genomic Semantic Compression Protocol (GAJE) for high-density vector storage."
 authors = [{name = "Erick Aguilar"}]
-license = {text = "MIT"}
+license = {text = "AGPL-3.0-only"}
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [

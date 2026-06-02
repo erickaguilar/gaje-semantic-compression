@@ -100,7 +100,8 @@ impl SessionBuffer {
     }
 
     /// Carga el buffer desde un archivo binario.
-    #[cfg_attr(feature = "python", staticmethod)]
+    #[cfg(feature = "python")]
+    #[staticmethod]
     pub fn load_from_disk(filepath: String) -> PyResult<Self> {
         let file = File::open(filepath).map_err(|e| PyIOError::new_err(e.to_string()))?;
         let reader = BufReader::new(file);

@@ -1,4 +1,5 @@
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
+use crate::compute::lagrangian::LagrangianEngine;
 use crate::core::db::{GajeDatabaseWriter, METADATA_TABLE, TENSOR_TABLE};
 use redb::ReadTransaction;
 use serde::{Deserialize, Serialize};
@@ -110,6 +111,7 @@ pub fn load_smg1_model(path: &str) -> std::io::Result<(Smg1Model, Smg1Config)> {
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),
             rms_ema: 1.0,
+            lagrangian: LagrangianEngine::new(1.0),
         };
         layer.load_anchors_from_u8(&anchors_u8);
         layers.push(layer);

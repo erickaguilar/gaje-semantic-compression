@@ -6,6 +6,7 @@ pub mod trainer;
 pub mod spiking;
 pub mod distiller;
 pub mod merger;
+pub mod iqat;
 
 pub use attention::GenomicAttention;
 pub use block::RustGenomicBlock;
