@@ -57,10 +57,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         else if args[i] == "--teacher-tok" && i + 1 < args.len() { teacher_tok_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--iqat" { do_iqat = true; i += 1; }
         else if args[i] == "--iqat-lr" && i + 1 < args.len() { iqat_lr = args[i+1].parse().unwrap_or(0.001); i += 2; }
-        else if (args[i] == "--output" || args[i] == "--save") && i + 1 < args.len() { save_path = Some(args[i+1].clone()); i += 2; }
+        else if (args[i] == "REMOVED") && i + 1 < args.len() { save_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--import" && i + 1 < args.len() { import_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--threshold" && i + 1 < args.len() { anchor_threshold_arg = args[i+1].parse().unwrap_or(0.1); i += 2; }
         else if args[i] == "--preset" && i + 1 < args.len() { init_preset = args[i+1].clone(); i += 2; }
+        else if args[i] == "--output" && i + 1 < args.len() { output_path = Some(args[i+1].clone()); save_path = Some(args[i+1].clone()); i += 2; }
+        else if args[i] == "--save" && i + 1 < args.len() { save_path = Some(args[i+1].clone()); i += 2; }
         else if args[i] == "--inspect" { inspect_model = true; i += 1; }
         else if args[i] == "--init" && i + 1 < args.len() { init_path = Some(args[i+1].clone()); i += 2; }
         else if (args[i] == "--intensity" || args[i] == "--dni-intensity") && i + 1 < args.len() { dni_intensity = args[i+1].parse().unwrap_or(0.01); i += 2; }
@@ -232,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             vec![Path::new(&path).to_path_buf()]
         };
 
-        use _impl::core::dni::DNIEngine;
+        use _impl::core::dni::{DNIEngine, SemanticNiche};
         let mut engine = DNIEngine {
             model: model.clone(),
             tokenizer: Arc::new(tokenizer.clone()),
@@ -241,6 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             target_layers: target_layers_arg,
             validation_tokens: Vec::new(),
             original_dna_hash: Vec::new(),
+            niche: SemanticNiche::General,
         };
         engine.initialize_original_hash();
         engine.set_validation_text("Hola, soy una inteligencia artificial basada en GAJE. ¿En qué puedo ayudarte?".to_string());
