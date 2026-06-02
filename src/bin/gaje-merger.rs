@@ -1,4 +1,3 @@
-use _impl::nn::llm::GenomicLLM;
 use _impl::nn::merger::merge_genomic_models;
 use _impl::io::loader::{NativeLoader, save_genomic_model};
 use std::env;

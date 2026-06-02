@@ -25,10 +25,10 @@ use pyo3::prelude::*;
 #[cfg(feature = "python")]
 use pyo3::types::PyBytes;
 #[cfg(feature = "python")]
-use pyo3::exceptions::{PyTypeError, PyValueError, PyIOError};
+use pyo3::exceptions::{PyTypeError, PyValueError};
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::{PyResult, Python, PyObject, exceptions::{PyTypeError, PyValueError, PyIOError}};
+use crate::pyo3_shim::{PyResult, Python, PyObject, exceptions::{PyTypeError, PyValueError}};
 
 // --- Lógica Interna Pura (Rust) ---
 

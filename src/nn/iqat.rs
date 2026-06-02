@@ -6,7 +6,6 @@
 
 use crate::nn::llm::GenomicLLM;
 use crate::nn::distiller::Teacher;
-use crate::core::tokenizer::GajeTokenizer;
 use std::time::Instant;
 
 #[cfg(feature = "python")]
@@ -44,7 +43,7 @@ impl IQATEngine {
         
         for &token_id in input_tokens {
             // 1. Obtener activaciones del maestro hasta el bloque bloque_idx
-            let t_act_in = self.capture_activation(&mut teacher_model, token_id, block_idx)?;
+            let _t_act_in = self.capture_activation(&mut teacher_model, token_id, block_idx)?;
             let t_act_out = self.capture_activation(&mut teacher_model, token_id, block_idx + 1)?;
 
             // 2. Obtener activaciones del estudiante hasta el bloque bloque_idx

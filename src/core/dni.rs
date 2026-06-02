@@ -5,7 +5,6 @@
 use crate::nn::llm::GenomicLLM;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::distiller::CouncilOfTeachers;
-use crate::nn::distiller::Teacher;
 use rand::Rng;
 use rayon::prelude::*;
 use std::sync::Arc;
@@ -117,7 +116,7 @@ impl DNIEngine {
         if chunks.is_empty() { return Ok(0.0); }
         let num_cpus = rayon::current_num_threads();
         let chunks_per_island = (chunks.len() as f32 / num_cpus as f32).ceil() as usize;
-        let island_results: Vec<(GenomicLLM, f32)> = chunks.chunks(chunks_per_island).enumerate().par_bridge().map(|(island_id, island_chunks)| {
+        let island_results: Vec<(GenomicLLM, f32)> = chunks.chunks(chunks_per_island).enumerate().par_bridge().map(|(_island_id, island_chunks)| {
                 let mut island_engine = DNIEngine {
                     model: self.model.clone(),
                     tokenizer: self.tokenizer.clone(),
@@ -289,7 +288,7 @@ impl DNIEngine {
         for i in 0..logic_model.blocks.len() {
             let blk_l = &mut logic_model.blocks[i];
             let blk_g = &mut grammar_model.blocks[i];
-            let mut db_l = (*blk_l.w_down.database).clone();
+            let db_l = (*blk_l.w_down.database).clone();
             let mut db_g = (*blk_g.w_down.database).clone();
             for j in (db_l.len()/2)..db_l.len() { if rng.gen::<f32>() < 0.3 { db_g[j] = db_l[j]; } }
             blk_g.w_down.database = Arc::new(db_g);

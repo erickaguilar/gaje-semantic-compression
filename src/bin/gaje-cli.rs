@@ -8,7 +8,6 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use rand::distributions::{Distribution, WeightedIndex};
-use indicatif::{ProgressBar, ProgressStyle};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe { kernels::init_shuffle_table(); }
