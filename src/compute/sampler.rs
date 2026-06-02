@@ -62,7 +62,7 @@ impl ToroidalSampler {
                 let lagrangian = self.engine.calculate_lagrangian(self.last_velocity, potential);
                 let adjusted_logit = energy + lagrangian.min(0.0);
                 
-                candidates.push((i, (adjusted_logit / temperature.max(1e-6)).exp(), current_phase));
+                candidates.push((i, ((adjusted_logit - max_logit) / temperature.max(1e-6)).exp(), current_phase));
             }
         }
 

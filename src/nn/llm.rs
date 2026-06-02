@@ -51,6 +51,10 @@ impl GenomicLLM {
         let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
         let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
         
+        if self.lm_head.out_features == 0 {
+             return Err("LM Head out_features is 0!".to_string());
+        }
+
         self.lm_head.forward_core(h_norm, modulation, activate_rna)
     }
 

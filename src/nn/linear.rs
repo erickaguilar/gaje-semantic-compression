@@ -162,6 +162,11 @@ impl GenomicLinear {
             if has_bias { sum += self.bias[i]; }
             sum
         }).collect();
+
+        if results.len() != self.out_features && self.out_features > 0 {
+             eprintln!("[SDK Debug] ERROR: results.len() ({}) != out_features ({})", results.len(), self.out_features);
+        }
+
         Ok(results)
     }
 
@@ -180,6 +185,7 @@ impl GenomicLinear {
         }
         Ok(res)
     }
+
 
     pub fn backward_core(&self, d_output: Vec<f32>) -> Result<Vec<f32>, String> {
         let n_blocks = self.in_features / self.block_size;
