@@ -13,9 +13,10 @@ La carpeta `docs` ha sido consolidada para reflejar la hoja de ruta de 2026.
 *   **[CIRCULAR_AND_TOROIDAL_STABILITY_PLAN.md](docs/plans/CIRCULAR_AND_TOROIDAL_STABILITY_PLAN.md)**: Estrategia de estabilidad de fase y memoria recirculante.
 *   **[ISLAND_MODEL_IMPLEMENTATION.md](docs/plans/ISLAND_MODEL_IMPLEMENTATION.md)**: Detalles de paralelismo evolutivo en ARM.
 
-### 📚 Guías y Reportes
+### 📚 Documentación Técnica y Auditoría
 *   **[DISRUPTIVE_INNOVATIONS.md](docs/meta/DISRUPTIVE_INNOVATIONS.md)**: Resumen de las innovaciones críticas y sorprendentes del proyecto.
 *   **[VALIDATION_PROTOCOLS.md](docs/meta/VALIDATION_PROTOCOLS.md)**: Métodos técnicos para certificar las capacidades del sistema.
+*   **`docs/certifications/`**: Reportes oficiales de auditoría y certificación del protocolo.
 *   **`docs/guides/`**: Manuales operativos (Breeding, Born, User Guide).
 *   **`docs/reports/`**: Hallazgos técnicos y validaciones de fases previas.
 
