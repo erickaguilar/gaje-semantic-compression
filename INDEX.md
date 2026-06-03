@@ -15,6 +15,7 @@ La carpeta `docs` ha sido consolidada para reflejar la hoja de ruta de 2026.
 
 ### 📚 Guías y Reportes
 *   **[DISRUPTIVE_INNOVATIONS.md](docs/meta/DISRUPTIVE_INNOVATIONS.md)**: Resumen de las innovaciones críticas y sorprendentes del proyecto.
+*   **[VALIDATION_PROTOCOLS.md](docs/meta/VALIDATION_PROTOCOLS.md)**: Métodos técnicos para certificar las capacidades del sistema.
 *   **`docs/guides/`**: Manuales operativos (Breeding, Born, User Guide).
 *   **`docs/reports/`**: Hallazgos técnicos y validaciones de fases previas.
 
