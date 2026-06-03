@@ -14,6 +14,7 @@ La carpeta `docs` ha sido consolidada para reflejar la hoja de ruta de 2026.
 *   **[ISLAND_MODEL_IMPLEMENTATION.md](docs/plans/ISLAND_MODEL_IMPLEMENTATION.md)**: Detalles de paralelismo evolutivo en ARM.
 
 ### 📚 Guías y Reportes
+*   **[DISRUPTIVE_INNOVATIONS.md](docs/meta/DISRUPTIVE_INNOVATIONS.md)**: Resumen de las innovaciones críticas y sorprendentes del proyecto.
 *   **`docs/guides/`**: Manuales operativos (Breeding, Born, User Guide).
 *   **`docs/reports/`**: Hallazgos técnicos y validaciones de fases previas.
 
