@@ -79,13 +79,25 @@ impl DNIEngine {
             .map_err(|e| PyValueError::new_err(format!("Tokenizer error: {}", e)))?;
         if tokens.len() < 2 { return Ok(0.0); }
         let activations = self.profile_activations(&tokens);
+        
+        // Temperatura Genómica Inicial (T_g)
+        let mut t_g = 1.0f32;
+        let base_sigma = 2.0f32;
+
         let mut population: Vec<GenomicLLM> = (0..pop_size).map(|_| {
                 let mut mutant = self.model.clone();
-                self.apply_targeted_mutation_v2(&mut mutant, self.intensity, &activations);
+                // En el primer paso usamos la temperatura máxima y sigma máximo
+                self.apply_targeted_mutation_v2(&mut mutant, self.intensity * t_g, &activations, base_sigma * t_g);
                 mutant
             }).collect();
+            
         let mut best_fitness = 0.0;
         for gen in 0..generations {
+            // Curva de Enfriamiento Termodinámico (Tercera Ley)
+            t_g = 1.0 - (gen as f32 / generations as f32);
+            let current_intensity = self.intensity * t_g;
+            let current_sigma = base_sigma * t_g;
+
             let scores: Vec<(usize, f32)> = population.par_iter_mut().enumerate().map(|(idx, mutant)| {
                     let new_knowledge_fitness = self.evaluate_mutant(mutant, &tokens);
                     let mut final_fitness = new_knowledge_fitness;
@@ -97,13 +109,14 @@ impl DNIEngine {
                 }).collect();
             let (best_idx, fitness) = scores.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal)).unwrap();
             best_fitness = *fitness;
+            
             if gen < generations - 1 {
                 let winner = population[*best_idx].clone();
                 population.par_iter_mut().enumerate().for_each(|(i, mutant)| {
                     if i != *best_idx {
                         *mutant = winner.clone();
-                        let current_intensity = self.intensity * (1.0 - (gen as f32 / generations as f32));
-                        self.apply_targeted_mutation_v2(mutant, current_intensity, &activations);
+                        // Aplicamos mutación difusa con enfriamiento
+                        self.apply_targeted_mutation_v2(mutant, current_intensity, &activations, current_sigma);
                     }
                 });
             } else { self.model = population[*best_idx].clone(); }
@@ -201,7 +214,32 @@ impl DNIEngine {
         activation_stats
     }
 
-    fn apply_targeted_mutation_v2(&self, mutant: &mut GenomicLLM, rate: f32, activations: &[Vec<f32>]) {
+    fn calculate_fuzzy_membership(idx: usize, sorted_anchors: &[usize], sigma: f32) -> f32 {
+        if sorted_anchors.is_empty() || sigma <= 1e-6 { return 0.0; }
+        
+        // Búsqueda binaria para encontrar el ancla más cercana en O(log N)
+        let pos = match sorted_anchors.binary_search(&idx) {
+            Ok(_) => return 1.0, // Coincidencia exacta (ancla protegida)
+            Err(p) => p,
+        };
+
+        let mut min_dist_sq = f32::MAX;
+        
+        // Comprobar vecinos inmediatos (izquierdo y derecho)
+        if pos < sorted_anchors.len() {
+            let dist = (sorted_anchors[pos] as f32 - idx as f32).abs();
+            if dist < 10.0 { min_dist_sq = min_dist_sq.min(dist * dist); }
+        }
+        if pos > 0 {
+            let dist = (idx as f32 - sorted_anchors[pos - 1] as f32).abs();
+            if dist < 10.0 { min_dist_sq = min_dist_sq.min(dist * dist); }
+        }
+        
+        if min_dist_sq == f32::MAX { 0.0 }
+        else { (-min_dist_sq / (2.0 * sigma * sigma)).exp() }
+    }
+
+    fn apply_targeted_mutation_v2(&self, mutant: &mut GenomicLLM, rate: f32, activations: &[Vec<f32>], sigma: f32) {
         let mut rng = rand::thread_rng();
         let n_blocks = mutant.blocks.len();
         for i in 0..n_blocks {
@@ -209,10 +247,19 @@ impl DNIEngine {
             let layer_stats = activations.get(i);
             let layers = [&mut block.gate_gen, &mut block.up_gen, &mut block.w_down];
             for layer in layers {
-                let protected_indices: std::collections::HashSet<usize> = layer.anchor_indices.iter().map(|&idx| idx as usize).collect();
+                // Cálculo de entropía local para ajustar sigma dinámicamente
+                let h = crate::compute::math::calculate_genomic_entropy_core(&layer.database);
+                let local_sigma = sigma * (1.0 + h);
+
+                // Optimizacion 1: Usar Vec ordenado en lugar de HashSet para búsqueda binaria
+                let mut sorted_anchors: Vec<usize> = layer.anchor_indices.iter().map(|&idx| idx as usize).collect();
+                sorted_anchors.sort_unstable();
+
                 let mut db = (*layer.database).clone();
                 let mut changed = false;
                 let n_neurons = layer.out_features;
+                let row_len_bytes = layer.database.len() / n_neurons;
+
                 for row in 0..n_neurons {
                     let mut row_rate = rate;
                     if let Some(stats) = layer_stats {
@@ -221,18 +268,36 @@ impl DNIEngine {
                             else if act > 10.0 { row_rate *= 0.1; }
                         }
                     }
-                    let row_start = row * (layer.database.len() / n_neurons);
-                    let row_end = row_start + (layer.database.len() / n_neurons);
-                    for byte_idx in row_start..row_end {
-                        let mut is_protected = false;
+                    
+                    // Optimizacion 2: Si row_rate es extremadamente bajo, podemos saltar la fila
+                    if row_rate < 1e-8 { continue; }
+
+                    let row_start = row * row_len_bytes;
+                    for byte_idx in 0..row_len_bytes {
+                        let global_byte_idx = row_start + byte_idx;
+                        let mut byte = db[global_byte_idx];
+                        let mut byte_changed = false;
+
                         for s in 0..4 {
-                            let input_idx = (byte_idx - row_start) * 4 + s;
-                            if protected_indices.contains(&(row * layer.in_features + input_idx)) { is_protected = true; break; }
+                            // Optimizacion 3: Comprobación temprana de probabilidad de mutación
+                            // Solo calculamos fuzzy membership si el RNG pasa el filtro base
+                            if rng.gen::<f32>() < row_rate {
+                                let input_idx = byte_idx * 4 + s;
+                                let global_weight_idx = row * layer.in_features + input_idx;
+                                
+                                let membership = Self::calculate_fuzzy_membership(global_weight_idx, &sorted_anchors, local_sigma);
+                                
+                                // Aplicamos la penalización de membership
+                                if rng.gen::<f32>() < (1.0 - membership) {
+                                    let shift = (3 - s) * 2;
+                                    let mutation = rng.gen::<u8>() & 0b11;
+                                    byte = (byte & !(0b11 << shift)) | (mutation << shift);
+                                    byte_changed = true;
+                                    changed = true;
+                                }
+                            }
                         }
-                        if !is_protected && rng.gen::<f32>() < row_rate {
-                            *db.get_mut(byte_idx).unwrap() ^= rng.gen::<u8>();
-                            changed = true;
-                        }
+                        if byte_changed { db[global_byte_idx] = byte; }
                     }
                 }
                 if changed { layer.database = Arc::new(db); }

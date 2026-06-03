@@ -54,6 +54,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(crate::compute::math::quantize_phase_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::dequantize_phase_native, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::calculate_shannon_entropy, m)?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::calculate_genomic_entropy, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::apply_repetition_penalty, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::sample_top_p, m)?)?;
     Ok(())

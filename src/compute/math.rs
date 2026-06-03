@@ -892,6 +892,35 @@ pub fn calculate_shannon_entropy(
     Ok(calculate_shannon_entropy_core(data_f32, rows, cols, bins))
 }
 
+/// # Entropía Genómica (2-bit Shannon Entropy)
+/// 
+/// Calcula la entropía de Shannon directamente sobre los pesos empaquetados de 2 bits.
+/// Útil para medir la densidad informativa de una capa de ADN sin de-cuantizar.
+pub fn calculate_genomic_entropy_core(dna_packed: &[u8]) -> f32 {
+    if dna_packed.is_empty() { return 0.0; }
+    let mut counts = [0usize; 4];
+    for &byte in dna_packed {
+        counts[((byte >> 6) & 0b11) as usize] += 1;
+        counts[((byte >> 4) & 0b11) as usize] += 1;
+        counts[((byte >> 2) & 0b11) as usize] += 1;
+        counts[(byte & 0b11) as usize] += 1;
+    }
+    let total = (dna_packed.len() * 4) as f32;
+    let mut entropy = 0.0f32;
+    for &count in &counts {
+        if count > 0 {
+            let p = count as f32 / total;
+            entropy -= p * p.log2();
+        }
+    }
+    entropy
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn calculate_genomic_entropy(dna_packed: Vec<u8>) -> PyResult<f32> {
+    Ok(calculate_genomic_entropy_core(&dna_packed))
+}
+
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     let mut centroids = Vec::with_capacity(n_blocks * 4);
     for _ in 0..n_blocks { centroids.push(-1.51); centroids.push(-0.45); centroids.push(0.45); centroids.push(1.51); }

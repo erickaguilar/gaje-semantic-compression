@@ -40,7 +40,7 @@ El objetivo para el Q3-2026 es automatizar la carga de datos directamente en el 
 ---
 
 ## 4. Próximos Pasos Técnicos
-*   [ ] Implementar el flag `--dni-ingest <file.txt>` en `gaje-cli`.
+*   [x] Implementar el flag `--dni-ingest <file.txt>` en `gaje-cli`.
 *   [ ] Desarrollar un sistema de "Métricas de Olvido" para medir cuánto conocimiento base se desplaza al inyectar datos nuevos.
 *   [ ] Optimizar los kernels de mutación bitwise para manejar documentos de >1MB en menos de 5 segundos.
 
