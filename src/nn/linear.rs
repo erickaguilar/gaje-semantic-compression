@@ -213,6 +213,8 @@ impl GenomicLinear {
     pub fn refine_with_grads_core(&mut self, mut input: Vec<f32>, grads: Vec<f32>, lr: f32) -> Result<(), String> {
         if !self.rmsnorm_weight.is_empty() { input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) }; }
         let n_blocks = self.in_features / self.block_size;
+        
+        // 1. Refinar Centroides
         self.centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
             if i >= grads.len() { return; }
             let grad_scale = grads[i] * lr; if grad_scale.abs() > 1e-12 {
@@ -231,6 +233,28 @@ impl GenomicLinear {
                 }
             }
         });
+
+        // 2. Refinar Anclas (F16) - Esto rompe la rigidez semántica
+        if !self.anchor_values.is_empty() {
+            let anchor_values_mut = Arc::make_mut(&mut self.anchor_values);
+            for i in 0..self.out_features {
+                if i >= grads.len() { break; }
+                let grad_scale = grads[i] * lr;
+                if grad_scale.abs() < 1e-12 { continue; }
+                
+                let a_s = self.anchor_row_ptrs[i];
+                let a_e = self.anchor_row_ptrs[i + 1];
+                for k in a_s..a_e {
+                    let idx = self.anchor_indices[k] as usize;
+                    if idx < input.len() {
+                        let current_val = anchor_values_mut[k].to_f32();
+                        let delta = grad_scale * input[idx];
+                        anchor_values_mut[k] = f16::from_f32(current_val - delta);
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -248,6 +272,41 @@ impl GenomicLinear {
         let mut rng = rand::thread_rng(); let mut delta = Vec::with_capacity(self.centroids.len());
         for c in &mut self.centroids { let m = rng.gen_range(-scale..scale); *c += m; delta.push(m); }
         Ok(delta)
+    }
+
+    /// # 🧬 Recalibración Genómica de Centroides
+    ///
+    /// Ajusta los polos de resonancia del toroide basándose en la masa semántica actual.
+    /// Útil cuando el modelo entra en colapso de fase (ruido ζ).
+    pub fn recalibrate_centroids_core(&mut self, shift: f32) -> Result<(), String> {
+        let n_blocks = self.in_features / self.block_size;
+        self.centroids.par_chunks_mut(n_blocks * 4).enumerate().for_each(|(i, row_centroids)| {
+            let row_off = i * n_blocks * self.stride;
+            for j in 0..n_blocks {
+                let weights = &self.database[row_off + j * self.stride..row_off + (j + 1) * self.stride];
+                let mut counts = [0usize; 4];
+                let mut sums = [0.0f32; 4];
+                
+                for &byte in weights {
+                    for s in 0..4 {
+                        let bits = (byte >> ((3 - s) * 2)) & 0b11;
+                        let c_idx = match bits { 0b00 => 0, 0b01 => 1, 0b11 => 2, 0b10 => 3, _ => 4 };
+                        if c_idx < 4 { counts[c_idx] += 1; }
+                    }
+                }
+                
+                // Si hay colapso, desplazamos los centroides hacia una distribución más gaussiana
+                for c_idx in 0..4 {
+                    if counts[c_idx] > 0 {
+                        let current = row_centroids[j * 4 + c_idx];
+                        row_centroids[j * 4 + c_idx] = current * (1.0 - shift) + (match c_idx {
+                            0 => -1.5, 1 => -0.5, 2 => 0.5, 3 => 1.5, _ => 0.0
+                        } * shift);
+                    }
+                }
+            }
+        });
+        Ok(())
     }
 
     pub fn anchors_sparse_buffer(&self) -> Vec<u8> {
@@ -274,4 +333,18 @@ impl GenomicLinear {
     pub fn get_row(&self, idx: usize) -> PyResult<Vec<f32>> { self.get_row_core(idx).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn backward(&self, d_output: Vec<f32>) -> PyResult<Vec<f32>> { self.backward_core(d_output).map_err(pyo3::exceptions::PyValueError::new_err) }
     pub fn refine_with_grads(&mut self, input: Vec<f32>, grads: Vec<f32>, lr: f32) -> PyResult<()> { self.refine_with_grads_core(input, grads, lr).map_err(pyo3::exceptions::PyValueError::new_err) }
+    pub fn recalibrate_centroids(&mut self, shift: f32) -> PyResult<()> { self.recalibrate_centroids_core(shift).map_err(pyo3::exceptions::PyValueError::new_err) }
+    
+    #[getter]
+    pub fn database(&self) -> PyResult<PyObject> {
+        Python::with_gil(|py| {
+            use pyo3::types::PyBytes;
+            Ok(PyBytes::new(py, &self.database).into())
+        })
+    }
+    
+    #[getter]
+    pub fn centroids(&self) -> PyResult<Vec<f32>> {
+        Ok(self.centroids.clone())
+    }
 }

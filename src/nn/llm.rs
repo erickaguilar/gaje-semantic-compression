@@ -365,4 +365,28 @@ impl GenomicLLM {
         self.clear_cache_core();
         Ok(())
     }
+
+    pub fn recalibrate_all_centroids(&mut self, shift: f32) -> PyResult<()> {
+        self.embeddings.recalibrate_centroids_core(shift)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        for block in &mut self.blocks {
+            block.q_gen.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.k_gen.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.v_gen.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.w_o.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.gate_gen.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.up_gen.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+            block.w_down.recalibrate_centroids_core(shift)
+                .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        }
+        self.lm_head.recalibrate_centroids_core(shift)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        Ok(())
+    }
 }
