@@ -1,7 +1,7 @@
+use crate::compute::event_queue::SpikeEvent;
+use crate::compute::scheduler::NeuromorphicScheduler;
 use crate::nn::spiking::attention::SpikingAttention;
 use crate::nn::spiking::ffn::SpikingFFN;
-use crate::compute::scheduler::NeuromorphicScheduler;
-use crate::compute::event_queue::SpikeEvent;
 
 /// Bloque Transformer Neuromórfico Completo.
 /// Combina Atención y FFN operando sobre el motor de eventos.

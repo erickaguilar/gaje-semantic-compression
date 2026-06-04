@@ -12,7 +12,10 @@ pub struct GenomicTrainerCore {
 
 impl GenomicTrainerCore {
     pub fn new(lr: f32, resonance_weight: f32) -> Self {
-        Self { lr, resonance_weight }
+        Self {
+            lr,
+            resonance_weight,
+        }
     }
 
     pub fn train_step(
@@ -56,7 +59,7 @@ impl GenomicTrainerCore {
             }
 
             let ce_loss = -(probs[target_id].max(1e-10)).ln();
-            
+
             let mut entropy = 0.0f32;
             for &p in &probs {
                 if p > 1e-12 {
@@ -64,7 +67,7 @@ impl GenomicTrainerCore {
                 }
             }
             let norm_entropy = entropy / (logits.len() as f32).ln();
-            
+
             let loss = ce_loss + self.resonance_weight * norm_entropy;
             if !loss.is_nan() && !loss.is_infinite() {
                 total_loss += loss;
@@ -79,7 +82,9 @@ impl GenomicTrainerCore {
                 d_logits[j] = (d_logits[j] + self.resonance_weight * grad_ent).clamp(-1.0, 1.0);
             }
 
-            model.lm_head.refine_with_grads_core(h_norm, d_logits, self.lr)?;
+            model
+                .lm_head
+                .refine_with_grads_core(h_norm, d_logits, self.lr)?;
         }
 
         Ok(total_loss / seq_len as f32)
@@ -94,8 +99,9 @@ impl GenomicTrainerCore {
         phase: u8,
         start_step: usize,
         mut on_step: F,
-    ) -> Result<f32, String> 
-    where F: FnMut(&mut GenomicLLM, usize, f32) -> Result<(), String>
+    ) -> Result<f32, String>
+    where
+        F: FnMut(&mut GenomicLLM, usize, f32) -> Result<(), String>,
     {
         let phase_name = match phase {
             1 => "Base (LM Head)",
@@ -108,16 +114,22 @@ impl GenomicTrainerCore {
         let mut count = 0;
 
         // Si start_step >= dataset.len(), reiniciamos a 0 para esta época
-        let actual_start = if start_step < dataset.len() { start_step } else { 0 };
+        let actual_start = if start_step < dataset.len() {
+            start_step
+        } else {
+            0
+        };
         if actual_start > 0 {
             println!("    [>] Reanudando desde muestra #{}", actual_start);
         }
 
         for (idx, seq) in dataset.iter().enumerate().skip(actual_start) {
-            if seq.len() < 2 { continue; }
-            let input = &seq[0..seq.len()-1];
+            if seq.len() < 2 {
+                continue;
+            }
+            let input = &seq[0..seq.len() - 1];
             let target = &seq[1..seq.len()];
-            
+
             match self.train_step(model, input, target, phase) {
                 Ok(loss) => {
                     epoch_loss += loss;
@@ -127,7 +139,7 @@ impl GenomicTrainerCore {
                         // El índice absoluto es actual_start + count
                         on_step(model, actual_start + count, epoch_loss / count as f32)?;
                     }
-                },
+                }
                 Err(e) => println!("    [!] Error en secuencia {}: {}", idx, e),
             }
         }
@@ -136,7 +148,12 @@ impl GenomicTrainerCore {
             let avg_loss = epoch_loss / count as f32;
             println!(
                 "    - Época {}/{} [{}] | Loss: {:.4} | PPL: {:.2} | {:?}",
-                epoch + 1, total_epochs, phase_name, avg_loss, avg_loss.exp(), start.elapsed()
+                epoch + 1,
+                total_epochs,
+                phase_name,
+                avg_loss,
+                avg_loss.exp(),
+                start.elapsed()
             );
             Ok(avg_loss)
         } else {
@@ -150,13 +167,22 @@ impl GenomicTrainerCore {
         dataset: &[Vec<usize>],
         epochs: usize,
     ) -> Result<(), String> {
-        println!("[*] GenomicTrainer: Iniciando entrenamiento nativo ({} épocas)", epochs);
-        
+        println!(
+            "[*] GenomicTrainer: Iniciando entrenamiento nativo ({} épocas)",
+            epochs
+        );
+
         let p1_end = (epochs as f32 * 0.2) as usize;
         let p2_end = (epochs as f32 * 0.7) as usize;
 
         for epoch in 0..epochs {
-            let phase = if epoch < p1_end { 1 } else if epoch < p2_end { 2 } else { 3 };
+            let phase = if epoch < p1_end {
+                1
+            } else if epoch < p2_end {
+                2
+            } else {
+                3
+            };
             self.fit_epoch(model, dataset, epoch, epochs, phase, 0, |_, _, _| Ok(()))?;
         }
         Ok(())
@@ -188,6 +214,8 @@ impl NativeGenomicTrainer {
         dataset: Vec<Vec<usize>>,
         epochs: usize,
     ) -> PyResult<()> {
-        self.inner.fit(model, &dataset, epochs).map_err(pyo3::exceptions::PyValueError::new_err)
+        self.inner
+            .fit(model, &dataset, epochs)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

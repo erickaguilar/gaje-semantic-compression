@@ -1,9 +1,9 @@
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
+use crate::compute::lagrangian::LagrangianEngine;
 use rand::Rng;
 use std::cmp::Ordering;
-use crate::compute::lagrangian::{LagrangianEngine};
 
 /// # 🧬 SintergicSampler: El Puente Transductor (Lattice -> Humano)
 ///
@@ -41,7 +41,7 @@ impl SintergicSampler {
         }
 
         let n_tokens = logits.len();
-        
+
         // 1. Transformar Logits en "Tiempo de Arribo" (Moneda Dimensional)
         // Cuanto más alto el logit, más cerca de la "Latencia Cero" (Inmovilidad/Luz).
         let mut temporal_arrivals = Vec::with_capacity(n_tokens);
@@ -51,7 +51,7 @@ impl SintergicSampler {
             // Aplicamos una transformación exponencial para acentuar los picos de sintergia
             let logit_norm = (energy - max_logit) / temperature.max(1e-6);
             let resonance = logit_norm.exp();
-            
+
             // Latencia: Inversa de la resonancia (Luz = 0.0, Caos = 1.0)
             let latency = 1.0 / (1.0 + resonance);
             temporal_arrivals.push((i, latency, resonance));
@@ -60,14 +60,14 @@ impl SintergicSampler {
         // 2. Colapso Sintergico (K-WTA por Latencia)
         // Solo permitimos que los impulsos que están en sintonía con las Anclas (F16) pasen.
         // Los impulsos que experimentan "tiempo" (latencia > threshold) son aniquilados.
-        
+
         // Ordenamos por latencia (los más rápidos primero)
         temporal_arrivals.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
-        
+
         // Filtrado K-WTA Dinámico: Tomamos solo los que están cerca del "Presente Puro"
         let min_latency = temporal_arrivals[0].1;
         let survival_threshold = min_latency + (self.sintergy_threshold * k_wta_factor);
-        
+
         let mut survivors = Vec::new();
         for &candidate in &temporal_arrivals {
             if candidate.1 <= survival_threshold {
@@ -122,7 +122,8 @@ impl SintergicSampler {
         temperature: f32,
         k_wta_factor: f32,
     ) -> PyResult<usize> {
-        self.sample_sintergic_core(logits, temperature, k_wta_factor).map_err(pyo3::exceptions::PyValueError::new_err)
+        self.sample_sintergic_core(logits, temperature, k_wta_factor)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     pub fn reset_py(&mut self) {
@@ -154,7 +155,8 @@ impl ToroidalSampler {
     ) -> Result<usize, String> {
         // Mapeamos top_p a k_wta_factor de forma heurística para el puente transductor
         let k_wta_factor = (1.0 - top_p) * 2.0;
-        self.sintergic.sample_sintergic_core(logits, temperature, k_wta_factor)
+        self.sintergic
+            .sample_sintergic_core(logits, temperature, k_wta_factor)
     }
 
     pub fn reset(&mut self) {
@@ -171,13 +173,9 @@ impl ToroidalSampler {
         Self::new_core(mass, curvature)
     }
 
-    pub fn sample(
-        &mut self,
-        logits: Vec<f32>,
-        temperature: f32,
-        top_p: f32,
-    ) -> PyResult<usize> {
-        self.sample_core(logits, temperature, top_p).map_err(pyo3::exceptions::PyValueError::new_err)
+    pub fn sample(&mut self, logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+        self.sample_core(logits, temperature, top_p)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     pub fn reset_py(&mut self) {

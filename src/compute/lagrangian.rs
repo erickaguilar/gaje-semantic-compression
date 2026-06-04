@@ -1,11 +1,11 @@
 //! # 🪐 Motor Lagrangiano: Optimización por Mínima Acción
 //!
-//! Este módulo implementa la física del Protocolo GAJE basada en las ecuaciones 
-//! de Euler-Lagrange. En lugar de optimización estadística tradicional, 
+//! Este módulo implementa la física del Protocolo GAJE basada en las ecuaciones
+//! de Euler-Lagrange. En lugar de optimización estadística tradicional,
 //! tratamos el flujo de información como una partícula viajando por una geodésica.
 //!
 //! ## Principios:
-//! * **L = T - V**: El Lagrangiano es la diferencia entre la energía cinética 
+//! * **L = T - V**: El Lagrangiano es la diferencia entre la energía cinética
 //!   (velocidad de disparo) y la energía potencial (resistencia semántica).
 //! * **Mínima Acción**: La naturaleza elige la ruta que minimiza la integral de L.
 //! * **Soberanía Física**: La coherencia semántica se impone como una restricción

@@ -27,8 +27,8 @@ def test_minimal_mapping_consistency():
     # 3. Centroides: Bits 0b10 deben mapear a c[3] (según Gray code en lib.rs)
     c = [1.0, 2.0, 3.0, 42.0]
 
-    linear = dna_core.GenomicLinear(dna, [], c, out_features, in_features, block_size)
-    y_rust = linear.forward(x)[0]
+    linear = dna_core.GenomicLinear(dna, b"", c, out_features, in_features, block_size)
+    y_rust = linear.forward(x, False)[0] # Rust espera (input, activate_rna)
     
     w_deq = np.array(dna_core.dequantize_embedding(dna, in_features, c))
     y_py = np.dot(w_deq, x)
@@ -47,11 +47,11 @@ def test_basic_kernel_vs_numpy():
     
     y_rust = layer.forward(x)
     
-    # Referencia Python (Dequantize manual)
+    # Referencia Python: Usamos get_row() del objeto nativo (.linear)
     w_deq = []
     for i in range(out_features):
-        dna = layer.dna_weights[i*(in_features//4):(i+1)*(in_features//4)]
-        w_deq.append(dna_core.dequantize_embedding(dna, in_features, layer.centroids[i*4:(i+1)*4]))
+        row = layer.linear.get_row(i)
+        w_deq.append(row)
     
     y_py = np.dot(np.array(w_deq), x)
     assert np.allclose(y_rust, y_py, atol=1e-5)
@@ -83,7 +83,7 @@ def test_mixed_precision_kernel_phase12():
     )
     
     input_vec = np.random.normal(0, 1.0, in_features).astype(np.float32)
-    output = model.forward(input_vec.tolist())
+    output = model.forward(input_vec.tolist(), False)
     assert len(output) == out_features
     print(f"Mixed Precision Kernel Output: {output[0]:.6f}")
 

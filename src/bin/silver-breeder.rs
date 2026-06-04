@@ -1,9 +1,9 @@
 use _impl::core::evolution_bitwise::IslandModel;
-use _impl::nn::distiller::{CouncilOfTeachers, Teacher};
 use _impl::core::tokenizer::GajeTokenizer;
 use _impl::core::topology::CentroidGraph;
-use std::sync::Arc;
+use _impl::nn::distiller::{CouncilOfTeachers, Teacher};
 use std::fs;
+use std::sync::Arc;
 use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,7 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.trim().to_string())
         .filter(|s| s.len() > 10)
         .collect();
-    println!("📊 Dataset cargado: {} muestras para evaluación.", samples.len());
+    println!(
+        "📊 Dataset cargado: {} muestras para evaluación.",
+        samples.len()
+    );
 
     // 3. Cargar Estudiante (Silver Adult)
     println!("[*] Cargando Estudiante: {}...", student_path);
@@ -49,7 +52,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     arr[2].as_f64().unwrap_or(0.0) as f32,
                     arr[3].as_f64().unwrap_or(0.0) as f32,
                 ];
-                println!("[*] Estabilizando fases con Anclaje Algebraico: {:?}", algebraic_c);
+                println!(
+                    "[*] Estabilizando fases con Anclaje Algebraico: {:?}",
+                    algebraic_c
+                );
 
                 let apply_to_layer = |layer: &mut _impl::nn::linear::GenomicLinear| {
                     for i in 0..layer.centroids.len() {
@@ -79,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "SmolLM2-Expert".to_string(),
         teacher_model_path,
         tokenizer_path,
-        &tokenizer
+        &tokenizer,
     )?;
     council.add_teacher(teacher);
     let council = Arc::new(council);
@@ -99,34 +105,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("[*] Inicializando Island Model (4 Islas, 16 individuos cada una)...");
     let mut engine = IslandModel::new_llm(
         student_llm,
-        4,      // num_islands
-        16,     // pop_per_island
-        0.005,  // mutation_rate (0.5% de los bits)
-        50,     // migration_rate (cada 50 gen)
-        topology
+        4,     // num_islands
+        16,    // pop_per_island
+        0.005, // mutation_rate (0.5% de los bits)
+        50,    // migration_rate (cada 50 gen)
+        topology,
     );
     engine.set_council(council, tokenizer.clone());
 
     // 7. Bucle de Evolución Principal
     let num_generations = 200;
-    println!("\n🚀 Iniciando Gran Evolución ({} generaciones)...", num_generations);
-    
+    println!(
+        "\n🚀 Iniciando Gran Evolución ({} generaciones)...",
+        num_generations
+    );
+
     for gen in 1..=num_generations {
         let start = Instant::now();
-        
+
         // A. Evaluación Híbrida (Coherence + Needle)
         engine.evaluate_hybrid(&samples);
-        
+
         // B. Paso Evolutivo (Mutación + Crossover + Migración)
         engine.step();
-        
+
         let best_fitness = engine.islands[0].population[0].fitness;
         let duration = start.elapsed();
-        
+
         if gen % 10 == 0 || gen == 1 {
             println!(
                 "📈 Gen {:3} | Best Fitness: {:.4} | Tiempo: {:?} | Islas: {}",
-                gen, best_fitness, duration, engine.islands.len()
+                gen,
+                best_fitness,
+                duration,
+                engine.islands.len()
             );
         }
 
@@ -135,8 +147,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let checkpoint_path = "models/checkpoints/silverfetus-checkpoint.gaje";
             if let Some(best_organism) = engine.islands[0].population.first() {
                 if let Some(llm) = &best_organism.llm {
-                    _impl::io::loader::save_genomic_model(checkpoint_path, llm, &config, Some(&tokenizer))?;
-                    println!("💾 Checkpoint actualizado (Gen {}): {}", gen, checkpoint_path);
+                    _impl::io::loader::save_genomic_model(
+                        checkpoint_path,
+                        llm,
+                        &config,
+                        Some(&tokenizer),
+                    )?;
+                    println!(
+                        "💾 Checkpoint actualizado (Gen {}): {}",
+                        gen, checkpoint_path
+                    );
                 }
             }
         }

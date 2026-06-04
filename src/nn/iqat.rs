@@ -1,11 +1,11 @@
 //! # 🧬 IQAT: Iterative Quantization-Aware Training
-//! 
+//!
 //! Este módulo implementa el refinamiento profundo del modelo genómico
 //! mediante la minimización de la "Deriva de Activación" (Activation Drift)
 //! respecto a un modelo maestro.
 
-use crate::nn::llm::GenomicLLM;
 use crate::nn::distiller::Teacher;
+use crate::nn::llm::GenomicLLM;
 use std::time::Instant;
 
 #[cfg(feature = "python")]
@@ -38,9 +38,9 @@ impl IQATEngine {
 
         // Necesitamos capturar activaciones del maestro y del estudiante
         // en el punto de entrada y salida del bloque.
-        
+
         let mut teacher_model = teacher.model.clone();
-        
+
         for &token_id in input_tokens {
             // 1. Obtener activaciones del maestro hasta el bloque bloque_idx
             let _t_act_in = self.capture_activation(&mut teacher_model, token_id, block_idx)?;
@@ -48,7 +48,7 @@ impl IQATEngine {
 
             // 2. Obtener activaciones del estudiante hasta el bloque bloque_idx
             let s_act_in = self.capture_activation(student_model, token_id, block_idx)?;
-            
+
             // 3. Ejecutar bloque del estudiante con la entrada real del estudiante
             let block = &mut student_model.blocks[block_idx];
             let s_act_out = block.forward_core(s_act_in.clone(), count)?;
@@ -62,21 +62,34 @@ impl IQATEngine {
                 grads[j] = diff;
                 drift += diff * diff;
             }
-            
+
             total_drift += drift.sqrt();
             count += 1;
 
             // 5. Refinamiento quirúrgico del bloque (Backprop local)
             // Refinamos las sub-capas del bloque usando el gradiente de deriva
-            block.gate_gen.refine_with_grads_core(s_act_in.clone(), grads.clone(), self.lr * self.block_lr_scale)?;
-            block.up_gen.refine_with_grads_core(s_act_in.clone(), grads.clone(), self.lr * self.block_lr_scale)?;
+            block.gate_gen.refine_with_grads_core(
+                s_act_in.clone(),
+                grads.clone(),
+                self.lr * self.block_lr_scale,
+            )?;
+            block.up_gen.refine_with_grads_core(
+                s_act_in.clone(),
+                grads.clone(),
+                self.lr * self.block_lr_scale,
+            )?;
             // Nota: ffn_down requiere su propia entrada (post-act)
         }
 
         Ok(total_drift / count as f32)
     }
 
-    fn capture_activation(&self, model: &mut GenomicLLM, token_id: usize, block_limit: usize) -> Result<Vec<f32>, String> {
+    fn capture_activation(
+        &self,
+        model: &mut GenomicLLM,
+        token_id: usize,
+        block_limit: usize,
+    ) -> Result<Vec<f32>, String> {
         // Ejecución parcial del modelo hasta block_limit
         let mut x = model.embeddings.get_row_core(token_id)?;
         for i in 0..block_limit {
@@ -103,15 +116,23 @@ impl IQATEngine {
 
             for (t_idx, text) in texts.iter().enumerate() {
                 // Usamos el tokenizador del maestro para asegurar alineación si el estudiante no tiene uno
-                let tokens_u32 = teacher.tokenizer.encode(text, false).map_err(|e| e.to_string())?;
+                let tokens_u32 = teacher
+                    .tokenizer
+                    .encode(text, false)
+                    .map_err(|e| e.to_string())?;
                 let tokens: Vec<usize> = tokens_u32.into_iter().map(|id| id as usize).collect();
 
-                if tokens.len() < 2 { continue; }
+                if tokens.len() < 2 {
+                    continue;
+                }
 
                 for b_idx in 0..n_blocks {
                     let drift = self.refine_block_drift(student, b_idx, &tokens, teacher)?;
                     if t_idx % 10 == 0 && b_idx == n_blocks - 1 {
-                        println!("    - Texto {} | Bloque {} | Drift Medio: {:.6}", t_idx, b_idx, drift);
+                        println!(
+                            "    - Texto {} | Bloque {} | Drift Medio: {:.6}",
+                            t_idx, b_idx, drift
+                        );
                     }
                 }
             }
@@ -145,6 +166,8 @@ impl NativeIQATEngine {
         texts: Vec<String>,
         epochs: usize,
     ) -> PyResult<()> {
-        self.inner.run_iqat_cycle(student, teacher, &texts, epochs).map_err(pyo3::exceptions::PyValueError::new_err)
+        self.inner
+            .run_iqat_cycle(student, teacher, &texts, epochs)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

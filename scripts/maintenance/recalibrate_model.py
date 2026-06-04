@@ -13,6 +13,9 @@ def apply_recalibration(model_path, output_path, shift=0.1):
     
     print(f"[*] Aplicando recalibración de fase masiva (shift={shift})...")
     llm.rust_llm.recalibrate_all_centroids(shift)
+
+    print(f"[*] Aplicando Alineación de Vector en Equilibrio (VE) (strength=0.1)...")
+    llm.rust_llm.apply_vector_equilibrium_alignment_all(0.1)
         
     print(f"[*] Guardando modelo recalibrado en: {output_path}")
     llm.save(output_path)

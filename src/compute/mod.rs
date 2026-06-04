@@ -1,9 +1,9 @@
-pub mod kernels;
-pub mod math;
 pub mod event_queue;
-pub mod scheduler;
-pub mod power;
-pub mod mcts;
-pub mod timing_wheel;
+pub mod kernels;
 pub mod lagrangian;
+pub mod math;
+pub mod mcts;
+pub mod power;
 pub mod sampler;
+pub mod scheduler;
+pub mod timing_wheel;

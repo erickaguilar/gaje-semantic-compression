@@ -107,8 +107,12 @@ impl RustGenomicBlock {
             x.clone()
         };
 
-        let q = self.q_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
-        let k = self.k_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+        let q = self
+            .q_gen
+            .forward_core(x_norm.clone(), modulation, activate_rna)?;
+        let k = self
+            .k_gen
+            .forward_core(x_norm.clone(), modulation, activate_rna)?;
         let v = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
@@ -121,8 +125,12 @@ impl RustGenomicBlock {
             .for_each(|(xi, &ai)| *xi += ai);
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
 
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
-        let up = self.up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
+        let gate = self
+            .gate_gen
+            .forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
+        let up = self
+            .up_gen
+            .forward_core(x_ffn_n, modulation, activate_rna)?;
 
         let mut ffn_out = vec![0.0f32; gate.len()];
         match self.act_fn.as_str() {
@@ -142,7 +150,9 @@ impl RustGenomicBlock {
                 ffn_out.par_iter_mut().for_each(|out| *out *= s);
             }
         }
-        let projected_ffn = self.w_down.forward_core(ffn_out, modulation, activate_rna)?;
+        let projected_ffn = self
+            .w_down
+            .forward_core(ffn_out, modulation, activate_rna)?;
         let mut final_out = x_post;
         final_out
             .par_iter_mut()
@@ -210,8 +220,12 @@ impl RustGenomicBlock {
             x_post_attn[i] += proj_attn[i];
         }
         let x_ffn_n = unsafe { rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
-        let gate = self.gate_gen.forward_core(x_ffn_n.clone(), modulation, true)?;
-        let up = self.up_gen.forward_core(x_ffn_n.clone(), modulation, true)?;
+        let gate = self
+            .gate_gen
+            .forward_core(x_ffn_n.clone(), modulation, true)?;
+        let up = self
+            .up_gen
+            .forward_core(x_ffn_n.clone(), modulation, true)?;
 
         let d_ffn_out = self.w_down.backward_core(d_hidden.clone())?;
         let mut d_gate = vec![0.0f32; gate.len()];

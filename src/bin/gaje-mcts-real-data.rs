@@ -1,7 +1,7 @@
-use _impl::compute::mcts::MctsTree;
 use _impl::compute::math::calculate_genomic_mse;
-use std::time::Instant;
+use _impl::compute::mcts::MctsTree;
 use std::fs;
+use std::time::Instant;
 
 fn main() {
     println!("🧪 Validando MCTS con Dataset Real: tiny_shakespeare.txt");
@@ -9,9 +9,10 @@ fn main() {
     // 1. Cargar el dataset y convertirlo en "pesos" simulados (bytes -> f32 normalizado)
     let path = "data/datasets/tiny_shakespeare.txt";
     let content = fs::read(path).expect("No se pudo leer el dataset");
-    
+
     // Tomamos una muestra para la optimización (ej. primeros 20,000 bytes)
-    let weights: Vec<f32> = content.iter()
+    let weights: Vec<f32> = content
+        .iter()
         .take(20000)
         .map(|&b| (b as f32 / 255.0) - 0.5) // Normalizar a rango [-0.5, 0.5]
         .collect();
@@ -49,7 +50,7 @@ fn main() {
     }
 
     let duration = start_time.elapsed();
-    
+
     // 4. Encontrar el mejor resultado
     let mut best_node_idx = 0;
     let mut max_q = -1.0;
@@ -66,5 +67,8 @@ fn main() {
     println!("\n✅ Validación completada en {:?}", duration);
     println!("   Centroides Óptimos: {:?}", best_centroids);
     println!("   MSE Final (MCTS): {:.6}", final_mse);
-    println!("   Mejora: {:.2}%", ((initial_mse - final_mse) / initial_mse) * 100.0);
+    println!(
+        "   Mejora: {:.2}%",
+        ((initial_mse - final_mse) / initial_mse) * 100.0
+    );
 }

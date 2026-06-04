@@ -45,14 +45,18 @@ impl GenomicLLM {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        
+
         // LM Head: Activación dinámica basada en la entropía del estado final
         let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
-        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let rna_threshold = if self.blocks.is_empty() {
+            0.5
+        } else {
+            self.blocks[0].rna_threshold
+        };
         let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
-        
+
         if self.lm_head.out_features == 0 {
-             return Err("LM Head out_features is 0!".to_string());
+            return Err("LM Head out_features is 0!".to_string());
         }
 
         self.lm_head.forward_core(h_norm, modulation, activate_rna)
@@ -95,12 +99,18 @@ impl GenomicLLM {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = unsafe { rms_norm(&h, &self.output_norm, self.eps) };
-        
+
         let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
-        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let rna_threshold = if self.blocks.is_empty() {
+            0.5
+        } else {
+            self.blocks[0].rna_threshold
+        };
         let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
-        
-        let logits = self.lm_head.forward_core(h_norm.clone(), modulation, activate_rna)?;
+
+        let logits = self
+            .lm_head
+            .forward_core(h_norm.clone(), modulation, activate_rna)?;
         Ok((logits, h_norm))
     }
 
@@ -115,12 +125,18 @@ impl GenomicLLM {
             .topology
             .as_ref()
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
-        
+
         let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
-        let rna_threshold = if self.blocks.is_empty() { 0.5 } else { self.blocks[0].rna_threshold };
+        let rna_threshold = if self.blocks.is_empty() {
+            0.5
+        } else {
+            self.blocks[0].rna_threshold
+        };
         let activate_rna = crate::compute::math::should_activate_rna(entropy, rna_threshold);
 
-        let excitation = self.lm_head.forward_core(h_norm, modulation, activate_rna)?;
+        let excitation = self
+            .lm_head
+            .forward_core(h_norm, modulation, activate_rna)?;
 
         let n_tokens = excitation.len();
         let max_excitation = excitation.iter().fold(0.0f32, |a, &b| a.max(b));
@@ -367,25 +383,46 @@ impl GenomicLLM {
     }
 
     pub fn recalibrate_all_centroids(&mut self, shift: f32) -> PyResult<()> {
-        self.embeddings.recalibrate_centroids_core(shift)
+        // ...
+        Ok(())
+    }
+
+    pub fn apply_vector_equilibrium_alignment_all(&mut self, strength: f32) -> PyResult<()> {
+        self.embeddings
+            .apply_vector_equilibrium_alignment_core(strength)
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
         for block in &mut self.blocks {
-            block.q_gen.recalibrate_centroids_core(shift)
+            block
+                .q_gen
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.k_gen.recalibrate_centroids_core(shift)
+            block
+                .k_gen
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.v_gen.recalibrate_centroids_core(shift)
+            block
+                .v_gen
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.w_o.recalibrate_centroids_core(shift)
+            block
+                .w_o
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.gate_gen.recalibrate_centroids_core(shift)
+            block
+                .gate_gen
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.up_gen.recalibrate_centroids_core(shift)
+            block
+                .up_gen
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
-            block.w_down.recalibrate_centroids_core(shift)
+            block
+                .w_down
+                .apply_vector_equilibrium_alignment_core(strength)
                 .map_err(pyo3::exceptions::PyValueError::new_err)?;
         }
-        self.lm_head.recalibrate_centroids_core(shift)
+        self.lm_head
+            .apply_vector_equilibrium_alignment_core(strength)
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
         Ok(())
     }
