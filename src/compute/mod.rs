@@ -1,3 +1,4 @@
+pub mod diagnostics;
 pub mod event_queue;
 pub mod kernels;
 pub mod lagrangian;

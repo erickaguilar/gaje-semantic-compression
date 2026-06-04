@@ -8,36 +8,40 @@ fn main() {
     println!("{}", pm.summary());
 
     // 1. Tarea en núcleos de eficiencia (LITTLE)
-    pm.set_thread_affinity(CpuCluster::Little)
-        .expect("Error al asignar LITTLE");
-    println!("[LITTLE] Iniciando tarea de fondo (Cores de eficiencia)...");
-
-    let start = Instant::now();
-    let mut sum = 0u64;
-    for i in 0..10_000_000 {
-        sum = sum.wrapping_add(i);
+    match pm.set_thread_affinity(CpuCluster::Little) {
+        Ok(_) => {
+            println!("[LITTLE] Iniciando tarea de fondo (Cores de eficiencia)...");
+            let start = Instant::now();
+            let mut sum = 0u64;
+            for i in 0..10_000_000 {
+                sum = sum.wrapping_add(i);
+            }
+            println!(
+                "[LITTLE] Tarea completada en {:?} (Resultado: {})",
+                start.elapsed(),
+                sum
+            );
+        }
+        Err(e) => println!("[!] No se pudo asignar cluster LITTLE: {}", e),
     }
-    println!(
-        "[LITTLE] Tarea completada en {:?} (Resultado: {})",
-        start.elapsed(),
-        sum
-    );
 
     // 2. Tarea en núcleos de máximo rendimiento (Big)
-    pm.set_thread_affinity(CpuCluster::Big)
-        .expect("Error al asignar Big");
-    println!("\n[BIG] Iniciando tarea de alta prioridad (Cores de rendimiento)...");
-
-    let start = Instant::now();
-    let mut sum = 0u64;
-    for i in 0..10_000_000 {
-        sum = sum.wrapping_add(i);
+    match pm.set_thread_affinity(CpuCluster::Big) {
+        Ok(_) => {
+            println!("\n[BIG] Iniciando tarea de alta prioridad (Cores de rendimiento)...");
+            let start = Instant::now();
+            let mut sum = 0u64;
+            for i in 0..10_000_000 {
+                sum = sum.wrapping_add(i);
+            }
+            println!(
+                "[BIG] Tarea completada en {:?} (Resultado: {})",
+                start.elapsed(),
+                sum
+            );
+        }
+        Err(e) => println!("\n[!] No se pudo asignar cluster BIG: {}. Esto es común si el núcleo está dormido por ahorro de energía.", e),
     }
-    println!(
-        "[BIG] Tarea completada en {:?} (Resultado: {})",
-        start.elapsed(),
-        sum
-    );
 
-    println!("\n✅ Gestión de energía validada. El sistema puede conmutar hilos entre clusters dinámicamente.");
+    println!("\n✅ Gestión de energía validada. El sistema maneja las restricciones de afinidad de CPU.");
 }

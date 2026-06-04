@@ -166,6 +166,16 @@ impl GenomicLinear {
             input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
         }
         let n_blocks = self.in_features / self.block_size;
+        
+        // Medición de Sparsity (Escasez) para Nivel 4
+        let zero_threshold = 1e-6;
+        let mut skipped_blocks = 0u64;
+        for block in input.chunks_exact(self.block_size) {
+            let is_zero = block.iter().all(|&v| v.abs() < zero_threshold);
+            if is_zero { skipped_blocks += 1; }
+        }
+        crate::compute::diagnostics::report_sparsity(n_blocks as u64, skipped_blocks);
+
         let has_bias = !self.bias.is_empty();
         let use_epi = activate_rna && !self.epi_strands.is_empty();
         let has_tri = !self.tri_strands.is_empty();
