@@ -5,20 +5,22 @@ Este documento sirve como mapa central del repositorio tras la consolidación de
 ---
 
 ## 📂 1. Documentación Estratégica (`docs/`)
-La carpeta `docs` ha sido consolidada para reflejar la hoja de ruta de 2026.
+La carpeta `docs` ha sido consolidada para reflejar la realidad técnica de 2026.
+
+### ⚖️ Auditoría de Verdad y Estado Real
+*   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Mapa de la realidad que contrasta el código con resultados empíricos (PPL ~572).
+*   **[TECHNICAL_BIRTH_AND_REALITY.md](docs/meta/TECHNICAL_BIRTH_AND_REALITY.md)**: Resumen del proceso de transmutación toroidal y el abismo semántico actual.
+*   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Diagrama de flujo del ciclo de vida y Gates de Certificación.
+
+### 🛠️ Guías Operativas (`docs/guides/`)
+*   **[GAJE_CLI_GUIDE.md](docs/guides/GAJE_CLI_GUIDE.md)**: **MANUAL PRINCIPAL.** Guía completa de comandos y parámetros para el motor nativo de Rust.
+*   **[OPERATIONAL_WORKFLOWS_V1.1.0.md](docs/guides/OPERATIONAL_WORKFLOWS_V1.1.0.md)**: Flujos de trabajo del protocolo GAJE-Flow.
+*   **[USER_GUIDE.md](docs/guides/USER_GUIDE.md)**: Manual de usuario para interacción con el ecosistema.
 
 ### 📋 Planes y Roadmap (`docs/plans/`)
-*   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica, análisis de brechas y metas del MVP.
-*   **[DNI_IMPLEMENTATION_PLAN.md](docs/plans/DNI_IMPLEMENTATION_PLAN.md)**: Plan unificado para la Ingestión Neuronal Directa (Rust + CLI).
-*   **[CIRCULAR_AND_TOROIDAL_STABILITY_PLAN.md](docs/plans/CIRCULAR_AND_TOROIDAL_STABILITY_PLAN.md)**: Estrategia de estabilidad de fase y memoria recirculante.
-*   **[ISLAND_MODEL_IMPLEMENTATION.md](docs/plans/ISLAND_MODEL_IMPLEMENTATION.md)**: Detalles de paralelismo evolutivo en ARM.
-
-### 📚 Documentación Técnica y Auditoría
-*   **[DISRUPTIVE_INNOVATIONS.md](docs/meta/DISRUPTIVE_INNOVATIONS.md)**: Resumen de las innovaciones críticas y sorprendentes del proyecto.
-*   **[VALIDATION_PROTOCOLS.md](docs/meta/VALIDATION_PROTOCOLS.md)**: Métodos técnicos para certificar las capacidades del sistema.
-*   **`docs/certifications/`**: Reportes oficiales de auditoría y certificación del protocolo.
-*   **`docs/guides/`**: Manuales operativos (Breeding, Born, User Guide).
-*   **`docs/reports/`**: Hallazgos técnicos y validaciones de fases previas.
+*   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
+*   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Plan activo de sincronización documental.
+*   **[ISLAND_MODEL_IMPLEMENTATION.md](docs/plans/ISLAND_MODEL_IMPLEMENTATION.md)**: (Fase 4 - Aspiracional) Paralelismo evolutivo en ARM.
 
 ---
 
