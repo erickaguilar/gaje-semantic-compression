@@ -7,24 +7,25 @@ graph TD
     %% Fase 1: Concepción e Infraestructura
     subgraph F1 [Fase 1: Concepción - Gold Embryo]
         A[GGUF Master Model] -->|Extraction| B[Genomic Centroids]
-        B -->|Quantization| C[2-bit DNA Genome]
-        C -->|Injection| D[Stability Anchors F16]
-        D -->|Gate 1| E{Certificación Nivel 1: Infraestructura}
+        B -->|Phase Mapping| C[Toroidal Topology Q-Zeta16]
+        C -->|Quantization| D[2-bit DNA Genome]
+        D -->|Injection| E[Stability Anchors F16]
+        E -->|Gate 1| F{Certificación Nivel 1: Infraestructura}
     end
 
-    E -->|FAIL: NaNs/Instabilidad| D
-    E -->|PASS: Similitud > 0.99| F[Fase 2: Crianza - Silver Fetus]
+    F -->|FAIL: NaNs/Instabilidad| E
+    F -->|PASS: Similitud > 0.99| G[Fase 2: Crianza - Silver Fetus]
 
     %% Fase 2: Crianza y Estabilidad Semántica
     subgraph F2 [Fase 2: Crianza - Silver Fetus]
-        F --> G[Native Genomic Training / Distillation]
-        G --> H[Mosaic Dataset Injection 500MB]
-        H --> I[Toroidal Phase Tuning Q-Zeta16]
-        I --> J{Certificación Nivel 2: Semántica}
+        G --> H[Native Genomic Training / Distillation]
+        H --> I[Mosaic Dataset Injection 500MB]
+        I --> J[Epigenetic Refinement]
+        J --> K{Certificación Nivel 2: Semántica}
     end
 
-    J -->|FAIL: PPL > 15.0 / Obsesión| G
-    J -->|PASS: PPL < 15.0| K[Fase 3: Maduración - Silver Adult]
+    K -->|FAIL: PPL > 15.0 / Obsesión| H
+    K -->|PASS: PPL < 15.0| L[Fase 3: Maduración - Silver Adult]
 
     %% Fase 3: Maduración y Funcionalidad
     subgraph F3 [Fase 3: Maduración - Silver Adult]
