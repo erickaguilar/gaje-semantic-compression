@@ -235,22 +235,25 @@ impl GGUFLoader {
         let rope_base = self
             .get_metadata_f32(&format!("{}rope.freq_base", p))
             .unwrap_or(10000.0);
+        let name = self
+            .get_metadata_string("general.name")
+            .unwrap_or_else(|| "GGUF-Model".to_string());
+        let is_smollm2 = name.to_lowercase().contains("smollm2");
+        let actual_rope_base = if is_smollm2 { 10000.0 } else { rope_base };
         Ok(ModelConfig {
             config: ArchConfig {
-                name: self
-                    .get_metadata_string("general.name")
-                    .unwrap_or_else(|| "GGUF-Model".to_string()),
+                name,
                 version: "1.0.0-alpha".to_string(),
                 tokenizer_id: "tokenizer".to_string(),
-                rope_base,
+                rope_base: actual_rope_base,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
-                rope_style: "split".to_string(),
+                rope_style: if is_smollm2 { "interleaved".to_string() } else { "split".to_string() },
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
                 rna_threshold: 0.5,
-                unpermute_weights: false,
-                apply_smollm_rope_patch: false,
+                unpermute_weights: is_smollm2,
+                apply_smollm_rope_patch: is_smollm2,
                 dni: default_dni(),
                 state: "stable".to_string(),
             },
@@ -269,34 +272,89 @@ impl GGUFLoader {
         anchor_threshold: f32,
     ) -> std::io::Result<GenomicLLM> {
         let block_size = 32;
-        let embd_dna = self.genomize_tensor("token_embd.weight", block_size, -1.0)?;
+        let embd_dna =
+            self.genomize_tensor("token_embd.weight", block_size, -1.0, false, 0, 0, None)?;
         let mut blocks = Vec::new();
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
             let p = format!("blk.{}.", i);
-            let q_gen =
-                self.genomize_tensor(&format!("{}attn_q.weight", p), block_size, anchor_threshold)?;
-            let k_gen =
-                self.genomize_tensor(&format!("{}attn_k.weight", p), block_size, anchor_threshold)?;
-            let v_gen =
-                self.genomize_tensor(&format!("{}attn_v.weight", p), block_size, anchor_threshold)?;
+
+            // Carga de Bias (Opcional en GGUF)
+            let q_bias = self.load_f32_tensor_optional(&format!("{}attn_q.bias", p));
+            let k_bias = self.load_f32_tensor_optional(&format!("{}attn_k.bias", p));
+            let v_bias = self.load_f32_tensor_optional(&format!("{}attn_v.bias", p));
+            let o_bias = self.load_f32_tensor_optional(&format!("{}attn_output.bias", p));
+
+            let q_gen = self.genomize_tensor(
+                &format!("{}attn_q.weight", p),
+                block_size,
+                anchor_threshold,
+                config.config.unpermute_weights,
+                config.n_head,
+                head_dim,
+                q_bias,
+            )?;
+            let k_gen = self.genomize_tensor(
+                &format!("{}attn_k.weight", p),
+                block_size,
+                anchor_threshold,
+                config.config.unpermute_weights,
+                config.n_head_kv,
+                head_dim,
+                k_bias,
+            )?;
+            let v_gen = self.genomize_tensor(
+                &format!("{}attn_v.weight", p),
+                block_size,
+                anchor_threshold,
+                false,
+                0,
+                0,
+                v_bias,
+            )?;
             let o_gen = self.genomize_tensor(
                 &format!("{}attn_output.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                o_bias,
             )?;
+
+            // FFN Tensors (Normalmente sin bias en Llama/SmolLM, pero Qwen puede tenerlos)
+            let gate_bias = self.load_f32_tensor_optional(&format!("{}ffn_gate.bias", p));
+            let up_bias = self.load_f32_tensor_optional(&format!("{}ffn_up.bias", p));
+            let down_bias = self.load_f32_tensor_optional(&format!("{}ffn_down.bias", p));
+
             let gate_gen = self.genomize_tensor(
                 &format!("{}ffn_gate.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                gate_bias,
             )?;
-            let up_gen =
-                self.genomize_tensor(&format!("{}ffn_up.weight", p), block_size, anchor_threshold)?;
+            let up_gen = self.genomize_tensor(
+                &format!("{}ffn_up.weight", p),
+                block_size,
+                anchor_threshold,
+                false,
+                0,
+                0,
+                up_bias,
+            )?;
             let down_gen = self.genomize_tensor(
                 &format!("{}ffn_down.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                down_bias,
             )?;
+
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;
             let attn = GenomicAttention::new(
@@ -332,7 +390,9 @@ impl GGUFLoader {
         } else {
             "token_embd.weight"
         };
-        let lm_head = self.genomize_tensor(lm_head_name, block_size, anchor_threshold)?;
+        let lm_head_bias = self.load_f32_tensor_optional("output.bias");
+        let lm_head =
+            self.genomize_tensor(lm_head_name, block_size, anchor_threshold, false, 0, 0, lm_head_bias)?;
         Ok(GenomicLLM {
             embeddings: embd_dna,
             blocks,
@@ -341,6 +401,13 @@ impl GGUFLoader {
             eps: config.eps,
             topology: None,
         })
+    }
+
+    fn load_f32_tensor_optional(&self, name: &str) -> Option<Vec<f32>> {
+        if !self.reader.tensors.contains_key(name) {
+            return None;
+        }
+        self.load_f32_tensor(name).ok()
     }
 
     fn load_f32_tensor(&self, name: &str) -> std::io::Result<Vec<f32>> {
@@ -382,12 +449,16 @@ impl GGUFLoader {
         name: &str,
         block_size: usize,
         anchor_threshold: f32,
+        unpermute: bool,
+        n_head: usize,
+        head_dim: usize,
+        bias: Option<Vec<f32>>,
     ) -> std::io::Result<GenomicLinear> {
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
         let out_features = info.shape[info.n_dims as usize - 1] as usize;
         let in_features = info.shape[0] as usize;
-        let f32_data: Vec<f32> = match info.tensor_type {
+        let mut f32_data: Vec<f32> = match info.tensor_type {
             GGMLType::F32 => data
                 .chunks_exact(4)
                 .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
@@ -413,6 +484,11 @@ impl GGUFLoader {
                 ))
             }
         };
+
+        if unpermute && n_head > 0 && head_dim > 0 {
+            unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
+        }
+
         let (dna, centroids, anchors_u8) =
             crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None);
         Ok(GenomicLinear::new(
@@ -429,10 +505,35 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            Vec::new(),
+            bias.unwrap_or_default(),
         ))
     }
 }
+
+fn unpermute_f32(
+    data: &mut [f32],
+    n_head: usize,
+    head_dim: usize,
+    out_features: usize,
+    in_features: usize,
+) {
+    let mut scratch = vec![0.0f32; out_features * in_features];
+    for i in 0..out_features {
+        let h = i / head_dim;
+        let j = i % head_dim;
+        let new_j = if j < head_dim / 2 {
+            2 * j
+        } else {
+            2 * (j - head_dim / 2) + 1
+        };
+        let new_i = h * head_dim + new_j;
+        for k in 0..in_features {
+            scratch[new_i * in_features + k] = data[i * in_features + k];
+        }
+    }
+    data.copy_from_slice(&scratch);
+}
+
 
 #[cfg_attr(feature = "python", pyclass)]
 pub struct NativeLoader {

@@ -69,9 +69,18 @@ impl RustGenomicBlock {
     }
 
     pub fn forward_core(&mut self, x: Vec<f32>, pos: usize) -> Result<Vec<f32>, String> {
+        if x.iter().any(|v| v.is_nan()) { return Err("Input x is NaN".into()); }
         // --- STAGE 1: ENTROPY ANALYSIS (Pilar 2) ---
         let entropy = crate::compute::math::calculate_activation_entropy(&x);
         let activate_rna = crate::compute::math::should_activate_rna(entropy, self.rna_threshold);
+
+        let x_norm = if !self.attn.rmsnorm_weight.is_empty() {
+            let res = unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) };
+            if res.iter().any(|v| v.is_nan()) { return Err("NaN after attn rms_norm".into()); }
+            res
+        } else {
+            x.clone()
+        };
 
         // --- STAGE 4: DINAMIC STATE ESTIMATION ---
         let (current_state, modulation) = if let Some(ref topo) = self.topology {
@@ -101,36 +110,40 @@ impl RustGenomicBlock {
             (2, None)
         };
 
-        let x_norm = if !self.attn.rmsnorm_weight.is_empty() {
-            unsafe { rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) }
-        } else {
-            x.clone()
-        };
-
         let q = self
             .q_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;
+        if q.iter().any(|v| v.is_nan()) { return Err("NaN in q".into()); }
         let k = self
             .k_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;
+        if k.iter().any(|v| v.is_nan()) { return Err("NaN in k".into()); }
         let v = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
+        if v.iter().any(|v| v.is_nan()) { return Err("NaN in v".into()); }
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
+        if attn_out.iter().any(|v| v.is_nan()) { return Err("NaN in attn_out".into()); }
         let projected_attn = self.w_o.forward_core(attn_out, modulation, activate_rna)?;
+        if projected_attn.iter().any(|v| v.is_nan()) { return Err("NaN in projected_attn".into()); }
 
         let mut x_post = x;
         x_post
             .par_iter_mut()
             .zip(projected_attn.par_iter())
             .for_each(|(xi, &ai)| *xi += ai);
+        if x_post.iter().any(|v| v.is_nan()) { return Err("NaN after x_post addition".into()); }
+        
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
+        if x_ffn_n.iter().any(|v| v.is_nan()) { return Err("NaN after ffn rms_norm".into()); }
 
         let gate = self
             .gate_gen
             .forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
+        if gate.iter().any(|v| v.is_nan()) { return Err("NaN in gate".into()); }
         let up = self
             .up_gen
             .forward_core(x_ffn_n, modulation, activate_rna)?;
+        if up.iter().any(|v| v.is_nan()) { return Err("NaN in up".into()); }
 
         let mut ffn_out = vec![0.0f32; gate.len()];
         match self.act_fn.as_str() {
@@ -141,6 +154,8 @@ impl RustGenomicBlock {
                 crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
             }
         }
+        if ffn_out.iter().any(|v| v.is_nan()) { return Err("NaN in ffn_out".into()); }
+
         if self.use_genomic_norm {
             let rms = (ffn_out.par_iter().map(|&v| v * v).sum::<f32>() / ffn_out.len() as f32
                 + self.eps)
@@ -153,11 +168,22 @@ impl RustGenomicBlock {
         let projected_ffn = self
             .w_down
             .forward_core(ffn_out, modulation, activate_rna)?;
+        if projected_ffn.iter().any(|v| v.is_nan()) { return Err("NaN in projected_ffn".into()); }
+
         let mut final_out = x_post;
         final_out
             .par_iter_mut()
             .zip(projected_ffn.par_iter())
             .for_each(|(fi, &pi)| *fi += pi);
+        if final_out.iter().any(|v| v.is_nan()) { return Err("NaN after projected_ffn addition".into()); }
+
+        // --- STAGE 5: TOROIDAL CONFINEMENT (K-WTA Lateral Inhibition) ---
+        // Filtramos el ruido de fondo para que solo la señal en resonancia sobreviva.
+        // Esto evita la acumulación de entropía (deriva semántica) detectada en Phase 2.
+        if self.use_genomic_norm {
+            let k = (final_out.len() as f32 * 0.95) as usize; // Conservamos el top 95%
+            crate::compute::kernels::lateral_inhibition_kwta(&mut final_out, k);
+        }
 
         // Inyectar Bias Relacional al final del bloque
         if let Some(ref topo) = self.topology {

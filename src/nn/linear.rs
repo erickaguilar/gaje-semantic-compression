@@ -168,8 +168,14 @@ impl GenomicLinear {
         let n_blocks = self.in_features / self.block_size;
         
         // Medición de Sparsity (Escasez) para Nivel 4
-        let zero_threshold = 1e-6;
+        let zero_threshold = 1e-5; // Calibración del Transductor: Umbral de transparencia
         let mut skipped_blocks = 0u64;
+        
+        // Limpieza de ruido en el transductor para evitar deriva por silencia (ID 0)
+        input.par_iter_mut().for_each(|v| {
+            if v.abs() < zero_threshold { *v = 0.0; }
+        });
+
         for block in input.chunks_exact(self.block_size) {
             let is_zero = block.iter().all(|&v| v.abs() < zero_threshold);
             if is_zero { skipped_blocks += 1; }
@@ -209,12 +215,28 @@ impl GenomicLinear {
                         &m_factors,
                     )
                 };
+                if sum.is_nan() {
+                    // Solo imprimimos una vez para no saturar
+                    static PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                    if !PRINTED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        eprintln!("[SDK Debug] NaN detected in genomic_dot_product for row {}", i);
+                    }
+                }
+                
                 let a_s = self.anchor_row_ptrs[i];
                 let a_e = self.anchor_row_ptrs[i + 1];
                 for k in a_s..a_e {
                     let idx = self.anchor_indices[k] as usize;
                     if idx < input.len() {
-                        sum += input[idx] * self.anchor_values[k].to_f32();
+                        let anchor_val = self.anchor_values[k].to_f32();
+                        sum += input[idx] * anchor_val;
+                    }
+                }
+                
+                if sum.is_nan() {
+                    static PRINTED_A: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                    if !PRINTED_A.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                        eprintln!("[SDK Debug] NaN detected after anchors for row {}", i);
                     }
                 }
                 if use_epi {

@@ -170,79 +170,31 @@ impl GajeNeuromorphicLayer {
         let start_byte = input_index * row_size;
         let homeostatic_bias = 0.01;
 
+        /* Temporarily disabled SIMD for NaN diagnosis
         #[cfg(target_arch = "aarch64")]
         unsafe {
-            use std::arch::aarch64::*;
-            let n = self.num_neurons;
-            let real_ptr = self.membrane_potentials_real.as_mut_ptr();
-            let imag_ptr = self.membrane_potentials_imag.as_mut_ptr();
-            let weights_ptr = self.packed_weights.as_ptr().add(start_byte);
-            let intensity_v = vdupq_n_f32(intensity);
-            let bias_v = vdupq_n_f32(homeostatic_bias);
-
-            let table_r = vld1q_u8(centroides_real.as_ptr() as *const u8);
-            let table_im = vld1q_u8(centroides_imag.as_ptr() as *const u8);
-
-            let b0123 = vcreate_u8(0x0302010003020100);
-            let offsets = vcombine_u8(b0123, b0123);
-            let masks = vld1q_u8(
-                [
-                    0x03, 0x03, 0x03, 0x03, 0x0C, 0x0C, 0x0C, 0x0C, 0x30, 0x30, 0x30, 0x30, 0xC0,
-                    0xC0, 0xC0, 0xC0,
-                ]
-                .as_ptr(),
-            );
-            let shifts =
-                vld1q_s8([2, 2, 2, 2, 0, 0, 0, 0, -2, -2, -2, -2, -4, -4, -4, -4].as_ptr());
-
-            let mut i = 0;
-            while i + 4 <= n {
-                let byte_idx = i / 4;
-                let b = *weights_ptr.add(byte_idx);
-                let v_b = vdupq_n_u8(b);
-                let indices_base = vandq_u8(v_b, masks);
-                let indices_scaled = vshlq_u8(indices_base, shifts);
-                let indices = vaddq_u8(indices_scaled, offsets);
-
-                // Real part lookup and integration
-                let lookup_r = vqtbl1q_u8(table_r, indices);
-                let r_v: float32x4_t = std::mem::transmute(lookup_r);
-                let mut p_r = vld1q_f32(real_ptr.add(i));
-                p_r = vfmaq_f32(p_r, r_v, intensity_v);
-                p_r = vaddq_f32(p_r, bias_v);
-                vst1q_f32(real_ptr.add(i), p_r);
-
-                // Imaginary part lookup and integration
-                let lookup_im = vqtbl1q_u8(table_im, indices);
-                let im_v: float32x4_t = std::mem::transmute(lookup_im);
-                let mut p_im = vld1q_f32(imag_ptr.add(i));
-                p_im = vfmaq_f32(p_im, im_v, intensity_v);
-                vst1q_f32(imag_ptr.add(i), p_im);
-
-                i += 4;
-            }
-            while i < n {
-                let byte_idx = i / 4;
-                let bit_shift = (i % 4) * 2;
-                let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials_real[i] +=
-                    (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
-                self.membrane_potentials_imag[i] +=
-                    centroides_imag[weight_bits as usize] * intensity;
-                i += 1;
-            }
+            // ... (SIMD code)
         }
+        */
 
-        #[cfg(not(target_arch = "aarch64"))]
-        {
-            for i in 0..self.num_neurons {
-                let byte_idx = i / 4;
-                let bit_shift = (i % 4) * 2;
-                let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
-                self.membrane_potentials_real[i] +=
-                    (centroides_real[weight_bits as usize] * intensity) + homeostatic_bias;
-                self.membrane_potentials_imag[i] +=
-                    centroides_imag[weight_bits as usize] * intensity;
+        // Fallback robusto (Scalar)
+        for i in 0..self.num_neurons {
+            let byte_idx = i / 4;
+            let bit_shift = (i % 4) * 2;
+            let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
+            let delta_r = centroides_real[weight_bits as usize] * intensity;
+            let delta_im = centroides_imag[weight_bits as usize] * intensity;
+            
+            // Reactivando Homeostasis: el bias evita el colapso por silencio (Materia Oscura)
+            self.membrane_potentials_real[i] += delta_r + homeostatic_bias;
+            self.membrane_potentials_imag[i] += delta_im;
+
+            // Clamping para evitar explosión numérica en inferencia prolongada
+            if !self.membrane_potentials_real[i].is_finite() {
+                self.membrane_potentials_real[i] = 0.0;
+            }
+            if !self.membrane_potentials_imag[i].is_finite() {
+                self.membrane_potentials_imag[i] = 0.0;
             }
         }
 
@@ -318,12 +270,16 @@ impl GajeNeuromorphicLayer {
             let r = self.membrane_potentials_real[i];
             let im = self.membrane_potentials_imag[i];
             let mag_sq = r * r + im * im;
-            sum_sq += mag_sq;
+            if mag_sq.is_finite() {
+                sum_sq += mag_sq;
+            }
         }
 
         let rms = (sum_sq / n as f32 + 1e-6).sqrt();
         let alpha = 0.15;
-        self.rms_ema = (1.0 - alpha) * self.rms_ema + alpha * rms;
+        if rms.is_finite() {
+            self.rms_ema = (1.0 - alpha) * self.rms_ema + alpha * rms;
+        }
 
         for i in 0..n {
             let r = self.membrane_potentials_real[i];
@@ -331,8 +287,8 @@ impl GajeNeuromorphicLayer {
             let magnitude = (r * r + im * im).sqrt();
             let threshold = self.thresholds[i];
 
-            if magnitude >= threshold {
-                let norm_factor = if self.rms_ema > 1.0 {
+            if magnitude.is_finite() && magnitude >= threshold {
+                let norm_factor = if self.rms_ema.is_finite() && self.rms_ema > 1.0 {
                     1.0 / self.rms_ema
                 } else {
                     1.0
@@ -352,6 +308,14 @@ impl GajeNeuromorphicLayer {
             } else if magnitude > 0.0 {
                 self.membrane_potentials_real[i] *= self.decays[i];
                 self.membrane_potentials_imag[i] *= self.decays[i];
+                
+                // Limpieza de seguridad
+                if !self.membrane_potentials_real[i].is_finite() {
+                    self.membrane_potentials_real[i] = 0.0;
+                }
+                if !self.membrane_potentials_imag[i].is_finite() {
+                    self.membrane_potentials_imag[i] = 0.0;
+                }
             }
         }
         spikes

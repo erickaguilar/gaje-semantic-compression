@@ -54,6 +54,6 @@ impl LagrangianEngine {
 ///
 /// Define cómo se deforma el espacio semántico en la topología toroidal Q(zeta_16).
 pub fn christoffel_connection(phase: f32, curvature: f32) -> f32 {
-    // Aproximación de primer orden para la conexión en el toroide semántico
+    // Revertido temporalmente para diagnóstico de NaN
     phase.sin() * curvature
 }

@@ -33,7 +33,39 @@ use crate::pyo3_shim::{
     PyObject, PyResult, Python,
 };
 
-// --- Lógica Interna Pura (Rust) ---
+// --- Look-Up Tables para Optimización ARM ---
+lazy_static::lazy_static! {
+    static ref SIN_LUT: [f32; 256] = {
+        let mut lut = [0.0f32; 256];
+        for i in 0..256 {
+            let angle = (i as f32 / 256.0) * 2.0 * std::f32::consts::PI;
+            lut[i] = angle.sin();
+        }
+        lut
+    };
+    static ref COS_LUT: [f32; 256] = {
+        let mut lut = [0.0f32; 256];
+        for i in 0..256 {
+            let angle = (i as f32 / 256.0) * 2.0 * std::f32::consts::PI;
+            lut[i] = angle.cos();
+        }
+        lut
+    };
+}
+
+/// Obtiene el seno rápido desde la LUT
+pub fn fast_sin(phase: f32) -> f32 {
+    let normalized = (phase / (2.0 * std::f32::consts::PI)).rem_euclid(1.0);
+    let idx = (normalized * 255.0) as usize;
+    SIN_LUT[idx]
+}
+
+/// Obtiene el coseno rápido desde la LUT
+pub fn fast_cos(phase: f32) -> f32 {
+    let normalized = (phase / (2.0 * std::f32::consts::PI)).rem_euclid(1.0);
+    let idx = (normalized * 255.0) as usize;
+    COS_LUT[idx]
+}
 
 pub fn genomize_f32_core(
     f32_data: &[f32],
