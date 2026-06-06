@@ -114,6 +114,12 @@ impl RustGenomicBlock {
             .q_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;
         if q.iter().any(|v| v.is_nan()) { return Err("NaN in q".into()); }
+        
+        let q_sum: f32 = q.iter().map(|v| v.abs()).sum();
+        if pos == 0 {
+             println!("[Debug Block {}] q_abs_sum: {:.4}", self.idx, q_sum);
+        }
+
         let k = self
             .k_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;

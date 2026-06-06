@@ -624,14 +624,23 @@ fn generate(
     let mut logits = Vec::new();
     for &tid in &tokens {
         logits = model
-            .forward_phase_gaje_core(tid as usize, 64)
+            .forward_core(tid as usize, false)
             .map_err(|e| e.to_string())?;
     }
 
-    println!("\n[*] Generando con MCTS-Light (1-step look-ahead)...");
+    println!("\n[*] Generando con Greedy Decoding (Standard Forward)...");
     for _ in 0..max_tokens {
-        // Usamos MCTS-Light con Top-5 candidatos para equilibrio entre calidad y velocidad
-        let next_token = sample_logits_mcts(model, &logits, 0.4, 5);
+        let mut indexed_logits: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
+        indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        println!("[Debug] Top-5 candidates:");
+        for k in 0..5 {
+            let (tid, score) = indexed_logits[k];
+            let word = tokenizer.decode(&[tid as u32], true).unwrap_or("???".to_string());
+            println!("   {}. [{:>5}] {:<15} score: {:.4}", k+1, tid, word, score);
+        }
+
+        let next_token = indexed_logits[0].0;
 
         if next_token == 0 || next_token == 151643 {
             break;
@@ -643,7 +652,7 @@ fn generate(
         io::stdout().flush()?;
 
         logits = model
-            .forward_phase_gaje_core(next_token, 64)
+            .forward_core(next_token, false)
             .map_err(|e| e.to_string())?;
     }
     println!();
