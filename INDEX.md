@@ -18,6 +18,7 @@ La carpeta `docs` ha sido consolidada para reflejar la realidad técnica de 2026
 *   **[USER_GUIDE.md](docs/guides/USER_GUIDE.md)**: Manual de usuario para interacción con el ecosistema.
 
 ### 📋 Planes y Roadmap (`docs/plans/`)
+*   **[NEXT_STEPS_2026.md](docs/plans/NEXT_STEPS_2026.md)**: **PLAN DE CHOQUE.** Hoja de ruta inmediata para la Operación Rescate (L1 y L2).
 *   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
 *   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Plan activo de sincronización documental.
 *   **[ISLAND_MODEL_IMPLEMENTATION.md](docs/plans/ISLAND_MODEL_IMPLEMENTATION.md)**: (Fase 4 - Aspiracional) Paralelismo evolutivo en ARM.
