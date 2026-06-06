@@ -272,8 +272,16 @@ impl GGUFLoader {
         anchor_threshold: f32,
     ) -> std::io::Result<GenomicLLM> {
         let block_size = 32;
+
+        // Detectar si los pesos de entrada y salida están unidos (Tied Weights)
+        let has_output_weight = self.reader.tensors.contains_key("output.weight");
+        
+        // Si están unidos, aplicamos el threshold de anclas también a la entrada para mantener simetría
+        let embd_threshold = if has_output_weight { -1.0 } else { anchor_threshold };
+
         let embd_dna =
-            self.genomize_tensor("token_embd.weight", block_size, -1.0, false, 0, 0, None)?;
+            self.genomize_tensor("token_embd.weight", block_size, embd_threshold, false, 0, 0, None)?;
+
         let mut blocks = Vec::new();
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
@@ -385,14 +393,15 @@ impl GGUFLoader {
             ));
         }
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
-        let lm_head_name = if self.reader.tensors.contains_key("output.weight") {
-            "output.weight"
+        
+        let lm_head = if has_output_weight {
+            let lm_head_bias = self.load_f32_tensor_optional("output.bias");
+            self.genomize_tensor("output.weight", block_size, anchor_threshold, false, 0, 0, lm_head_bias)?
         } else {
-            "token_embd.weight"
+            // Tied Weights: La salida es una copia exacta de la entrada
+            embd_dna.clone()
         };
-        let lm_head_bias = self.load_f32_tensor_optional("output.bias");
-        let lm_head =
-            self.genomize_tensor(lm_head_name, block_size, anchor_threshold, false, 0, 0, lm_head_bias)?;
+
         Ok(GenomicLLM {
             embeddings: embd_dna,
             blocks,
