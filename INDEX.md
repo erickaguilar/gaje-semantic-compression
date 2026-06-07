@@ -8,6 +8,7 @@ Este documento sirve como mapa central del repositorio tras la consolidación de
 La carpeta `docs` ha sido consolidada para reflejar la realidad técnica de 2026.
 
 ### ⚖️ Auditoría de Verdad y Estado Real
+*   **[CONSTITUTION_OF_BIRTH.md](docs/meta/CONSTITUTION_OF_BIRTH.md)**: **LEY FUNDAMENTAL.** Principios éticos y técnicos que rigen el nacimiento de los organismos.
 *   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Mapa de la realidad que contrasta el código con resultados empíricos (PPL ~572).
 *   **[FINDINGS_AND_DIAGNOSTICS_2026.md](docs/meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de los éxitos (Rust engine) y fracasos (importación directa) de la sesión.
 *   **[TECHNICAL_BIRTH_AND_REALITY.md](docs/meta/TECHNICAL_BIRTH_AND_REALITY.md)**: Resumen del proceso de transmutación toroidal y el abismo semántico actual.
