@@ -7,9 +7,10 @@ Este documento sirve como mapa central del repositorio tras la consolidación de
 ## 📂 1. Documentación Estratégica (`docs/`)
 La carpeta `docs` ha sido consolidada para reflejar la realidad técnica de 2026.
 
-### ⚖️ Auditoría de Verdad y Estado Real
+### ⚖️ Auditoría de Verdad y Gobernanza
 *   **[CONSTITUTION_OF_BIRTH.md](docs/meta/CONSTITUTION_OF_BIRTH.md)**: **LEY FUNDAMENTAL.** Principios éticos y técnicos que rigen el nacimiento de los organismos.
-*   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Mapa de la realidad que contrasta el código con resultados empíricos (PPL ~572).
+*   **[RESPONSIBLE_POLICY_AND_GOVERNANCE.md](docs/meta/RESPONSIBLE_POLICY_AND_GOVERNANCE.md)**: **POLÍTICA DE RESPONSABILIDAD.** Posicionamiento de IA Constitucional Local frente a la industria.
+*   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Mapa de la realidad que contrasta el código con resultados empíricos.
 *   **[FINDINGS_AND_DIAGNOSTICS_2026.md](docs/meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de los éxitos (Rust engine) y fracasos (importación directa) de la sesión.
 *   **[TECHNICAL_BIRTH_AND_REALITY.md](docs/meta/TECHNICAL_BIRTH_AND_REALITY.md)**: Resumen del proceso de transmutación toroidal y el abismo semántico actual.
 *   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Diagrama de flujo del ciclo de vida y Gates de Certificación.
