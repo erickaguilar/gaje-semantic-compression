@@ -628,19 +628,34 @@ fn generate(
             .map_err(|e| e.to_string())?;
     }
 
-    println!("\n[*] Generando con Greedy Decoding (Standard Forward)...");
+    let mut generated_history = Vec::new();
+    let penalty = 1.5f32; // Penalización fuerte para romper bucles en Android
+
+    println!("\n[*] Generando con Repetition Penalty (Anti-Loop)...");
     for _ in 0..max_tokens {
+        // 1. Aplicar penalización a los logits basados en la historia
+        for &past_token in &generated_history {
+            if logits[past_token] > 0.0 {
+                logits[past_token] /= penalty;
+            } else {
+                logits[past_token] *= penalty;
+            }
+        }
+
         let mut indexed_logits: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
         indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         
+        /*
         println!("[Debug] Top-5 candidates:");
         for k in 0..5 {
             let (tid, score) = indexed_logits[k];
             let word = tokenizer.decode(&[tid as u32], true).unwrap_or("???".to_string());
             println!("   {}. [{:>5}] {:<15} score: {:.4}", k+1, tid, word, score);
         }
+        */
 
         let next_token = indexed_logits[0].0;
+        generated_history.push(next_token);
 
         if next_token == 0 || next_token == 151643 {
             break;

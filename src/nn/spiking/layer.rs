@@ -229,7 +229,7 @@ impl GajeNeuromorphicLayer {
         let start_byte = input_index * row_size;
 
         // Aceleración geodésica frena el avance si hay resistencia
-        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance);
+        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance, false);
 
         for i in 0..self.num_neurons {
             let byte_idx = i / 4;

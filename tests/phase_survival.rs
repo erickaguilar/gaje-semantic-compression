@@ -15,7 +15,7 @@ mod tests {
         let mut model = match loader_res {
             Ok(loader) => {
                 match loader.load_llm() {
-                    Ok(m) => {
+                    Ok(mut m) => {
                         println!("✅ Modelo Silver Adult cargado para la prueba.");
                         // Auditoría de pesos
                         let mut weight_nan = false;

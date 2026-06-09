@@ -370,7 +370,10 @@ impl GenomicLinear {
         }
         let n_blocks = self.in_features / self.block_size;
 
-        // 1. Refinar Centroides
+        // Instanciamos el motor físico para el Gradiente Natural Proximal
+        let engine = crate::compute::lagrangian::LagrangianEngine::new(1.0);
+
+        // 1. Refinar Centroides (Espacio Genomic 2-bit)
         self.centroids
             .par_chunks_mut(n_blocks * 4)
             .enumerate()
@@ -378,8 +381,8 @@ impl GenomicLinear {
                 if i >= grads.len() {
                     return;
                 }
-                let grad_scale = grads[i] * lr;
-                if grad_scale.abs() > 1e-12 {
+                let row_grad = grads[i];
+                if row_grad.abs() > 1e-12 {
                     let row_off = i * n_blocks * self.stride;
                     for j in 0..n_blocks {
                         let weights = &self.database
@@ -397,8 +400,15 @@ impl GenomicLinear {
                                     _ => 4,
                                 };
                                 if c_idx < 4 {
-                                    row_centroids[j * 4 + c_idx] -=
-                                        grad_scale * input_block[k * 4 + s];
+                                    let x = input_block[k * 4 + s];
+                                    let grad_w = row_grad * x;
+                                    
+                                    // Estimación Lazy de Fisher: M ≈ (grad_w)^2
+                                    // Aplicamos el paso PNG: delta = lr * M^-1 * grad_w
+                                    let fisher_est = grad_w.powi(2);
+                                    let step = engine.calculate_step(grad_w, fisher_est, false, lr);
+                                    
+                                    row_centroids[j * 4 + c_idx] -= step;
                                 }
                             }
                         }
@@ -406,15 +416,15 @@ impl GenomicLinear {
                 }
             });
 
-        // 2. Refinar Anclas (F16) - Esto rompe la rigidez semántica
+        // 2. Refinar Anclas (F16) - Métrica Heterogénea (Stiffening)
         if !self.anchor_values.is_empty() {
             let anchor_values_mut = Arc::make_mut(&mut self.anchor_values);
             for i in 0..self.out_features {
                 if i >= grads.len() {
                     break;
                 }
-                let grad_scale = grads[i] * lr;
-                if grad_scale.abs() < 1e-12 {
+                let row_grad = grads[i];
+                if row_grad.abs() < 1e-12 {
                     continue;
                 }
 
@@ -424,13 +434,17 @@ impl GenomicLinear {
                     let idx = self.anchor_indices[k] as usize;
                     if idx < input.len() {
                         let current_val = anchor_values_mut[k].to_f32();
-                        let delta = grad_scale * input[idx];
-                        let mut new_val = current_val - delta;
+                        let x = input[idx];
+                        let grad_w = row_grad * x;
 
-                        // SIMULACIÓN F8: Reducimos la inercia mediante cuantización virtual de precisión
-                        // Forzamos que los cambios tengan que ser lo suficientemente grandes
-                        // para 'saltar' en una escala de 8 bits (E4M3 aprox)
-                        let f8_step = 0.01; // Paso mínimo de plasticidad
+                        // Estimación Lazy de Fisher con Stiffening Conforme (gamma)
+                        let fisher_est = grad_w.powi(2);
+                        let step = engine.calculate_step(grad_w, fisher_est, true, lr);
+                        
+                        let mut new_val = current_val - step;
+
+                        // SIMULACIÓN F8: Reducimos la inercia mediante cuantización virtual
+                        let f8_step = 0.005; // Mayor precisión que antes (era 0.01)
                         new_val = (new_val / f8_step).round() * f8_step;
 
                         anchor_values_mut[k] = f16::from_f32(new_val);

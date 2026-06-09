@@ -42,29 +42,29 @@ impl SintergicSampler {
 
         let n_tokens = logits.len();
 
-        // 1. Transformar Logits en "Tiempo de Arribo" (Moneda Dimensional)
-        // Cuanto más alto el logit, más cerca de la "Latencia Cero" (Inmovilidad/Luz).
+        // 1. Transformar Logits en "Tiempo de Arribo" vía Motor Lagrangiano
+        // Cuanto más alto el logit, menor es la Energía Potencial (Resistencia).
         let mut temporal_arrivals = Vec::with_capacity(n_tokens);
         let max_logit = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
 
         for (i, &energy) in logits.iter().enumerate() {
-            // Aplicamos una transformación exponencial para acentuar los picos de sintergia
-            let logit_norm = (energy - max_logit) / temperature.max(1e-6);
-            let resonance = logit_norm.exp();
-
-            // Latencia: Inversa de la resonancia (Luz = 0.0, Caos = 1.0)
-            let latency = 1.0 / (1.0 + resonance);
+            // Energía Potencial: V = max_logit - logit_actual (Resistencia semántica)
+            let potential = (max_logit - energy) / temperature.max(1e-6);
+            
+            // Usamos el Motor Lagrangiano para calcular el retraso geodésico
+            let latency = self.engine.calculate_timing_delay(potential);
+            
+            // Resonancia: Inversa de la energía potencial para el muestreo final
+            let resonance = (-potential).exp();
+            
             temporal_arrivals.push((i, latency, resonance));
         }
 
-        // 2. Colapso Sintergico (K-WTA por Latencia)
-        // Solo permitimos que los impulsos que están en sintonía con las Anclas (F16) pasen.
-        // Los impulsos que experimentan "tiempo" (latencia > threshold) son aniquilados.
-
-        // Ordenamos por latencia (los más rápidos primero)
+        // 2. Colapso Sintergico (K-WTA por Latencia Geodésica)
+        // Ordenamos por latencia (los más rápidos/coherentes primero)
         temporal_arrivals.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
 
-        // Filtrado K-WTA Dinámico: Tomamos solo los que están cerca del "Presente Puro"
+        // Filtrado K-WTA Dinámico
         let min_latency = temporal_arrivals[0].1;
         let survival_threshold = min_latency + (self.sintergy_threshold * k_wta_factor);
 

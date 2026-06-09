@@ -93,7 +93,7 @@ impl SpikingNeuron {
 
         // El Lagrangiano ajusta la integración: si la resistencia es alta,
         // la aceleración geodésica frena el avance.
-        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance);
+        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance, false);
         let velocity_adjusted = (velocity + acceleration).max(0.0);
 
         // Escalamos el delta por la velocidad ajustada
