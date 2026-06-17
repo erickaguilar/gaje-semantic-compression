@@ -2,7 +2,6 @@ use _impl::compute::kernels;
 use _impl::core::tokenizer::GajeTokenizer;
 use _impl::io::loader::NativeLoader;
 use _impl::nn::llm::GenomicLLM;
-use rand::distributions::{Distribution, WeightedIndex};
 use std::env;
 use std::io::{self, Write};
 use std::path::Path;
@@ -39,6 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut output_path: Option<String> = None;
     let mut init_preset = "default".to_string();
     let mut tokenize_text: Option<String> = None;
+    let mut eval_corpus: Option<String> = None;
     let mut inspect_model = false;
     let mut dni_path: Option<String> = None;
     let mut dni_intensity = 0.01;
@@ -57,6 +57,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             i += 1;
         } else if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i + 1].clone();
+            i += 2;
+        } else if args[i] == "--eval" && i + 1 < args.len() {
+            eval_corpus = Some(args[i + 1].clone());
             i += 2;
         } else if (args[i] == "--file" || args[i] == "--dni-ingest") && i + 1 < args.len() {
             dni_path = Some(args[i + 1].clone());
@@ -528,6 +531,85 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[+] Proceso completado exitosamente.");
     }
 
+    if let Some(corpus_path) = eval_corpus {
+        println!("[*] Evaluando perplejidad nativa sobre: {}", corpus_path);
+        let text = std::fs::read_to_string(&corpus_path)
+            .map_err(|e| format!("No se pudo leer el corpus: {}", e))?;
+
+        let lines: Vec<&str> = text
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| l.len() > 5)
+            .collect();
+
+        if lines.is_empty() {
+            return Err("Corpus vacío o sin líneas válidas".into());
+        }
+
+        let mut total_log_prob = 0.0f32;
+        let mut total_tokens = 0usize;
+        let mut skipped = 0usize;
+
+        for (idx, line) in lines.iter().enumerate() {
+            let tokens = match tokenizer.encode(line, false) {
+                Ok(t) if t.len() >= 2 => t,
+                _ => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            model.clear_cache_core();
+            let mut line_log_prob = 0.0f32;
+
+            for i in 0..tokens.len() - 1 {
+                let logits = model
+                    .forward_core(tokens[i] as usize, false)
+                    .map_err(|e| format!("Error en forward pass línea {}: {}", idx, e))?;
+
+                let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                let sum_exp: f32 = logits.iter().map(|&l| (l - max_l).exp()).sum();
+                let prob = (logits[tokens[i + 1] as usize] - max_l).exp() / (sum_exp + 1e-12);
+                line_log_prob += (prob + 1e-12).ln();
+            }
+
+            total_log_prob += line_log_prob;
+            total_tokens += tokens.len() - 1;
+
+            if idx % 50 == 0 {
+                let ppl_parcial = (-(total_log_prob / total_tokens as f32)).exp();
+                println!(
+                    "  [Línea {:>4}/{}] PPL parcial: {:.4}",
+                    idx + 1,
+                    lines.len(),
+                    ppl_parcial
+                );
+            }
+        }
+
+        if total_tokens == 0 {
+            return Err("No se procesaron tokens válidos".into());
+        }
+
+        let ppl = (-(total_log_prob / total_tokens as f32)).exp();
+
+        println!("\n╔══════════════════════════════════════╗");
+        println!("║  RESULTADO — EVALUACIÓN NATIVA       ║");
+        println!("╠══════════════════════════════════════╣");
+        println!("║  Modelo  : {}", corpus_path);
+        println!(
+            "║  Líneas  : {} procesadas, {} omitidas",
+            lines.len() - skipped,
+            skipped
+        );
+        println!("║  Tokens  : {}", total_tokens);
+        println!("║  PPL     : {:.4}", ppl);
+        println!("║  Log-P   : {:.4}", total_log_prob);
+        println!("╚══════════════════════════════════════╝");
+
+        return Ok(());
+    }
+
     if let Some(prompt) = prompt_arg {
         generate(&mut model, &tokenizer, &prompt, 50)?;
     } else if evolve_target.is_none() && train_target.is_none() {
@@ -535,82 +617,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     Ok(())
-}
-
-fn sample_logits_mcts(
-    model: &mut GenomicLLM,
-    logits: &[f32],
-    temperature: f32,
-    top_k: usize,
-) -> usize {
-    // 1. Seleccionar Top-K candidatos iniciales
-    let mut indexed_logits: Vec<(usize, f32)> =
-        logits.iter().enumerate().map(|(i, &l)| (i, l)).collect();
-    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    if top_k > 0 && top_k < indexed_logits.len() {
-        indexed_logits.truncate(top_k);
-    }
-
-    // 2. Simulación Flash (1-step look-ahead) para cada candidato
-    let mut final_candidates = Vec::new();
-    for (token_id, current_score) in indexed_logits {
-        // Guardar estado del cache
-        let mut cache_sizes = Vec::new();
-        for block in &model.blocks {
-            cache_sizes.push(block.attn.k_cache.len());
-        }
-
-        // Simular siguiente paso: ¿Qué tan "estable" es el futuro si elijo este token?
-        let lookahead_resonance =
-            if let Ok(next_logits) = model.forward_phase_gaje_core(token_id, 64) {
-                // Tomamos el valor máximo de la siguiente activación como medida de resonancia
-                next_logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-            } else {
-                -50.0 // Penalización si falla
-            };
-
-        // Restaurar cache (Crucial para no ensuciar la generación real)
-        for (i, block) in model.blocks.iter_mut().enumerate() {
-            block.attn.k_cache.truncate(cache_sizes[i]);
-            block.attn.v_cache.truncate(cache_sizes[i]);
-        }
-
-        // Score combinado: Score actual + Resonancia futura (0.5 es el factor de "visión de futuro")
-        let total_score = current_score + 0.5 * lookahead_resonance;
-        final_candidates.push((token_id, total_score));
-    }
-
-    // 3. Muestreo Probabilístico (Softmax) sobre los candidatos evaluados por MCTS
-    if temperature <= 0.0 {
-        return final_candidates
-            .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| *i)
-            .unwrap_or(0);
-    }
-
-    let max_score = final_candidates
-        .iter()
-        .map(|&(_, s)| s)
-        .fold(f32::NEG_INFINITY, f32::max);
-    let mut probs: Vec<(usize, f32)> = final_candidates
-        .iter()
-        .map(|&(i, s)| (i, ((s - max_score) / temperature).exp()))
-        .collect();
-    let sum: f32 = probs.iter().map(|&(_, p)| p).sum();
-
-    let mut rng = rand::thread_rng();
-    if sum > 0.0 {
-        for item in &mut probs {
-            item.1 /= sum;
-        }
-        let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
-        if let Ok(dist) = WeightedIndex::new(&weights) {
-            return probs[dist.sample(&mut rng)].0;
-        }
-    }
-
-    final_candidates[0].0
 }
 
 fn generate(

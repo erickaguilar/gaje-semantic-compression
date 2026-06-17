@@ -36,7 +36,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         rope_base=10000.0,
         has_bias=False,
         rope_style="split",
-        unpermute_weights=True,
+        unpermute_weights=False,
     ),
     "qwen2": ArchitectureConfig(
         name="qwen2",
@@ -45,7 +45,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         rope_base=1000000.0,  # Qwen2 usually uses 1M
         has_bias=True,
         rope_style="split",
-        unpermute_weights=True,
+        unpermute_weights=False,
         default_centroids={
             "blk.0.ffn_down.weight": [-0.0267, -0.0078, 0.0075, 0.0264],
             "blk.0.ffn_gate.weight": [-0.0364, -0.0132, 0.006, 0.0294],
@@ -64,7 +64,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         rope_base=10000.0,
         has_bias=False,
         rope_style="split",
-        unpermute_weights=True,
+        unpermute_weights=False,
         apply_smollm_rope_patch=True,
     ),
     "gaje_native": ArchitectureConfig(

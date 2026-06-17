@@ -17,7 +17,10 @@ def run_phase_3_1(gaje_path, context_lengths=[512, 1024, 2048]):
     
     # 1. Cargar GAJE
     print("[~] Cargando modelo GAJE...")
-    gaje_model = GenomicLLM.load_genomic(gaje_path)
+    if gaje_path.endswith(".gaje"):
+        gaje_model = GenomicLLM.load_genomic(gaje_path)
+    else:
+        gaje_model = GenomicLLM(gaje_path)
     tokenizer = gaje_model.tokenizer
     
     needle = "El código secreto de la misión es GAJE-2026."

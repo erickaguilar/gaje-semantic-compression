@@ -382,7 +382,7 @@ impl GenomicLLM {
         Ok(())
     }
 
-    pub fn recalibrate_all_centroids(&mut self, shift: f32) -> PyResult<()> {
+    pub fn recalibrate_all_centroids(&mut self, _shift: f32) -> PyResult<()> {
         // ...
         Ok(())
     }

@@ -14,6 +14,7 @@ use std::arch::aarch64::*;
 use std::arch::x86_64::*;
 
 use rayon::prelude::*;
+use crate::compute::kv_cache::CompressedKVCache;
 
 // =============================================================================
 // dot_product — Producto punto vectorizado universal
@@ -104,6 +105,48 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 #[inline(always)]
 pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     dot_product(a, b)
+}
+
+/// # Safety
+/// Esta función es unsafe porque realiza acceso directo a memoria mediante punteros
+/// y de-cuantización manual de bits. El llamador debe asegurar que:
+/// 1. `query.len() == len`.
+/// 2. `start_idx + len` no exceda la capacidad del cache.
+pub unsafe fn dot_product_compressed(
+    query: &[f32],
+    cache: &CompressedKVCache,
+    start_idx: usize,
+    len: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+    
+    // Optimizamos procesando por bloques de 48 (alineados con el cache)
+    let mut i = 0;
+    while i < len {
+        let global_idx = start_idx + i;
+        let block_idx = global_idx / 48;
+        let sub_idx = global_idx % 48;
+        
+        let block = &cache.blocks[block_idx];
+        let scale = block.scale;
+        
+        // Procesamos lo que queda del bloque actual o hasta el final de len
+        let remaining_in_block = 48 - sub_idx;
+        let batch_len = remaining_in_block.min(len - i);
+        
+        for j in 0..batch_len {
+            let current_sub_idx = sub_idx + j;
+            let byte_idx = current_sub_idx / 4;
+            let bit_shift = (3 - (current_sub_idx % 4)) * 2;
+            let quantized = (block.data[byte_idx] >> bit_shift) & 0b11;
+            
+            sum += query[i + j] * (quantized as f32) * scale;
+        }
+        
+        i += batch_len;
+    }
+    
+    sum
 }
 
 // =============================================================================
@@ -442,6 +485,44 @@ pub unsafe fn genomic_dot_product_scalar(
     // Frenado Lagrangiano: El rozamiento semántico aniquila el ruido residual (Entropía)
     // Esto asegura que el eco toroidal sea puro en ciclos infinitos.
     if sum.abs() < 1e-5 {
+        sum = 0.0;
+    }
+
+    sum
+}
+
+/// # Safety
+/// Implementación de 4 bits (2 pesos por byte). Soporta 16 centroides por bloque.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_4bit(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride_4bit: usize, // stride_4bit = block_size / 2
+    n_blocks: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block_size = stride_4bit * 2;
+        let input_block_ptr = input.as_ptr().add(j * block_size);
+        let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
+        let centroids_ptr = centroids.as_ptr().add(j * 16);
+
+        for k in 0..stride_4bit {
+            let byte = *weights_block_ptr.add(k);
+            
+            // Peso 1 (High nibble)
+            let c_idx1 = (byte >> 4) as usize;
+            sum += *centroids_ptr.add(c_idx1) * *input_block_ptr.add(k * 2);
+
+            // Peso 2 (Low nibble)
+            let c_idx2 = (byte & 0x0F) as usize;
+            sum += *centroids_ptr.add(c_idx2) * *input_block_ptr.add(k * 2 + 1);
+        }
+    }
+
+    if sum.abs() < 1e-6 {
         sum = 0.0;
     }
 

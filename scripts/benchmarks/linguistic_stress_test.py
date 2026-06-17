@@ -68,4 +68,7 @@ def run_stress_test(model_path):
         print("🟢 ESTABILIDAD RELATIVA: El modelo mantiene la proporción.")
 
 if __name__ == "__main__":
-    run_stress_test("models/production/silver_adult_sovereign.gaje")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="models/production/smollm2_mixed_v1.gaje")
+    args = parser.parse_args()
+    run_stress_test(args.model)

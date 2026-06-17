@@ -1,5 +1,6 @@
 use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::distiller::CouncilOfTeachers;
+use crate::nn::linear::GenomicOperable;
 /// 🧬 DNIEngine: Motor de Ingestión Neuronal Directa para GAJE-Flow
 /// Permite la inyección granular de conocimiento en los pesos de 2 bits
 /// mediante evolución dirigida ultrarrápida.
@@ -261,9 +262,9 @@ impl DNIEngine {
     fn calculate_dna_hash(model: &GenomicLLM) -> Vec<u64> {
         let mut hashes = Vec::new();
         for block in &model.blocks {
-            hashes.push(block.gate_gen.database.iter().map(|&b| b as u64).sum());
-            hashes.push(block.up_gen.database.iter().map(|&b| b as u64).sum());
-            hashes.push(block.w_down.database.iter().map(|&b| b as u64).sum());
+            hashes.push(block.gate_gen.database_ref().iter().map(|&b| b as u64).sum());
+            hashes.push(block.up_gen.database_ref().iter().map(|&b| b as u64).sum());
+            hashes.push(block.w_down.database_ref().iter().map(|&b| b as u64).sum());
         }
         hashes
     }
@@ -336,7 +337,7 @@ impl DNIEngine {
             let layers = [&mut block.gate_gen, &mut block.up_gen, &mut block.w_down];
             for layer in layers {
                 // Cálculo de entropía local para ajustar sigma dinámicamente
-                let h = crate::compute::math::calculate_genomic_entropy_core(&layer.database);
+                let h = crate::compute::math::calculate_genomic_entropy_core(layer.database_ref());
                 let local_sigma = sigma * (1.0 + h);
 
                 // Optimizacion 1: Usar Vec ordenado en lugar de HashSet para búsqueda binaria
@@ -347,10 +348,10 @@ impl DNIEngine {
                     .collect();
                 sorted_anchors.sort_unstable();
 
-                let mut db = (*layer.database).clone();
-                let mut changed = false;
                 let n_neurons = layer.out_features;
-                let row_len_bytes = layer.database.len() / n_neurons;
+                let row_len_bytes = layer.weight_db.len_bytes() / n_neurons;
+                let bit_depth = layer.weight_db.bit_depth();
+                let params_per_byte = 8 / bit_depth;
 
                 for row in 0..n_neurons {
                     let mut row_rate = rate;
@@ -372,14 +373,10 @@ impl DNIEngine {
                     let row_start = row * row_len_bytes;
                     for byte_idx in 0..row_len_bytes {
                         let global_byte_idx = row_start + byte_idx;
-                        let mut byte = db[global_byte_idx];
-                        let mut byte_changed = false;
 
-                        for s in 0..4 {
-                            // Optimizacion 3: Comprobación temprana de probabilidad de mutación
-                            // Solo calculamos fuzzy membership si el RNG pasa el filtro base
+                        for s in 0..params_per_byte as usize {
                             if rng.gen::<f32>() < row_rate {
-                                let input_idx = byte_idx * 4 + s;
+                                let input_idx = byte_idx * params_per_byte as usize + s;
                                 let global_weight_idx = row * layer.in_features + input_idx;
 
                                 let membership = Self::calculate_fuzzy_membership(
@@ -390,21 +387,17 @@ impl DNIEngine {
 
                                 // Aplicamos la penalización de membership
                                 if rng.gen::<f32>() < (1.0 - membership) {
-                                    let shift = (3 - s) * 2;
-                                    let mutation = rng.gen::<u8>() & 0b11;
-                                    byte = (byte & !(0b11 << shift)) | (mutation << shift);
-                                    byte_changed = true;
-                                    changed = true;
+                                    let current_bits = layer.weight_db.read(global_byte_idx, s);
+                                    let max_val = (1 << bit_depth) - 1;
+                                    let mutation = rng.gen::<u8>() % (max_val + 1);
+                                    
+                                    if mutation != current_bits {
+                                        layer.weight_db.mutate(global_byte_idx, s, mutation);
+                                    }
                                 }
                             }
                         }
-                        if byte_changed {
-                            db[global_byte_idx] = byte;
-                        }
                     }
-                }
-                if changed {
-                    layer.database = Arc::new(db);
                 }
             }
         }
@@ -454,14 +447,15 @@ impl DNIEngine {
                 (&mut b_base.w_o, &b_mutant.w_o),
             ];
             for (l_base, l_mutant) in layers {
-                let mut db_base = (*l_base.database).clone();
-                let db_mutant = &l_mutant.database;
-                if db_base != **db_mutant {
+                let db_base_vec = l_base.database_ref().to_vec();
+                let db_mutant = l_mutant.database_ref();
+                if db_base_vec != db_mutant {
+                    let mut db_base = db_base_vec;
                     let crossover_point = rng.gen_range(0..db_base.len());
                     for j in crossover_point..db_base.len() {
                         db_base[j] = db_mutant[j];
                     }
-                    l_base.database = Arc::new(db_base);
+                    l_base.database_mut().copy_from_slice(&db_base);
                 }
             }
         }
@@ -472,22 +466,25 @@ impl DNIEngine {
         for i in 0..logic_model.blocks.len() {
             let blk_l = &mut logic_model.blocks[i];
             let blk_g = &mut grammar_model.blocks[i];
-            let db_l = (*blk_l.w_down.database).clone();
-            let mut db_g = (*blk_g.w_down.database).clone();
-            for j in (db_l.len() / 2)..db_l.len() {
-                if rng.gen::<f32>() < 0.3 {
+            
+            let db_l = blk_l.w_down.database_ref().to_vec();
+            let mut db_g = blk_g.w_down.database_ref().to_vec();
+            for j in 0..db_l.len() {
+                if rng.gen_bool(0.1) {
                     db_g[j] = db_l[j];
                 }
             }
-            blk_g.w_down.database = Arc::new(db_g);
-            let mut db_attn_l = (*blk_l.w_o.database).clone();
-            let db_attn_g = &blk_g.w_o.database;
-            for j in 0..(db_attn_l.len() / 2) {
-                if rng.gen::<f32>() < 0.3 {
+            blk_g.w_down.database_mut().copy_from_slice(&db_g);
+
+            let mut db_attn_l = blk_l.w_o.database_ref().to_vec();
+            let db_attn_g = blk_g.w_o.database_ref();
+            for j in 0..db_attn_l.len() {
+                if rng.gen_bool(0.1) {
                     db_attn_l[j] = db_attn_g[j];
                 }
             }
-            blk_l.w_o.database = Arc::new(db_attn_l);
+            blk_l.w_o.database_mut().copy_from_slice(&db_attn_l);
+
         }
     }
 }

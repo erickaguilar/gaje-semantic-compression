@@ -122,8 +122,8 @@ def run_level_1_audit(model_path, context_lengths=[4096, 16384, 32768, 65536]):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="models/production/silver_adult_steel.gaje")
+    parser.add_argument("--model", type=str, default="models/production/silver_adult_clean_v1.gaje")
     args = parser.parse_args()
     
     # Probamos longitudes crecientes para ver el límite de estabilidad
-    run_level_1_audit(args.model, context_lengths=[3])
+    run_level_1_audit(args.model, context_lengths=[4096, 16384])

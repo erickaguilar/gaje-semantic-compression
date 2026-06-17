@@ -40,9 +40,10 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False, rope_st
             
         return weights_f32.reshape(out_f, in_f)
 
-def unpermute_to_interleaved(weights, n_head, head_dim):
-    """Deshace la permutación de RoPE usada en GGUF para Llama/Qwen."""
+def unpermute_to_split(weights, n_head, head_dim):
+    """Deshace la permutación de RoPE usada en GGUF para Llama/Qwen, pasando de interleaved a split."""
     # weights: [out_features, in_features]
-    # Re-shaping for heads
+    # GGUF almacena los pesos como (n_head, head_dim // 2, 2)
+    # Nosotros queremos (n_head, 2, head_dim // 2)
     out_f, in_f = weights.shape
-    return weights.reshape(n_head, 2, head_dim // 2, in_f).transpose(0, 2, 1, 3).reshape(out_f, in_f)
+    return weights.reshape(n_head, head_dim // 2, 2, in_f).transpose(0, 2, 1, 3).reshape(out_f, in_f)

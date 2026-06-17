@@ -37,6 +37,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::compute::sampler::SintergicSampler>()?;
     m.add_class::<crate::io::loader::NativeLoader>()?;
     m.add_class::<crate::core::db::GajeDatabaseWriter>()?;
+    m.add_class::<crate::core::db::GajeBatchWriter>()?;
     m.add_class::<crate::core::db::GajeDatabaseReader>()?;
     m.add_class::<crate::io::loader::ModelConfig>()?;
     m.add_class::<crate::io::loader::ArchConfig>()?;
@@ -95,6 +96,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::compute::math::apply_repetition_penalty,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(crate::compute::math::rms_norm_py, m)?)?;
     m.add_function(wrap_pyfunction!(crate::compute::math::sample_top_p, m)?)?;
     Ok(())
 }

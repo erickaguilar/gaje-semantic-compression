@@ -14,7 +14,7 @@ use crate::pyo3_shim::*;
 
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufReader, BufWriter};
 
 /// 🧬 SessionBuffer: Memoria Intermedia Toroidal para GAJE-Flow
 /// Implementa un Ring Buffer basado en SoA (Structure of Arrays) para optimizar

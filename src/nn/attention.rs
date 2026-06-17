@@ -63,7 +63,7 @@ impl GenomicAttention {
             for h in 0..heads {
                 let h_start = h * head_dim;
                 for i in 0..(head_dim / 2) {
-                    let freq = 1.0 / rope_base.powf((2 * i) as f32 / head_dim as f32);
+                    let freq = 1.0 / (rope_base.powf((2.0 * i as f32) / head_dim as f32));
                     let theta = pos as f32 * freq;
                     let (sin, cos) = theta.sin_cos();
                     if is_split {
@@ -90,6 +90,9 @@ impl GenomicAttention {
         let attn_out: Vec<f32> = (0..n_head)
             .into_par_iter()
             .flat_map(|h| {
+                if h == 0 {
+                    println!("[ENGINE CRITICAL] h=0, pos={}, cache_len_before={}, base={}, style={}", pos, self.k_cache.len(), self.rope_base, self.rope_style);
+                }
                 let kv_h = h / n_groups;
                 let kv_h_off = kv_h * head_dim;
                 let q_slice = &q_rope[h * head_dim..(h + 1) * head_dim];
@@ -106,6 +109,9 @@ impl GenomicAttention {
                     if s > max_s {
                         max_s = s;
                     }
+                }
+                if h == 0 && pos == 0 {
+                    println!("[Debug Attn 0] max_score: {:.4}, seq_len: {}", max_s, seq_len);
                 }
                 let mut sum_e = 0.0f32;
                 for t in 0..seq_len {

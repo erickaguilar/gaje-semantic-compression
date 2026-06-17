@@ -1,6 +1,7 @@
 pub mod diagnostics;
 pub mod event_queue;
 pub mod kernels;
+pub mod kv_cache;
 pub mod lagrangian;
 pub mod math;
 pub mod mcts;

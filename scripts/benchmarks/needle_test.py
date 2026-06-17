@@ -101,6 +101,6 @@ def run_needle_test(model_path, tokenizer_path, context_lengths=[128, 256, 512, 
 
 if __name__ == "__main__":
     run_needle_test(
-        "models/checkpoints/silverfetus-distilled-cam.gaje",
+        "models/production/silver_adult_sovereign.gaje",
         "models/core/tokenizer.json"
     )

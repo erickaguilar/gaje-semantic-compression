@@ -67,8 +67,10 @@ Utilidades de soporte para el ciclo de vida genómico.
 ## 🏛️ 5. Visualización y Experiencia (`examples/`)
 Interfaces para interacción con el organismo.
 
-*   **`examples/core_demos/`**: Scripts básicos de chat y demostración de protocolos (SMG1).
+*   **`examples/ui/roadmap_2026.html`**: **DASHBOARD PRINCIPAL.** Visualización del avance del proyecto y roadmap estratégico (Silver Adult 2026).
 *   **`examples/ui/`**: Visualizaciones de topología y dinámicas neuronales.
+*   **`examples/core_demos/`**: Scripts básicos de chat y demostración de protocolos (SMG1).
+*   **`examples/ui/web_ui/`**: Interfaz web para interacción en tiempo real.
 *   **`examples/legacy_research/`**: Archivo de demos de etapas previas de investigación.
 
 ---

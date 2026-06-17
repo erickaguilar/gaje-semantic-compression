@@ -234,12 +234,19 @@ impl GGUFLoader {
             .unwrap_or(1e-6);
         let rope_base = self
             .get_metadata_f32(&format!("{}rope.freq_base", p))
+            .or_else(|| self.get_metadata_f32("llama.rope.freq_base"))
             .unwrap_or(10000.0);
         let name = self
             .get_metadata_string("general.name")
             .unwrap_or_else(|| "GGUF-Model".to_string());
         let is_smollm2 = name.to_lowercase().contains("smollm2");
-        let actual_rope_base = if is_smollm2 { 10000.0 } else { rope_base };
+        let actual_rope_base = rope_base; // Usamos el valor real del GGUF (100k)
+        let rope_style = if arch == "qwen2" || arch == "llama" {
+            "split".to_string()
+        } else {
+            "interleaved".to_string()
+        };
+
         Ok(ModelConfig {
             config: ArchConfig {
                 name,
@@ -248,11 +255,11 @@ impl GGUFLoader {
                 rope_base: actual_rope_base,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
-                rope_style: if is_smollm2 { "interleaved".to_string() } else { "split".to_string() },
+                rope_style,
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
                 rna_threshold: 0.5,
-                unpermute_weights: is_smollm2,
+                unpermute_weights: true, // Re-habilitamos unpermute para Llama
                 apply_smollm_rope_patch: is_smollm2,
                 dni: default_dni(),
                 state: "stable".to_string(),
@@ -498,8 +505,19 @@ impl GGUFLoader {
             unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
         }
 
-        let (dna, centroids, anchors_u8) =
-            crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None);
+        // Auto-detección de bit_depth para Mixed-Bit Import
+        let bit_depth = if name.contains("attn") || name.contains("q_proj") || name.contains("k_proj") || name.contains("v_proj") || name.contains("o_proj") {
+            4
+        } else {
+            2
+        };
+
+        let (dna, centroids, anchors_u8) = if bit_depth == 4 {
+            crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold)
+        } else {
+            crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None)
+        };
+
         Ok(GenomicLinear::new(
             dna,
             anchors_u8,
@@ -515,13 +533,14 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
             bias.unwrap_or_default(),
+            bit_depth,
         ))
     }
 }
 
 fn unpermute_f32(
     data: &mut [f32],
-    n_head: usize,
+    _n_head: usize,
     head_dim: usize,
     out_features: usize,
     in_features: usize,
@@ -535,9 +554,9 @@ fn unpermute_f32(
         } else {
             2 * (j - head_dim / 2) + 1
         };
-        let new_i = h * head_dim + new_j;
+        let interleaved_i = h * head_dim + new_j;
         for k in 0..in_features {
-            scratch[new_i * in_features + k] = data[i * in_features + k];
+            scratch[i * in_features + k] = data[interleaved_i * in_features + k];
         }
     }
     data.copy_from_slice(&scratch);
@@ -682,6 +701,7 @@ impl NativeLoader {
             let attn_norm = {
                 let n = Self::get_tensor_f32(&read_txn, &format!("{}attn_norm", p));
                 if n.is_empty() {
+                    eprintln!("[Loader Warning] Missing attn_norm for block {}", i);
                     vec![1.0f32; config.n_embd]
                 } else {
                     n
@@ -772,6 +792,21 @@ impl NativeLoader {
         let anchors = Self::get_tensor(txn, &format!("{}.anchors", p));
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", p));
         let mask = Self::get_tensor(txn, &format!("{}.precision_mask", p));
+        
+        // Inferencia robusta de profundidad de bits basada en el tamaño real del buffer DNA
+        let n_elements = i_f * o_f;
+        let expected_2bit = (n_elements + 3) / 4;
+        let expected_4bit = (n_elements + 1) / 2;
+        
+        let bit_depth = if dna.len() == expected_4bit {
+            4
+        } else if dna.len() == expected_2bit {
+            2
+        } else {
+             panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con 2-bit ({}) ni 4-bit ({})", 
+                    dna.len(), p, expected_2bit, expected_4bit);
+        };
+
         GenomicLinear::new(
             dna,
             anchors,
@@ -779,7 +814,7 @@ impl NativeLoader {
             o_f,
             i_f,
             b_s,
-            Vec::new(),
+            Vec::new(), // explicitly ensure no internal norm
             1e-6,
             mask,
             Vec::new(),
@@ -787,6 +822,7 @@ impl NativeLoader {
             Vec::new(),
             Vec::new(),
             bias,
+            bit_depth,
         )
     }
     pub fn load_tokenizer(&self) -> std::io::Result<GajeTokenizer> {
@@ -833,9 +869,9 @@ pub fn save_genomic_model(
     config: &ModelConfig,
     tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
-    let mut writer =
+    let writer =
         crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
-    let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;
+    let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
     batch
         .write_metadata("config", &serde_json::to_string(config).unwrap())
         .unwrap();
@@ -848,7 +884,7 @@ pub fn save_genomic_model(
     let f32_u8 =
         |d: &[f32]| unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, d.len() * 4) };
     let write_l = |b: &mut crate::core::db::GajeBatchWriter, p: &str, l: &GenomicLinear| {
-        b.write_tensor(&format!("{}.dna", p), &compress(&l.database))
+        b.write_tensor(&format!("{}.dna", p), &compress(l.database_ref()))
             .unwrap();
         b.write_tensor(&format!("{}.centroids", p), &compress(f32_u8(&l.centroids)))
             .unwrap();
@@ -948,6 +984,7 @@ pub fn init_born_genomic_model(
             Vec::new(),
             Vec::new(),
             Vec::new(),
+            2, // Default bit_depth for backwards compatibility
         )
     };
     let embeddings = init_l(config.n_embd, vocab_size);

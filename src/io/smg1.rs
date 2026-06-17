@@ -20,8 +20,8 @@ pub struct Smg1Model {
 }
 
 pub fn save_smg1_model(path: &str, model: &Smg1Model, config: &Smg1Config) -> std::io::Result<()> {
-    let mut writer = GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
-    let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;
+    let writer = GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
+    let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
 
     // 1. Guardar Configuración y Vocabulario
     batch

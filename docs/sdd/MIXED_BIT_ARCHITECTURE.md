@@ -31,17 +31,51 @@ Los tensores en el archivo de base de datos ahora incluyen una cabecera de bits:
 
 ---
 
-## 3. Kernels SIMD Híbridos (Roadmap Rust)
-Se requiere la creación de nuevos kernels en `src/compute/math.rs` y `src/nn/linear.rs`:
+## 3. Implementación: Dispatch Estático y Traits
+Para evitar el overhead de branching en los loops de inferencia, utilizaremos un patrón de **Static Dispatch** en Rust.
 
-1.  **`genomic_dot_product_4bit`**: Kernel optimizado para desempacar 4 bits y multiplicar por centroides (16 polos).
-2.  **`MixedLinear`**: Una nueva estructura en Rust que puede cargar dinámicamente el bit-depth basándose en los metadatos de la capa.
+### A. Estructura de Datos
+```rust
+pub enum WeightDatabase {
+    Genomic2Bit(Arc<Vec<u8>>), // 4 pesos/byte, 4 centroides/bloque
+    Genomic4Bit(Arc<Vec<u8>>), // 2 pesos/byte, 16 centroides/bloque
+}
+
+pub struct GenomicLinear {
+    pub weights: WeightDatabase,
+    pub centroids: Vec<f32>,
+    // ... otros campos
+}
+```
+
+### B. El Trait `GenomicKernel`
+Definiremos un contrato para los kernels de cómputo que el compilador podrá monomorfizar:
+
+```rust
+pub trait GenomicKernel {
+    fn dot_product(
+        &self,
+        weights: &[u8],
+        input: &[f32],
+        centroids: &[f32],
+        stride: usize,
+        n_blocks: usize,
+    ) -> f32;
+}
+```
+
+### C. Optimización NEON (Android)
+En arquitecturas ARM, el kernel de 4-bits aprovechará que 16 centroides caben exactamente en un registro `uint8x16_t`. Utilizaremos la instrucción `vqtbl1q_u8` para realizar el lookup de los 16 polos de resonancia en un solo ciclo SIMD, manteniendo la paridad de rendimiento con el kernel de 2-bits.
 
 ---
 
-## 4. Impacto en Memoria y Performance
-*   **Tamaño del Modelo:** El modelo "Silver Adult" (135M) pasará de ~35MB a ~55MB. Sigue estando por debajo del límite de 100MB para "On-Device Sovereignty".
-*   **Latencia:** Se espera una penalización del 15-20% en las capas de atención, compensada por la estabilidad de la PPL.
+## 4. Protocolo de Validación (Baseline PPL)
+Antes de proceder con la re-calibración de centroides, ejecutaremos el cambio arquitectural manteniendo el corpus de calibración original para aislar el efecto de la **resolución de la ε-net**.
+
+**Baseline Actual (Silver Adult v1.0):**
+*   **Simple:** 23,651.23
+*   **Medio:** 32,803.82
+*   **Técnico:** 47,549.09
 
 ---
 *Este diseño sustituye la sección 2 del ARCHITECTURE_CORE.md previo.*
