@@ -78,14 +78,14 @@ class GenomicLayer:
                 w_matrix = raw_data.reshape(self.out_features, self.in_features)
 
                 unpermute = self.config.unpermute_weights if self.config else True
-                print(f"    [~] Capa {name}: Unpermute={unpermute}, Bit-Depth={bit_depth}")
                 needs_unpermute = (
                     unpermute
                     and is_q_or_k
                     and n_head is not None
                     and head_dim is not None
-                    and (self.config.rope_style != "split" if self.config else True)
+                    and (self.config.rope_style == "split" if self.config else True)
                 )
+                print(f"    [~] Capa {name}: Unpermute={unpermute}, Needs-Unpermute={needs_unpermute}, Bit-Depth={bit_depth}")
 
                 if (
                     bit_depth != 32 # Si es F32, forzamos el path lento para tener f32_data
@@ -139,6 +139,19 @@ class GenomicLayer:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 rope_style = self.config.rope_style if self.config else "split"
                 weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style)
+                
+                unpermute = self.config.unpermute_weights if self.config else True
+                needs_unpermute = (
+                    unpermute
+                    and is_q_or_k
+                    and n_head is not None
+                    and head_dim is not None
+                    and (self.config.rope_style == "split" if self.config else True)
+                )
+                if needs_unpermute:
+                    from gaje.utils.quantization import unpermute_to_split
+                    weights_f32 = unpermute_to_split(weights_f32, n_head, head_dim)
+                
                 self.out_features, self.in_features = weights_f32.shape
                 self._init_from_f32(
                     weights_f32, block_size, anchor_threshold, custom_base_c, bit_depth
@@ -195,6 +208,7 @@ class GenomicLayer:
             triplet_database=self.triplet_database,
             triplet_centroids=self.triplet_centroids,
             bias=self.bias,
+            bit_depth=self.bit_depth,
         )
 
     def _init_from_f32(
@@ -809,6 +823,9 @@ class GenomicLLM:
             config=self.config,
         )
 
+    def clear_cache(self):
+        self.rust_llm.clear_cache_py()
+
     def forward(self, tokens, clear_cache=True):
         if clear_cache:
             self.rust_llm.clear_cache_py()
@@ -1286,24 +1303,33 @@ class GenomicLLM:
                     else:
                         return model.n_embd * 4
 
-                # Inferencia universal basada en el tamaño del buffer DNA
                 dna_bytes = db_reader.read_tensor(f"{actual_name}.dna")
                 dna_len = len(dna_bytes)
-                
-                # Intentamos adivinar la profundidad de bits por heurística de tamaño
-                # 32-bit: out_features = len / (in_features * 4)
-                # 4-bit:  out_features = len / (in_features / 2)
-                # 2-bit:  out_features = len / (in_features / 4)
-                
-                # Si len es múltiplo exacto de in_features * 4 -> es F32
-                if dna_len % (in_features * 4) == 0:
+
+                # Si no tiene centroides, es F32 (32-bit)
+                if not db_reader.has_tensor(f"{actual_name}.centroids"):
                     return dna_len // (in_features * 4)
-                elif dna_len % (in_features // 2) == 0:
-                    return dna_len // (in_features // 2)
-                elif dna_len % (in_features // 4) == 0:
-                    return dna_len // (in_features // 4)
-                else:
-                    return model.n_embd * 4
+
+                centroids_bytes = db_reader.read_tensor(f"{actual_name}.centroids")
+                centroids_len = len(centroids_bytes) // 4  # en floats
+                if centroids_len == 0:
+                    return dna_len // (in_features * 4)
+
+                # Probamos 2-bit
+                out_2bit = (dna_len * 4) // in_features
+                expected_c_2bit = (out_2bit * in_features) // 8
+                if expected_c_2bit == centroids_len:
+                    return out_2bit
+
+                # Probamos 4-bit
+                out_4bit = (dna_len * 2) // in_features
+                expected_c_4bit = (out_4bit * in_features) // 2
+                if expected_c_4bit == centroids_len:
+                    return out_4bit
+
+                # Fallback seguro
+                return (dna_len * 4) // in_features
+
 
             ffn_hidden = get_out_features(p + "ffn_gate", model.n_embd)
 

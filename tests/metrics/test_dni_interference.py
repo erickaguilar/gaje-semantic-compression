@@ -6,7 +6,8 @@ import subprocess
 from tqdm import tqdm
 
 # Asegurar uso de código local
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python")))
+# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python")))
+
 
 from gaje.nn.stabilized import GenomicLLM
 
@@ -34,9 +35,11 @@ def calculate_ppl(model, text, tokenizer, max_length=128):
         log_probs.append(np.log(p))
     
     if not log_probs:
+        model.clear_cache()
         return None
         
     avg_log_prob = np.mean(log_probs)
+    model.clear_cache()
     return np.exp(-avg_log_prob)
 
 def run_needle_test(model, needle, question, expected_answer_part):
@@ -47,6 +50,7 @@ def run_needle_test(model, needle, question, expected_answer_part):
     # Generar respuesta
     generated_tokens = []
     curr_tokens = tokens
+    model.clear_cache()
     for _ in range(20):
         logits = model.forward(curr_tokens, clear_cache=False)[-1]
         next_token = int(np.argmax(logits))
@@ -80,7 +84,8 @@ def main():
     # 2. Medir PPL Pre-Ingesta
     print("[~] Midiendo PPL Pre-Ingesta (Control)...")
     with open(control_data_path, "r", encoding="utf-8") as f:
-        lines = [l.strip() for l in f.readlines() if len(l.strip()) > 20][:30]
+        lines = [l.strip() for l in f.readlines() if len(l.strip()) > 20][:3]
+
     
     ppls_pre = []
     for line in tqdm(lines, desc="PPL Pre"):
@@ -102,8 +107,11 @@ def main():
         "--dni-ingest", needle_file,
         "--intensity", "0.005",
         "--pop", "8",
-        "--out", "temp_dni_model.gaje"
+        "--gens", "20",
+        "--output", "temp_dni_model.gaje"
     ]
+
+
     
     try:
         subprocess.run(ingest_cmd, check=True, capture_output=True)

@@ -111,7 +111,22 @@ impl GenomicLinear {
                 indices.push(u32::from_le_bytes(anchors_u8[idx_s + i * 4..idx_s + (i + 1) * 4].try_into().unwrap()));
                 values.push(f16::from_le_bytes(anchors_u8[val_s + i * 2..val_s + (i + 1) * 2].try_into().unwrap()));
             }
-            for i in 0..=out_features { row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_s + i * 8..ptr_s + (i + 1) * 8].try_into().unwrap()) as usize; }
+            if anchors_u8.len() >= ptr_s + (out_features + 1) * 8 {
+                for i in 0..=out_features { row_ptrs[i] = u64::from_le_bytes(anchors_u8[ptr_s + i * 8..ptr_s + (i + 1) * 8].try_into().unwrap()) as usize; }
+            } else {
+                let mut current_row = 0;
+                for (anchor_idx, &flat_idx) in indices.iter().enumerate() {
+                    let r = flat_idx as usize / in_features;
+                    while current_row < r {
+                        row_ptrs[current_row + 1] = anchor_idx;
+                        current_row += 1;
+                    }
+                }
+                while current_row < out_features {
+                    row_ptrs[current_row + 1] = indices.len();
+                    current_row += 1;
+                }
+            }
             (indices, values, row_ptrs)
         } else { (Vec::new(), Vec::new(), vec![0; out_features + 1]) };
 

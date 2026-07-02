@@ -12,11 +12,11 @@ def dequantize_q8_0(tensor, n_head=None, head_dim=None, is_q_or_k=False, rope_st
     # GGUF tensors usually have shape [out, in] or [length]
     # We need the original dimensions to reshape
     if len(tensor.shape) == 2:
-        out_f, in_f = tensor.shape
+        in_f, out_f = tensor.shape
     else:
-        # Fallback si es 1D (como embeddings a veces)
         out_f = tensor.shape[0]
-        in_f = 1 # No es exacto pero ayuda a calcular
+        in_f = 1
+
         
     # Usamos la implementación nativa si está disponible por velocidad
     try:
