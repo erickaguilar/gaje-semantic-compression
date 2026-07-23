@@ -1,3 +1,4 @@
+use crate::compute::lagrangian::LagrangianEngine;
 use crate::core::db::{GajeDatabaseWriter, METADATA_TABLE, TENSOR_TABLE};
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use redb::ReadTransaction;
@@ -19,8 +20,8 @@ pub struct Smg1Model {
 }
 
 pub fn save_smg1_model(path: &str, model: &Smg1Model, config: &Smg1Config) -> std::io::Result<()> {
-    let mut writer = GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
-    let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;
+    let writer = GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
+    let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
 
     // 1. Guardar Configuración y Vocabulario
     batch
@@ -154,6 +155,7 @@ pub fn load_smg1_model(path: &str) -> std::io::Result<(Smg1Model, Smg1Config)> {
             weights_per_neuron,
             k_wta: (num_neurons / 10).max(1),
             rms_ema: 1.0,
+            lagrangian: LagrangianEngine::new(1.0),
         };
         layer.load_anchors_from_u8(&anchors_u8);
         layers.push(layer);

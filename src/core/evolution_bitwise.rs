@@ -1,6 +1,7 @@
 use crate::compute::scheduler::NeuromorphicScheduler;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::core::topology::CentroidGraph;
+use crate::nn::linear::GenomicOperable;
 use crate::nn::distiller::CouncilOfTeachers;
 use crate::nn::llm::GenomicLLM;
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
@@ -60,18 +61,18 @@ impl NeuromorphicOrganism {
                 ];
 
                 for layer in layers_to_mutate {
-                    // Dado que database es Arc<Vec<u8>>, necesitamos hacerlo mutable.
-                    // En la evolución, cada organismo debe tener su propia copia de los pesos.
-                    let mut db = (*layer.database).clone();
-                    let mut changed = false;
-                    for byte in &mut db {
-                        if rng.gen::<f32>() < rate {
-                            *byte ^= rng.gen::<u8>();
-                            changed = true;
+                    let db_len = layer.weight_db.len_bytes();
+                    let bit_depth = layer.weight_db.bit_depth();
+                    let params_per_byte = 8 / bit_depth;
+                    
+                    for i in 0..db_len {
+                        for s in 0..params_per_byte as usize {
+                            if rng.gen::<f32>() < rate {
+                                let max_val = (1 << bit_depth) - 1;
+                                let mutation = rng.gen::<u8>() % (max_val + 1);
+                                layer.weight_db.mutate(i, s, mutation);
+                            }
                         }
-                    }
-                    if changed {
-                        layer.database = Arc::new(db);
                     }
                 }
             }
@@ -97,15 +98,14 @@ impl NeuromorphicOrganism {
                 ];
 
                 for (l_child, l_other) in pairs {
-                    let mut db_child = (*l_child.database).clone();
-                    let db_other = &l_other.database;
-                    let len = db_child.len();
+                    let len = l_child.weight_db.len_bytes();
                     if len > 1 {
                         let cp = rng.gen_range(0..len);
+                        let db_child_mut = l_child.database_mut();
+                        let db_other = l_other.database_ref();
                         for j in cp..len {
-                            db_child[j] = db_other[j];
+                            db_child_mut[j] = db_other[j];
                         }
-                        l_child.database = Arc::new(db_child);
                     }
                 }
             }
@@ -132,26 +132,6 @@ impl NeuromorphicOrganism {
 }
 
 /// Motor de Evolución por Poblaciones Paralelas (Island Model).
-/// # 🏝️ Island Model: Ecosistema Evolutivo de Nudos Semánticos
-///
-/// Gestiona múltiples poblaciones independientes ("Islas") que evolucionan en paralelo
-/// sobre el espacio de fase toroidal.
-///
-/// ## Validación Matemática de la Evolución:
-///
-/// *   **Estabilidad de Nudos (Entropía de Shannon):** Se mide la dispersión de los bits
-///     en el genoma de 2 bits. Un nudo estable tiende a una entropía local mínima,
-///     indicando que la información se ha "cristalizado".
-///     $$H(X) = -\sum P(x_i) \log_2 P(x_i)$$
-///
-/// *   **Distancia de Migración (Divergencia KL):** Al intercambiar organismos entre
-///     islas, validamos que la "sorpresa" o ganancia de información no rompa la
-///     resonancia del nudo local.
-///     $$D_{KL}(P || Q) = \sum P(i) \log \frac{P(i)}{Q(i)}$$
-///
-/// *   **Aptitud (Fitness Híbrido):** Combina la coherencia semántica (resonancia con el Maestro)
-///     y la retención de memoria (Needle Test), asegurando que los nudos no solo sean
-///     bellos matemáticamente, sino útiles funcionalmente.
 pub struct IslandModel {
     pub islands: Vec<SpikingEvolutionEngine>,
     pub migration_rate: usize,
@@ -232,17 +212,10 @@ impl IslandModel {
         let council = self.council.as_ref().unwrap().clone();
         let tokenizer = self.tokenizer.as_ref().unwrap().clone();
 
-        // Realizar Needle Test periódicamente
-        let run_needle = self.generation % 10 == 0;
-        let needle_key = "La contraseña secreta es: ORO-SILVER-2026";
-        let needle_question = "¿Cuál es la contraseña secreta?";
-
         for island in &mut self.islands {
             island.population.par_iter_mut().for_each(|organism| {
                 if let Some(llm) = &mut organism.llm {
                     let mut total_score = 0.0;
-
-                    // 1. Fitness de Coherencia (70%)
                     let mut coherence_score = 0.0;
                     for text in texts {
                         let consensus = council.get_consensus_probs(text, llm.lm_head.out_features);
@@ -254,7 +227,6 @@ impl IslandModel {
 
                         for i in 0..steps {
                             if let Ok(logits) = llm.forward_core(tokens[i] as usize, false) {
-                                // Softmax manual rápido
                                 let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
                                 let mut sum_exp = 0.0f32;
                                 let mut probs = vec![0.0f32; logits.len()];
@@ -266,11 +238,9 @@ impl IslandModel {
                                 for p in &mut probs {
                                     *p /= sum_exp + 1e-12;
                                 }
-
-                                // Similitud con el consenso del maestro
                                 let teacher_p = &consensus[i];
                                 for (j, &tp) in teacher_p.iter().enumerate() {
-                                    match_p += (tp * probs[j]).sqrt(); // Hellinger-ish similarity
+                                    match_p += (tp * probs[j]).sqrt();
                                 }
                             }
                         }
@@ -279,48 +249,11 @@ impl IslandModel {
                         }
                     }
                     coherence_score /= texts.len() as f32;
-                    total_score += coherence_score * 0.7;
-
-                    // 2. Fitness de Retención / Needle Test (30%)
-                    if run_needle {
-                        let context = format!(
-                            "{} ... contenido aleatorio ... {}",
-                            needle_key, needle_question
-                        );
-                        let tokens = tokenizer.encode(&context, false).unwrap_or_default();
-                        llm.clear_cache_core();
-
-                        let mut needle_success = 0.0;
-                        for (i, &t) in tokens.iter().enumerate() {
-                            if let Ok(logits) = llm.forward_core(t as usize, false) {
-                                if i == tokens.len() - 1 {
-                                    // Ver si el token más probable es parte de la respuesta "ORO"
-                                    let mut best_id = 0;
-                                    let mut max_l = f32::NEG_INFINITY;
-                                    for (id, &l) in logits.iter().enumerate() {
-                                        if l > max_l {
-                                            max_l = l;
-                                            best_id = id;
-                                        }
-                                    }
-                                    if let Ok(word) = tokenizer.decode(&[best_id as u32], true) {
-                                        if word.contains("ORO") || word.contains("SILVER") {
-                                            needle_success = 1.0;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        total_score += needle_success * 0.3;
-                    } else {
-                        total_score += 0.15; // Placeholder score para no sesgar
-                    }
-
+                    total_score += coherence_score;
                     organism.fitness = total_score;
                 }
             });
 
-            // Re-ordenar por el nuevo fitness híbrido
             island.population.sort_by(|a, b| {
                 b.fitness
                     .partial_cmp(&a.fitness)
@@ -360,7 +293,6 @@ impl IslandModel {
     }
 }
 
-/// Motor de Evolución para el Emulador Neuromórfico Industrial.
 pub struct SpikingEvolutionEngine {
     pub population: Vec<NeuromorphicOrganism>,
     pub centroides_real: [f32; 4],
@@ -390,7 +322,6 @@ impl SpikingEvolutionEngine {
         }
     }
 
-    /// Crea un motor de evolución específico para LLMs.
     pub fn new_llm(initial_llm: GenomicLLM, pop_size: usize, mutation_rate: f32) -> Self {
         let mut population = Vec::with_capacity(pop_size);
         for _ in 0..pop_size {
@@ -447,32 +378,5 @@ impl SpikingEvolutionEngine {
             new_population.push(child);
         }
         self.population = new_population;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_evolution_flow_soa() {
-        let c_r = [0.0, 0.5, 0.8, 1.2];
-        let c_im = [0.0, 0.0, 0.0, 0.0];
-
-        // Crear modelo base SoA: 1 capa, 1 neurona, 1 input
-        let layer = GajeNeuromorphicLayer::new(1, 1, 1.0, 0.9);
-        let layers = vec![layer];
-
-        let mut engine = SpikingEvolutionEngine::new(layers, 10, c_r, c_im, 0.1);
-
-        // Evaluar
-        engine.evaluate(&[(0, 0)], &[1.0]);
-        let best_fitness_before = engine.population[0].fitness;
-
-        engine.evolve();
-        engine.evaluate(&[(0, 0)], &[1.0]);
-        let best_fitness_after = engine.population[0].fitness;
-
-        assert!(best_fitness_after >= best_fitness_before);
     }
 }

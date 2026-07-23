@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DNA Semantic Compression — Plan Maestro 2026</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg:        #080C10;
+    --surface:   #0E1419;
+    --border:    #1C2630;
+    --dim:       #263340;
+    --muted:     #4A6070;
+    --body:      #8BABB8;
+    --text:      #C8DDE8;
+    --bright:    #EDF4F8;
+    --teal:      #2ECFB0;
+    --teal-dim:  #1A7A68;
+    --amber:     #F0A830;
+    --amber-dim: #7A5418;
+    --red:       #E05050;
+    --red-dim:   #6A2020;
+    --blue:      #4090D0;
+    --blue-dim:  #1A3A60;
+    --pulse: #2ECFB0;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── GRID SCAN LINES ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(46,207,176,0.012) 3px,
+      rgba(46,207,176,0.012) 4px
+    );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  /* ── HEADER ── */
+  header { margin-bottom: 56px; }
+
+  .logo-line {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--teal);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 700;
+    color: var(--bright);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  h1 span {
+    display: block;
+    background: linear-gradient(90deg, var(--teal), var(--blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    margin-top: 12px;
+    font-size: 16px;
+    color: var(--body);
+    max-width: 560px;
+  }
+
+  /* ── STATUS STRIP ── */
+  .status-strip {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 32px;
+    padding: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .badge-green  { background: rgba(46,207,176,0.1); color: var(--teal); border: 1px solid var(--teal-dim); }
+  .badge-amber  { background: rgba(240,168,48,0.1); color: var(--amber); border: 1px solid var(--amber-dim); }
+  .badge-red    { background: rgba(224,80,80,0.1);  color: var(--red);   border: 1px solid var(--red-dim); }
+  .badge-blue   { background: rgba(64,144,208,0.1); color: var(--blue);  border: 1px solid var(--blue-dim); }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  /* ── SECTION TITLES ── */
+  .section { margin-top: 56px; }
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .section-label h2 {
+    font-size: 11px;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    font-weight: 400;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── METRICS GRID ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    transition: border-color 0.2s;
+  }
+  .metric:hover { border-color: var(--dim); }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .metric-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--bright);
+    letter-spacing: -0.03em;
+    font-family: 'Space Mono', monospace;
+    line-height: 1;
+  }
+
+  .metric-value.green { color: var(--teal); }
+  .metric-value.amber { color: var(--amber); }
+  .metric-value.red   { color: var(--red); }
+
+  .metric-sub {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── PHASE CARDS ── */
+  .phases { display: flex; flex-direction: column; gap: 16px; }
+
+  .phase {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .phase:hover { border-color: var(--dim); }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .phase-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 28px;
+  }
+
+  .phase-title { flex: 1; font-weight: 600; color: var(--bright); }
+  .phase-period { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; }
+
+  .phase-status {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-done    { background: var(--teal); }
+  .status-active  { background: var(--amber); animation: pulse 1.5s infinite; }
+  .status-blocked { background: var(--red); }
+  .status-next    { background: var(--blue); }
+  .status-future  { background: var(--dim); }
+
+  .phase-body {
+    padding: 0 24px 20px 68px;
+    display: none;
+  }
+  .phase.open .phase-body { display: block; }
+
+  .phase-chevron {
+    color: var(--muted);
+    font-size: 12px;
+    transition: transform 0.2s;
+  }
+  .phase.open .phase-chevron { transform: rotate(180deg); }
+
+  .task-list { list-style: none; }
+
+  .task {
+    display: flex;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    color: var(--body);
+  }
+  .task:last-child { border-bottom: none; }
+
+  .task-icon { flex-shrink: 0; font-size: 13px; }
+  .task strong { color: var(--text); font-weight: 500; }
+  .task em { color: var(--muted); font-style: normal; font-family: 'Space Mono', monospace; font-size: 12px; }
+
+  /* ── DUAL PATH ── */
+  .dual-path {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 600px) { .dual-path { grid-template-columns: 1fr; } }
+
+  .path-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+  }
+
+  .path-card.path-a { border-top: 3px solid var(--teal); }
+  .path-card.path-b { border-top: 3px solid var(--blue); }
+
+  .path-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .path-a .path-title { color: var(--teal); }
+  .path-b .path-title { color: var(--blue); }
+
+  .path-name { font-weight: 600; color: var(--bright); margin-bottom: 12px; font-size: 16px; }
+
+  .path-detail {
+    font-size: 13px;
+    color: var(--body);
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+
+  .path-metric {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+
+  /* ── RISK TABLE ── */
+  .risk-table { width: 100%; border-collapse: collapse; }
+
+  .risk-table th {
+    text-align: left;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .risk-table td {
+    padding: 12px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--body);
+    vertical-align: top;
+  }
+
+  .risk-table tr:last-child td { border-bottom: none; }
+  .risk-table td:first-child { color: var(--text); font-weight: 500; }
+
+  .risk-level {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .risk-high   { background: rgba(224,80,80,0.15);  color: var(--red); }
+  .risk-medium { background: rgba(240,168,48,0.15); color: var(--amber); }
+  .risk-low    { background: rgba(46,207,176,0.15); color: var(--teal); }
+
+  /* ── CERTIFICATION LADDER ── */
+  .cert-ladder {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cert-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  .cert-level {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    min-width: 36px;
+    color: var(--muted);
+  }
+
+  .cert-row.done   .cert-level { color: var(--teal); }
+  .cert-row.active .cert-level { color: var(--amber); }
+  .cert-row.next   .cert-level { color: var(--blue); }
+
+  .cert-info { flex: 1; }
+  .cert-name { font-weight: 600; color: var(--bright); font-size: 14px; }
+  .cert-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .cert-state {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 3px;
+  }
+  .cert-row.done .cert-state   { background: rgba(46,207,176,0.1); color: var(--teal); }
+  .cert-row.active .cert-state { background: rgba(240,168,48,0.1); color: var(--amber); }
+  .cert-row.next .cert-state   { background: rgba(64,144,208,0.1); color: var(--blue); }
+  .cert-row .cert-state.blocked{ background: rgba(224,80,80,0.1);  color: var(--red); }
+
+  /* ── FOOTER ── */
+  footer {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .footer-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+
+  .toroidal-glyph {
+    width: 48px; height: 48px;
+    opacity: 0.25;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HEADER -->
+  <header>
+    <p class="logo-line">◈ DNA Semantic Compression — Plan Maestro</p>
+    <h1>
+      Silver Adult<br>
+      <span>Roadmap 2026</span>
+    </h1>
+    <p class="subtitle">
+      Un organismo computacional de 10–50 MB capaz de razonar en el borde.
+      Co-creado por Erick Aguilar + Gemini CLI.
+    </p>
+
+    <div class="status-strip">
+      <span class="badge badge-green"><span class="dot"></span>Rust Binario — Operativo</span>
+      <span class="badge badge-green">Cosine Sim — 96.5%</span>
+      <span class="badge badge-green">PPL — 1.60</span>
+      <span class="badge badge-amber"><span class="dot"></span>Fase Activa — Crianza Nativa</span>
+      <span class="badge badge-blue">Meta — Silver Adult Q4 2026</span>
+    </div>
+  </header>
+
+  <!-- MÉTRICAS CLAVE -->
+  <div class="section">
+    <div class="section-label"><h2>Métricas de Estado</h2></div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">Similitud Coseno</div>
+        <div class="metric-value green">96.5%</div>
+        <div class="metric-sub">Meta: &gt; 95% ✓</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Perplexidad (PPL)</div>
+        <div class="metric-value green">1.60</div>
+        <div class="metric-sub">Meta: &lt; 15.0 ✓</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Consumo energético</div>
+        <div class="metric-value green">&lt;0.5W</div>
+        <div class="metric-sub">ARM big.LITTLE ✓</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Tamaño objetivo</div>
+        <div class="metric-value amber">50MB</div>
+        <div class="metric-sub">Silver Adult target</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Precisión</div>
+        <div class="metric-value">2-bit</div>
+        <div class="metric-sub">híbrida + IQAT</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">Dependencias Python</div>
+        <div class="metric-value green">0</div>
+        <div class="metric-sub">Zero-GIL / Soberanía ✓</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESCALERA DE CERTIFICACIÓN -->
+  <div class="section">
+    <div class="section-label"><h2>Escalera de Certificación</h2></div>
+    <div class="cert-ladder">
+      <div class="cert-row done">
+        <div class="cert-level">L5</div>
+        <div class="cert-info">
+          <div class="cert-name">Soberanía Nativa</div>
+          <div class="cert-desc">Binario Rust 100% autónomo, Zero-GIL, sin dependencias Python</div>
+        </div>
+        <span class="cert-state">Certificado</span>
+      </div>
+      <div class="cert-row done">
+        <div class="cert-level">L4</div>
+        <div class="cert-info">
+          <div class="cert-name">Green-AI Edge</div>
+          <div class="cert-desc">Operación ARM big.LITTLE &lt;0.5W, kernels SIMD NEON</div>
+        </div>
+        <span class="cert-state">Certificado</span>
+      </div>
+      <div class="cert-row active">
+        <div class="cert-level">L3</div>
+        <div class="cert-info">
+          <div class="cert-name">Fidelidad Semántica</div>
+          <div class="cert-desc">PPL &lt;15, Cosine Sim &gt;95% — alcanzado vía Crianza Nativa + IQAT</div>
+        </div>
+        <span class="cert-state">En validación</span>
+      </div>
+      <div class="cert-row next">
+        <div class="cert-level">L2</div>
+        <div class="cert-info">
+          <div class="cert-name">Fluidez Lingüística</div>
+          <div class="cert-desc">Generación coherente en español con gramática estable a 2 bits</div>
+        </div>
+        <span class="cert-state">Próximo</span>
+      </div>
+      <div class="cert-row next">
+        <div class="cert-level">L1</div>
+        <div class="cert-info">
+          <div class="cert-name">Resonancia Toroidal</div>
+          <div class="cert-desc">Needle In A Haystack 128k tokens — canal toroidal validado</div>
+        </div>
+        <span class="cert-state">Próximo</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- FASES DEL ROADMAP -->
+  <div class="section">
+    <div class="section-label"><h2>Fases del Roadmap</h2></div>
+    <div class="phases">
+
+      <div class="phase open" onclick="togglePhase(this)">
+        <div class="phase-header">
+          <span class="phase-num">F0</span>
+          <span class="phase-title">Diagnóstico Forense + Pivot</span>
+          <span class="phase-period">Jun 2026</span>
+          <span class="phase-status status-done"></span>
+          <span class="phase-chevron">▾</span>
+        </div>
+        <div class="phase-body">
+          <ul class="task-list">
+            <li class="task"><span class="task-icon">✅</span><div>Identificar fallo de transmutación directa a 2 bits. <em>cosine ~0.04 → descartado</em></div></li>
+            <li class="task"><span class="task-icon">✅</span><div>Pivot a <strong>Crianza Nativa</strong>: modelo maestro guía al modelo de 2 bits durante entrenamiento</div></li>
+            <li class="task"><span class="task-icon">✅</span><div>Implementar <strong>IQAT</strong> (Iterative Quantization-Aware Training)</div></li>
+            <li class="task"><span class="task-icon">✅</span><div>Validar: Cosine Sim → 96.5%, PPL → 1.60 <em>Meta superada</em></div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="phase open" onclick="togglePhase(this)">
+        <div class="phase-header">
+          <span class="phase-num">F1</span>
+          <span class="phase-title">Validación de Canal Toroidal</span>
+          <span class="phase-period">Jun–Jul 2026</span>
+          <span class="phase-status status-active"></span>
+          <span class="phase-chevron">▾</span>
+        </div>
+        <div class="phase-body">
+          <ul class="task-list">
+            <li class="task"><span class="task-icon">🎯</span><div><strong>Prueba Needle In A Haystack</strong> — contexto 128k tokens. Valida L1 (Resonancia Toroidal)</div></li>
+            <li class="task"><span class="task-icon">⚙️</span><div>Verificar recuperación exacta de datos en el canal toroidal de información</div></li>
+            <li class="task"><span class="task-icon">📊</span><div>Documentar métricas de recall a distintas posiciones dentro del contexto largo</div></li>
+            <li class="task"><span class="task-icon">🔀</span><div>Según resultado: bifurcar a Vía A (lingüística) o Vía B (almacenamiento) — ver sección abajo</div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="phase" onclick="togglePhase(this)">
+        <div class="phase-header">
+          <span class="phase-num">F2</span>
+          <span class="phase-title">Island Model + Evolución Distribuida</span>
+          <span class="phase-period">Q3 2026</span>
+          <span class="phase-status status-next"></span>
+          <span class="phase-chevron">▾</span>
+        </div>
+        <div class="phase-body">
+          <ul class="task-list">
+            <li class="task"><span class="task-icon">🏝️</span><div><strong>Island Model</strong>: múltiples subpoblaciones del modelo que evolucionan de forma independiente y se fusionan periódicamente</div></li>
+            <li class="task"><span class="task-icon">🔄</span><div>Migración genética entre islas — exploración vs. explotación en el espacio de pesos</div></li>
+            <li class="task"><span class="task-icon">🧪</span><div>Evaluar si diversidad de islas mejora PPL sin comprometer el tamaño objetivo de 50MB</div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="phase" onclick="togglePhase(this)">
+        <div class="phase-header">
+          <span class="phase-num">F3</span>
+          <span class="phase-title">Native Semantic RAG en Rust</span>
+          <span class="phase-period">Q3 2026</span>
+          <span class="phase-status status-next"></span>
+          <span class="phase-chevron">▾</span>
+        </div>
+        <div class="phase-body">
+          <ul class="task-list">
+            <li class="task"><span class="task-icon">🗄️</span><div>Integrar directamente en el binario Rust: búsqueda vectorial semántica sin Python</div></li>
+            <li class="task"><span class="task-icon">⚡</span><div>Aprovechar la infraestructura GAJE existente como motor de indexado vectorial</div></li>
+            <li class="task"><span class="task-icon">📱</span><div>Validar en Termux: consulta RAG completa end-to-end en Android sin red</div></li>
+            <li class="task"><span class="task-icon">📏</span><div>Meta: latencia &lt;500ms para recuperación semántica en hardware ARM</div></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="phase" onclick="togglePhase(this)">
+        <div class="phase-header">
+          <span class="phase-num">F4</span>
+          <span class="phase-title">Silver Adult — Integración Final</span>
+          <span class="phase-period">Q4 2026</span>
+          <span class="phase-status status-future"></span>
+          <span class="phase-chevron">▾</span>
+        </div>
+        <div class="phase-body">
+          <ul class="task-list">
+            <li class="task"><span class="task-icon">🎯</span><div>Modelo final: 10–50 MB, razonamiento equivalente a un modelo de ~300MB</div></li>
+            <li class="task"><span class="task-icon">✅</span><div>Todos los niveles L1–L5 certificados</div></li>
+            <li class="task"><span class="task-icon">📄</span><div>Documentación técnica completa: arquitectura, métricas, reproducibilidad</div></li>
+            <li class="task"><span class="task-icon">🌐</span><div>Publicación como investigación open-source — nueva clase de modelos genómicos</div></li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- DOBLE VÍA -->
+  <div class="section">
+    <div class="section-label"><h2>Estrategia Doble Vía (post F1)</h2></div>
+    <div class="dual-path">
+      <div class="path-card path-a">
+        <div class="path-title">Vía A</div>
+        <div class="path-name">Rescate Lingüístico</div>
+        <p class="path-detail">
+          Si el Needle In A Haystack falla, el foco vuelve a la gramática.
+          Usar el <strong>Mosaic Dataset</strong> para refinar la fluidez
+          del español a 2 bits. Continuar rondas de IQAT con datos lingüísticos
+          de mayor calidad.
+        </p>
+        <span class="path-metric">📚 Mosaic Dataset</span>
+        <span class="path-metric">🔁 IQAT adicional</span>
+        <span class="path-metric">🎯 L2 Fluidez</span>
+      </div>
+      <div class="path-card path-b">
+        <div class="path-title">Vía B</div>
+        <div class="path-name">Almacenamiento Puro</div>
+        <p class="path-detail">
+          Si el Needle In A Haystack pasa, el modelo se certifica como
+          <strong>motor de recuperación semántica soberana</strong>.
+          Pivot hacia almacenamiento revolucionario a ultra-baja potencia,
+          incluso sin fluidez generativa perfecta.
+        </p>
+        <span class="path-metric">🔍 128k ctx</span>
+        <span class="path-metric">🌀 Canal Toroidal</span>
+        <span class="path-metric">🏅 L1 Resonancia</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIESGOS -->
+  <div class="section">
+    <div class="section-label"><h2>Riesgos y Mitigaciones</h2></div>
+    <table class="risk-table">
+      <thead>
+        <tr>
+          <th>Riesgo</th>
+          <th>Nivel</th>
+          <th>Mitigación</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>PPL regresa al alza en rondas adicionales de IQAT</td>
+          <td><span class="risk-level risk-medium">Medio</span></td>
+          <td>Checkpointing frecuente; rollback a última versión estable (PPL 1.60)</td>
+        </tr>
+        <tr>
+          <td>Island Model aumenta tamaño del binario sobre 50MB</td>
+          <td><span class="risk-level risk-medium">Medio</span></td>
+          <td>Pruning agresivo post-fusión; límite de islas por parámetro de memoria disponible</td>
+        </tr>
+        <tr>
+          <td>Needle In A Haystack falla — canal toroidal no retiene contexto largo</td>
+          <td><span class="risk-level risk-high">Alto</span></td>
+          <td>Activar Vía A; rediseñar mecanismo de atención en la arquitectura toroidal</td>
+        </tr>
+        <tr>
+          <td>Latencia RAG inaceptable en hardware bajo</td>
+          <td><span class="risk-level risk-low">Bajo</span></td>
+          <td>Índices cuantizados, búsqueda aproximada (HNSW) ya disponible en GAJE</td>
+        </tr>
+        <tr>
+          <td>Burnout de desarrollo en proyecto individual</td>
+          <td><span class="risk-level risk-medium">Medio</span></td>
+          <td>Timeline sin fecha externa rígida; milestones graduales con victorias tempranas</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PRÓXIMA ACCIÓN -->
+  <div class="section">
+    <div class="section-label"><h2>Próxima Acción Inmediata</h2></div>
+    <div class="phase">
+      <div class="phase-header" style="cursor:default;">
+        <span class="phase-num" style="color:var(--amber);">→</span>
+        <span class="phase-title" style="color:var(--amber);">Ejecutar prueba Needle In A Haystack</span>
+        <span class="phase-period">Esta semana</span>
+        <span class="phase-status status-active"></span>
+      </div>
+      <div class="phase-body" style="display:block;">
+        <ul class="task-list">
+          <li class="task"><span class="task-icon">1.</span><div>Preparar corpus de 128k tokens con datos ocultos en distintas posiciones (inicio, medio, final)</div></li>
+          <li class="task"><span class="task-icon">2.</span><div>Ejecutar inferencia en el binario Rust en Termux — medir recall exacto</div></li>
+          <li class="task"><span class="task-icon">3.</span><div>Si recall &gt; 90%: certificar L1, activar Vía B</div></li>
+          <li class="task"><span class="task-icon">4.</span><div>Si recall &lt; 90%: documentar posiciones de fallo → activar Vía A + revisión arquitectural</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span class="footer-text">DNA Semantic Compression — Erick Aguilar — 2026</span>
+    <svg class="toroidal-glyph" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="24" cy="24" rx="20" ry="10" stroke="#2ECFB0" stroke-width="1.5" fill="none"/>
+      <ellipse cx="24" cy="24" rx="8" ry="20" stroke="#4090D0" stroke-width="1.5" fill="none"/>
+      <circle cx="24" cy="24" r="3" fill="#2ECFB0" opacity="0.6"/>
+    </svg>
+    <span class="footer-text">Silver Adult — Q4 2026</span>
+  </footer>
+
+</div>
+
+<script>
+  function togglePhase(el) {
+    el.classList.toggle('open');
+  }
+</script>
+</body>
+</html>

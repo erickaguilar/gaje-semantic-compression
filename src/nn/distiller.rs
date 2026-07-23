@@ -137,6 +137,12 @@ impl CouncilOfTeachers {
     }
 }
 
+impl Default for CouncilOfTeachers {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CouncilOfTeachers {
     pub fn new() -> Self {
         CouncilOfTeachers {
@@ -197,9 +203,7 @@ impl CouncilOfTeachers {
                                         if let Some(s_id) =
                                             teacher.vocab_mapping.get(t_id).and_then(|&id| id)
                                         {
-                                            if let Some(slot) = student_probs.get_mut(s_id) {
-                                                *slot += p;
-                                            }
+                                            student_probs[s_id] += p;
                                         }
                                     }
                                 }
@@ -345,11 +349,6 @@ impl GenomicDistiller {
             }
             let token_id = tokens[i] as usize;
             let target_id = tokens[i + 1] as usize;
-
-            if token_id >= student_vocab_size || target_id >= student_vocab_size {
-                continue;
-            }
-
             let teacher_probs = &consensus_seq[i];
 
             let (logits, h_norm) = student.forward_with_hidden_core(token_id, false)?;
@@ -385,12 +384,6 @@ impl GenomicDistiller {
                 let grad_ce = student_probs[j] - (if j == target_id { 1.0 } else { 0.0 });
                 let grad_kl = student_probs[j] - teacher_probs[j];
                 d_logits[j] = (1.0 - self.distill_weight) * grad_ce + self.distill_weight * grad_kl;
-            }
-
-            // Estabilización: Gradient Clipping para evitar explosiones numéricas y NaNs
-            let clip_val = 1.0f32;
-            for val in &mut d_logits {
-                *val = val.clamp(-clip_val, clip_val);
             }
 
             student

@@ -136,8 +136,8 @@ fn main() {
             );
             let mut new_l2 =
                 GajeNeuromorphicLayer::new(vocab_size, layers[2].weights_per_neuron, 0.4, 0.8);
-            let old_row_size = (layers[2].num_neurons + 3) / 4;
-            let new_row_size = (vocab_size + 3) / 4;
+            let old_row_size = layers[2].num_neurons.div_ceil(4);
+            let new_row_size = vocab_size.div_ceil(4);
             for input_idx in 0..layers[2].weights_per_neuron {
                 let old_start = input_idx * old_row_size;
                 let new_start = input_idx * new_row_size;

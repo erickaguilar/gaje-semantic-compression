@@ -19,7 +19,8 @@ class ArchitectureConfig:
     # Quantization Settings
     anchor_threshold: float = -1.0  # -1.0 means disable by default
     ffn_anchor_threshold: float = -1.0
-
+    rna_threshold: float = 0.5  # Umbral para activación dinámica de hebras de ARN
+    
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
     dni: bool = False  # Direct Neural Ingestion support
@@ -35,7 +36,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         rope_base=10000.0,
         has_bias=False,
         rope_style="split",
-        unpermute_weights=True,
+        unpermute_weights=False,
     ),
     "qwen2": ArchitectureConfig(
         name="qwen2",

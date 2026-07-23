@@ -2,7 +2,6 @@ use _impl::compute::kernels;
 use _impl::core::tokenizer::GajeTokenizer;
 use _impl::io::loader::NativeLoader;
 use _impl::nn::llm::GenomicLLM;
-use rand::distributions::{Distribution, WeightedIndex};
 use std::env;
 use std::io::{self, Write};
 use std::path::Path;
@@ -33,28 +32,55 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut train_epochs = 10;
     let mut scale = 0.02;
     let mut resonance_weight = 0.05;
-    let mut save_path = None;
-    let mut init_path = None;
-    let mut import_path = None;
-    let mut output_path = None;
+    let mut save_path: Option<String> = None;
+    let mut init_path: Option<String> = None;
+    let mut import_path: Option<String> = None;
+    let mut output_path: Option<String> = None;
     let mut init_preset = "default".to_string();
-    let mut tokenize_text = None;
+    let mut tokenize_text: Option<String> = None;
+    let mut eval_corpus: Option<String> = None;
     let mut inspect_model = false;
-    let mut dni_path = None;
+    let mut dni_path: Option<String> = None;
     let mut dni_intensity = 0.01;
     let mut dni_pop = 16;
     let mut anchor_threshold_arg = 0.1;
     let mut target_layers_arg = Vec::new();
+    let mut is_ingest_mode = false;
+    let mut teacher_path = None;
+    let mut teacher_tok_path = None;
+    let mut do_iqat = false;
+    let mut iqat_lr = 0.001;
 
     while i < args.len() {
-        if args[i] == "--model" && i + 1 < args.len() {
+        if args[i] == "ingest" {
+            is_ingest_mode = true;
+            i += 1;
+        } else if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i + 1].clone();
+            i += 2;
+        } else if args[i] == "--eval" && i + 1 < args.len() {
+            eval_corpus = Some(args[i + 1].clone());
+            i += 2;
+        } else if (args[i] == "--file" || args[i] == "--dni-ingest") && i + 1 < args.len() {
+            dni_path = Some(args[i + 1].clone());
+            i += 2;
+        } else if args[i] == "--teacher" && i + 1 < args.len() {
+            teacher_path = Some(args[i + 1].clone());
+            i += 2;
+        } else if args[i] == "--teacher-tok" && i + 1 < args.len() {
+            teacher_tok_path = Some(args[i + 1].clone());
+            i += 2;
+        } else if args[i] == "--iqat" {
+            do_iqat = true;
+            i += 1;
+        } else if args[i] == "--iqat-lr" && i + 1 < args.len() {
+            iqat_lr = args[i + 1].parse().unwrap_or(0.001);
+            i += 2;
+        } else if (args[i] == "REMOVED") && i + 1 < args.len() {
+            save_path = Some(args[i + 1].clone());
             i += 2;
         } else if args[i] == "--import" && i + 1 < args.len() {
             import_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--output" && i + 1 < args.len() {
-            output_path = Some(args[i + 1].clone());
             i += 2;
         } else if args[i] == "--threshold" && i + 1 < args.len() {
             anchor_threshold_arg = args[i + 1].parse().unwrap_or(0.1);
@@ -62,19 +88,23 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         } else if args[i] == "--preset" && i + 1 < args.len() {
             init_preset = args[i + 1].clone();
             i += 2;
+        } else if args[i] == "--output" && i + 1 < args.len() {
+            output_path = Some(args[i + 1].clone());
+            save_path = Some(args[i + 1].clone());
+            i += 2;
+        } else if args[i] == "--save" && i + 1 < args.len() {
+            save_path = Some(args[i + 1].clone());
+            i += 2;
         } else if args[i] == "--inspect" {
             inspect_model = true;
             i += 1;
         } else if args[i] == "--init" && i + 1 < args.len() {
             init_path = Some(args[i + 1].clone());
             i += 2;
-        } else if args[i] == "--dni-ingest" && i + 1 < args.len() {
-            dni_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--dni-intensity" && i + 1 < args.len() {
+        } else if (args[i] == "--intensity" || args[i] == "--dni-intensity") && i + 1 < args.len() {
             dni_intensity = args[i + 1].parse().unwrap_or(0.01);
             i += 2;
-        } else if args[i] == "--dni-pop" && i + 1 < args.len() {
+        } else if (args[i] == "--pop" || args[i] == "--dni-pop") && i + 1 < args.len() {
             dni_pop = args[i + 1].parse().unwrap_or(16);
             i += 2;
         } else if args[i] == "--target-layers" && i + 1 < args.len() {
@@ -103,9 +133,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             i += 2;
         } else if args[i] == "--resonance" && i + 1 < args.len() {
             resonance_weight = args[i + 1].parse().unwrap_or(0.05);
-            i += 2;
-        } else if args[i] == "--save" && i + 1 < args.len() {
-            save_path = Some(args[i + 1].clone());
             i += 2;
         } else if model_path.is_empty() {
             if !args[i].starts_with("--") {
@@ -143,10 +170,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 rope_style: "split".to_string(),
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
+                rna_threshold: 0.5,
                 unpermute_weights: false,
                 apply_smollm_rope_patch: false,
-                tie_word_embeddings: init_preset == "silver_adult_32m"
-                    || init_preset == "silver_adult",
                 dni: String::new(), // Se generará automáticamente
                 state: "born".to_string(),
             },
@@ -190,8 +216,16 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         return Ok(());
     }
 
+    if is_ingest_mode && (dni_path.is_none() || model_path.is_empty()) {
+        println!("Usage: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>] [--intensity 0.01] [--pop 16] [--gens 2000]");
+        return Ok(());
+    }
+
     if model_path.is_empty() {
         println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect] [--import path.gguf --output path.gaje]");
+        println!(
+            "Or: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>]"
+        );
         return Ok(());
     }
 
@@ -311,49 +345,75 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
 
-    if let Some(path) = dni_path {
+    if let Some(path) = dni_path.clone() {
         println!(
-            "[*] Iniciando Direct Neural Ingestion (DNI) desde: {}",
+            "[*] Iniciando Direct Neural Ingestion (DNI) Scalable: {}",
             path
         );
-        let content = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-            println!(
-                "[!] Error: No se pudo leer el archivo DNI {}. Usando como texto plano.",
-                path
-            );
-            path.clone()
-        });
+        let paths = if Path::new(&path).is_dir() {
+            std::fs::read_dir(&path)?
+                .filter_map(|e| e.ok())
+                .map(|e| e.path())
+                .filter(|p| p.is_file())
+                .collect::<Vec<_>>()
+        } else {
+            vec![Path::new(&path).to_path_buf()]
+        };
 
-        use _impl::core::dni::DNIEngine;
+        use _impl::core::dni::{DNIEngine, SemanticNiche};
         let mut engine = DNIEngine {
             model: model.clone(),
             tokenizer: Arc::new(tokenizer.clone()),
             council: None,
             intensity: dni_intensity,
             target_layers: target_layers_arg,
+            validation_tokens: Vec::new(),
+            original_dna_hash: Vec::new(),
+            niche: SemanticNiche::General,
         };
+        engine.initialize_original_hash();
+        engine.set_validation_text(
+            "Hola, soy una inteligencia artificial basada en GAJE. ¿En qué puedo ayudarte?"
+                .to_string(),
+        );
 
         let start = std::time::Instant::now();
-        // Fragmentar contenido si es muy largo (Cromosomización básica por líneas)
-        for (idx, line) in content.lines().filter(|l| l.trim().len() > 10).enumerate() {
-            if !running.load(Ordering::SeqCst) {
-                break;
-            }
-            print!(
-                "    [Ingesta #{}]: \"{}...\" ",
-                idx + 1,
-                &line[..40.min(line.len())]
-            );
-            std::io::stdout().flush()?;
-
-            match engine.ingest_text(line.to_string(), generations, dni_pop) {
-                Ok(fitness) => println!("-> Fitness: {:.4}", fitness),
-                Err(e) => println!("-> [!] Error: {}", e),
+        for p in paths {
+            println!("  [+] Inyectando: {:?}", p);
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                match engine.ingest_document(content, generations, dni_pop) {
+                    Ok(fitness) => println!("    - Completado. Fitness Final: {:.4}", fitness),
+                    Err(e) => println!("    [!] Error en {:?}: {}", p, e),
+                }
             }
         }
 
         model = engine.model;
-        println!("[+] Proceso DNI completado en {:?}.", start.elapsed());
+        println!("[+] Proceso DNI finalizado en {:?}.", start.elapsed());
+    }
+
+    if do_iqat {
+        let t_path = teacher_path.ok_or("Debe especificar --teacher <path.gguf> para IQAT")?;
+        let t_tok =
+            teacher_tok_path.ok_or("Debe especificar --teacher-tok <tokenizer.json> para IQAT")?;
+        let teacher =
+            _impl::nn::distiller::Teacher::new("Master".to_string(), &t_path, &t_tok, &tokenizer)
+                .map_err(|e| e.to_string())?;
+
+        println!("[*] Iniciando Refinamiento IQAT (Activation Drift) bloque a bloque...");
+        let texts = if let Some(ref d_path) = dni_path {
+            if Path::new(d_path).is_file() {
+                vec![std::fs::read_to_string(d_path).unwrap_or_default()]
+            } else {
+                vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
+            }
+        } else {
+            vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
+        };
+
+        let iqat = _impl::nn::iqat::IQATEngine::new(iqat_lr);
+        iqat.run_iqat_cycle(&mut model, &teacher, &texts, train_epochs)
+            .map_err(|e| e.to_string())?;
     }
 
     if let Some(ref dataset_path) = train_target {
@@ -474,6 +534,85 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         println!("[+] Proceso completado exitosamente.");
     }
 
+    if let Some(corpus_path) = eval_corpus {
+        println!("[*] Evaluando perplejidad nativa sobre: {}", corpus_path);
+        let text = std::fs::read_to_string(&corpus_path)
+            .map_err(|e| format!("No se pudo leer el corpus: {}", e))?;
+
+        let lines: Vec<&str> = text
+            .lines()
+            .map(|l| l.trim())
+            .filter(|l| l.len() > 5)
+            .collect();
+
+        if lines.is_empty() {
+            return Err("Corpus vacío o sin líneas válidas".into());
+        }
+
+        let mut total_log_prob = 0.0f32;
+        let mut total_tokens = 0usize;
+        let mut skipped = 0usize;
+
+        for (idx, line) in lines.iter().enumerate() {
+            let tokens = match tokenizer.encode(line, false) {
+                Ok(t) if t.len() >= 2 => t,
+                _ => {
+                    skipped += 1;
+                    continue;
+                }
+            };
+
+            model.clear_cache_core();
+            let mut line_log_prob = 0.0f32;
+
+            for i in 0..tokens.len() - 1 {
+                let logits = model
+                    .forward_core(tokens[i] as usize, false)
+                    .map_err(|e| format!("Error en forward pass línea {}: {}", idx, e))?;
+
+                let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                let sum_exp: f32 = logits.iter().map(|&l| (l - max_l).exp()).sum();
+                let prob = (logits[tokens[i + 1] as usize] - max_l).exp() / (sum_exp + 1e-12);
+                line_log_prob += (prob + 1e-12).ln();
+            }
+
+            total_log_prob += line_log_prob;
+            total_tokens += tokens.len() - 1;
+
+            if idx % 50 == 0 {
+                let ppl_parcial = (-(total_log_prob / total_tokens as f32)).exp();
+                println!(
+                    "  [Línea {:>4}/{}] PPL parcial: {:.4}",
+                    idx + 1,
+                    lines.len(),
+                    ppl_parcial
+                );
+            }
+        }
+
+        if total_tokens == 0 {
+            return Err("No se procesaron tokens válidos".into());
+        }
+
+        let ppl = (-(total_log_prob / total_tokens as f32)).exp();
+
+        println!("\n╔══════════════════════════════════════╗");
+        println!("║  RESULTADO — EVALUACIÓN NATIVA       ║");
+        println!("╠══════════════════════════════════════╣");
+        println!("║  Modelo  : {}", corpus_path);
+        println!(
+            "║  Líneas  : {} procesadas, {} omitidas",
+            lines.len() - skipped,
+            skipped
+        );
+        println!("║  Tokens  : {}", total_tokens);
+        println!("║  PPL     : {:.4}", ppl);
+        println!("║  Log-P   : {:.4}", total_log_prob);
+        println!("╚══════════════════════════════════════╝");
+
+        return Ok(());
+    }
+
     if let Some(prompt) = prompt_arg {
         generate(&mut model, &tokenizer, &prompt, 50)?;
     } else if evolve_target.is_none() && train_target.is_none() {
@@ -481,82 +620,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     Ok(())
-}
-
-fn sample_logits_mcts(
-    model: &mut GenomicLLM,
-    logits: &[f32],
-    temperature: f32,
-    top_k: usize,
-) -> usize {
-    // 1. Seleccionar Top-K candidatos iniciales
-    let mut indexed_logits: Vec<(usize, f32)> =
-        logits.iter().enumerate().map(|(i, &l)| (i, l)).collect();
-    indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    if top_k > 0 && top_k < indexed_logits.len() {
-        indexed_logits.truncate(top_k);
-    }
-
-    // 2. Simulación Flash (1-step look-ahead) para cada candidato
-    let mut final_candidates = Vec::new();
-    for (token_id, current_score) in indexed_logits {
-        // Guardar estado del cache
-        let mut cache_sizes = Vec::new();
-        for block in &model.blocks {
-            cache_sizes.push(block.attn.k_cache.len());
-        }
-
-        // Simular siguiente paso: ¿Qué tan "estable" es el futuro si elijo este token?
-        let lookahead_resonance =
-            if let Ok(next_logits) = model.forward_phase_gaje_core(token_id, 64) {
-                // Tomamos el valor máximo de la siguiente activación como medida de resonancia
-                next_logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b))
-            } else {
-                -50.0 // Penalización si falla
-            };
-
-        // Restaurar cache (Crucial para no ensuciar la generación real)
-        for (i, block) in model.blocks.iter_mut().enumerate() {
-            block.attn.k_cache.truncate(cache_sizes[i]);
-            block.attn.v_cache.truncate(cache_sizes[i]);
-        }
-
-        // Score combinado: Score actual + Resonancia futura (0.5 es el factor de "visión de futuro")
-        let total_score = current_score + 0.5 * lookahead_resonance;
-        final_candidates.push((token_id, total_score));
-    }
-
-    // 3. Muestreo Probabilístico (Softmax) sobre los candidatos evaluados por MCTS
-    if temperature <= 0.0 {
-        return final_candidates
-            .iter()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .map(|(i, _)| *i)
-            .unwrap_or(0);
-    }
-
-    let max_score = final_candidates
-        .iter()
-        .map(|&(_, s)| s)
-        .fold(f32::NEG_INFINITY, f32::max);
-    let mut probs: Vec<(usize, f32)> = final_candidates
-        .iter()
-        .map(|&(i, s)| (i, ((s - max_score) / temperature).exp()))
-        .collect();
-    let sum: f32 = probs.iter().map(|&(_, p)| p).sum();
-
-    let mut rng = rand::thread_rng();
-    if sum > 0.0 {
-        for item in &mut probs {
-            item.1 /= sum;
-        }
-        let weights: Vec<f32> = probs.iter().map(|&(_, p)| p).collect();
-        if let Ok(dist) = WeightedIndex::new(&weights) {
-            return probs[dist.sample(&mut rng)].0;
-        }
-    }
-
-    final_candidates[0].0
 }
 
 fn generate(
@@ -570,14 +633,38 @@ fn generate(
     let mut logits = Vec::new();
     for &tid in &tokens {
         logits = model
-            .forward_phase_gaje_core(tid as usize, 64)
+            .forward_core(tid as usize, false)
             .map_err(|e| e.to_string())?;
     }
 
-    println!("\n[*] Generando con MCTS-Light (1-step look-ahead)...");
+    let mut generated_history = Vec::new();
+    let penalty = 1.5f32; // Penalización fuerte para romper bucles en Android
+
+    println!("\n[*] Generando con Repetition Penalty (Anti-Loop)...");
     for _ in 0..max_tokens {
-        // Usamos MCTS-Light con Top-5 candidatos para equilibrio entre calidad y velocidad
-        let next_token = sample_logits_mcts(model, &logits, 0.4, 5);
+        // 1. Aplicar penalización a los logits basados en la historia
+        for &past_token in &generated_history {
+            if logits[past_token] > 0.0 {
+                logits[past_token] /= penalty;
+            } else {
+                logits[past_token] *= penalty;
+            }
+        }
+
+        let mut indexed_logits: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
+        indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        /*
+        println!("[Debug] Top-5 candidates:");
+        for k in 0..5 {
+            let (tid, score) = indexed_logits[k];
+            let word = tokenizer.decode(&[tid as u32], true).unwrap_or("???".to_string());
+            println!("   {}. [{:>5}] {:<15} score: {:.4}", k+1, tid, word, score);
+        }
+        */
+
+        let next_token = indexed_logits[0].0;
+        generated_history.push(next_token);
 
         if next_token == 0 || next_token == 151643 {
             break;
@@ -589,7 +676,7 @@ fn generate(
         io::stdout().flush()?;
 
         logits = model
-            .forward_phase_gaje_core(next_token, 64)
+            .forward_core(next_token, false)
             .map_err(|e| e.to_string())?;
     }
     println!();

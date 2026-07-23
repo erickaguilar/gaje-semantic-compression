@@ -33,7 +33,39 @@ use crate::pyo3_shim::{
     PyObject, PyResult, Python,
 };
 
-// --- Lógica Interna Pura (Rust) ---
+// --- Look-Up Tables para Optimización ARM ---
+lazy_static::lazy_static! {
+    static ref SIN_LUT: [f32; 256] = {
+        let mut lut = [0.0f32; 256];
+        for i in 0..256 {
+            let angle = (i as f32 / 256.0) * 2.0 * std::f32::consts::PI;
+            lut[i] = angle.sin();
+        }
+        lut
+    };
+    static ref COS_LUT: [f32; 256] = {
+        let mut lut = [0.0f32; 256];
+        for i in 0..256 {
+            let angle = (i as f32 / 256.0) * 2.0 * std::f32::consts::PI;
+            lut[i] = angle.cos();
+        }
+        lut
+    };
+}
+
+/// Obtiene el seno rápido desde la LUT
+pub fn fast_sin(phase: f32) -> f32 {
+    let normalized = (phase / (2.0 * std::f32::consts::PI)).rem_euclid(1.0);
+    let idx = (normalized * 255.0) as usize;
+    SIN_LUT[idx]
+}
+
+/// Obtiene el coseno rápido desde la LUT
+pub fn fast_cos(phase: f32) -> f32 {
+    let normalized = (phase / (2.0 * std::f32::consts::PI)).rem_euclid(1.0);
+    let idx = (normalized * 255.0) as usize;
+    COS_LUT[idx]
+}
 
 pub fn genomize_f32_core(
     f32_data: &[f32],
@@ -62,7 +94,7 @@ pub fn genomize_f32_core(
 
     let mut anchor_indices = Vec::new();
     let mut anchor_values = Vec::new();
-    let _anchor_row_ptrs = vec![0u64; 1]; // Temporal, se ajustará después si es multidimensional
+    let _anchor_row_ptrs = [0u64; 1]; // Temporal, se ajustará después si es multidimensional
 
     let base_c = custom_base_c.unwrap_or([-1.510f32, -0.4528, 0.4528, 1.510]);
 
@@ -418,48 +450,155 @@ pub fn quantize_pq(
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
-#[cfg_attr(feature = "python", pyo3(signature = (data_u8, block_size, anchor_threshold, custom_base_c=None)))]
+#[cfg_attr(feature = "python", pyo3(signature = (data_u8, block_size, anchor_threshold, bit_depth=2, custom_base_c=None)))]
 pub fn genomize_f32_native(
     data_u8: Vec<u8>,
     block_size: usize,
     anchor_threshold: f32,
+    bit_depth: u8,
     custom_base_c: Option<Vec<f32>>,
     _py: Python<'_>,
 ) -> PyResult<(PyObject, Vec<f32>, PyObject)> {
     let f32_data: &[f32] =
         unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
 
-    let base_c_arr = if let Some(c) = custom_base_c {
-        if c.len() != 4 {
-            return Err(PyTypeError::new_err("custom_base_c must have 4 elements"));
+    if bit_depth == 32 {
+        #[cfg(feature = "python")]
+        {
+            use pyo3::types::PyBytes;
+            let dna_py = PyBytes::new(_py, &data_u8).into();
+            let anchors_py = PyBytes::new(_py, &[]).into();
+            Ok((dna_py, vec![], anchors_py))
         }
-        Some([c[0], c[1], c[2], c[3]])
+        #[cfg(not(feature = "python"))]
+        { Err("Python not enabled".to_string()) }
+    } else if bit_depth == 4 {
+        let (_dna, _centroids, _anchors) = genomize_4bit_core(f32_data, block_size, anchor_threshold);
+        #[cfg(feature = "python")]
+        {
+            use pyo3::types::PyBytes;
+            let dna_py = PyBytes::new(_py, &_dna).into();
+            let anchors_py = PyBytes::new(_py, &_anchors).into();
+            Ok((dna_py, _centroids, anchors_py))
+        }
+        #[cfg(not(feature = "python"))]
+        { Err("Python not enabled".to_string()) }
     } else {
-        None
-    };
+        let base_c_arr = if let Some(c) = custom_base_c {
+            if c.len() != 4 {
+                return Err(PyTypeError::new_err("custom_base_c must have 4 elements"));
+            }
+            Some([c[0], c[1], c[2], c[3]])
+        } else {
+            None
+        };
 
-    #[allow(unused_variables)]
-    let (dna, centroids, anchors) =
-        genomize_f32_core(f32_data, block_size, anchor_threshold, base_c_arr);
+        let (_dna, _centroids, _anchors) =
+            genomize_f32_core(f32_data, block_size, anchor_threshold, base_c_arr);
 
-    #[cfg(feature = "python")]
-    {
-        let dna_py = PyBytes::new(_py, &dna).into();
-        let anchors_py = PyBytes::new(_py, &anchors).into();
-        Ok((dna_py, centroids, anchors_py))
-    }
-    #[cfg(not(feature = "python"))]
-    {
-        Err("Python not enabled".to_string())
+        #[cfg(feature = "python")]
+        {
+            use pyo3::types::PyBytes;
+            let dna_py = PyBytes::new(_py, &_dna).into();
+            let anchors_py = PyBytes::new(_py, &_anchors).into();
+            Ok((dna_py, _centroids, anchors_py))
+        }
+        #[cfg(not(feature = "python"))]
+        { Err("Python not enabled".to_string()) }
     }
 }
 
+pub fn genomize_4bit_core(
+    f32_data: &[f32],
+    block_size: usize,
+    anchor_threshold: f32,
+) -> (Vec<u8>, Vec<f32>, Vec<u8>) {
+    let n_elements = f32_data.len();
+    let n_blocks = n_elements / block_size;
+    let mut dna_database = Vec::with_capacity(n_elements / 2);
+    let mut all_centroids = Vec::with_capacity(n_blocks * 16);
+
+    let mut actual_threshold = anchor_threshold;
+    if anchor_threshold > 0.0 && anchor_threshold < 1.0 {
+        let mut abs_vals: Vec<f32> = f32_data.iter().map(|v| v.abs()).collect();
+        abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
+        let top_idx = (n_elements as f32 * anchor_threshold) as usize;
+        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+    }
+
+    let mut anchor_indices = Vec::new();
+    let mut anchor_values = Vec::new();
+
+    for i in 0..n_blocks {
+        let start = i * block_size;
+        let block_f32 = &f32_data[start..start + block_size];
+
+        // 16 centroides lineales para 4 bits en el rango del bloque
+        let mut min_val = f32::MAX;
+        let mut max_val = f32::MIN;
+        for &v in block_f32 {
+            if v < min_val { min_val = v; }
+            if v > max_val { max_val = v; }
+        }
+        
+        let mut c = [0.0f32; 16];
+        let step = (max_val - min_val) / 15.0;
+        for j in 0..16 {
+            c[j] = min_val + j as f32 * step;
+            all_centroids.push(c[j]);
+        }
+
+        for k in 0..(block_size / 2) {
+            let mut byte = 0u8;
+            for s in 0..2 {
+                let idx = k * 2 + s;
+                let val = block_f32[idx];
+                
+                // Cuantización 4-bit (Centroide más cercano)
+                let mut best_idx = 0;
+                let mut min_dist = f32::MAX;
+                for j in 0..16 {
+                    let dist = (val - c[j]).abs();
+                    if dist < min_dist {
+                        min_dist = dist;
+                        best_idx = j;
+                    }
+                }
+
+                if s == 0 {
+                    byte |= (best_idx as u8) << 4;
+                } else {
+                    byte |= best_idx as u8;
+                }
+
+                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                    anchor_indices.push((start + idx) as u32);
+                    anchor_values.push(f16::from_f32(val));
+                }
+            }
+            dna_database.push(byte);
+        }
+    }
+
+    // Empaquetar anclas en formato GAJE
+    let mut anchors_buf = Vec::new();
+    anchors_buf.extend_from_slice(b"GAJE");
+    anchors_buf.extend_from_slice(&(anchor_indices.len() as u32).to_le_bytes());
+    for &idx in &anchor_indices { anchors_buf.extend_from_slice(&idx.to_le_bytes()); }
+    for &val in &anchor_values { anchors_buf.extend_from_slice(&val.to_le_bytes()); }
+    let row_ptrs = [0u64, anchor_indices.len() as u64]; // Simplificación para exportación de 1 layer
+    for &ptr in &row_ptrs { anchors_buf.extend_from_slice(&ptr.to_le_bytes()); }
+
+    (dna_database, all_centroids, anchors_buf)
+}
+
 #[cfg_attr(feature = "python", pyfunction)]
-#[cfg_attr(feature = "python", pyo3(signature = (data_u8, block_size, anchor_threshold, custom_base_c=None)))]
+#[cfg_attr(feature = "python", pyo3(signature = (data_u8, block_size, anchor_threshold, bit_depth=2, custom_base_c=None)))]
 pub fn genomize_f16_native(
     data_u8: Vec<u8>,
     block_size: usize,
     anchor_threshold: f32,
+    bit_depth: u8,
     custom_base_c: Option<Vec<f32>>,
     _py: Python<'_>,
 ) -> PyResult<(PyObject, Vec<f32>, PyObject)> {
@@ -475,25 +614,38 @@ pub fn genomize_f16_native(
         None
     };
 
-    #[allow(unused_variables)]
-    let (dna, centroids, anchors) =
-        genomize_f16_core(f16_data, block_size, anchor_threshold, base_c_arr);
+    if bit_depth == 4 {
+        // Convertir F16 a F32 para procesar con el core de 4 bits existente
+        let f32_data: Vec<f32> = f16_data.iter().map(|v| v.to_f32()).collect();
+        let (dna, centroids, anchors) =
+            genomize_4bit_core(&f32_data, block_size, anchor_threshold);
+        #[cfg(feature = "python")]
+        {
+            use pyo3::types::PyBytes;
+            let dna_py = PyBytes::new(_py, &dna).into();
+            let anchors_py = PyBytes::new(_py, &anchors).into();
+            Ok((dna_py, centroids, anchors_py))
+        }
+        #[cfg(not(feature = "python"))]
+        { Err("Python not enabled".into()) }
+    } else {
+        let (dna, centroids, anchors) =
+            genomize_f16_core(f16_data, block_size, anchor_threshold, base_c_arr);
 
-    #[cfg(feature = "python")]
-    {
-        let dna_py = PyBytes::new(_py, &dna).into();
-        let anchors_py = PyBytes::new(_py, &anchors).into();
-        Ok((dna_py, centroids, anchors_py))
-    }
-    #[cfg(not(feature = "python"))]
-    {
-        Err("Python not enabled".to_string())
+        #[cfg(feature = "python")]
+        {
+            let dna_py = PyBytes::new(_py, &dna).into();
+            let anchors_py = PyBytes::new(_py, &anchors).into();
+            Ok((dna_py, centroids, anchors_py))
+        }
+        #[cfg(not(feature = "python"))]
+        {
+            Err("Python not enabled".to_string())
+        }
     }
 }
 
-#[cfg_attr(feature = "python", pyfunction)]
-#[cfg_attr(feature = "python", pyo3(signature = (logits, temperature=1.0, top_p=0.9)))]
-pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+pub fn sample_top_p_core(logits: Vec<f32>, temperature: f32, top_p: f32) -> Result<usize, String> {
     if logits.is_empty() {
         return Ok(0);
     }
@@ -504,6 +656,9 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
         .map(|(i, &l)| (i, ((l - max_logit) / temperature).exp()))
         .collect();
     let sum_exp: f32 = probs.iter().map(|(_, p)| p).sum();
+    if sum_exp <= 0.0 {
+        return Ok(0);
+    }
     for p in &mut probs {
         p.1 /= sum_exp;
     }
@@ -531,6 +686,12 @@ pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<
     Ok(probs[0].0)
 }
 
+#[cfg_attr(feature = "python", pyfunction)]
+#[cfg_attr(feature = "python", pyo3(signature = (logits, temperature=1.0, top_p=0.9)))]
+pub fn sample_top_p(logits: Vec<f32>, temperature: f32, top_p: f32) -> PyResult<usize> {
+    sample_top_p_core(logits, temperature, top_p).map_err(PyValueError::new_err)
+}
+
 pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
     let n = real.len();
     let mut packed = Vec::with_capacity((n + 3) / 4);
@@ -543,11 +704,11 @@ pub fn quantize_phase_core(real: &[f32], imag: &[f32]) -> Vec<u8> {
                 // atan2 returns values in (-PI, PI]
                 let angle = im.atan2(r);
 
-                let bits = if angle >= 0.0 && angle < std::f32::consts::FRAC_PI_2 {
+                let bits = if (0.0..std::f32::consts::FRAC_PI_2).contains(&angle) {
                     0b00 // Quadrant I: 0 to 90 deg (A)
-                } else if angle >= std::f32::consts::FRAC_PI_2 && angle <= std::f32::consts::PI {
+                } else if (std::f32::consts::FRAC_PI_2..=std::f32::consts::PI).contains(&angle) {
                     0b01 // Quadrant II: 90 to 180 deg (C)
-                } else if angle >= -std::f32::consts::PI && angle < -std::f32::consts::FRAC_PI_2 {
+                } else if (-std::f32::consts::PI..-std::f32::consts::FRAC_PI_2).contains(&angle) {
                     0b11 // Quadrant III: 180 to 270 deg (G)
                 } else {
                     0b10 // Quadrant IV: 270 to 360 deg (T)
@@ -622,44 +783,6 @@ pub fn complex_mul(r1: f32, i1: f32, r2: f32, i2: f32) -> (f32, f32) {
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn dequantize_phase_native(dna_packed: Vec<u8>, dims: usize) -> PyResult<(Vec<f32>, Vec<f32>)> {
     Ok(dequantize_phase_core(&dna_packed, dims))
-}
-
-pub fn calculate_shannon_entropy(data_u8: Vec<u8>, rows: usize, cols: usize) -> PyResult<Vec<f32>> {
-    if data_u8.is_empty() || rows == 0 || cols == 0 {
-        return Ok(vec![]);
-    }
-    let f32_data: &[f32] =
-        unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
-    let entropies: Vec<f32> = (0..cols)
-        .into_par_iter()
-        .map(|d_idx| {
-            let mut values = Vec::with_capacity(rows);
-            for r in 0..rows {
-                values.push(f32_data[r * cols + d_idx]);
-            }
-            let min = values.iter().fold(f32::INFINITY, |a, &b| a.min(b));
-            let max = values.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-            let range = max - min;
-            if range < 1e-6 {
-                return 0.0f32;
-            }
-            let n_bins = 64;
-            let mut bins = vec![0usize; n_bins];
-            for &v in &values {
-                let bin_idx = (((v - min) / range) * (n_bins - 1) as f32) as usize;
-                bins[bin_idx.min(n_bins - 1)] += 1;
-            }
-            let mut entropy = 0.0f32;
-            for &count in &bins {
-                if count > 0 {
-                    let p = count as f32 / rows as f32;
-                    entropy -= p * (p.ln() / 2.0f32.ln());
-                }
-            }
-            entropy
-        })
-        .collect();
-    Ok(entropies)
 }
 
 pub fn dequantize_q8_0_core(data_u8: &[u8], out_features: usize, in_features: usize) -> Vec<f32> {
@@ -1015,6 +1138,123 @@ pub fn calculate_distribution_entropy_native(probs: Vec<f32>) -> PyResult<f32> {
         .map(|&p| -p * p.ln() / 2.0f32.ln())
         .sum();
     Ok(entropy)
+}
+
+/// # Detección de Incertidumbre Semántica
+///
+/// Calcula una aproximación rápida de la entropía de un vector de activaciones.
+/// Se utiliza para decidir si activar las hebras de ARN (precisión adaptativa).
+pub fn calculate_activation_entropy(input: &[f32]) -> f32 {
+    if input.is_empty() {
+        return 0.0;
+    }
+    let n = input.len() as f32;
+    let mean = input.iter().sum::<f32>() / n;
+    let variance = input.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / n;
+
+    // Usamos la varianza como proxy de entropía para activaciones normalizadas (RMSNorm)
+    // Alta varianza -> Alta incertidumbre/Complejidad
+    variance.sqrt()
+}
+
+/// Decide si se deben activar las hebras de ARN basándose en un umbral de entropía.
+pub fn should_activate_rna(entropy: f32, threshold: f32) -> bool {
+    entropy > threshold
+}
+
+/// # Analizador de Entropía de Shannon (Sovereign Information Density)
+///
+/// Calcula la entropía informativa por dimensión para un tensor dado.
+/// Esto permite identificar qué dimensiones son ricas en información (alta entropía)
+/// y cuáles son ruido o redundantes (baja entropía).
+pub fn calculate_shannon_entropy_core(
+    data: &[f32],
+    rows: usize,
+    cols: usize,
+    bins: usize,
+) -> Vec<f32> {
+    (0..cols)
+        .into_par_iter()
+        .map(|col_idx| {
+            let mut col_data = Vec::with_capacity(rows);
+            for r in 0..rows {
+                col_data.push(data[r * cols + col_idx]);
+            }
+
+            let min = col_data.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+            let max = col_data.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let range = max - min;
+
+            if range < 1e-7 {
+                return 0.0;
+            }
+
+            let mut histogram = vec![0usize; bins];
+            for &val in &col_data {
+                let bin_idx = (((val - min) / range) * (bins - 1) as f32) as usize;
+                histogram[bin_idx.min(bins - 1)] += 1;
+            }
+
+            let mut entropy = 0.0;
+            let n = rows as f32;
+            for &count in &histogram {
+                if count > 0 {
+                    let p = count as f32 / n;
+                    entropy -= p * p.log2();
+                }
+            }
+            entropy
+        })
+        .collect()
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+#[cfg_attr(feature = "python", pyo3(signature = (data_u8, rows, cols, bins=64)))]
+pub fn calculate_shannon_entropy(
+    data_u8: Vec<u8>,
+    rows: usize,
+    cols: usize,
+    bins: usize,
+) -> PyResult<Vec<f32>> {
+    let data_f32: &[f32] =
+        unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
+    Ok(calculate_shannon_entropy_core(data_f32, rows, cols, bins))
+}
+
+/// # Entropía Genómica (2-bit Shannon Entropy)
+///
+/// Calcula la entropía de Shannon directamente sobre los pesos empaquetados de 2 bits.
+/// Útil para medir la densidad informativa de una capa de ADN sin de-cuantizar.
+pub fn calculate_genomic_entropy_core(dna_packed: &[u8]) -> f32 {
+    if dna_packed.is_empty() {
+        return 0.0;
+    }
+    let mut counts = [0usize; 4];
+    for &byte in dna_packed {
+        counts[((byte >> 6) & 0b11) as usize] += 1;
+        counts[((byte >> 4) & 0b11) as usize] += 1;
+        counts[((byte >> 2) & 0b11) as usize] += 1;
+        counts[(byte & 0b11) as usize] += 1;
+    }
+    let total = (dna_packed.len() * 4) as f32;
+    let mut entropy = 0.0f32;
+    for &count in &counts {
+        if count > 0 {
+            let p = count as f32 / total;
+            entropy -= p * p.log2();
+        }
+    }
+    entropy
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn calculate_genomic_entropy(dna_packed: Vec<u8>) -> PyResult<f32> {
+    Ok(calculate_genomic_entropy_core(&dna_packed))
+}
+
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn rms_norm_py(input: Vec<f32>, weight: Vec<f32>, eps: f32) -> PyResult<Vec<f32>> {
+    Ok(unsafe { crate::compute::kernels::rms_norm(&input, &weight, eps) })
 }
 
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {

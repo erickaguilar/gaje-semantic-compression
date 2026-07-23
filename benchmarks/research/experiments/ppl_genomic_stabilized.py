@@ -5,7 +5,7 @@ import numpy as np
 # Añadir el directorio python al path
 sys.path.append(os.path.abspath("python"))
 
-from stabilized_genomic_llm import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM
 
 
 def calculate_ppl(model, text):
@@ -40,7 +40,7 @@ def calculate_ppl(model, text):
 
 
 def run_test():
-    model_path = "/data/data/com.termux/files/home/models/gguf/smollm2-135m-q8_0.gguf"
+    model_path = "models/gguf/qwen2-0_5b-q8_0.gguf"
     if not os.path.exists(model_path):
         print("❌ Modelo no encontrado.")
         return

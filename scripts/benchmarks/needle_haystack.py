@@ -19,7 +19,10 @@ def run_phase_3_1(gaje_path, context_lengths=[512, 1024, 2048]):
 
     # 1. Cargar GAJE
     print("[~] Cargando modelo GAJE...")
-    gaje_model = GenomicLLM.load_genomic(gaje_path)
+    if gaje_path.endswith(".gaje"):
+        gaje_model = GenomicLLM.load_genomic(gaje_path)
+    else:
+        gaje_model = GenomicLLM(gaje_path)
     tokenizer = gaje_model.tokenizer
 
     needle = "El código secreto de la misión es GAJE-2026."
@@ -27,7 +30,7 @@ def run_phase_3_1(gaje_path, context_lengths=[512, 1024, 2048]):
     expected_answer = "GAJE-2026"
 
     # Dataset para el "pajar" (ruido irrelevante)
-    haystack_file = "data/datasets/tiny_shakespeare.txt"
+    haystack_file = "data/datasets/hybrid_polyglot_dataset.txt"
     if not os.path.exists(haystack_file):
         print(f"❌ Error: No se encontró el dataset de ruido en {haystack_file}")
         return
@@ -64,7 +67,7 @@ def run_phase_3_1(gaje_path, context_lengths=[512, 1024, 2048]):
         start_time = time.time()
 
         # Limpiar caché y pre-llenar con el contexto
-        gaje_model.rust_llm.clear_cache()
+        gaje_model.rust_llm.clear_cache_py()
         for i, tid in enumerate(full_context_tokens):
             gaje_model.rust_llm.forward(tid, False)
             if (i + 1) % 500 == 0:

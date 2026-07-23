@@ -14,6 +14,7 @@ use std::arch::aarch64::*;
 use std::arch::x86_64::*;
 
 use rayon::prelude::*;
+use crate::compute::kv_cache::CompressedKVCache;
 
 // =============================================================================
 // dot_product — Producto punto vectorizado universal
@@ -106,6 +107,48 @@ pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     dot_product(a, b)
 }
 
+/// # Safety
+/// Esta función es unsafe porque realiza acceso directo a memoria mediante punteros
+/// y de-cuantización manual de bits. El llamador debe asegurar que:
+/// 1. `query.len() == len`.
+/// 2. `start_idx + len` no exceda la capacidad del cache.
+pub unsafe fn dot_product_compressed(
+    query: &[f32],
+    cache: &CompressedKVCache,
+    start_idx: usize,
+    len: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+    
+    // Optimizamos procesando por bloques de 48 (alineados con el cache)
+    let mut i = 0;
+    while i < len {
+        let global_idx = start_idx + i;
+        let block_idx = global_idx / 48;
+        let sub_idx = global_idx % 48;
+        
+        let block = &cache.blocks[block_idx];
+        let scale = block.scale;
+        
+        // Procesamos lo que queda del bloque actual o hasta el final de len
+        let remaining_in_block = 48 - sub_idx;
+        let batch_len = remaining_in_block.min(len - i);
+        
+        for j in 0..batch_len {
+            let current_sub_idx = sub_idx + j;
+            let byte_idx = current_sub_idx / 4;
+            let bit_shift = (3 - (current_sub_idx % 4)) * 2;
+            let quantized = (block.data[byte_idx] >> bit_shift) & 0b11;
+            
+            sum += query[i + j] * (quantized as f32) * scale;
+        }
+        
+        i += batch_len;
+    }
+    
+    sum
+}
+
 // =============================================================================
 // rms_norm — Normalización RMS vectorizada universal
 // =============================================================================
@@ -135,7 +178,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             i += 1;
         }
         // Suelo de seguridad para evitar NaNs en Android
-        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
+        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
         let inv_rms_v = vdupq_n_f32(inv_rms);
         i = 0;
         while i + 4 <= n {
@@ -173,7 +216,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 sum_sq += x[i] * x[i];
                 i += 1;
             }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
             let inv_rms_v = _mm256_set1_ps(inv_rms);
             i = 0;
             while i + 8 <= n {
@@ -204,7 +247,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 sum_sq += x[i] * x[i];
                 i += 1;
             }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-12).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
             let inv_rms_v = _mm_set1_ps(inv_rms);
             i = 0;
             while i + 4 <= n {
@@ -224,7 +267,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     #[cfg(all(not(target_arch = "aarch64"), not(target_arch = "x86_64")))]
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
-        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-12).sqrt();
+        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-5).sqrt();
         for i in 0..n {
             out[i] = x[i] * inv_rms * weight[i];
         }
@@ -358,7 +401,7 @@ pub fn lateral_inhibition_kwta(scores: &mut [f32], k: usize) {
         return;
     }
 
-    // Encontramos el umbral del k-ésimo ganador
+    // Revertido para diagnóstico de NaN
     let mut sorted_scores = scores.to_vec();
     sorted_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
     let threshold = sorted_scores[k - 1];
@@ -387,71 +430,8 @@ pub unsafe fn genomic_dot_product(
     n_blocks: usize,
     modulation: &[f32; 4],
 ) -> f32 {
-    #[cfg(target_arch = "aarch64")]
-    {
-        let mut sum_v = vdupq_n_f32(0.0);
-        let m_v = vld1q_f32(modulation.as_ptr());
-        #[allow(static_mut_refs)]
-        let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
-        for j in 0..n_blocks {
-            // Cargar centroides y aplicar modulación granular
-            let raw_c = vld1q_f32(centroids.as_ptr().add(j * 4));
-            let c_mod = vmulq_f32(raw_c, m_v);
-            let c_v = vreinterpretq_u8_f32(c_mod);
-
-            let input_block_ptr = input.as_ptr().add(j * stride * 4);
-            let weights_block_ptr = weights.as_ptr().add(j * stride);
-            for k in 0..stride {
-                let byte = *weights_block_ptr.add(k);
-                let mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
-                let v_vals = vqtbl1q_u8(c_v, mask);
-                let v_weights = vreinterpretq_f32_u8(v_vals);
-                sum_v = vfmaq_f32(sum_v, v_weights, vld1q_f32(input_block_ptr.add(k * 4)));
-            }
-        }
-        vaddvq_f32(sum_v)
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        if is_x86_feature_detected!("ssse3") {
-            #[allow(static_mut_refs)]
-            let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
-            let mut acc = _mm_setzero_ps();
-            let m_v = _mm_loadu_ps(modulation.as_ptr());
-
-            for j in 0..n_blocks {
-                let raw_c = _mm_loadu_ps(centroids.as_ptr().add(j * 4));
-                let c_mod = _mm_mul_ps(raw_c, m_v);
-                let c_v = _mm_castps_si128(c_mod);
-
-                let input_block_ptr = input.as_ptr().add(j * stride * 4);
-                let weights_block_ptr = weights.as_ptr().add(j * stride);
-                for k in 0..stride {
-                    let byte = *weights_block_ptr.add(k);
-                    let mask = _mm_loadu_si128(table_ptr.add(byte as usize) as *const __m128i);
-                    let v_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(c_v, mask));
-                    let v_in = _mm_loadu_ps(input_block_ptr.add(k * 4));
-                    if is_x86_feature_detected!("fma") {
-                        acc = _mm_fmadd_ps(v_vals_f, v_in, acc);
-                    } else {
-                        acc = _mm_add_ps(acc, _mm_mul_ps(v_vals_f, v_in));
-                    }
-                }
-            }
-            let shuf = _mm_movehdup_ps(acc);
-            let sums = _mm_add_ps(acc, shuf);
-            let shuf2 = _mm_movehl_ps(sums, sums);
-            _mm_cvtss_f32(_mm_add_ss(sums, shuf2))
-        } else {
-            genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
-        }
-    }
-
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-    {
-        genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
-    }
+    // Audit Forense: Forzamos motor escalar para aislar inestabilidad SIMD
+    genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
 }
 
 // Alias para compatibilidad con rama windows
@@ -501,6 +481,51 @@ pub unsafe fn genomic_dot_product_scalar(
             }
         }
     }
+    
+    // Frenado Lagrangiano: El rozamiento semántico aniquila el ruido residual (Entropía)
+    // Esto asegura que el eco toroidal sea puro en ciclos infinitos.
+    if sum.abs() < 1e-5 {
+        sum = 0.0;
+    }
+
+    sum
+}
+
+/// # Safety
+/// Implementación de 4 bits (2 pesos por byte). Soporta 16 centroides por bloque.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_4bit(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride_4bit: usize, // stride_4bit = block_size / 2
+    n_blocks: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block_size = stride_4bit * 2;
+        let input_block_ptr = input.as_ptr().add(j * block_size);
+        let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
+        let centroids_ptr = centroids.as_ptr().add(j * 16);
+
+        for k in 0..stride_4bit {
+            let byte = *weights_block_ptr.add(k);
+            
+            // Peso 1 (High nibble)
+            let c_idx1 = (byte >> 4) as usize;
+            sum += *centroids_ptr.add(c_idx1) * *input_block_ptr.add(k * 2);
+
+            // Peso 2 (Low nibble)
+            let c_idx2 = (byte & 0x0F) as usize;
+            sum += *centroids_ptr.add(c_idx2) * *input_block_ptr.add(k * 2 + 1);
+        }
+    }
+
+    if sum.abs() < 1e-6 {
+        sum = 0.0;
+    }
+
     sum
 }
 

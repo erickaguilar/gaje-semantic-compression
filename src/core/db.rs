@@ -121,70 +121,95 @@ impl GajeDatabaseWriter {
     }
 
     #[cfg(feature = "python")]
-    pub fn write_metadata(&self, key: &str, value: &str) -> PyResult<()> {
-        let write_txn = self
-            .db
-            .begin_write()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        {
-            let mut table = write_txn
-                .open_table(METADATA_TABLE)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            table
-                .insert(key, value)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        }
-        write_txn
-            .commit()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(())
+    #[pyo3(name = "write_metadata")]
+    pub fn py_write_metadata(&self, key: &str, value: &str) -> PyResult<()> {
+        let mut writer = self.begin_batch_rust().map_err(pyo3::exceptions::PyIOError::new_err)?;
+        writer.write_metadata(key, value).map_err(pyo3::exceptions::PyIOError::new_err)?;
+        writer.commit_core().map_err(pyo3::exceptions::PyIOError::new_err)
     }
 
     #[cfg(feature = "python")]
-    pub fn write_tensor_compressed(&self, key: &str, data: &[u8]) -> PyResult<()> {
-        let write_txn = self
-            .db
-            .begin_write()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        {
-            let mut table = write_txn
-                .open_table(TENSOR_TABLE)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-            let compressed = lz4_flex::compress_prepend_size(data);
-            table
-                .insert(key, compressed.as_slice())
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        }
-        write_txn
-            .commit()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(())
+    #[pyo3(name = "write_tensor_compressed")]
+    pub fn py_write_tensor_compressed(&self, key: &str, data: &[u8]) -> PyResult<()> {
+        let mut writer = self.begin_batch_rust().map_err(pyo3::exceptions::PyIOError::new_err)?;
+        writer.write_tensor_compressed(key, data).map_err(pyo3::exceptions::PyIOError::new_err)?;
+        writer.commit_core().map_err(pyo3::exceptions::PyIOError::new_err)
+    }
+
+    #[cfg(feature = "python")]
+    pub fn begin_batch(&self) -> PyResult<GajeBatchWriter> {
+        self.begin_batch_rust().map_err(pyo3::exceptions::PyIOError::new_err)
     }
 }
 
+#[cfg_attr(feature = "python", pyclass)]
 pub struct GajeBatchWriter {
-    pub txn: redb::WriteTransaction,
+    pub txn: Option<redb::WriteTransaction>,
+}
+
+#[cfg_attr(feature = "python", pymethods)]
+impl GajeBatchWriter {
+    #[cfg(feature = "python")]
+    #[pyo3(name = "write_tensor")]
+    pub fn py_write_tensor(&mut self, key: &str, data: &[u8]) -> PyResult<()> {
+        self.write_tensor(key, data).map_err(pyo3::exceptions::PyIOError::new_err)
+    }
+
+    #[cfg(feature = "python")]
+    #[pyo3(name = "write_tensor_compressed")]
+    pub fn py_write_tensor_compressed(&mut self, key: &str, data: &[u8]) -> PyResult<()> {
+        self.write_tensor_compressed(key, data).map_err(pyo3::exceptions::PyIOError::new_err)
+    }
+
+    #[cfg(feature = "python")]
+    #[pyo3(name = "write_metadata")]
+    pub fn py_write_metadata(&mut self, key: &str, value: &str) -> PyResult<()> {
+        self.write_metadata(key, value).map_err(pyo3::exceptions::PyIOError::new_err)
+    }
+
+    #[cfg(feature = "python")]
+    #[pyo3(name = "commit")]
+    pub fn py_commit(&mut self) -> PyResult<()> {
+        self.commit_core().map_err(pyo3::exceptions::PyIOError::new_err)
+    }
 }
 
 impl GajeBatchWriter {
     pub fn write_tensor(&mut self, key: &str, data: &[u8]) -> Result<(), String> {
-        let mut table = self
-            .txn
+        let txn = self.txn.as_mut().ok_or("Transaction closed")?;
+        let mut table = txn
             .open_table(TENSOR_TABLE)
             .map_err(|e| e.to_string())?;
         table.insert(key, data).map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    pub fn write_tensor_compressed(&mut self, key: &str, data: &[u8]) -> Result<(), String> {
+        let txn = self.txn.as_mut().ok_or("Transaction closed")?;
+        let mut table = txn
+            .open_table(TENSOR_TABLE)
+            .map_err(|e| e.to_string())?;
+        let compressed = lz4_flex::compress_prepend_size(data);
+        table.insert(key, compressed.as_slice()).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn write_metadata(&mut self, key: &str, value: &str) -> Result<(), String> {
-        let mut table = self
-            .txn
+        let txn = self.txn.as_mut().ok_or("Transaction closed")?;
+        let mut table = txn
             .open_table(METADATA_TABLE)
             .map_err(|e| e.to_string())?;
         table.insert(key, value).map_err(|e| e.to_string())?;
         Ok(())
     }
-    pub fn commit(self) -> Result<(), String> {
-        self.txn.commit().map_err(|e| e.to_string())?;
+
+    pub fn commit(mut self) -> Result<(), String> {
+        self.commit_core()
+    }
+
+    pub fn commit_core(&mut self) -> Result<(), String> {
+        let txn = self.txn.take().ok_or("Transaction already committed")?;
+        txn.commit().map_err(|e| e.to_string())?;
         Ok(())
     }
 }
@@ -194,9 +219,9 @@ impl GajeDatabaseWriter {
         let db = get_or_create_db(path, false)?;
         Ok(GajeDatabaseWriter { db })
     }
-    pub fn begin_batch(&mut self) -> Result<GajeBatchWriter, String> {
+    pub fn begin_batch_rust(&self) -> Result<GajeBatchWriter, String> {
         let txn = self.db.begin_write().map_err(|e| e.to_string())?;
-        Ok(GajeBatchWriter { txn })
+        Ok(GajeBatchWriter { txn: Some(txn) })
     }
     pub fn compact(&self) -> Result<(), String> {
         Ok(())

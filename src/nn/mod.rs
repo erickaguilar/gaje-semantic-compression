@@ -1,6 +1,7 @@
 pub mod attention;
 pub mod block;
 pub mod distiller;
+pub mod iqat;
 pub mod linear;
 pub mod llm;
 pub mod merger;

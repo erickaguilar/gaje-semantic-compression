@@ -37,6 +37,8 @@ pub struct ArchConfig {
     pub anchor_threshold: f32,
     #[serde(default = "default_anchor_threshold")]
     pub ffn_anchor_threshold: f32,
+    #[serde(default = "default_rna_threshold")]
+    pub rna_threshold: f32,
     #[serde(default = "default_false")]
     pub unpermute_weights: bool,
     #[serde(default = "default_false")]
@@ -53,7 +55,7 @@ pub struct ArchConfig {
 impl ArchConfig {
     #[cfg(feature = "python")]
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, rna_threshold = 0.5, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
     pub fn py_new(
         name: String,
         version: String,
@@ -64,9 +66,9 @@ impl ArchConfig {
         rope_style: String,
         anchor_threshold: f32,
         ffn_anchor_threshold: f32,
+        rna_threshold: f32,
         unpermute_weights: bool,
         apply_smollm_rope_patch: bool,
-        tie_word_embeddings: bool,
         dni: String,
         state: String,
     ) -> Self {
@@ -81,9 +83,9 @@ impl ArchConfig {
             rope_style,
             anchor_threshold,
             ffn_anchor_threshold,
+            rna_threshold,
             unpermute_weights,
             apply_smollm_rope_patch,
-            tie_word_embeddings,
             dni: actual_dni,
             state,
         }
@@ -113,6 +115,9 @@ fn default_rope_style() -> String {
 }
 fn default_anchor_threshold() -> f32 {
     0.1
+}
+fn default_rna_threshold() -> f32 {
+    0.5
 }
 fn default_state() -> String {
     "stable".to_string()
@@ -231,23 +236,33 @@ impl GGUFLoader {
             .unwrap_or(1e-6);
         let rope_base = self
             .get_metadata_f32(&format!("{}rope.freq_base", p))
+            .or_else(|| self.get_metadata_f32("llama.rope.freq_base"))
             .unwrap_or(10000.0);
+        let name = self
+            .get_metadata_string("general.name")
+            .unwrap_or_else(|| "GGUF-Model".to_string());
+        let is_smollm2 = name.to_lowercase().contains("smollm2");
+        let actual_rope_base = rope_base; // Usamos el valor real del GGUF (100k)
+        let rope_style = if arch == "qwen2" || arch == "llama" {
+            "split".to_string()
+        } else {
+            "interleaved".to_string()
+        };
+
         Ok(ModelConfig {
             config: ArchConfig {
-                name: self
-                    .get_metadata_string("general.name")
-                    .unwrap_or_else(|| "GGUF-Model".to_string()),
+                name,
                 version: "1.0.0-alpha".to_string(),
                 tokenizer_id: "tokenizer".to_string(),
-                rope_base,
+                rope_base: actual_rope_base,
                 ffn_act: "swiglu".to_string(),
                 use_genomic_norm: false,
-                rope_style: "split".to_string(),
+                rope_style,
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
-                unpermute_weights: false,
-                apply_smollm_rope_patch: false,
-                tie_word_embeddings: false,
+                rna_threshold: 0.5,
+                unpermute_weights: true, // Re-habilitamos unpermute para Llama
+                apply_smollm_rope_patch: is_smollm2,
                 dni: default_dni(),
                 state: "stable".to_string(),
             },
@@ -266,34 +281,97 @@ impl GGUFLoader {
         anchor_threshold: f32,
     ) -> std::io::Result<GenomicLLM> {
         let block_size = 32;
-        let embd_dna = self.genomize_tensor("token_embd.weight", block_size, -1.0)?;
+
+        // Detectar si los pesos de entrada y salida están unidos (Tied Weights)
+        let has_output_weight = self.reader.tensors.contains_key("output.weight");
+        
+        // Si están unidos, aplicamos el threshold de anclas también a la entrada para mantener simetría
+        let embd_threshold = if has_output_weight { -1.0 } else { anchor_threshold };
+
+        let embd_dna =
+            self.genomize_tensor("token_embd.weight", block_size, embd_threshold, false, 0, 0, None)?;
+
         let mut blocks = Vec::new();
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
             let p = format!("blk.{}.", i);
-            let q_gen =
-                self.genomize_tensor(&format!("{}attn_q.weight", p), block_size, anchor_threshold)?;
-            let k_gen =
-                self.genomize_tensor(&format!("{}attn_k.weight", p), block_size, anchor_threshold)?;
-            let v_gen =
-                self.genomize_tensor(&format!("{}attn_v.weight", p), block_size, anchor_threshold)?;
+
+            // Carga de Bias (Opcional en GGUF)
+            let q_bias = self.load_f32_tensor_optional(&format!("{}attn_q.bias", p));
+            let k_bias = self.load_f32_tensor_optional(&format!("{}attn_k.bias", p));
+            let v_bias = self.load_f32_tensor_optional(&format!("{}attn_v.bias", p));
+            let o_bias = self.load_f32_tensor_optional(&format!("{}attn_output.bias", p));
+
+            let q_gen = self.genomize_tensor(
+                &format!("{}attn_q.weight", p),
+                block_size,
+                anchor_threshold,
+                config.config.unpermute_weights,
+                config.n_head,
+                head_dim,
+                q_bias,
+            )?;
+            let k_gen = self.genomize_tensor(
+                &format!("{}attn_k.weight", p),
+                block_size,
+                anchor_threshold,
+                config.config.unpermute_weights,
+                config.n_head_kv,
+                head_dim,
+                k_bias,
+            )?;
+            let v_gen = self.genomize_tensor(
+                &format!("{}attn_v.weight", p),
+                block_size,
+                anchor_threshold,
+                false,
+                0,
+                0,
+                v_bias,
+            )?;
             let o_gen = self.genomize_tensor(
                 &format!("{}attn_output.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                o_bias,
             )?;
+
+            // FFN Tensors (Normalmente sin bias en Llama/SmolLM, pero Qwen puede tenerlos)
+            let gate_bias = self.load_f32_tensor_optional(&format!("{}ffn_gate.bias", p));
+            let up_bias = self.load_f32_tensor_optional(&format!("{}ffn_up.bias", p));
+            let down_bias = self.load_f32_tensor_optional(&format!("{}ffn_down.bias", p));
+
             let gate_gen = self.genomize_tensor(
                 &format!("{}ffn_gate.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                gate_bias,
             )?;
-            let up_gen =
-                self.genomize_tensor(&format!("{}ffn_up.weight", p), block_size, anchor_threshold)?;
+            let up_gen = self.genomize_tensor(
+                &format!("{}ffn_up.weight", p),
+                block_size,
+                anchor_threshold,
+                false,
+                0,
+                0,
+                up_bias,
+            )?;
             let down_gen = self.genomize_tensor(
                 &format!("{}ffn_down.weight", p),
                 block_size,
                 anchor_threshold,
+                false,
+                0,
+                0,
+                down_bias,
             )?;
+
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
             let ffn_norm = self.load_f32_tensor(&format!("{}ffn_norm.weight", p))?;
             let attn = GenomicAttention::new(
@@ -320,15 +398,19 @@ impl GGUFLoader {
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
                 1.0,
+                config.config.rna_threshold,
             ));
         }
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
-        let lm_head_name = if self.reader.tensors.contains_key("output.weight") {
-            "output.weight"
+        
+        let lm_head = if has_output_weight {
+            let lm_head_bias = self.load_f32_tensor_optional("output.bias");
+            self.genomize_tensor("output.weight", block_size, anchor_threshold, false, 0, 0, lm_head_bias)?
         } else {
-            "token_embd.weight"
+            // Tied Weights: La salida es una copia exacta de la entrada
+            embd_dna.clone()
         };
-        let lm_head = self.genomize_tensor(lm_head_name, block_size, anchor_threshold)?;
+
         Ok(GenomicLLM {
             embeddings: embd_dna,
             blocks,
@@ -337,6 +419,13 @@ impl GGUFLoader {
             eps: config.eps,
             topology: None,
         })
+    }
+
+    fn load_f32_tensor_optional(&self, name: &str) -> Option<Vec<f32>> {
+        if !self.reader.tensors.contains_key(name) {
+            return None;
+        }
+        self.load_f32_tensor(name).ok()
     }
 
     fn load_f32_tensor(&self, name: &str) -> std::io::Result<Vec<f32>> {
@@ -378,12 +467,16 @@ impl GGUFLoader {
         name: &str,
         block_size: usize,
         anchor_threshold: f32,
+        unpermute: bool,
+        n_head: usize,
+        head_dim: usize,
+        bias: Option<Vec<f32>>,
     ) -> std::io::Result<GenomicLinear> {
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
         let out_features = info.shape[info.n_dims as usize - 1] as usize;
         let in_features = info.shape[0] as usize;
-        let f32_data: Vec<f32> = match info.tensor_type {
+        let mut f32_data: Vec<f32> = match info.tensor_type {
             GGMLType::F32 => data
                 .chunks_exact(4)
                 .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
@@ -400,7 +493,7 @@ impl GGUFLoader {
                 res
             }
             GGMLType::Q8_0 => {
-                crate::compute::math::dequantize_q8_0_core(&data, out_features, in_features)
+                crate::compute::math::dequantize_q8_0_core(data, out_features, in_features)
             }
             _ => {
                 return Err(std::io::Error::new(
@@ -409,8 +502,24 @@ impl GGUFLoader {
                 ))
             }
         };
-        let (dna, centroids, anchors_u8) =
-            crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None);
+
+        if unpermute && n_head > 0 && head_dim > 0 {
+            unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
+        }
+
+        // Auto-detección de bit_depth para Mixed-Bit Import
+        let bit_depth = if name.contains("attn") || name.contains("q_proj") || name.contains("k_proj") || name.contains("v_proj") || name.contains("o_proj") {
+            4
+        } else {
+            2
+        };
+
+        let (dna, centroids, anchors_u8) = if bit_depth == 4 {
+            crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold)
+        } else {
+            crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None)
+        };
+
         Ok(GenomicLinear::new(
             dna,
             anchors_u8,
@@ -425,10 +534,36 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            Vec::new(),
+            bias.unwrap_or_default(),
+            bit_depth,
         ))
     }
 }
+
+fn unpermute_f32(
+    data: &mut [f32],
+    _n_head: usize,
+    head_dim: usize,
+    out_features: usize,
+    in_features: usize,
+) {
+    let mut scratch = vec![0.0f32; out_features * in_features];
+    for i in 0..out_features {
+        let h = i / head_dim;
+        let j = i % head_dim;
+        let new_j = if j < head_dim / 2 {
+            2 * j
+        } else {
+            2 * (j - head_dim / 2) + 1
+        };
+        let interleaved_i = h * head_dim + new_j;
+        for k in 0..in_features {
+            scratch[i * in_features + k] = data[interleaved_i * in_features + k];
+        }
+    }
+    data.copy_from_slice(&scratch);
+}
+
 
 #[cfg_attr(feature = "python", pyclass)]
 pub struct NativeLoader {
@@ -495,11 +630,7 @@ impl NativeLoader {
             vocab_size,
             block_size,
         );
-        let lm_head = if config.config.tie_word_embeddings {
-            embeddings.clone()
-        } else {
-            self.get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size)
-        };
+        let lm_head = self.get_linear(&read_txn, "lm_head", config.n_embd, vocab_size, block_size);
         let output_norm = {
             let n = Self::get_tensor_f32(&read_txn, "output_norm");
             if n.is_empty() {
@@ -572,6 +703,7 @@ impl NativeLoader {
             let attn_norm = {
                 let n = Self::get_tensor_f32(&read_txn, &format!("{}attn_norm", p));
                 if n.is_empty() {
+                    eprintln!("[Loader Warning] Missing attn_norm for block {}", i);
                     vec![1.0f32; config.n_embd]
                 } else {
                     n
@@ -617,6 +749,7 @@ impl NativeLoader {
                 config.config.ffn_act.clone(),
                 config.config.use_genomic_norm,
                 h_scale,
+                config.config.rna_threshold,
             ));
         }
         Ok(GenomicLLM {
@@ -661,6 +794,21 @@ impl NativeLoader {
         let anchors = Self::get_tensor(txn, &format!("{}.anchors", p));
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", p));
         let mask = Self::get_tensor(txn, &format!("{}.precision_mask", p));
+        
+        // Inferencia robusta de profundidad de bits basada en el tamaño real del buffer DNA
+        let n_elements = i_f * o_f;
+        let expected_2bit = (n_elements + 3) / 4;
+        let expected_4bit = (n_elements + 1) / 2;
+        
+        let bit_depth = if dna.len() == expected_4bit {
+            4
+        } else if dna.len() == expected_2bit {
+            2
+        } else {
+             panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con 2-bit ({}) ni 4-bit ({})", 
+                    dna.len(), p, expected_2bit, expected_4bit);
+        };
+
         GenomicLinear::new(
             dna,
             anchors,
@@ -668,7 +816,7 @@ impl NativeLoader {
             o_f,
             i_f,
             b_s,
-            Vec::new(),
+            Vec::new(), // explicitly ensure no internal norm
             1e-6,
             mask,
             Vec::new(),
@@ -676,6 +824,7 @@ impl NativeLoader {
             Vec::new(),
             Vec::new(),
             bias,
+            bit_depth,
         )
     }
     pub fn load_tokenizer(&self) -> std::io::Result<GajeTokenizer> {
@@ -722,9 +871,9 @@ pub fn save_genomic_model(
     config: &ModelConfig,
     tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
-    let mut writer =
+    let writer =
         crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
-    let mut batch = writer.begin_batch().map_err(std::io::Error::other)?;
+    let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
     batch
         .write_metadata("config", &serde_json::to_string(config).unwrap())
         .unwrap();
@@ -737,7 +886,7 @@ pub fn save_genomic_model(
     let f32_u8 =
         |d: &[f32]| unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, d.len() * 4) };
     let write_l = |b: &mut crate::core::db::GajeBatchWriter, p: &str, l: &GenomicLinear| {
-        b.write_tensor(&format!("{}.dna", p), &compress(&l.database))
+        b.write_tensor(&format!("{}.dna", p), &compress(l.database_ref()))
             .unwrap();
         b.write_tensor(&format!("{}.centroids", p), &compress(f32_u8(&l.centroids)))
             .unwrap();
@@ -774,9 +923,7 @@ pub fn save_genomic_model(
             .write_tensor(&format!("{}h_scale", p), &compress(f32_u8(&[blk.h_scale])))
             .unwrap();
     }
-    if !config.config.tie_word_embeddings {
-        write_l(&mut batch, "lm_head", &model.lm_head);
-    }
+    write_l(&mut batch, "lm_head", &model.lm_head);
     batch
         .write_tensor("output_norm", &compress(f32_u8(&model.output_norm)))
         .unwrap();
@@ -839,6 +986,7 @@ pub fn init_born_genomic_model(
             Vec::new(),
             Vec::new(),
             Vec::new(),
+            2, // Default bit_depth for backwards compatibility
         )
     };
     let embeddings = init_l(config.n_embd, vocab_size);
@@ -869,19 +1017,14 @@ pub fn init_born_genomic_model(
             config.config.ffn_act.clone(),
             config.config.use_genomic_norm,
             1.0,
+            config.config.rna_threshold,
         ));
     }
-    let lm_head = if config.config.tie_word_embeddings {
-        embeddings.clone()
-    } else {
-        init_l(config.n_embd, vocab_size)
-    };
-
     let model = GenomicLLM {
         embeddings,
         blocks,
         output_norm: vec![1.0; config.n_embd],
-        lm_head,
+        lm_head: init_l(config.n_embd, vocab_size),
         eps: config.eps,
         topology: None,
     };

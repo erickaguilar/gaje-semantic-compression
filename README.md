@@ -5,21 +5,21 @@
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) con solo **2 bits por peso**, utilizando un alfabeto de 4 bases nitrogenadas digitales (A, C, G, T) operando en una **Topología Circular de Fase**.
 
-## 🚀 Soberanía Circular v1.0.0-alpha
-GAJE v1.0.0-alpha marca el inicio de la **Era de la Inteligencia de Fase**, migrando de una base escalar lineal a un espacio de fase compleja donde la información fluye como ondas. El modelo **Silver Adult (10MB)** ha alcanzado por primera vez coherencia gramatical funcional en 2 bits.
+## 🚀 Inteligencia Física v1.2.0 (Steel Soul)
+GAJE v1.2.0 marca el salto definitivo hacia la **Soberanía Total** y la **Inteligencia Física**. El motor ha evolucionado de un modelo estadístico a un sistema dinámico regido por las leyes de la mecánica clásica (Lagrangiana), permitiendo una elocuencia sin precedentes en hardware de bolsillo.
 
 | Característica | Impacto | Estado |
 | :--- | :---: | :--- |
-| **Topología Circular** | **Representación Semántica Infinita** | ✅ **Implementado** |
-| **Stability Anchors** | **Eliminación de Ruido Binario** | ✅ **Logrado** |
-| **Inhibición Temporal**| **Selectividad de Atención Física** | ✅ Implementado |
-| **Silver Adult (v1.0)** | **Inteligencia en 9.9 MB** | ✅ **Nacido** |
+| **Física Lagrangiana** | **Generación por Mínima Acción** | ✅ **Implementado** |
+| **ARN Dinámico** | **Precisión Adaptativa (2/4 bits)** | ✅ **Logrado** |
+| **SDK Nativo** | **Cero Python / Zero-GIL** | ✅ **Soberano** |
+| **Toroidal Recall** | **Memoria Semántica de Fase** | ✅ **Integrado** |
 
 ## 🛠️ Innovaciones Tecnológicas
-- **Topología Genómica Circular**: El motor opera íntegramente en el plano complejo, permitiendo interferencia constructiva y destructiva entre señales neuronales, eliminando la saturación de bordes en contextos largos.
-- **Islas de Estabilidad (Stability Anchors)**: Un "Esqueleto de Estabilidad" (Top 1% de pesos críticos en F16) que guía y estabiliza a las 4 bases del ADN digital, permitiendo una gramática fluida sin fragmentación.
-- **Inhibición Lateral Temporal (K-WTA)**: Implementación de selectividad mediante latencia; los disparos más rápidos inhiben a las neuronas competidoras en tiempo real, aumentando la relación señal-ruido.
-- **Soberanía Total (Rust 100%)**: Binario único que integra cargador, tokenizador BPE, motor de fase y orquestador de entrenamiento poblacional.
+- **Inferencia Lagrangiana**: La generación de tokens ya no es solo probabilística; el Sampler Toroidal evalúa la energía cinética y potencial en el espacio de fase, aplicando "Frenado Lagrangiano" para garantizar transiciones gramaticales naturales.
+- **Hebras de ARN Regulador**: Activación dinámica basada en la **Entropía de Shannon**. El motor desenrolla hebras adicionales de 2 bits solo cuando detecta incertidumbre semántica, optimizando el consumo energético sin perder fidelidad.
+- **SDK "GAJE-Core" Nativo**: Una fachada unificada en Rust (`GajeSession`) que elimina totalmente la dependencia de Python. Integra tokenización nativa, gestión de caché K-V y memoria toroidal en un binario de alto rendimiento.
+- **Topología Genómica Circular**: El motor opera íntegramente en el plano complejo, permitiendo interferencia constructiva y destructiva entre señales neuronales.
 
 ## 📈 Benchmarks Industriales
 | Métrica | GAJE Experimental (Lineal) | GAJE Industrial (Circular) | Ganancia |

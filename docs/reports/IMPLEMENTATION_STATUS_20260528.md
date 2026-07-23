@@ -27,10 +27,10 @@ Este documento detalla el grado de implementación de las innovaciones arquitect
 *   **Logro:** Utilizado exitosamente en el entrenamiento nocturno para evitar el sobreajuste y fomentar la especialización semántica (islas de lógica vs. islas de gramática).
 
 ## 4. Direct Neural Ingestion (DNI)
-*   **Estado:** **Fase de Prototipo / Diseño de Pipeline**
-*   **Ficheros Clave:** `docs/research/EVOLUTIONARY_MEMORY_AND_DNI.md`
-*   **Descripción:** Capacidad de "ingesta" directa de datos externos en los pesos mediante crianza (Breeding) ultrarrápida, eliminando la necesidad de RAG externo.
-*   **Próximo Paso:** Implementación de la tubería automática `--dni-ingest` en `gaje-cli`.
+*   **Estado:** **100% Operativo / Integrado en CLI**
+*   **Ficheros Clave:** `src/core/dni.rs`, `src/bin/gaje-cli.rs`, `docs/research/EVOLUTIONARY_MEMORY_AND_DNI.md`
+*   **Descripción:** Capacidad de "ingesta" directa de datos externos en los pesos mediante crianza (Breeding) ultrarrápida, eliminando la necesidad de RAG externo. Implementado mediante el `DNIEngine` con soporte para nichos semánticos (lógica vs gramática).
+*   **Próximo Paso:** Implementar el "Blindaje de Anclas" (Stability Anchors) durante la ingesta para proteger la estructura lógica f16 mientras se mutan los pesos genómicos.
 
 ---
 

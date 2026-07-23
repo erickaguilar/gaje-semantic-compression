@@ -1,0 +1,311 @@
+[Debug Block 0] q_abs_sum: 3036.9229
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 69.7488, seq_len: 1
+[Debug Block 1] q_abs_sum: 2966.6262
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: -41.1509, seq_len: 1
+[Debug Block 2] q_abs_sum: 2622.1812
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: -44.7293, seq_len: 1
+[Debug Block 3] q_abs_sum: 2374.6814
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 49.4732, seq_len: 1
+[Debug Block 4] q_abs_sum: 2394.6731
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 81.6584, seq_len: 1
+[Debug Block 5] q_abs_sum: 2393.2241
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: -1.4618, seq_len: 1
+[Debug Block 6] q_abs_sum: 2439.0818
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 77.9620, seq_len: 1
+[Debug Block 7] q_abs_sum: 2135.1035
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 70.7176, seq_len: 1
+[Debug Block 8] q_abs_sum: 2268.1724
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 68.4354, seq_len: 1
+[Debug Block 9] q_abs_sum: 2921.1409
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 208.0014, seq_len: 1
+[Debug Block 10] q_abs_sum: 2466.3247
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 8.6693, seq_len: 1
+[Debug Block 11] q_abs_sum: 2504.3105
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 44.4037, seq_len: 1
+[Debug Block 12] q_abs_sum: 2451.0718
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 20.8800, seq_len: 1
+[Debug Block 13] q_abs_sum: 2676.0842
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 64.2171, seq_len: 1
+[Debug Block 14] q_abs_sum: 2187.6711
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 3.3630, seq_len: 1
+[Debug Block 15] q_abs_sum: 2347.2937
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 18.1335, seq_len: 1
+[Debug Block 16] q_abs_sum: 2526.3003
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 17.2411, seq_len: 1
+[Debug Block 17] q_abs_sum: 2045.6083
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 35.6982, seq_len: 1
+[Debug Block 18] q_abs_sum: 1986.0668
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: -11.7025, seq_len: 1
+[Debug Block 19] q_abs_sum: 1903.6482
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 5.1569, seq_len: 1
+[Debug Block 20] q_abs_sum: 1813.7656
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 13.5627, seq_len: 1
+[Debug Block 21] q_abs_sum: 2061.2910
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 8.5887, seq_len: 1
+[Debug Block 22] q_abs_sum: 2098.0950
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 6.4896, seq_len: 1
+[Debug Block 23] q_abs_sum: 1751.9047
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 21.0653, seq_len: 1
+[Debug Block 24] q_abs_sum: 1803.1437
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 4.9867, seq_len: 1
+[Debug Block 25] q_abs_sum: 2021.7665
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 13.9170, seq_len: 1
+[Debug Block 26] q_abs_sum: 1956.3440
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: -7.7894, seq_len: 1
+[Debug Block 27] q_abs_sum: 1950.9781
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 18.7396, seq_len: 1
+[Debug Block 28] q_abs_sum: 1805.4220
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 16.0091, seq_len: 1
+[Debug Block 29] q_abs_sum: 1927.0085
+[ENGINE CRITICAL] h=0, pos=0, cache_len_before=1, base=100000, style=split
+[Debug Attn 0] max_score: 7.1654, seq_len: 1
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=1, cache_len_before=2, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=2, cache_len_before=3, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=3, cache_len_before=4, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=4, cache_len_before=5, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=5, cache_len_before=6, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=6, cache_len_before=7, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+[ENGINE CRITICAL] h=0, pos=7, cache_len_before=8, base=100000, style=split
+🧬 Despertando Organismo GAJE desde base de datos: models/production/silver_adult_clean_v1.gaje
+✅ Reconstructed 30 transformer blocks.
+[*] Tokenizador cargado desde la base de datos genómica.
+[*] Reconstrucción desde BD finalizada en 10.06s
+
+Prompt: 'Hola, ¿cómo'
+  1. [ spasms] Logit: 8.0823
+  2. [rations] Logit: 7.4883
+  3. [odder] Logit: 7.4653
+  4. [ogue] Logit: 7.1611
+  5. [ulsion] Logit: 6.8388

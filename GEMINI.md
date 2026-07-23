@@ -30,12 +30,15 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 7.  **Robustez Rust:** El código nativo debe usar siempre validación de límites (`.get().unwrap_or()`) para prevenir pánicos por discrepancias epigenéticas.
 8.  **Benchmarking Interactivo:** Las herramientas deben aceptar entrada de texto y tener timeouts para no bloquear el flujo de trabajo.
 
-## 3. Estado Técnico y Metas (v1.0.0)
+## 3. Estado Técnico y Estándar Empírico (Operación Rescate)
 
-- **Soberanía Nativa Alcanzada:** El motor es 100% independiente de Python para inferencia y entrenamiento.
-- **Hito Silver Adult:** Implementación de **Anclas de Estabilidad (F16)** que guían pesos de 2 bits, logrando resonancia total de identidad.
-- **Topología Circular:** Transición exitosa a un espacio de fase compleja $\mathbb{Q}(\zeta_{16})$.
-- **Rendimiento:** Latencia <100ms en ARM con perplejidad optimizada (221.84).
+El proyecto se encuentra en estado **Alpha Real**. La infraestructura base compila, pero la validación semántica falla (PPL ~572).
+
+*   **Mandato de Verdad Empírica:** ESTÁ PROHIBIDO declarar cualquier fase o característica como "completada" basándose únicamente en que el código compila. 
+*   **Certificación Requerida:** Toda declaración de éxito debe cumplir los umbrales definidos en `docs/meta/EMPIRICAL_TRUTH_STATE.md`.
+*   **Fundamentación Matemática:** Antes de intentar reducir la PPL, es OBLIGATORIO consultar `docs/research/FORMALIZATION_LAYER.md` para entender el equilibrio Lagrangiano requerido entre movilidad (energía cinética) y precisión (potencial semántico).
+*   **Prioridad Actual:** Congelamiento de nuevas características (Island Model, RAG) hasta superar la Certificación Semántica (Nivel 2: lograr PPL < 15.0).
+*   **Lectura Obligatoria:** Antes de iniciar desarrollo, consultar `docs/meta/EMPIRICAL_TRUTH_STATE.md` para conocer la realidad matemática y funcional del modelo.
 
 ## 4. Estilo de Commits
 
