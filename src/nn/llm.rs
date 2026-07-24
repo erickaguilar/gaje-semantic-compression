@@ -29,9 +29,11 @@ impl GenomicLLM {
         } else {
             self.blocks[0].attn.k_cache_len()
         };
-        if token_id >= self.embeddings.out_features {
-            return Err(format!("Token id {} out of bounds", token_id));
-        }
+        let token_id = if self.embeddings.out_features > 0 {
+            token_id % self.embeddings.out_features
+        } else {
+            return Err("Embeddings layer has 0 out_features".to_string());
+        };
 
         // Modulación granular para la capa de salida (usamos la última capa como referencia)
         let modulation = self
@@ -85,9 +87,11 @@ impl GenomicLLM {
         } else {
             self.blocks[0].attn.k_cache_len()
         };
-        if token_id >= self.embeddings.out_features {
-            return Err(format!("Token id {} out of bounds", token_id));
-        }
+        let token_id = if self.embeddings.out_features > 0 {
+            token_id % self.embeddings.out_features
+        } else {
+            return Err("Embeddings layer has 0 out_features".to_string());
+        };
 
         let modulation = self
             .topology
@@ -339,6 +343,11 @@ impl GenomicLLM {
             eps,
             topology: None,
         }
+    }
+
+    #[getter]
+    pub fn vocab_size(&self) -> usize {
+        self.embeddings.out_features
     }
 
     pub fn load_topology(&mut self, json_path: &str) -> PyResult<()> {
