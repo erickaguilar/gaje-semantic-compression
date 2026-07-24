@@ -14,10 +14,10 @@ Siguiendo el principio de **Verdad Empírica** (`docs/meta/EMPIRICAL_TRUTH_STATE
 
 ```mermaid
 graph TD
-    A["Nivel 5: Soberanía de Infraestructura (Rust/PyO3)"] -->|PASADO| B["Nivel 4: Eficiencia de Memoria y Latencia SIMD"]
-    B -->|PASADO| C["Nivel 3: Ingesta Neuronal Directa (DNI)"]
-    C -->|EN PRUEBAS| D["Nivel 2: Certificación Semántica (PPL < 15.0)"]
-    D -->|CRISIS (PPL ~572)| E["Nivel 1: Retención de Contexto (Needle in a Haystack)"]
+    A["Nivel 5: Soberanía de Infraestructura (Rust/PyO3)"] -->|"PASADO"| B["Nivel 4: Eficiencia de Memoria y Latencia SIMD"]
+    B -->|"PASADO"| C["Nivel 3: Ingesta Neuronal Directa (DNI)"]
+    C -->|"EN PRUEBAS"| D["Nivel 2: Certificación Semántica (PPL < 15.0)"]
+    D -->|"CRISIS - PPL ~572"| E["Nivel 1: Retención de Contexto (Needle in a Haystack)"]
 ```
 
 ### 1. Capa de Infraestructura (Niveles 5 y 4: PASADO 🟢)
