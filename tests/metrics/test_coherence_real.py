@@ -43,7 +43,7 @@ def test_coherence(model_arg=None):
     next_token = llm.tokenizer.decode([next_token_id])
 
     print(f"[*] Predicted next token: '{next_token}' (ID: {next_token_id})")
-    print(f"[*] Inference time: {(end_time - start_time)*1000:.2f} ms")
+    print(f"[*] Inference time: {(end_time - start_time) * 1000:.2f} ms")
 
     # Top 5 tokens
     top_5_ids = np.argsort(logits)[-5:][::-1]
@@ -54,7 +54,7 @@ def test_coherence(model_arg=None):
         exp_logits = np.exp(logits - max_logit)
         prob = exp_logits[tid] / np.sum(exp_logits)
         print(
-            f"  {i+1}. '{llm.tokenizer.decode([tid])}' (ID: {tid}) - Prob: {prob:.4f}"
+            f"  {i + 1}. '{llm.tokenizer.decode([tid])}' (ID: {tid}) - Prob: {prob:.4f}"
         )
 
     if "Paris" in next_token:

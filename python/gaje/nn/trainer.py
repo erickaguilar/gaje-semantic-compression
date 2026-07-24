@@ -151,10 +151,10 @@ class GenomicTrainer:
                 avg_loss = total_loss / count
                 ppl = np.exp(avg_loss) if avg_loss < 20 else 999.9
                 print(
-                    f"    - Época {epoch+1}/{epochs} [{phase_name}] | Loss: {avg_loss:.4f} | PPL: {ppl:.2f} | {duration:.2f}s"
+                    f"    - Época {epoch + 1}/{epochs} [{phase_name}] | Loss: {avg_loss:.4f} | PPL: {ppl:.2f} | {duration:.2f}s"
                 )
             else:
-                print(f"    - Época {epoch+1}/{epochs} | Sin datos válidos")
+                print(f"    - Época {epoch + 1}/{epochs} | Sin datos válidos")
 
     def evaluate(self, dataset):
         total_loss = 0

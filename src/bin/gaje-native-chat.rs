@@ -48,7 +48,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let duration = start.elapsed();
                 println!("🧬 Organismo > {}", response);
                 let sparsity = _impl::compute::diagnostics::get_sparsity_report();
-                println!("\n   [Latencia Nativa: {:.2?}] | [Sparsity Temporal: {:.2}%]", duration, sparsity);
+                println!(
+                    "\n   [Latencia Nativa: {:.2?}] | [Sparsity Temporal: {:.2}%]",
+                    duration, sparsity
+                );
             }
             Err(e) => {
                 println!("❌ Error en el motor: {}", e);

@@ -65,7 +65,7 @@ class DatasetProcessor:
 
                     if not instruction or not response:
                         print(
-                            f"[!] Advertencia: Línea {line_idx+1} en JSONL ignorada (faltan campos 'instruction' o 'response')."
+                            f"[!] Advertencia: Línea {line_idx + 1} en JSONL ignorada (faltan campos 'instruction' o 'response')."
                         )
                         continue
 
@@ -79,7 +79,7 @@ class DatasetProcessor:
 
                 except json.JSONDecodeError:
                     print(
-                        f"[!] Advertencia: Línea {line_idx+1} en JSONL no es un JSON válido."
+                        f"[!] Advertencia: Línea {line_idx + 1} en JSONL no es un JSON válido."
                     )
 
         print(f"[*] Procesadas {len(dataset)} interacciones estructuradas (JSONL).")

@@ -173,6 +173,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 rna_threshold: 0.5,
                 unpermute_weights: false,
                 apply_smollm_rope_patch: false,
+                tie_word_embeddings: false,
                 dni: String::new(), // Se generará automáticamente
                 state: "born".to_string(),
             },
@@ -653,7 +654,7 @@ fn generate(
 
         let mut indexed_logits: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
         indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        
+
         /*
         println!("[Debug] Top-5 candidates:");
         for k in 0..5 {

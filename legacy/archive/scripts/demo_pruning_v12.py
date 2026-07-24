@@ -47,7 +47,7 @@ def main():
     stride = len(dna_strands[0])
     genomic_size = len(database) / (1024 * 1024)
     print(
-        f"    Tamaño Genómico (2-bit): {genomic_size:.2f} MB (Reducción {(1 - genomic_size/original_size)*100:.1f}%)"
+        f"    Tamaño Genómico (2-bit): {genomic_size:.2f} MB (Reducción {(1 - genomic_size / original_size) * 100:.1f}%)"
     )
 
     # 3. Análisis de Entropía (Fase 12)
@@ -72,8 +72,8 @@ def main():
     print(f"    Dimensiones Activas:    {len(active_dims)}")
     print(f"    Dimensiones Eliminadas: {cols - len(active_dims)}")
     print(f"    Tamaño Final (Pruned):  {pruned_size:.2f} MB")
-    print(f"    Ahorro Adicional:       {(1 - pruned_size/genomic_size)*100:.1f}%")
-    print(f"    Tiempo de Ejecución:    {(end_prune - start_prune)*1000:.2f} ms")
+    print(f"    Ahorro Adicional:       {(1 - pruned_size / genomic_size) * 100:.1f}%")
+    print(f"    Tiempo de Ejecución:    {(end_prune - start_prune) * 1000:.2f} ms")
 
     print("\n✅ TEST COMPLETADO: La poda genómica ha optimizado el organismo.")
     print("=" * 60)

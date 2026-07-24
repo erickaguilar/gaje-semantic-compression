@@ -7,6 +7,7 @@ Este script:
 3. Ejecuta inferencia usando los kernels nativos (AVX2/FMA en x86_64, NEON en ARM)
 4. Reporta tokens/segundo y texto generado
 """
+
 import os
 import sys
 import time

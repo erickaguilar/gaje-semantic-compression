@@ -84,6 +84,7 @@ impl ArchConfig {
             anchor_threshold,
             ffn_anchor_threshold,
             rna_threshold,
+            tie_word_embeddings: false,
             unpermute_weights,
             apply_smollm_rope_patch,
             dni: actual_dni,
@@ -263,6 +264,7 @@ impl GGUFLoader {
                 rna_threshold: 0.5,
                 unpermute_weights: true, // Re-habilitamos unpermute para Llama
                 apply_smollm_rope_patch: is_smollm2,
+                tie_word_embeddings: false,
                 dni: default_dni(),
                 state: "stable".to_string(),
             },
@@ -284,12 +286,23 @@ impl GGUFLoader {
 
         // Detectar si los pesos de entrada y salida están unidos (Tied Weights)
         let has_output_weight = self.reader.tensors.contains_key("output.weight");
-        
-        // Si están unidos, aplicamos el threshold de anclas también a la entrada para mantener simetría
-        let embd_threshold = if has_output_weight { -1.0 } else { anchor_threshold };
 
-        let embd_dna =
-            self.genomize_tensor("token_embd.weight", block_size, embd_threshold, false, 0, 0, None)?;
+        // Si están unidos, aplicamos el threshold de anclas también a la entrada para mantener simetría
+        let embd_threshold = if has_output_weight {
+            -1.0
+        } else {
+            anchor_threshold
+        };
+
+        let embd_dna = self.genomize_tensor(
+            "token_embd.weight",
+            block_size,
+            embd_threshold,
+            false,
+            0,
+            0,
+            None,
+        )?;
 
         let mut blocks = Vec::new();
         let head_dim = config.n_embd / config.n_head;
@@ -402,10 +415,18 @@ impl GGUFLoader {
             ));
         }
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
-        
+
         let lm_head = if has_output_weight {
             let lm_head_bias = self.load_f32_tensor_optional("output.bias");
-            self.genomize_tensor("output.weight", block_size, anchor_threshold, false, 0, 0, lm_head_bias)?
+            self.genomize_tensor(
+                "output.weight",
+                block_size,
+                anchor_threshold,
+                false,
+                0,
+                0,
+                lm_head_bias,
+            )?
         } else {
             // Tied Weights: La salida es una copia exacta de la entrada
             embd_dna.clone()
@@ -508,7 +529,12 @@ impl GGUFLoader {
         }
 
         // Auto-detección de bit_depth para Mixed-Bit Import
-        let bit_depth = if name.contains("attn") || name.contains("q_proj") || name.contains("k_proj") || name.contains("v_proj") || name.contains("o_proj") {
+        let bit_depth = if name.contains("attn")
+            || name.contains("q_proj")
+            || name.contains("k_proj")
+            || name.contains("v_proj")
+            || name.contains("o_proj")
+        {
             4
         } else {
             2
@@ -563,7 +589,6 @@ fn unpermute_f32(
     }
     data.copy_from_slice(&scratch);
 }
-
 
 #[cfg_attr(feature = "python", pyclass)]
 pub struct NativeLoader {
@@ -794,18 +819,18 @@ impl NativeLoader {
         let anchors = Self::get_tensor(txn, &format!("{}.anchors", p));
         let bias = Self::get_tensor_f32(txn, &format!("{}.bias", p));
         let mask = Self::get_tensor(txn, &format!("{}.precision_mask", p));
-        
+
         // Inferencia robusta de profundidad de bits basada en el tamaño real del buffer DNA
         let n_elements = i_f * o_f;
         let expected_2bit = (n_elements + 3) / 4;
         let expected_4bit = (n_elements + 1) / 2;
-        
+
         let bit_depth = if dna.len() == expected_4bit {
             4
         } else if dna.len() == expected_2bit {
             2
         } else {
-             panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con 2-bit ({}) ni 4-bit ({})", 
+            panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con 2-bit ({}) ni 4-bit ({})",
                     dna.len(), p, expected_2bit, expected_4bit);
         };
 
@@ -871,8 +896,7 @@ pub fn save_genomic_model(
     config: &ModelConfig,
     tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
-    let writer =
-        crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
+    let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
     let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
     batch
         .write_metadata("config", &serde_json::to_string(config).unwrap())

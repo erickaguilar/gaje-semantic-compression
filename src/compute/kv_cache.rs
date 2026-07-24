@@ -43,17 +43,19 @@ impl CompressedKVCache {
     /// Differential approach: each block of 48 gets its own scale.
     pub fn pack(&mut self, values: &[f32]) {
         for (i, chunk) in values.chunks(48).enumerate() {
-            if i >= self.blocks.len() { break; }
-            
+            if i >= self.blocks.len() {
+                break;
+            }
+
             // 1. Find max absolute value for scaling
             let mut max_val = 0.0f32;
             for &v in chunk {
                 max_val = max_val.max(v.abs());
             }
-            
+
             let scale = if max_val > 0.0 { max_val / 3.0 } else { 1.0 };
             self.blocks[i].scale = scale;
-            
+
             // 2. Pack 48 values into 12 bytes
             let mut block_data = [0u8; 12];
             for (j, &v) in chunk.iter().enumerate() {
@@ -70,13 +72,15 @@ impl CompressedKVCache {
     pub fn get_value(&self, idx: usize) -> f32 {
         let block_idx = idx / 48;
         let sub_idx = idx % 48;
-        if block_idx >= self.blocks.len() { return 0.0; }
-        
+        if block_idx >= self.blocks.len() {
+            return 0.0;
+        }
+
         let block = &self.blocks[block_idx];
         let byte_idx = sub_idx / 4;
         let bit_shift = (sub_idx % 4) * 2;
         let quantized = (block.data[byte_idx] >> bit_shift) & 0b11;
-        
+
         (quantized as f32) * block.scale
     }
 }
@@ -114,13 +118,19 @@ mod tests {
         for (i, &v) in original.iter().enumerate() {
             full_chunk[i] = v;
         }
-        
+
         cache.pack(&full_chunk);
-        
+
         for (i, &v) in original.iter().enumerate() {
             let recovered = cache.get_value(i);
             let diff = (v - recovered).abs();
-            assert!(diff <= 0.51, "Error de cuantización demasiado alto en índice {}: original {}, recuperado {}", i, v, recovered);
+            assert!(
+                diff <= 0.51,
+                "Error de cuantización demasiado alto en índice {}: original {}, recuperado {}",
+                i,
+                v,
+                recovered
+            );
         }
     }
 }

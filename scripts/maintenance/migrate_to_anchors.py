@@ -4,7 +4,6 @@ import gaje_core
 
 def migrate():
     model_path = "models/silver_adult.gaje"
-    output_path = "models/silver_adult_anchored.gaje"
 
     if not os.path.exists(model_path):
         print(f"Error: {model_path} not found")
@@ -15,7 +14,7 @@ def migrate():
     # 1. Load existing model and config
     loader = gaje_core.NativeLoader(model_path)
     config = loader.py_load_config()
-    model = loader.py_load_llm()
+    loader.py_load_llm()
 
     # 2. Update config to include anchor threshold
     config.config.anchor_threshold = 0.05

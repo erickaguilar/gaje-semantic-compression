@@ -118,7 +118,7 @@ impl Teacher {
 
 /// Orquestador de múltiples maestros para destilación por consenso.
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct CouncilOfTeachers {
     pub teachers: Vec<Teacher>,
 }

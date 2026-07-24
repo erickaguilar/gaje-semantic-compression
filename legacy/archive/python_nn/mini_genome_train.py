@@ -45,9 +45,9 @@ def main():
         loss = trainer.train_step(input_ids, target_ids)
         history.append(loss)
         if (epoch + 1) % 10 == 0:
-            print(f"Epoch {epoch+1:3d}/{epochs} | Loss: {loss:.6f}")
+            print(f"Epoch {epoch + 1:3d}/{epochs} | Loss: {loss:.6f}")
         if loss < 0.001:
-            print(f"[*] Convergencia alcanzada en la época {epoch+1}")
+            print(f"[*] Convergencia alcanzada en la época {epoch + 1}")
             break
 
     end_train = time.time()

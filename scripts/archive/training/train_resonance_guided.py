@@ -117,7 +117,7 @@ def main():
     trainer.fit(lines, epochs=args.epochs)
 
     total_duration = time.time() - start_time
-    print(f"\n✅ Fase de resonancia completada en {total_duration/60:.2f} minutos.")
+    print(f"\n✅ Fase de resonancia completada en {total_duration / 60:.2f} minutos.")
 
     # 4. Guardar Organismo Final
     print(f"[*] Guardando organismo refinado en {args.output}...")

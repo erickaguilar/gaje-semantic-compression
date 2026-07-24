@@ -31,7 +31,7 @@ def calculate_ppl(model, text):
 
         if (i + 1) % 5 == 0:
             print(
-                f"    [~] Token {i+1}/{len(tokens)-1} evaluado. Prob del target: {prob_target:.4f}"
+                f"    [~] Token {i + 1}/{len(tokens) - 1} evaluado. Prob del target: {prob_target:.4f}"
             )
 
     avg_log_likelihood = np.mean(log_likelihoods)

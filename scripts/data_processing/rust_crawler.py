@@ -40,7 +40,7 @@ def rust_book_crawler(
             for i, link in enumerate(
                 links[:50]
             ):  # Limitamos a los primeros 50 para evitar bloqueos iniciales
-                print(f"[{i+1}/{len(links)}] Descargando: {link}...")
+                print(f"[{i + 1}/{len(links)}] Descargando: {link}...")
                 try:
                     res = requests.get(link, headers=headers, timeout=10)
                     if res.status_code == 200:

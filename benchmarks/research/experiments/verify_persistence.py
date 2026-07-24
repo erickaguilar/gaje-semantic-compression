@@ -11,7 +11,7 @@ def verify_persistence(gaje_dir):
     model = GenomicLLM(gaje_dir, load_genomic=True)
     end_load = time.perf_counter()
 
-    print(f"[*] Modelo cargado en {(end_load - start_load)*1000:.2f} ms")
+    print(f"[*] Modelo cargado en {(end_load - start_load) * 1000:.2f} ms")
     print(f"[*] Número de bloques detectados: {len(model.blocks)}")
 
     # 2. Realizar inferencia

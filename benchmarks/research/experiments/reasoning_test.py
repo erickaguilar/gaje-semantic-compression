@@ -52,7 +52,6 @@ def run_reasoning_test():
 
         start_time = time.time()
         # Generar solo 5 tokens de respuesta
-        generated_tokens = []
         current_tokens = list(tokens)
 
         # Limpiar caché de atención para cada nueva tarea

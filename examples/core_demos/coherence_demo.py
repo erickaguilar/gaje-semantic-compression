@@ -1,22 +1,25 @@
 import os
 import sys
-import numpy as np
-import time
 
 # Asegurar uso de código local
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python")))
+sys.path.insert(
+    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python"))
+)
 from gaje.nn.stabilized import GenomicLLM
+
 
 def run_coherence_demo():
     print("🧬 GAJE COHERENCE DEMO: Evaluación de Sentido Común")
     print("=" * 60)
-    
+
     model_path = "models/gguf/qwen2-0_5b-q8_0.gguf"
     if not os.path.exists(model_path):
-        print(f"⚠️ Modelo no encontrado en {model_path}. Por favor descarga uno para probar.")
+        print(
+            f"⚠️ Modelo no encontrado en {model_path}. Por favor descarga uno para probar."
+        )
         return
 
-    print(f"[*] Cargando Micro-Genoma (v1.x)...")
+    print("[*] Cargando Micro-Genoma (v1.x)...")
     llm = GenomicLLM(model_path, num_blocks=4)
 
     test_prompts = [
@@ -30,7 +33,8 @@ def run_coherence_demo():
         print("🤖 Respuesta: ", end="", flush=True)
         for token in llm.generate(prompt, max_new_tokens=20, temperature=0.5):
             print(token, end="", flush=True)
-        print("\n" + "-"*40)
+        print("\n" + "-" * 40)
+
 
 if __name__ == "__main__":
     run_coherence_demo()

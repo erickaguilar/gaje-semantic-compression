@@ -71,7 +71,7 @@ def run_phase_3_1(gaje_path, context_lengths=[512, 1024, 2048]):
         for i, tid in enumerate(full_context_tokens):
             gaje_model.rust_llm.forward(tid, False)
             if (i + 1) % 500 == 0:
-                print(f"    [*] {i+1} tokens procesados...")
+                print(f"    [*] {i + 1} tokens procesados...")
 
         # Procesar pregunta
         for tid in question_tokens[:-1]:

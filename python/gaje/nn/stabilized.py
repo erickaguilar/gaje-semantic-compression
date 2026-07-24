@@ -50,7 +50,6 @@ class GenomicLayer:
 
         is_q_or_k = "attn_q" in name or "attn_k" in name
         # También consideramos attn_v y attn_output para 4-bit en Mixed-Bit strategy
-        is_attn = is_q_or_k or "attn_v" in name or "attn_output" in name or "lm_head" in name
         # Para el test de rescate, probamos F32 en TODO para aislar errores del motor.
         bit_depth = 32
 
@@ -85,10 +84,13 @@ class GenomicLayer:
                     and head_dim is not None
                     and (self.config.rope_style == "split" if self.config else True)
                 )
-                print(f"    [~] Capa {name}: Unpermute={unpermute}, Needs-Unpermute={needs_unpermute}, Bit-Depth={bit_depth}")
+                print(
+                    f"    [~] Capa {name}: Unpermute={unpermute}, Needs-Unpermute={needs_unpermute}, Bit-Depth={bit_depth}"
+                )
 
                 if (
-                    bit_depth != 32 # Si es F32, forzamos el path lento para tener f32_data
+                    bit_depth
+                    != 32  # Si es F32, forzamos el path lento para tener f32_data
                     and not needs_unpermute
                     and tensor.tensor_type == gguf.GGMLQuantizationType.F16
                 ):
@@ -101,7 +103,7 @@ class GenomicLayer:
                         tensor.data.tobytes(),
                         block_size,
                         anchor_threshold,
-                        bit_depth, # Pass bit_depth
+                        bit_depth,  # Pass bit_depth
                         custom_base_c,
                     )
                     self.dna_database = bytes(dna) if isinstance(dna, list) else dna
@@ -109,7 +111,7 @@ class GenomicLayer:
                     self.anchors_f16_bytes = (
                         bytes(anchors) if isinstance(anchors, list) else anchors
                     )
-                    self.bit_depth = bit_depth # Save bit_depth
+                    self.bit_depth = bit_depth  # Save bit_depth
 
                     self.epigenetic_database = b""
                     self.epigenetic_centroids = []
@@ -138,8 +140,10 @@ class GenomicLayer:
             else:
                 # Solo para Q8_0 aplicamos la lógica de des-permutación necesaria
                 rope_style = self.config.rope_style if self.config else "split"
-                weights_f32 = dequantize_q8_0(tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style)
-                
+                weights_f32 = dequantize_q8_0(
+                    tensor, n_head, head_dim, is_q_or_k, rope_style=rope_style
+                )
+
                 unpermute = self.config.unpermute_weights if self.config else True
                 needs_unpermute = (
                     unpermute
@@ -150,8 +154,9 @@ class GenomicLayer:
                 )
                 if needs_unpermute:
                     from gaje.utils.quantization import unpermute_to_split
+
                     weights_f32 = unpermute_to_split(weights_f32, n_head, head_dim)
-                
+
                 self.out_features, self.in_features = weights_f32.shape
                 self._init_from_f32(
                     weights_f32, block_size, anchor_threshold, custom_base_c, bit_depth
@@ -176,8 +181,9 @@ class GenomicLayer:
 
                 weights_f32 = unpermute_to_interleaved(weights_f32, n_head, head_dim)
 
-            self._init_from_f32(weights_f32, block_size, anchor_threshold, custom_base_c, bit_depth)
-
+            self._init_from_f32(
+                weights_f32, block_size, anchor_threshold, custom_base_c, bit_depth
+            )
 
         # Manejo de Bias (Crucial para Qwen2)
         self.bias = []
@@ -238,7 +244,11 @@ class GenomicLayer:
                 w_chunk = weights_f32[i:end].copy()
 
                 ret = dna_semantic_compression.genomize_f32_native(
-                    w_chunk.tobytes(), block_size, anchor_threshold, bit_depth, custom_base_c
+                    w_chunk.tobytes(),
+                    block_size,
+                    anchor_threshold,
+                    bit_depth,
+                    custom_base_c,
                 )
                 d_db, d_c, a_bin = ret
                 dna_db_list.append(d_db)
@@ -257,12 +267,16 @@ class GenomicLayer:
         else:
             # Procedimiento estándar para capas pequeñas
             dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
-                weights_f32.tobytes(), block_size, anchor_threshold, bit_depth, custom_base_c
+                weights_f32.tobytes(),
+                block_size,
+                anchor_threshold,
+                bit_depth,
+                custom_base_c,
             )
             self.dna_database = dna_db
             self.dna_centroids = dna_centroids
             self.anchors_f16_bytes = a_bin
-        
+
         self.bit_depth = bit_depth
 
         self.epigenetic_database = b""
@@ -299,7 +313,7 @@ class GenomicLayer:
 
     def forward(self, x):
         return np.array(
-            self.linear.forward(x.tolist() if hasattr(x, "tolist") else x),
+            self.linear.forward(x.tolist() if hasattr(x, "tolist") else x, False),
             dtype=np.float32,
         )
 
@@ -326,7 +340,7 @@ class GenomicLayer:
             row_start = idx * self.in_features * 4
             row_bytes = self.dna_database[row_start : row_start + self.in_features * 4]
             return np.frombuffer(row_bytes, dtype=np.float32).copy()
-        
+
         if bit_depth == 4:
             n_blocks = self.in_features // self.block_size
             stride = self.block_size // 2
@@ -336,11 +350,15 @@ class GenomicLayer:
             res = np.zeros(self.in_features, dtype=np.float32)
             for b in range(n_blocks):
                 block_dna = dna_row[b * stride : (b + 1) * stride]
-                block_centroids = self.dna_centroids[(idx * n_blocks + b) * 16 : (idx * n_blocks + b) * 16 + 16]
+                block_centroids = self.dna_centroids[
+                    (idx * n_blocks + b) * 16 : (idx * n_blocks + b) * 16 + 16
+                ]
                 for k in range(stride):
                     byte = block_dna[k]
                     # High nibble
-                    res[b * self.block_size + k * 2] = block_centroids[(byte >> 4) & 0x0F]
+                    res[b * self.block_size + k * 2] = block_centroids[
+                        (byte >> 4) & 0x0F
+                    ]
                     # Low nibble
                     res[b * self.block_size + k * 2 + 1] = block_centroids[byte & 0x0F]
         else:
@@ -361,17 +379,17 @@ class GenomicLayer:
                 )
 
         # De-cuantizar anclas on-the-fly si es necesario para inspección
-        if len(self.anchors_f16_bytes) < 8: # Mínimo "GAJE" + count
+        if len(self.anchors_f16_bytes) < 8:  # Mínimo "GAJE" + count
             return res
-            
+
         anchors = np.frombuffer(self.anchors_f16_bytes, dtype=np.float16).astype(
             np.float32
         )
-        # Nota: Esto asume anclas densas o un formato compatible para get_row. 
+        # Nota: Esto asume anclas densas o un formato compatible para get_row.
         # Para GAJE real (sparse), get_row debería usar la lógica de reconstrucción nativa.
         if len(anchors) == 0:
             return res
-            
+
         try:
             return res + anchors[idx * self.in_features : (idx + 1) * self.in_features]
         except:
@@ -553,7 +571,7 @@ class GenomicTransformerBlock:
             self.eps,
             act_fn,
             use_gen_norm,
-            1.0, # h_scale default
+            1.0,  # h_scale default
             rna_threshold,
         )
 
@@ -629,9 +647,7 @@ class GenomicLLM:
             rope_base_field = f"{arch_name}.rope.freq_base"
             llama_rope_base_field = "llama.rope.freq_base"
             if rope_base_field in self.reader.fields:
-                self.rope_base = float(
-                    self.reader.fields[rope_base_field].parts[-1][0]
-                )
+                self.rope_base = float(self.reader.fields[rope_base_field].parts[-1][0])
             elif llama_rope_base_field in self.reader.fields:
                 self.rope_base = float(
                     self.reader.fields[llama_rope_base_field].parts[-1][0]
@@ -792,7 +808,7 @@ class GenomicLLM:
             self.blocks.append(block)
             rust_blocks.append(block.rust_block)
             if (i + 1) % 10 == 0:
-                print(f"    [~] Bloque {i+1}/{self.n_blocks} sincronizado...")
+                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado...")
 
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
             self.embeddings.linear,
@@ -875,11 +891,13 @@ class GenomicLLM:
             tokens = tokens.ids
 
         generated_tokens = list(tokens)
-        
+
         # Inicializar Sampler Toroidal si se solicita
         toroidal_sampler = None
         if use_toroidal and not use_spiking:
-            toroidal_sampler = dna_semantic_compression.ToroidalSampler(toroidal_mass, toroidal_curvature)
+            toroidal_sampler = dna_semantic_compression.ToroidalSampler(
+                toroidal_mass, toroidal_curvature
+            )
 
         # Inferencia inicial (prompt)
         # Para el prompt, procesamos token por token
@@ -914,16 +932,16 @@ class GenomicLLM:
 
             # Repetition penalty
             penalized_logits = dna_semantic_compression.apply_repetition_penalty(
-                next_token_logits.tolist() if hasattr(next_token_logits, "tolist") else list(next_token_logits),
+                next_token_logits.tolist()
+                if hasattr(next_token_logits, "tolist")
+                else list(next_token_logits),
                 repetition_penalty,
-                generated_tokens[-20:]
+                generated_tokens[-20:],
             )
 
             # Muestreo: Toroidal o Top-P tradicional
             if toroidal_sampler:
-                next_id = toroidal_sampler.sample(
-                    penalized_logits, temperature, top_p
-                )
+                next_id = toroidal_sampler.sample(penalized_logits, temperature, top_p)
             else:
                 next_id = dna_semantic_compression.sample_top_p(
                     penalized_logits, top_p, temperature
@@ -1227,7 +1245,7 @@ class GenomicLLM:
             expected_2bit = (n_elements + 3) // 4
             expected_4bit = (n_elements + 1) // 2
             expected_32bit = n_elements * 4
-            
+
             if len(dna) == expected_32bit:
                 bit_depth = 32
             elif len(dna) == expected_4bit:
@@ -1353,7 +1371,6 @@ class GenomicLLM:
 
                 # Fallback seguro
                 return (dna_len * 4) // in_features
-
 
             ffn_hidden = get_out_features(p + "ffn_gate", model.n_embd)
 

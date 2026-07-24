@@ -50,13 +50,13 @@ impl SintergicSampler {
         for (i, &energy) in logits.iter().enumerate() {
             // Energía Potencial: V = max_logit - logit_actual (Resistencia semántica)
             let potential = (max_logit - energy) / temperature.max(1e-6);
-            
+
             // Usamos el Motor Lagrangiano para calcular el retraso geodésico
             let latency = self.engine.calculate_timing_delay(potential);
-            
+
             // Resonancia: Inversa de la energía potencial para el muestreo final
             let resonance = (-potential).exp();
-            
+
             temporal_arrivals.push((i, latency, resonance));
         }
 

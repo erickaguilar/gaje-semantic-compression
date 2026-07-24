@@ -65,7 +65,7 @@ def monte_carlo_centroid_search(weights_f32, iterations=5000, noise_scale=0.1):
             best_centroids = candidate_centroids
 
         if (i + 1) % 1000 == 0:
-            print(f"   [Iter {i+1}] Mejor MSE actual: {best_mse:.6f}")
+            print(f"   [Iter {i + 1}] Mejor MSE actual: {best_mse:.6f}")
 
     duration = time.time() - start_time
 

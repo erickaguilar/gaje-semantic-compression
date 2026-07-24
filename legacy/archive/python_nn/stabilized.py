@@ -732,7 +732,7 @@ class GenomicLLM:
             self.blocks.append(block)
             rust_blocks.append(block.rust_block)
             if (i + 1) % 10 == 0:
-                print(f"    [~] Bloque {i+1}/{self.n_blocks} sincronizado...")
+                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado...")
 
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
             self.embeddings.linear,

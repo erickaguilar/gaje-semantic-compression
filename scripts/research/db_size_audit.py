@@ -1,17 +1,17 @@
 import redb
-import os
 import lz4_flex
-import struct
+
 
 def audit_database_v2(path):
     print(f"Auditing DB: {path}")
     db = redb.Database(path)
     read_txn = db.begin_read()
     table = read_txn.open_table("tensors")
-    
+
     # Check config
     config_val = read_txn.open_table("metadata").get("config")
     import json
+
     config = json.loads(config_val.value())
     n_embd = config["n_embd"]
     print(f"Config: n_embd={n_embd}, n_blocks={config['n_blocks']}")
@@ -29,9 +29,13 @@ def audit_database_v2(path):
             print(f"Tensor {key}: size={size} bytes")
             print(f"  - Expected 2-bit: {expected_2bit}")
             print(f"  - Expected 4-bit: {expected_4bit}")
-            if size == expected_2bit: print("  -> Detected 2-bit")
-            elif size == expected_4bit: print("  -> Detected 4-bit")
-            else: print("  -> UNKNOWN DEPTH")
+            if size == expected_2bit:
+                print("  -> Detected 2-bit")
+            elif size == expected_4bit:
+                print("  -> Detected 4-bit")
+            else:
+                print("  -> UNKNOWN DEPTH")
+
 
 if __name__ == "__main__":
     audit_database_v2("models/production/silver_adult_sovereign.gaje")

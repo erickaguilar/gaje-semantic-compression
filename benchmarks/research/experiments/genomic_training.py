@@ -31,7 +31,7 @@ def train_metabolism():
     learning_rate = 0.05
 
     for epoch in range(epochs):
-        print(f"\n🌱 Época {epoch+1}/{epochs}")
+        print(f"\n🌱 Época {epoch + 1}/{epochs}")
         total_loss = 0
 
         for text in calibration_data:

@@ -46,7 +46,7 @@ def explain_and_test():
     print("-" * 45)
     print("MÉTRICA         | ESTÁNDAR (GAJE) | CLONADO (Tu Idea)")
     print(f"Similitud Cos   | {cos_std:.4f}          | {cos_cloned:.4f}")
-    print(f"Error Residual  | {1-cos_std:.6f}        | {1-cos_cloned:.6f}")
+    print(f"Error Residual  | {1 - cos_std:.6f}        | {1 - cos_cloned:.6f}")
     print("-" * 45)
 
     improvement = (cos_cloned - cos_std) / (1 - cos_std) * 100

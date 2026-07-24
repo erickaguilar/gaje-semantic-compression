@@ -20,7 +20,6 @@ def dequantize_q8_0(
         out_f = tensor.shape[0]
         in_f = 1
 
-        
     # Usamos la implementación nativa si está disponible por velocidad
     try:
         from gaje.core import _impl as dna_semantic_compression
@@ -48,10 +47,15 @@ def dequantize_q8_0(
 
         return weights_f32.reshape(out_f, in_f)
 
+
 def unpermute_to_split(weights, n_head, head_dim):
     """Deshace la permutación de RoPE usada en GGUF para Llama/Qwen, pasando de interleaved a split."""
     # weights: [out_features, in_features]
     # GGUF almacena los pesos como (n_head, head_dim // 2, 2)
     # Nosotros queremos (n_head, 2, head_dim // 2)
     out_f, in_f = weights.shape
-    return weights.reshape(n_head, head_dim // 2, 2, in_f).transpose(0, 2, 1, 3).reshape(out_f, in_f)
+    return (
+        weights.reshape(n_head, head_dim // 2, 2, in_f)
+        .transpose(0, 2, 1, 3)
+        .reshape(out_f, in_f)
+    )

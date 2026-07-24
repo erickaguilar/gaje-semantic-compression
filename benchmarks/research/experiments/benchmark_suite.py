@@ -32,7 +32,7 @@ def run_benchmarks():
             "float32_bytes": float32_size,
             "dna_bytes": dna_size,
             "ratio": f"{ratio:.1f}x",
-            "saving_pct": f"{(1 - 1/ratio)*100:.2f}%",
+            "saving_pct": f"{(1 - 1 / ratio) * 100:.2f}%",
         }
 
     # 2. Encoding/Decoding Latency

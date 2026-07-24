@@ -45,7 +45,7 @@ class GAJEHealthReport:
         print("-" * 60)
         print(f"{'Latencia por Forward (Full)':<30} | {time_gen:<10.2f} ms | {'Info'}")
         print(
-            f"{'Entropía de Salida':<30} | {entropy:<10.4f} bits | { '✅' if entropy > 0.5 else '⚠️'}"
+            f"{'Entropía de Salida':<30} | {entropy:<10.4f} bits | {'✅' if entropy > 0.5 else '⚠️'}"
         )
 
         top1 = np.argmax(logits_gen)

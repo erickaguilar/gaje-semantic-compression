@@ -114,7 +114,7 @@ def main():
     trainer.fit(lines, epochs=args.epochs)
 
     total_duration = time.time() - start_time
-    print(f"\n✅ Entrenamiento completado en {total_duration/60:.2f} minutos.")
+    print(f"\n✅ Entrenamiento completado en {total_duration / 60:.2f} minutos.")
 
     # 5. Guardar Organismo Final
     print("[*] Guardando organismo evolucionado...")

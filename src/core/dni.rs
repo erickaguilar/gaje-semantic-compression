@@ -262,7 +262,14 @@ impl DNIEngine {
     fn calculate_dna_hash(model: &GenomicLLM) -> Vec<u64> {
         let mut hashes = Vec::new();
         for block in &model.blocks {
-            hashes.push(block.gate_gen.database_ref().iter().map(|&b| b as u64).sum());
+            hashes.push(
+                block
+                    .gate_gen
+                    .database_ref()
+                    .iter()
+                    .map(|&b| b as u64)
+                    .sum(),
+            );
             hashes.push(block.up_gen.database_ref().iter().map(|&b| b as u64).sum());
             hashes.push(block.w_down.database_ref().iter().map(|&b| b as u64).sum());
         }
@@ -390,7 +397,7 @@ impl DNIEngine {
                                     let current_bits = layer.weight_db.read(global_byte_idx, s);
                                     let max_val = (1 << bit_depth) - 1;
                                     let mutation = rng.gen::<u8>() % (max_val + 1);
-                                    
+
                                     if mutation != current_bits {
                                         layer.weight_db.mutate(global_byte_idx, s, mutation);
                                     }
@@ -466,7 +473,7 @@ impl DNIEngine {
         for i in 0..logic_model.blocks.len() {
             let blk_l = &mut logic_model.blocks[i];
             let blk_g = &mut grammar_model.blocks[i];
-            
+
             let db_l = blk_l.w_down.database_ref().to_vec();
             let mut db_g = blk_g.w_down.database_ref().to_vec();
             for j in 0..db_l.len() {
@@ -484,7 +491,6 @@ impl DNIEngine {
                 }
             }
             blk_l.w_o.database_mut().copy_from_slice(&db_attn_l);
-
         }
     }
 }

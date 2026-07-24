@@ -102,7 +102,7 @@ def test_triplet_frontier():
     print(f"   [DNA 2-bit]   Recall@10: {recall_2b:.2%}")
     print(f"   [Epi 4-bit]   Recall@10: {recall_4b:.2%}")
     print(f"   [Triplet 6-b] Recall@10: {recall_6b:.2%}")
-    print(f"   Latencia 6-bit (NEON): {(end-start)*1000:.4f}ms")
+    print(f"   Latencia 6-bit (NEON): {(end - start) * 1000:.4f}ms")
 
     assert (
         recall_6b >= recall_4b

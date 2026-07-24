@@ -67,13 +67,13 @@ def main():
 
     print("\n📊 DISTRIBUCIÓN DEL ADN METABÓLICO:")
     print(
-        f"   🟩 Hebras Base (2-bit):       {count_2bit} ({(count_2bit/total)*100:.1f}%) - MatMul Masivo SIMD"
+        f"   🟩 Hebras Base (2-bit):       {count_2bit} ({(count_2bit / total) * 100:.1f}%) - MatMul Masivo SIMD"
     )
     print(
-        f"   🟨 Hebras Epigenéticas (4-bit): {count_4bit} ({(count_4bit/total)*100:.1f}%) - Corrección de Señal"
+        f"   🟨 Hebras Epigenéticas (4-bit): {count_4bit} ({(count_4bit / total) * 100:.1f}%) - Corrección de Señal"
     )
     print(
-        f"   🟥 Hebras Tripletes (6-bit):    {count_6bit} ({(count_6bit/total)*100:.1f}%) - Preservación Crítica"
+        f"   🟥 Hebras Tripletes (6-bit):    {count_6bit} ({(count_6bit / total) * 100:.1f}%) - Preservación Crítica"
     )
 
     print("\n🧬 MAPA DE CALOR DEL ADN (Fragmento 256 dims):")

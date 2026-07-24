@@ -32,7 +32,7 @@ def run_hnsw_demo():
     start_build = time.time()
     index.build()
     end_build = time.time()
-    print(f"[+] Index built in {(end_build - start_build)*1000:.2f} ms")
+    print(f"[+] Index built in {(end_build - start_build) * 1000:.2f} ms")
 
     # Search
     query = data[0].tolist()
@@ -41,7 +41,7 @@ def run_hnsw_demo():
     results = index.search(query, ef=50)
     end_search = time.time()
 
-    print(f"[+] Search completed in {(end_search - start_search)*1000:.2f} ms")
+    print(f"[+] Search completed in {(end_search - start_search) * 1000:.2f} ms")
     print(f"[+] Top result index: {results[0][0]}")
     print("-" * 50)
 

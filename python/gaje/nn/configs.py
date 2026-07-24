@@ -20,7 +20,7 @@ class ArchitectureConfig:
     anchor_threshold: float = -1.0  # -1.0 means disable by default
     ffn_anchor_threshold: float = -1.0
     rna_threshold: float = 0.5  # Umbral para activación dinámica de hebras de ARN
-    
+
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
     dni: bool = False  # Direct Neural Ingestion support

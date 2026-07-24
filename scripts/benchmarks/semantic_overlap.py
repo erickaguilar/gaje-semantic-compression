@@ -48,7 +48,7 @@ def run_phase_1_1(master_id, gaje_path, prompts, k=10):
     overlaps = []
     jsds = []
 
-    print(f"\n| {'Prompt':<25} | {'Overlap @'+str(k):<12} | {'JSD':<8} |")
+    print(f"\n| {'Prompt':<25} | {'Overlap @' + str(k):<12} | {'JSD':<8} |")
     print("|" + "-" * 27 + "|" + "-" * 14 + "|" + "-" * 10 + "|")
 
     for prompt in prompts:
@@ -82,7 +82,7 @@ def run_phase_1_1(master_id, gaje_path, prompts, k=10):
         jsds.append(jsd)
 
         display_prompt = (prompt[:22] + "...") if len(prompt) > 25 else prompt
-        print(f"| {display_prompt:<25} | {overlap*100:>10.2f}% | {jsd:>8.4f} |")
+        print(f"| {display_prompt:<25} | {overlap * 100:>10.2f}% | {jsd:>8.4f} |")
 
     avg_overlap = np.mean(overlaps) * 100
     avg_jsd = np.mean(jsds)

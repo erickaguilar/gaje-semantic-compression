@@ -1,7 +1,5 @@
 import gguf
-import numpy as np
-import os
-import sys
+
 
 def check():
     GGUF_PATH = "models/gguf/smollm2-135m-f16.gguf"
@@ -11,5 +9,6 @@ def check():
     print(f"Shape: {t.shape}")
     print(f"Data size: {t.data.size}")
     print(f"Data type: {t.data.dtype}")
+
 
 check()

@@ -24,7 +24,7 @@ def test_save_and_load_db():
     model = GenomicLLM(num_blocks=2, config=config)
 
     # Check original value
-    orig_centroids = model.blocks[0].attn_layer.q_gen.linear.centroids
+    model.blocks[0].attn_layer.q_gen.linear.centroids
 
     # 2. Save model to database
     print(f"[*] Saving model to {db_path}...")

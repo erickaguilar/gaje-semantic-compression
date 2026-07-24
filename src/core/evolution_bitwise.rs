@@ -1,8 +1,8 @@
 use crate::compute::scheduler::NeuromorphicScheduler;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::core::topology::CentroidGraph;
-use crate::nn::linear::GenomicOperable;
 use crate::nn::distiller::CouncilOfTeachers;
+use crate::nn::linear::GenomicOperable;
 use crate::nn::llm::GenomicLLM;
 use crate::nn::spiking::layer::GajeNeuromorphicLayer;
 use rand::Rng;
@@ -64,7 +64,7 @@ impl NeuromorphicOrganism {
                     let db_len = layer.weight_db.len_bytes();
                     let bit_depth = layer.weight_db.bit_depth();
                     let params_per_byte = 8 / bit_depth;
-                    
+
                     for i in 0..db_len {
                         for s in 0..params_per_byte as usize {
                             if rng.gen::<f32>() < rate {

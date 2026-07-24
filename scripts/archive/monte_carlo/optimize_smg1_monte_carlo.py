@@ -158,7 +158,7 @@ def main():
             best_centroides = candidate_c
             best_thresholds = candidate_t
             print(
-                f"🔥 Iter {i+1}: Score: {best_score:.4f} | C: {best_centroides} | T: {best_thresholds}"
+                f"🔥 Iter {i + 1}: Score: {best_score:.4f} | C: {best_centroides} | T: {best_thresholds}"
             )
 
     duration = time.time() - start_time

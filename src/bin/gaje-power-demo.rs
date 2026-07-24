@@ -43,5 +43,7 @@ fn main() {
         Err(e) => println!("\n[!] No se pudo asignar cluster BIG: {}. Esto es común si el núcleo está dormido por ahorro de energía.", e),
     }
 
-    println!("\n✅ Gestión de energía validada. El sistema maneja las restricciones de afinidad de CPU.");
+    println!(
+        "\n✅ Gestión de energía validada. El sistema maneja las restricciones de afinidad de CPU."
+    );
 }

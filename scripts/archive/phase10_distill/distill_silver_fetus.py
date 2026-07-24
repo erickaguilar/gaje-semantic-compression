@@ -210,13 +210,13 @@ def main():
             count += 1
             if count % 10 == 0:
                 print(
-                    f"    - Muestra {count}/{len(samples)} | Loss: {loss:.4f} | {time.time()-start_time:.1f}s"
+                    f"    - Muestra {count}/{len(samples)} | Loss: {loss:.4f} | {time.time() - start_time:.1f}s"
                 )
 
         duration = time.time() - start_time
         avg_loss = epoch_loss / count if count > 0 else 0
         print(
-            f"✅ Época {epoch+1} completada | Loss Promedio: {avg_loss:.4f} | Total: {duration:.2f}s"
+            f"✅ Época {epoch + 1} completada | Loss Promedio: {avg_loss:.4f} | Total: {duration:.2f}s"
         )
 
     # 5. Guardar Modelo Destilado

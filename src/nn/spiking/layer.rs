@@ -184,7 +184,7 @@ impl GajeNeuromorphicLayer {
             let weight_bits = (self.packed_weights[start_byte + byte_idx] >> bit_shift) & 0x03;
             let delta_r = centroides_real[weight_bits as usize] * intensity;
             let delta_im = centroides_imag[weight_bits as usize] * intensity;
-            
+
             // Reactivando Homeostasis: el bias evita el colapso por silencio (Materia Oscura)
             self.membrane_potentials_real[i] += delta_r + homeostatic_bias;
             self.membrane_potentials_imag[i] += delta_im;
@@ -229,7 +229,9 @@ impl GajeNeuromorphicLayer {
         let start_byte = input_index * row_size;
 
         // Aceleración geodésica frena el avance si hay resistencia
-        let acceleration = self.lagrangian.geodesic_acceleration(-semantic_resistance, false);
+        let acceleration = self
+            .lagrangian
+            .geodesic_acceleration(-semantic_resistance, false);
 
         for i in 0..self.num_neurons {
             let byte_idx = i / 4;
@@ -308,7 +310,7 @@ impl GajeNeuromorphicLayer {
             } else if magnitude > 0.0 {
                 self.membrane_potentials_real[i] *= self.decays[i];
                 self.membrane_potentials_imag[i] *= self.decays[i];
-                
+
                 // Limpieza de seguridad
                 if !self.membrane_potentials_real[i].is_finite() {
                     self.membrane_potentials_real[i] = 0.0;

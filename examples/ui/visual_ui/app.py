@@ -43,7 +43,7 @@ def compress_demo(text):
     metrics = (
         f"Original Size: {orig_size_bytes} bytes ({dims}-dim float32)\n"
         f"DNA Size: {dna_size_bytes} bytes\n"
-        f"Compression Ratio: {orig_size_bytes/dna_size_bytes:.1f}x\n"
+        f"Compression Ratio: {orig_size_bytes / dna_size_bytes:.1f}x\n"
         f"Space Saved: {reduction:.2f}%"
     )
 

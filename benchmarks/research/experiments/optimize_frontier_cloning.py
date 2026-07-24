@@ -9,7 +9,7 @@ def optimize_output_frontier():
     # Rutas a los componentes globales del modelo
     base_path = "dna-semantic-compression/gaje_qwen2_full_v1/"
     embedding_path = os.path.join(base_path, "embedding_matrix.npy")
-    norm_path = os.path.join(base_path, "output_norm.npy")
+    os.path.join(base_path, "output_norm.npy")
 
     if not os.path.exists(embedding_path):
         print("[!] Error: No se encuentra la matriz de embeddings.")

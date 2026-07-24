@@ -40,7 +40,7 @@ def run_tests():
 
     for prompt in prompts:
         start_gen = time.time()
-        output = model.generate(prompt, max_new_tokens=15, temperature=0.7)
+        model.generate(prompt, max_new_tokens=15, temperature=0.7)
         gen_time = time.time() - start_gen
         tps = 15 / gen_time if gen_time > 0 else 0
         print(f"\n[⏱️ Speed: {tps:.2f} tokens/s]")

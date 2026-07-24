@@ -22,7 +22,7 @@ def run_distribution_analysis():
     total = num_samples * dims
     print(f"Total elements: {total}")
     for k, v in buckets.items():
-        print(f"  {k}: {v} ({v/total*100:.2f}%)")
+        print(f"  {k}: {v} ({v / total * 100:.2f}%)")
 
 
 if __name__ == "__main__":

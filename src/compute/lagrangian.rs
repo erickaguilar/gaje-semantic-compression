@@ -14,12 +14,12 @@
 #[derive(Clone, Debug)]
 pub struct LagrangianEngine {
     pub mass_base: f32, // Inercia base para el genoma de 2 bits
-    pub gamma: f32,    // Factor de conformalidad (stiffening) para las anclas
+    pub gamma: f32,     // Factor de conformalidad (stiffening) para las anclas
 }
 
 impl LagrangianEngine {
     pub fn new(mass_base: f32) -> Self {
-        Self { 
+        Self {
             mass_base,
             gamma: 8.0, // Default stiffening: factor 8x (proporcional a 16bit/2bit)
         }
@@ -35,7 +35,11 @@ impl LagrangianEngine {
     /// * `resistance`: Potencial semántico (Loss).
     /// * `is_anchor`: Si el parámetro es una ancla de alta precisión.
     pub fn calculate_lagrangian(&self, velocity: f32, resistance: f32, is_anchor: bool) -> f32 {
-        let m = if is_anchor { self.mass_base * self.gamma } else { self.mass_base };
+        let m = if is_anchor {
+            self.mass_base * self.gamma
+        } else {
+            self.mass_base
+        };
         let kinetic = 0.5 * m * velocity.powi(2);
         let potential = resistance;
         kinetic - potential
@@ -51,7 +55,11 @@ impl LagrangianEngine {
 
     /// Calcula la aceleración geodésica (fuerza/masa) respetando la métrica heterogénea.
     pub fn geodesic_acceleration(&self, force: f32, is_anchor: bool) -> f32 {
-        let m = if is_anchor { self.mass_base * self.gamma } else { self.mass_base };
+        let m = if is_anchor {
+            self.mass_base * self.gamma
+        } else {
+            self.mass_base
+        };
         force / m
     }
 
@@ -86,7 +94,7 @@ mod tests {
 
         // Genomic (2-bit) step
         let step_genomic = engine.calculate_step(grad, fisher_val, false, lr);
-        
+
         // Anchor (F16) step (should be 8x smaller due to gamma=8.0)
         let step_anchor = engine.calculate_step(grad, fisher_val, true, lr);
 

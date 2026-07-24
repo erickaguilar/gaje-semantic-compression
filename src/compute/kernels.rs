@@ -13,8 +13,8 @@ use std::arch::aarch64::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-use rayon::prelude::*;
 use crate::compute::kv_cache::CompressedKVCache;
+use rayon::prelude::*;
 
 // =============================================================================
 // dot_product — Producto punto vectorizado universal
@@ -119,33 +119,33 @@ pub unsafe fn dot_product_compressed(
     len: usize,
 ) -> f32 {
     let mut sum = 0.0f32;
-    
+
     // Optimizamos procesando por bloques de 48 (alineados con el cache)
     let mut i = 0;
     while i < len {
         let global_idx = start_idx + i;
         let block_idx = global_idx / 48;
         let sub_idx = global_idx % 48;
-        
+
         let block = &cache.blocks[block_idx];
         let scale = block.scale;
-        
+
         // Procesamos lo que queda del bloque actual o hasta el final de len
         let remaining_in_block = 48 - sub_idx;
         let batch_len = remaining_in_block.min(len - i);
-        
+
         for j in 0..batch_len {
             let current_sub_idx = sub_idx + j;
             let byte_idx = current_sub_idx / 4;
             let bit_shift = (3 - (current_sub_idx % 4)) * 2;
             let quantized = (block.data[byte_idx] >> bit_shift) & 0b11;
-            
+
             sum += query[i + j] * (quantized as f32) * scale;
         }
-        
+
         i += batch_len;
     }
-    
+
     sum
 }
 
@@ -481,7 +481,7 @@ pub unsafe fn genomic_dot_product_scalar(
             }
         }
     }
-    
+
     // Frenado Lagrangiano: El rozamiento semántico aniquila el ruido residual (Entropía)
     // Esto asegura que el eco toroidal sea puro en ciclos infinitos.
     if sum.abs() < 1e-5 {
@@ -511,7 +511,7 @@ pub unsafe fn genomic_dot_product_4bit(
 
         for k in 0..stride_4bit {
             let byte = *weights_block_ptr.add(k);
-            
+
             // Peso 1 (High nibble)
             let c_idx1 = (byte >> 4) as usize;
             sum += *centroids_ptr.add(c_idx1) * *input_block_ptr.add(k * 2);

@@ -471,9 +471,12 @@ pub fn genomize_f32_native(
             Ok((dna_py, vec![], anchors_py))
         }
         #[cfg(not(feature = "python"))]
-        { Err("Python not enabled".to_string()) }
+        {
+            Err("Python not enabled".to_string())
+        }
     } else if bit_depth == 4 {
-        let (_dna, _centroids, _anchors) = genomize_4bit_core(f32_data, block_size, anchor_threshold);
+        let (_dna, _centroids, _anchors) =
+            genomize_4bit_core(f32_data, block_size, anchor_threshold);
         #[cfg(feature = "python")]
         {
             use pyo3::types::PyBytes;
@@ -482,7 +485,9 @@ pub fn genomize_f32_native(
             Ok((dna_py, _centroids, anchors_py))
         }
         #[cfg(not(feature = "python"))]
-        { Err("Python not enabled".to_string()) }
+        {
+            Err("Python not enabled".to_string())
+        }
     } else {
         let base_c_arr = if let Some(c) = custom_base_c {
             if c.len() != 4 {
@@ -504,7 +509,9 @@ pub fn genomize_f32_native(
             Ok((dna_py, _centroids, anchors_py))
         }
         #[cfg(not(feature = "python"))]
-        { Err("Python not enabled".to_string()) }
+        {
+            Err("Python not enabled".to_string())
+        }
     }
 }
 
@@ -523,7 +530,11 @@ pub fn genomize_4bit_core(
         let mut abs_vals: Vec<f32> = f32_data.iter().map(|v| v.abs()).collect();
         abs_vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(Ordering::Equal));
         let top_idx = (n_elements as f32 * anchor_threshold) as usize;
-        actual_threshold = if top_idx < n_elements { abs_vals[top_idx] } else { 0.0 };
+        actual_threshold = if top_idx < n_elements {
+            abs_vals[top_idx]
+        } else {
+            0.0
+        };
     }
 
     let mut anchor_indices = Vec::new();
@@ -537,10 +548,14 @@ pub fn genomize_4bit_core(
         let mut min_val = f32::MAX;
         let mut max_val = f32::MIN;
         for &v in block_f32 {
-            if v < min_val { min_val = v; }
-            if v > max_val { max_val = v; }
+            if v < min_val {
+                min_val = v;
+            }
+            if v > max_val {
+                max_val = v;
+            }
         }
-        
+
         let mut c = [0.0f32; 16];
         let step = (max_val - min_val) / 15.0;
         for j in 0..16 {
@@ -553,7 +568,7 @@ pub fn genomize_4bit_core(
             for s in 0..2 {
                 let idx = k * 2 + s;
                 let val = block_f32[idx];
-                
+
                 // Cuantización 4-bit (Centroide más cercano)
                 let mut best_idx = 0;
                 let mut min_dist = f32::MAX;
@@ -584,10 +599,16 @@ pub fn genomize_4bit_core(
     let mut anchors_buf = Vec::new();
     anchors_buf.extend_from_slice(b"GAJE");
     anchors_buf.extend_from_slice(&(anchor_indices.len() as u32).to_le_bytes());
-    for &idx in &anchor_indices { anchors_buf.extend_from_slice(&idx.to_le_bytes()); }
-    for &val in &anchor_values { anchors_buf.extend_from_slice(&val.to_le_bytes()); }
+    for &idx in &anchor_indices {
+        anchors_buf.extend_from_slice(&idx.to_le_bytes());
+    }
+    for &val in &anchor_values {
+        anchors_buf.extend_from_slice(&val.to_le_bytes());
+    }
     let row_ptrs = [0u64, anchor_indices.len() as u64]; // Simplificación para exportación de 1 layer
-    for &ptr in &row_ptrs { anchors_buf.extend_from_slice(&ptr.to_le_bytes()); }
+    for &ptr in &row_ptrs {
+        anchors_buf.extend_from_slice(&ptr.to_le_bytes());
+    }
 
     (dna_database, all_centroids, anchors_buf)
 }
@@ -617,8 +638,7 @@ pub fn genomize_f16_native(
     if bit_depth == 4 {
         // Convertir F16 a F32 para procesar con el core de 4 bits existente
         let f32_data: Vec<f32> = f16_data.iter().map(|v| v.to_f32()).collect();
-        let (dna, centroids, anchors) =
-            genomize_4bit_core(&f32_data, block_size, anchor_threshold);
+        let (dna, centroids, anchors) = genomize_4bit_core(&f32_data, block_size, anchor_threshold);
         #[cfg(feature = "python")]
         {
             use pyo3::types::PyBytes;
@@ -627,7 +647,9 @@ pub fn genomize_f16_native(
             Ok((dna_py, centroids, anchors_py))
         }
         #[cfg(not(feature = "python"))]
-        { Err("Python not enabled".into()) }
+        {
+            Err("Python not enabled".into())
+        }
     } else {
         let (dna, centroids, anchors) =
             genomize_f16_core(f16_data, block_size, anchor_threshold, base_c_arr);

@@ -91,7 +91,13 @@ impl GenomicAttention {
             .into_par_iter()
             .flat_map(|h| {
                 if h == 0 {
-                    println!("[ENGINE CRITICAL] h=0, pos={}, cache_len_before={}, base={}, style={}", pos, self.k_cache.len(), self.rope_base, self.rope_style);
+                    println!(
+                        "[ENGINE CRITICAL] h=0, pos={}, cache_len_before={}, base={}, style={}",
+                        pos,
+                        self.k_cache.len(),
+                        self.rope_base,
+                        self.rope_style
+                    );
                 }
                 let kv_h = h / n_groups;
                 let kv_h_off = kv_h * head_dim;
@@ -111,7 +117,10 @@ impl GenomicAttention {
                     }
                 }
                 if h == 0 && pos == 0 {
-                    println!("[Debug Attn 0] max_score: {:.4}, seq_len: {}", max_s, seq_len);
+                    println!(
+                        "[Debug Attn 0] max_score: {:.4}, seq_len: {}",
+                        max_s, seq_len
+                    );
                 }
                 let mut sum_e = 0.0f32;
                 for t in 0..seq_len {

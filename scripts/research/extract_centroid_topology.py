@@ -31,7 +31,9 @@ sys.path.insert(
 class TopologyExtractor:
     def __init__(self, model_id):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        print(f"[*] Cargando Maestro para Extracción en {self.device.upper()}: {model_id}")
+        print(
+            f"[*] Cargando Maestro para Extracción en {self.device.upper()}: {model_id}"
+        )
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         dtype = torch.float16 if self.device == "cuda" else torch.float32
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -63,8 +65,8 @@ class TopologyExtractor:
             # Analizar flujo entre capas
             for i in range(num_layers - 1):
                 # Tomar la activación promedio del bloque de tokens para ver la tendencia de la capa
-                act_i = h_states[i + 1]      # Capa i: [seq_len, hidden_dim]
-                act_next = h_states[i + 2]   # Capa i+1: [seq_len, hidden_dim]
+                act_i = h_states[i + 1]  # Capa i: [seq_len, hidden_dim]
+                act_next = h_states[i + 2]  # Capa i+1: [seq_len, hidden_dim]
 
                 # Cuantizar activaciones en 4 niveles (basado en cuantiles para distribución uniforme)
                 def quantize_activations(act):
