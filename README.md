@@ -34,17 +34,17 @@ graph TD
 ## 🛠️ Fundamentos Arquitectónicos
 
 ### 1. Muestreo Lagrangiano de Mínima Acción
-La generación de tokens se modela como un sistema dinámico regido por el principio de mínima acción. El espacio de fase evalúa la energía cinética \(T\) (movilidad semántica) y el potencial \(V\) (restricción gramatical):
-\[
-\mathcal{L} = T - V
-\]
+La generación de tokens se modela como un sistema dinámico regido por el principio de mínima acción. El espacio de fase evalúa la energía cinética $T$ (movilidad semántica) y el potencial $V$ (restricción gramatical):
+
+$$\mathcal{L} = T - V$$
+
 Un Sampler Toroidal aplica frenado dinámico para estabilizar las transiciones de probabilidad y mitigar la alucinación producida por la cuantización agresiva.
 
 ### 2. Hebras Reguladoras de ARN (Precisión Adaptativa)
-El sistema utiliza **Entropía de Shannon** para medir la incertidumbre del estado oculto final \(h_{norm}\). Cuando la entropía supera un umbral dinámico \(\tau_{RNA}\), la red activa de forma secundaria hebras complementarias de 2-bits (alcanzando 4-bits efectivos en regiones de alta complejidad).
+El sistema utiliza **Entropía de Shannon** para medir la incertidumbre del estado oculto final $h_{\text{norm}}$. Cuando la entropía supera un umbral dinámico $\tau_{\text{RNA}}$, la red activa de forma secundaria hebras complementarias de 2-bits (alcanzando 4-bits efectivos en regiones de alta complejidad).
 
 ### 3. Inhibición Lateral K-WTA (K-Winners-Take-All)
-Para contrarrestar el ruido cuántico intrínseco de los centroides de 2-bits, se aplica un filtro competitivo temporal que silencia el \((100 - K)\%\) de las neuronas de menor resonancia en el `lm_head`, restaurando la nitidez de los logits de salida.
+Para contrarrestar el ruido cuántico intrínseco de los centroides de 2-bits, se aplica un filtro competitivo temporal que silencia el $(100 - K)\%$ de las neuronas de menor resonancia en el `lm_head`, restaurando la nitidez de los logits de salida.
 
 ---
 
