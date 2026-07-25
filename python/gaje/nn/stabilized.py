@@ -859,6 +859,10 @@ class GenomicLLM:
     def clear_cache(self):
         self.rust_llm.clear_cache_py()
 
+    def set_k_wta_ratio(self, ratio: float):
+        if hasattr(self, "rust_llm") and self.rust_llm:
+            self.rust_llm.set_k_wta_ratio(ratio)
+
     def forward(self, tokens, clear_cache=True):
         if clear_cache:
             self.rust_llm.clear_cache_py()

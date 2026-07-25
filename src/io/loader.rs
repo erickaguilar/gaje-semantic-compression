@@ -438,6 +438,7 @@ impl GGUFLoader {
             output_norm,
             lm_head,
             eps: config.eps,
+            k_wta_ratio: 0.50,
             topology: None,
         })
     }
@@ -783,6 +784,7 @@ impl NativeLoader {
             output_norm,
             lm_head,
             eps: config.eps,
+            k_wta_ratio: 0.50,
             topology: None,
         })
     }
@@ -1050,6 +1052,7 @@ pub fn init_born_genomic_model(
         output_norm: vec![1.0; config.n_embd],
         lm_head: init_l(config.n_embd, vocab_size),
         eps: config.eps,
+        k_wta_ratio: 0.50,
         topology: None,
     };
     save_genomic_model(path, &model, &config, None)?;

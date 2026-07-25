@@ -27,6 +27,7 @@ pub struct RustGenomicBlock {
     pub use_genomic_norm: bool,
     pub h_scale: f32,
     pub rna_threshold: f32,
+    pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
 }
 
@@ -64,6 +65,7 @@ impl RustGenomicBlock {
             use_genomic_norm,
             h_scale,
             rna_threshold,
+            k_wta_ratio: 0.50,
             topology: None,
         }
     }
@@ -214,8 +216,9 @@ impl RustGenomicBlock {
         // --- STAGE 5: TOROIDAL CONFINEMENT (K-WTA Lateral Inhibition) ---
         // Filtramos el ruido de fondo para que solo la señal en resonancia sobreviva.
         // Esto evita la acumulación de entropía (deriva semántica) detectada en Phase 2.
-        if self.use_genomic_norm {
-            let k = (final_out.len() as f32 * 0.95) as usize; // Conservamos el top 95%
+        if self.use_genomic_norm || self.k_wta_ratio < 1.0 {
+            let ratio = if self.k_wta_ratio > 0.0 { self.k_wta_ratio } else { 0.50 };
+            let k = ((final_out.len() as f32 * ratio) as usize).max(1);
             crate::compute::kernels::lateral_inhibition_kwta(&mut final_out, k);
         }
 
@@ -367,6 +370,7 @@ impl RustGenomicBlock {
             use_genomic_norm,
             h_scale,
             rna_threshold,
+            k_wta_ratio: 0.50,
             topology: None,
         }
     }

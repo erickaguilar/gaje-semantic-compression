@@ -34,10 +34,10 @@ fi
 
 for FOLDER in "${FOLDERS[@]}"; do
     echo "[>] Descargando/Sincronizando desde Drive: $FOLDER..." | tee -a "$LOG_FILE"
-    
+
     # Crear carpeta local si no existe
     mkdir -p "$FOLDER"
-    
+
     # rclone sync del remoto al local
     rclone sync "$REMOTE_NAME:$REMOTE_PATH/$FOLDER" "$FOLDER" \
         --progress \

@@ -16,6 +16,7 @@ pub struct GenomicLLM {
     pub output_norm: Vec<f32>,
     pub lm_head: GenomicLinear,
     pub eps: f32,
+    pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
 }
 
@@ -61,7 +62,15 @@ impl GenomicLLM {
             return Err("LM Head out_features is 0!".to_string());
         }
 
-        self.lm_head.forward_core(h_norm, modulation, activate_rna)
+        let mut logits = self.lm_head.forward_core(h_norm, modulation, activate_rna)?;
+
+        // Filtrado K-WTA en Logits de Salida para mitigar ruido de 2-bits
+        if self.k_wta_ratio > 0.0 && self.k_wta_ratio < 1.0 {
+            let k = ((logits.len() as f32 * self.k_wta_ratio) as usize).max(1);
+            crate::compute::kernels::lateral_inhibition_kwta(&mut logits, k);
+        }
+
+        Ok(logits)
     }
 
     pub fn load_topology_core(&mut self, path: &str) -> Result<(), String> {
@@ -341,6 +350,7 @@ impl GenomicLLM {
             output_norm,
             lm_head,
             eps,
+            k_wta_ratio: 0.50,
             topology: None,
         }
     }
@@ -348,6 +358,19 @@ impl GenomicLLM {
     #[getter]
     pub fn vocab_size(&self) -> usize {
         self.embeddings.out_features
+    }
+
+    #[getter]
+    pub fn k_wta_ratio(&self) -> f32 {
+        self.k_wta_ratio
+    }
+
+    pub fn set_k_wta_ratio(&mut self, ratio: f32) -> PyResult<()> {
+        self.k_wta_ratio = ratio;
+        for block in &mut self.blocks {
+            block.k_wta_ratio = ratio;
+        }
+        Ok(())
     }
 
     pub fn load_topology(&mut self, json_path: &str) -> PyResult<()> {
