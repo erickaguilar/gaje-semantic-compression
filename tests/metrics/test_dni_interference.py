@@ -31,7 +31,8 @@ def calculate_ppl(model, text, tokenizer, max_length=128):
     for i, target_id in enumerate(target_tokens):
         logits = logits_seq[i]
         probs = softmax(logits)
-        p = np.clip(probs[target_id], 1e-10, 1.0)
+        safe_target_id = target_id % len(probs)
+        p = np.clip(probs[safe_target_id], 1e-10, 1.0)
         log_probs.append(np.log(p))
 
     if not log_probs:
@@ -69,8 +70,8 @@ def main():
     print("🧬 GAJE Certification Suite: Nivel 3 - Ingesta No-Destructiva")
 
     # Configuración
-    model_path = "models/production/silver_adult_anchored.gaje"
-    control_data_path = "data/datasets/master/coherence_es.txt"
+    model_path = "models/silver_adult.gaje" if os.path.exists("models/silver_adult.gaje") else "models/production/silver_adult_anchored.gaje"
+    control_data_path = "data/datasets/coherence_es.txt"
     needle_data = "El código de acceso secreto para el nivel 3 es 'SILVER_SOUL_2026'."
     needle_file = "temp_needle.txt"
 

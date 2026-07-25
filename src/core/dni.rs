@@ -416,7 +416,7 @@ impl DNIEngine {
         let mut count = 0;
         for i in 0..tokens.len() - 1 {
             if let Ok(logits) = mutant.forward_core(tokens[i] as usize, false) {
-                let target = tokens[i + 1] as usize;
+                let target = if logits.is_empty() { 0 } else { (tokens[i + 1] as usize) % logits.len() };
                 let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
                 let mut sum_exp = 0.0f32;
                 for &l in &logits {

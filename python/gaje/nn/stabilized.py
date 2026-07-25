@@ -1163,7 +1163,9 @@ class GenomicLLM:
         if "name" not in config_data:
             config_data["name"] = "legacy_recovered"
 
-        config = ArchitectureConfig(**config_data)
+        valid_keys = set(ArchitectureConfig.__dataclass_fields__.keys())
+        filtered_config = {k: v for k, v in config_data.items() if k in valid_keys}
+        config = ArchitectureConfig(**filtered_config)
 
         # Instantiate model directly without `__init__` calling random generation
         model = cls.__new__(cls)
