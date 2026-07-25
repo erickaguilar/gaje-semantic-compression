@@ -3,6 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.0--alpha_Silver_Adult-purple)](CHANGELOG.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Language: English](https://img.shields.io/badge/Language-English-green.svg)](README.en.md)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de investigación y computación de ultra-alta densidad diseñado para la ejecución y compresión de Modelos de Lenguaje Masivos (LLMs). El protocolo cuantiza el espacio de parámetros a una representación discreta de **2 bits por peso** (utilizando un alfabeto genómico digital de 4 estados: `00=A`, `01=C`, `11=G`, `10=T`), mapeado a manifolds en una **Topología Circular de Fase**.
 
