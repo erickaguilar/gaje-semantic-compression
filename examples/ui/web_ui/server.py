@@ -4,15 +4,15 @@ import json
 import os
 import sys
 
-# Asegurar que usamos el código local de 'python/'
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SERVER_DIR = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(SERVER_DIR, "..", "..", ".."))
+DIRECTORY = SERVER_DIR
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 from gaje.core import _impl as dna_semantic_compression
 from gaje.nn.stabilized import GenomicLLM
 
 PORT = 8080
-DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 import threading
 
 # Cache de modelos y lock para evitar cargas duplicadas o fallos por concurrencia
@@ -38,15 +38,19 @@ def get_model(model_name):
                 break
 
         if not model_path:
+            print(f"❌ No se encontró el archivo de modelo '{model_name}' en los caminos: {possible_paths}")
             return None
 
         print(f"🧬 Cargando modelo real: {model_path}")
         try:
-            llm = GenomicLLM.load_genomic(model_path)
+            llm = GenomicLLM.load_genomic(os.path.abspath(model_path))
             loaded_models[model_name] = llm
             return llm
         except Exception as e:
+            import traceback
+
             print(f"❌ Error cargando modelo {model_name}: {e}")
+            traceback.print_exc()
             return None
 
 
