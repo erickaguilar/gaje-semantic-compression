@@ -1,7 +1,7 @@
 use rand::Rng;
-use std::time::Instant;
 use rayon::prelude::*;
 use std::fs;
+use std::time::Instant;
 
 #[derive(Clone)]
 struct RecurrentMicroOrganism {
@@ -126,25 +126,33 @@ fn main() {
                 let mut log_prob = 0.0f32;
                 let mut current_hidden = vec![0.0f32; hidden_dim];
                 // Evaluamos una sub-ventana para acelerar la evolución inicial
-                let eval_len = std::cmp::min(chars.len(), 100); 
+                let eval_len = std::cmp::min(chars.len(), 100);
                 for i in 0..eval_len - 1 {
                     let mut input = vec![0.0f32; in_dim];
                     input[char_to_idx(chars[i])] = 1.0;
                     let (output, next_hidden) = path.step(&input, &current_hidden);
                     let probs = softmax(&output);
-                    log_prob += (probs[char_to_idx(chars[i+1])] + 1e-10).ln();
+                    log_prob += (probs[char_to_idx(chars[i + 1])] + 1e-10).ln();
                     current_hidden = next_hidden;
                 }
                 (log_prob, path)
             })
             .collect();
 
-        if let Some((max_log_prob, best_org)) = results.into_iter().max_by(|a, b| a.0.partial_cmp(&b.0).unwrap()) {
+        if let Some((max_log_prob, best_org)) = results
+            .into_iter()
+            .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+        {
             if gen == 0 || max_log_prob > best_total_fitness {
                 best_total_fitness = max_log_prob;
                 organism = best_org;
                 if gen % 100 == 0 {
-                    println!("[Gen {}] Log-Probabilidad: {:.4} | Tiempo: {:?}", gen, best_total_fitness, start_time.elapsed());
+                    println!(
+                        "[Gen {}] Log-Probabilidad: {:.4} | Tiempo: {:?}",
+                        gen,
+                        best_total_fitness,
+                        start_time.elapsed()
+                    );
                 }
             }
         }
@@ -159,7 +167,12 @@ fn main() {
         input[char_to_idx(chars[i])] = 1.0;
         let (output, next_hidden) = organism.step(&input, &current_hidden);
         let probs = softmax(&output);
-        let best_idx = probs.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
+        let best_idx = probs
+            .iter()
+            .enumerate()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+            .unwrap()
+            .0;
         print!("{}", vocab[best_idx]);
         current_hidden = next_hidden;
     }

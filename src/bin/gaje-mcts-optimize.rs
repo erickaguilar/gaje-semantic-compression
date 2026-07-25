@@ -1,7 +1,7 @@
-use _impl::io::loader::NativeLoader;
 use _impl::compute::mcts::MctsTree;
-use std::time::Instant;
+use _impl::io::loader::NativeLoader;
 use std::env;
+use std::time::Instant;
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args: Vec<String> = env::args().collect();
@@ -16,22 +16,30 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         iterations = args[3].parse().unwrap_or(5000);
     }
 
-    println!("🎲 Iniciando Optimización MCTS-Genómica para: {}", model_path);
+    println!(
+        "🎲 Iniciando Optimización MCTS-Genómica para: {}",
+        model_path
+    );
 
     // 1. Cargar el modelo
-    let loader = NativeLoader::new(model_path)?;
-    let model = loader.load_llm()?;
-    
+    let model = {
+        let loader = NativeLoader::new(model_path)?;
+        loader.load_llm()?
+    };
+
     // Para la validación del Gold Embryo, optimizaremos los centroides de la capa de embeddings
     // ya que es la base del vocabulario y la más crítica para la coherencia inicial.
     let target_layer = &model.embeddings;
-    println!("   Optimizando capa: token_embd ({} x {})", target_layer.out_features, target_layer.in_features);
+    println!(
+        "   Optimizando capa: token_embd ({} x {})",
+        target_layer.out_features, target_layer.in_features
+    );
 
     // 2. Extraer datos para evaluación (Simulamos una distribución objetivo basada en los centroides actuales)
     // En una implementación de producción, aquí usaríamos los pesos F32 originales si estuvieran disponibles,
     // o muestras del dataset para maximizar la resonancia.
     let initial_centroids = target_layer.centroids[0..4].to_vec();
-    
+
     // 3. Configurar Árbol MCTS
     let mut mcts = MctsTree::new(initial_centroids.clone(), 1.0);
     let start_time = Instant::now();
@@ -53,12 +61,16 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         if (i + 1) % 1000 == 0 {
             let best_score = mcts.nodes[0].q_value;
-            println!("   [Iter {}] Mejor Score de Resonancia: {:.6}", i + 1, best_score);
+            println!(
+                "   [Iter {}] Mejor Score de Resonancia: {:.6}",
+                i + 1,
+                best_score
+            );
         }
     }
 
     let duration = start_time.elapsed();
-    
+
     // 4. Encontrar los mejores centroides
     let mut best_node_idx = 0;
     let mut max_q = -1.0;
@@ -74,8 +86,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("\n✅ Optimización completada en {:?}", duration);
     println!("   Centroides Originales: {:?}", initial_centroids);
     println!("   Centroides Optimizados: {:?}", best_centroids);
-    println!("   Mejora en Score: {:.2}%", ((max_q - mcts.nodes[0].q_value) / mcts.nodes[0].q_value.max(1e-6)) * 100.0);
-    
+    println!(
+        "   Mejora en Score: {:.2}%",
+        ((max_q - mcts.nodes[0].q_value) / mcts.nodes[0].q_value.max(1e-6)) * 100.0
+    );
+
     println!("\n[!] Nota: En la v1.0, estos centroides se guardarán automáticamente en el archivo .gaje.");
 
     Ok(())
@@ -83,18 +98,21 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 fn evaluate_and_backpropagate(tree: &mut MctsTree, node_idx: usize, _weights: &[f32]) {
     let centroids = &tree.nodes[node_idx].state;
-    
+
     // Heurística de fitness: premiar la dispersión y el equilibrio de los centroides
     // para evitar el colapso de la señal en 2 bits.
     let mut score = 0.0;
-    
+
     // 1. Penalizar centroides demasiado cercanos (colisión)
     for i in 0..3 {
-        let diff = (centroids[i+1] - centroids[i]).abs();
-        if diff < 0.2 { score -= 10.0; }
-        else { score += diff * 5.0; }
+        let diff = (centroids[i + 1] - centroids[i]).abs();
+        if diff < 0.2 {
+            score -= 10.0;
+        } else {
+            score += diff * 5.0;
+        }
     }
-    
+
     // 2. Premiar simetría respecto al cero
     let symmetry = (centroids[0] + centroids[3]).abs() + (centroids[1] + centroids[2]).abs();
     score += 1.0 / (symmetry + 0.1);

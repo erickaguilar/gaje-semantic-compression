@@ -18,10 +18,10 @@ pub struct GajeNeuromorphicLayer {
     pub membrane_potentials: Vec<f32>,
     pub thresholds: Vec<f32>,
     pub decays: Vec<f32>,
-    
+
     // Almacenamiento masivo de pesos de 2-bits empaquetados
     // ¡4 pesos por cada byte (u8)! Compresión extrema en RAM.
-    pub packed_weights: Vec<u8>, 
+    pub packed_weights: Vec<u8>,
 }
 
 impl GajeNeuromorphicLayer {
@@ -29,7 +29,7 @@ impl GajeNeuromorphicLayer {
         for (i, potential) in self.membrane_potentials.iter_mut().enumerate() {
             let byte_index = (i * active_spike_index) / 4;
             let bit_shift = ((i * active_spike_index) % 4) * 2;
-            
+
             let weight_bits = (self.packed_weights[byte_index] >> bit_shift) & 0b11;
             *potential += centroides[weight_bits as usize];
         }

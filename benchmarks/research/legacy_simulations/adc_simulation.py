@@ -74,8 +74,8 @@ def run_adc_simulation():
     adc_overlap = len(set(truth_top_k).intersection(set(adc_top_k))) / top_k
 
     print(f"RESULTS (Top-{top_k} Overlap):")
-    print(f"  SDC (Symmetric/Hamming): {sdc_overlap*100:.2f}%")
-    print(f"  ADC (Asymmetric/Float):  {adc_overlap*100:.2f}% 🚀")
+    print(f"  SDC (Symmetric/Hamming): {sdc_overlap * 100:.2f}%")
+    print(f"  ADC (Asymmetric/Float):  {adc_overlap * 100:.2f}% 🚀")
     print("-" * 50)
 
     improvement = ((adc_overlap / sdc_overlap) - 1) * 100 if sdc_overlap > 0 else 100

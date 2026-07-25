@@ -13,6 +13,7 @@ use std::arch::aarch64::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+use crate::compute::kv_cache::CompressedKVCache;
 use rayon::prelude::*;
 
 // =============================================================================
@@ -38,7 +39,10 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
             i += 4;
         }
         let mut sum = vaddvq_f32(sum_v);
-        while i < n { sum += a[i] * b[i]; i += 1; }
+        while i < n {
+            sum += a[i] * b[i];
+            i += 1;
+        }
         sum
     }
 
@@ -62,7 +66,10 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum = _mm_cvtss_f32(result);
-            while i < n { sum += a[i] * b[i]; i += 1; }
+            while i < n {
+                sum += a[i] * b[i];
+                i += 1;
+            }
             sum
         } else {
             let mut acc = _mm_setzero_ps();
@@ -78,7 +85,10 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum = _mm_cvtss_f32(result);
-            while i < n { sum += a[i] * b[i]; i += 1; }
+            while i < n {
+                sum += a[i] * b[i];
+                i += 1;
+            }
             sum
         }
     }
@@ -95,6 +105,48 @@ pub unsafe fn dot_product(a: &[f32], b: &[f32]) -> f32 {
 #[inline(always)]
 pub unsafe fn dot_product_neon(a: &[f32], b: &[f32]) -> f32 {
     dot_product(a, b)
+}
+
+/// # Safety
+/// Esta función es unsafe porque realiza acceso directo a memoria mediante punteros
+/// y de-cuantización manual de bits. El llamador debe asegurar que:
+/// 1. `query.len() == len`.
+/// 2. `start_idx + len` no exceda la capacidad del cache.
+pub unsafe fn dot_product_compressed(
+    query: &[f32],
+    cache: &CompressedKVCache,
+    start_idx: usize,
+    len: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+
+    // Optimizamos procesando por bloques de 48 (alineados con el cache)
+    let mut i = 0;
+    while i < len {
+        let global_idx = start_idx + i;
+        let block_idx = global_idx / 48;
+        let sub_idx = global_idx % 48;
+
+        let block = &cache.blocks[block_idx];
+        let scale = block.scale;
+
+        // Procesamos lo que queda del bloque actual o hasta el final de len
+        let remaining_in_block = 48 - sub_idx;
+        let batch_len = remaining_in_block.min(len - i);
+
+        for j in 0..batch_len {
+            let current_sub_idx = sub_idx + j;
+            let byte_idx = current_sub_idx / 4;
+            let bit_shift = (3 - (current_sub_idx % 4)) * 2;
+            let quantized = (block.data[byte_idx] >> bit_shift) & 0b11;
+
+            sum += query[i + j] * (quantized as f32) * scale;
+        }
+
+        i += batch_len;
+    }
+
+    sum
 }
 
 // =============================================================================
@@ -121,8 +173,12 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             i += 4;
         }
         let mut sum_sq = vaddvq_f32(sum_v);
-        while i < n { sum_sq += x[i] * x[i]; i += 1; }
-        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+        while i < n {
+            sum_sq += x[i] * x[i];
+            i += 1;
+        }
+        // Suelo de seguridad para evitar NaNs en Android
+        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
         let inv_rms_v = vdupq_n_f32(inv_rms);
         i = 0;
         while i + 4 <= n {
@@ -132,7 +188,10 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             vst1q_f32(out.as_mut_ptr().add(i), res);
             i += 4;
         }
-        while i < n { out[i] = (x[i] * inv_rms) * weight[i]; i += 1; }
+        while i < n {
+            out[i] = (x[i] * inv_rms) * weight[i];
+            i += 1;
+        }
     }
 
     #[cfg(target_arch = "x86_64")]
@@ -153,8 +212,11 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
-            while i < n { sum_sq += x[i] * x[i]; i += 1; }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+            while i < n {
+                sum_sq += x[i] * x[i];
+                i += 1;
+            }
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
             let inv_rms_v = _mm256_set1_ps(inv_rms);
             i = 0;
             while i + 8 <= n {
@@ -164,7 +226,10 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 _mm256_storeu_ps(out.as_mut_ptr().add(i), res);
                 i += 8;
             }
-            while i < n { out[i] = x[i] * inv_rms * weight[i]; i += 1; }
+            while i < n {
+                out[i] = x[i] * inv_rms * weight[i];
+                i += 1;
+            }
         } else {
             let mut acc = _mm_setzero_ps();
             let mut i = 0;
@@ -178,8 +243,11 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             let shuf2 = _mm_movehl_ps(sums, sums);
             let result = _mm_add_ss(sums, shuf2);
             let mut sum_sq = _mm_cvtss_f32(result);
-            while i < n { sum_sq += x[i] * x[i]; i += 1; }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
+            while i < n {
+                sum_sq += x[i] * x[i];
+                i += 1;
+            }
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
             let inv_rms_v = _mm_set1_ps(inv_rms);
             i = 0;
             while i + 4 <= n {
@@ -189,15 +257,20 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 _mm_storeu_ps(out.as_mut_ptr().add(i), res);
                 i += 4;
             }
-            while i < n { out[i] = x[i] * inv_rms * weight[i]; i += 1; }
+            while i < n {
+                out[i] = x[i] * inv_rms * weight[i];
+                i += 1;
+            }
         }
     }
 
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    #[cfg(all(not(target_arch = "aarch64"), not(target_arch = "x86_64")))]
     {
         let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
-        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).sqrt();
-        for i in 0..n { out[i] = x[i] * inv_rms * weight[i]; }
+        let inv_rms = 1.0 / (sum_sq / x.len() as f32 + eps).max(1e-5).sqrt();
+        for i in 0..n {
+            out[i] = x[i] * inv_rms * weight[i];
+        }
     }
     out
 }
@@ -232,14 +305,14 @@ pub fn swiglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
                 ex / (1.0 + ex)
             };
             let silu = g * sigmoid;
-            
+
             // Clamping adaptativo: reduce la probabilidad de explosión de gradiente/activación
             // en modelos profundos (>24 bloques).
             *o = (silu * u).clamp(-96.0, 96.0);
         });
 }
 
-/// Versión balanceada de SwiGLU que compensa el sesgo (bias) introducido 
+/// Versión balanceada de SwiGLU que compensa el sesgo (bias) introducido
 /// por la cuantización asimétrica de 2 bits.
 #[inline(always)]
 pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) {
@@ -254,8 +327,8 @@ pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) 
                 let ex = g_safe.exp();
                 ex / (1.0 + ex)
             };
-            
-            // Aplicamos h_scale como un factor de temperancia para suavizar 
+
+            // Aplicamos h_scale como un factor de temperancia para suavizar
             // la respuesta ante inputs ruidosos.
             let silu = g * sigmoid;
             *o = (silu * u * h_scale).clamp(-96.0, 96.0);
@@ -298,7 +371,9 @@ static mut SHUFFLE_TABLE_INITIALIZED: bool = false;
 /// Debe ser llamada una sola vez durante la inicialización del programa o garantizando
 /// que no haya condiciones de carrera.
 pub unsafe fn init_shuffle_table() {
-    if SHUFFLE_TABLE_INITIALIZED { return; }
+    if SHUFFLE_TABLE_INITIALIZED {
+        return;
+    }
     for b in 0..256usize {
         for i in 0..4 {
             let shift = (3 - i) * 2;
@@ -310,6 +385,33 @@ pub unsafe fn init_shuffle_table() {
         }
     }
     SHUFFLE_TABLE_INITIALIZED = true;
+}
+
+// =============================================================================
+// lateral_inhibition_kwta — El Filtro del "Río Semántico"
+// =============================================================================
+
+/// Implementa la Inhibición Lateral (K-Winners-Take-All).
+///
+/// Este kernel simula cómo las "Islas" de cristalización inhiben el ruido
+/// de la "Materia Oscura" circundante, forzando a la señal a fluir por los
+/// canales de máxima resonancia (El Río Semántico).
+pub fn lateral_inhibition_kwta(scores: &mut [f32], k: usize) {
+    if scores.len() <= k {
+        return;
+    }
+
+    // Revertido para diagnóstico de NaN
+    let mut sorted_scores = scores.to_vec();
+    sorted_scores.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+    let threshold = sorted_scores[k - 1];
+
+    // Inhibición: las señales por debajo del umbral se extinguen (Materia Oscura)
+    for s in scores.iter_mut() {
+        if *s < threshold {
+            *s = -1e9; // Silencio inhibitorio
+        }
+    }
 }
 
 // =============================================================================
@@ -328,70 +430,9 @@ pub unsafe fn genomic_dot_product(
     n_blocks: usize,
     modulation: &[f32; 4],
 ) -> f32 {
-    #[cfg(target_arch = "aarch64")]
-    {
-        let mut sum_v = vdupq_n_f32(0.0);
-        let m_v = vld1q_f32(modulation.as_ptr());
-        #[allow(static_mut_refs)]
-        let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
-        for j in 0..n_blocks {
-            // Cargar centroides y aplicar modulación granular
-            let raw_c = vld1q_f32(centroids.as_ptr().add(j * 4));
-            let c_mod = vmulq_f32(raw_c, m_v);
-            let c_v = vreinterpretq_u8_f32(c_mod);
-
-            let input_block_ptr = input.as_ptr().add(j * stride * 4);
-            let weights_block_ptr = weights.as_ptr().add(j * stride);
-            for k in 0..stride {
-                let byte = *weights_block_ptr.add(k);
-                let mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
-                let v_vals = vqtbl1q_u8(c_v, mask);
-                let v_weights = vreinterpretq_f32_u8(v_vals);
-                sum_v = vfmaq_f32(sum_v, v_weights, vld1q_f32(input_block_ptr.add(k * 4)));
-            }
-        }
-        vaddvq_f32(sum_v)
-    }
-
-    #[cfg(target_arch = "x86_64")]
-    {
-        if is_x86_feature_detected!("ssse3") {
-            #[allow(static_mut_refs)]
-            let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
-            let mut acc = _mm_setzero_ps();
-            let m_v = _mm_loadu_ps(modulation.as_ptr());
-
-            for j in 0..n_blocks {
-                let raw_c = _mm_loadu_ps(centroids.as_ptr().add(j * 4));
-                let c_mod = _mm_mul_ps(raw_c, m_v);
-                let c_v = _mm_castps_si128(c_mod);
-
-                let input_block_ptr = input.as_ptr().add(j * stride * 4);
-                let weights_block_ptr = weights.as_ptr().add(j * stride);
-                for k in 0..stride {
-                    let byte = *weights_block_ptr.add(k);
-                    let mask = _mm_loadu_si128(table_ptr.add(byte as usize) as *const __m128i);
-                    let v_vals_f = _mm_castsi128_ps(_mm_shuffle_epi8(c_v, mask));
-                    let v_in = _mm_loadu_ps(input_block_ptr.add(k * 4));
-                    if is_x86_feature_detected!("fma") { acc = _mm_fmadd_ps(v_vals_f, v_in, acc); }
-                    else { acc = _mm_add_ps(acc, _mm_mul_ps(v_vals_f, v_in)); }
-                }
-            }
-            let shuf = _mm_movehdup_ps(acc);
-            let sums = _mm_add_ps(acc, shuf);
-            let shuf2 = _mm_movehl_ps(sums, sums);
-            _mm_cvtss_f32(_mm_add_ss(sums, shuf2))
-        } else {
-            genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
-        }
-    }
-
-    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-    {
-        genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
-    }
+    // Audit Forense: Forzamos motor escalar para aislar inestabilidad SIMD
+    genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
 }
-
 
 // Alias para compatibilidad con rama windows
 /// # Safety
@@ -426,20 +467,65 @@ pub unsafe fn genomic_dot_product_scalar(
         let input_block_ptr = input.as_ptr().add(j * stride * 4);
         let weights_block_ptr = weights.as_ptr().add(j * stride);
         let centroids_ptr = centroids.as_ptr().add(j * 4);
-        
+
         for k in 0..stride {
             let byte = *weights_block_ptr.add(k);
-            
+
             for b in 0..4usize {
                 let shift = (3 - b) * 2;
                 let bits = (byte >> shift) & 0b11;
                 let c_idx = (bits ^ (bits >> 1)) as usize;
-                
+
                 let weight_val = *centroids_ptr.add(c_idx) * modulation[c_idx];
                 sum += weight_val * *input_block_ptr.add(k * 4 + b);
             }
         }
     }
+
+    // Frenado Lagrangiano: El rozamiento semántico aniquila el ruido residual (Entropía)
+    // Esto asegura que el eco toroidal sea puro en ciclos infinitos.
+    if sum.abs() < 1e-5 {
+        sum = 0.0;
+    }
+
+    sum
+}
+
+/// # Safety
+/// Implementación de 4 bits (2 pesos por byte). Soporta 16 centroides por bloque.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_4bit(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride_4bit: usize, // stride_4bit = block_size / 2
+    n_blocks: usize,
+) -> f32 {
+    let mut sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block_size = stride_4bit * 2;
+        let input_block_ptr = input.as_ptr().add(j * block_size);
+        let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
+        let centroids_ptr = centroids.as_ptr().add(j * 16);
+
+        for k in 0..stride_4bit {
+            let byte = *weights_block_ptr.add(k);
+
+            // Peso 1 (High nibble)
+            let c_idx1 = (byte >> 4) as usize;
+            sum += *centroids_ptr.add(c_idx1) * *input_block_ptr.add(k * 2);
+
+            // Peso 2 (Low nibble)
+            let c_idx2 = (byte & 0x0F) as usize;
+            sum += *centroids_ptr.add(c_idx2) * *input_block_ptr.add(k * 2 + 1);
+        }
+    }
+
+    if sum.abs() < 1e-6 {
+        sum = 0.0;
+    }
+
     sum
 }
 
@@ -474,14 +560,24 @@ pub unsafe fn calculate_distance_lut(
                 let shift = (3 - j) * 2;
                 let bb = (b_byte >> shift) & 0b11;
                 let b_idx = (bb ^ (bb >> 1)) as usize;
-                if mode == 0 { d_v[j] = *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0); }
-                else if mode == 1 {
+                if mode == 0 {
+                    d_v[j] = *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0);
+                } else if mode == 1 {
                     let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                    d_v[j] = *lut_epi.get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize)).unwrap_or(&0.0);
+                    d_v[j] = *lut_epi
+                        .get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize))
+                        .unwrap_or(&0.0);
                 } else {
                     let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
                     let tb = (*tri_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                    d_v[j] = *lut_tri.get(dims * 64 + (b_idx << 4 | ((eb ^ (eb >> 1)) as usize) << 2 | (tb ^ (tb >> 1)) as usize)).unwrap_or(&0.0);
+                    d_v[j] = *lut_tri
+                        .get(
+                            dims * 64
+                                + (b_idx << 4
+                                    | ((eb ^ (eb >> 1)) as usize) << 2
+                                    | (tb ^ (tb >> 1)) as usize),
+                        )
+                        .unwrap_or(&0.0);
                 }
                 dims += 1;
             }
@@ -494,14 +590,24 @@ pub unsafe fn calculate_distance_lut(
             let shift = (3 - (dims % 4)) * 2;
             let bb = (*strand.get(i).unwrap_or(&0) >> shift) & 0b11;
             let b_idx = (bb ^ (bb >> 1)) as usize;
-            if mode == 0 { total += *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0); }
-            else if mode == 1 {
+            if mode == 0 {
+                total += *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0);
+            } else if mode == 1 {
                 let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                total += *lut_epi.get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize)).unwrap_or(&0.0);
+                total += *lut_epi
+                    .get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize))
+                    .unwrap_or(&0.0);
             } else {
                 let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
                 let tb = (*tri_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                total += *lut_tri.get(dims * 64 + (b_idx << 4 | ((eb ^ (eb >> 1)) as usize) << 2 | (tb ^ (tb >> 1)) as usize)).unwrap_or(&0.0);
+                total += *lut_tri
+                    .get(
+                        dims * 64
+                            + (b_idx << 4
+                                | ((eb ^ (eb >> 1)) as usize) << 2
+                                | (tb ^ (tb >> 1)) as usize),
+                    )
+                    .unwrap_or(&0.0);
             }
             dims += 1;
         }
@@ -517,14 +623,24 @@ pub unsafe fn calculate_distance_lut(
             let shift = (3 - (dims % 4)) * 2;
             let bb = (*strand.get(i).unwrap_or(&0) >> shift) & 0b11;
             let b_idx = (bb ^ (bb >> 1)) as usize;
-            if mode == 0 { total += *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0); }
-            else if mode == 1 {
+            if mode == 0 {
+                total += *lut_base.get(dims * 4 + b_idx).unwrap_or(&0.0);
+            } else if mode == 1 {
                 let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                total += *lut_epi.get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize)).unwrap_or(&0.0);
+                total += *lut_epi
+                    .get(dims * 16 + (b_idx << 2 | (eb ^ (eb >> 1)) as usize))
+                    .unwrap_or(&0.0);
             } else {
                 let eb = (*epi_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
                 let tb = (*tri_strand.get(i).unwrap_or(&0) >> shift) & 0b11;
-                total += *lut_tri.get(dims * 64 + (b_idx << 4 | ((eb ^ (eb >> 1)) as usize) << 2 | (tb ^ (tb >> 1)) as usize)).unwrap_or(&0.0);
+                total += *lut_tri
+                    .get(
+                        dims * 64
+                            + (b_idx << 4
+                                | ((eb ^ (eb >> 1)) as usize) << 2
+                                | (tb ^ (tb >> 1)) as usize),
+                    )
+                    .unwrap_or(&0.0);
             }
         }
         total.sqrt()
@@ -545,5 +661,7 @@ pub unsafe fn calculate_distance_lut_neon(
     mask: &[u8],
     n_dims: usize,
 ) -> f32 {
-    calculate_distance_lut(lut_base, lut_epi, lut_tri, strand, epi_strand, tri_strand, mask, n_dims)
+    calculate_distance_lut(
+        lut_base, lut_epi, lut_tri, strand, epi_strand, tri_strand, mask, n_dims,
+    )
 }

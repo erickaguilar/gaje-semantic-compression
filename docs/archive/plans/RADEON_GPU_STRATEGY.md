@@ -11,7 +11,7 @@ Este documento analiza la viabilidad de utilizar esta GPU y compara los entornos
 
 ## 1. El Desafío Genómico en GPU
 
-El formato `.gaje` almacena los pesos en estructuras altamente empaquetadas (2 bits por peso + máscaras de precisión mixta de 4/6 bits). Las GPUs están optimizadas para multiplicar matrices masivas de `float16` o `float32`. 
+El formato `.gaje` almacena los pesos en estructuras altamente empaquetadas (2 bits por peso + máscaras de precisión mixta de 4/6 bits). Las GPUs están optimizadas para multiplicar matrices masivas de `float16` o `float32`.
 
 Para aprovechar la Radeon, necesitaríamos implementar un **De-quantization Shader** (un kernel en la GPU que desempaquete los bits al vuelo en memoria compartida) antes de la multiplicación de matrices.
 

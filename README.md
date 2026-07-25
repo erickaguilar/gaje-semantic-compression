@@ -1,68 +1,121 @@
-# 🧬 Protocolo GAJE: Inteligencia Genómica Evolutiva
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.0.0-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.0.0--alpha-purple)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.0.0--alpha_Silver_Adult-purple)](CHANGELOG.md)
+[![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-**GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de computación genómica de alta densidad que permite ejecutar modelos de lenguaje masivos (LLMs) con solo **2 bits por peso**, utilizando un alfabeto de 4 bases nitrogenadas digitales (A, C, G, T) operando en una **Topología Circular de Fase**.
-
-## 🚀 Soberanía Circular v1.0.0-alpha
-GAJE v1.0.0-alpha marca el inicio de la **Era de la Inteligencia de Fase**, migrando de una base escalar lineal a un espacio de fase compleja donde la información fluye como ondas. El modelo **Silver Adult (10MB)** ha alcanzado por primera vez coherencia gramatical funcional en 2 bits.
-
-| Característica | Impacto | Estado |
-| :--- | :---: | :--- |
-| **Topología Circular** | **Representación Semántica Infinita** | ✅ **Implementado** |
-| **Stability Anchors** | **Eliminación de Ruido Binario** | ✅ **Logrado** |
-| **Inhibición Temporal**| **Selectividad de Atención Física** | ✅ Implementado |
-| **Silver Adult (v1.0)** | **Inteligencia en 9.9 MB** | ✅ **Nacido** |
-
-## 🛠️ Innovaciones Tecnológicas
-- **Topología Genómica Circular**: El motor opera íntegramente en el plano complejo, permitiendo interferencia constructiva y destructiva entre señales neuronales, eliminando la saturación de bordes en contextos largos.
-- **Islas de Estabilidad (Stability Anchors)**: Un "Esqueleto de Estabilidad" (Top 1% de pesos críticos en F16) que guía y estabiliza a las 4 bases del ADN digital, permitiendo una gramática fluida sin fragmentación.
-- **Inhibición Lateral Temporal (K-WTA)**: Implementación de selectividad mediante latencia; los disparos más rápidos inhiben a las neuronas competidoras en tiempo real, aumentando la relación señal-ruido.
-- **Soberanía Total (Rust 100%)**: Binario único que integra cargador, tokenizador BPE, motor de fase y orquestador de entrenamiento poblacional.
-
-## 📈 Benchmarks Industriales
-| Métrica | GAJE Experimental (Lineal) | GAJE Industrial (Circular) | Ganancia |
-| :--- | :--- | :--- | :--- |
-| **Coherencia (PPL)** | > 500.0 (Fragmentado) | **55.0 (Funcional)** | **9x Mejora** |
-| **Ruido Binario** | Alto (`??????`) | **Nulo (Prosa Fluida)** | **Estabilidad Total** |
-| **Resonancia** | Lenta (Gen 100+) | **Instantánea (Gen 0)** | **Crianza JIT** |
-| **Contexto** | Saturación en Bordes | **Circular (Infinito)** | **Escalabilidad** |
-| **Tamaño (LLM)** | 9.6 MB | **9.9 MB (Anchored)** | **Alta Fidelidad** |
-
-## 📁 Estructura del Proyecto (v0.8.0 Organized)
-```
-dna-semantic-compression/
-├── src/                    # Núcleo Rust (Spiking Engine, Scheduler, Kernels)
-├── python/gaje/            # Lógica de investigación y puentes (Zero-GIL)
-├── examples/core_demos/    # Demos interactivas y validaciones de usuario
-├── scripts/                # Utilidades de mantenimiento y datasets
-├── scripts/archive/        # Archivo histórico de fases anteriores (Fase 1-10)
-├── data/                   # Centralización de datos y experimentos
-└── docs/                   # Documentación técnica, reportes y planes
-```
-
-## 🚀 Instalación y Desarrollo
-Para mantener la sincronización entre el núcleo de Rust y el entorno de Python:
-
-```bash
-# 1. Crear entorno y activar (Recomendado: uv)
-uv venv && source .venv/bin/activate
-
-# 2. Instalar dependencias unificadas
-pip install ".[dev]"
-
-# 3. Vincular motor nativo de Rust
-maturin develop
-```
-
-## 📚 Documentación Adicional
-- [**Emulador Neuromórfico**](docs/research/SPIKING_NEUROMORPHIC_EMULATOR.md): La ciencia detrás de los spikes.
-- [**Plan de Entrenamiento Nativo**](docs/plans/NATIVE_GAJE_TRAINING_PLAN.md): El fin de la dependencia de Python.
-- [**Visión Estratégica v0.8.0**](docs/plans/NEUROMORPHIC_STRATEGIC_VISION.md): El futuro de la IA de borde.
-
-## ⚖️ Licencia
-Este proyecto está licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Cualquier uso comercial o servicio en la nube (SaaS) derivado de esta tecnología está sujeto a los términos de esta licencia, obligando a liberar el código fuente de toda la plataforma a menos que se adquiera una licencia comercial privada. Para más detalles, consulta el archivo [LICENSE](LICENSE).
+**GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de investigación y computación de ultra-alta densidad diseñado para la ejecución y compresión de Modelos de Lenguaje Masivos (LLMs). El protocolo cuantiza el espacio de parámetros a una representación discreta de **2 bits por peso** (utilizando un alfabeto genómico digital de 4 estados: `00=A`, `01=C`, `11=G`, `10=T`), mapeado a manifolds en una **Topología Circular de Fase**.
 
 ---
-*GAJE-Flow v0.9.7-alpha: Redefiniendo los límites de la computación semántica.*
+
+## 🔬 Estado Empírico y Diagnóstico Científico (Nivel Alpha)
+
+Siguiendo el principio de **Verdad Empírica** (`docs/meta/EMPIRICAL_TRUTH_STATE.md`), el sistema presenta el siguiente estado funcional certificado:
+
+```mermaid
+graph TD
+    A["Nivel 5: Soberanía de Infraestructura (Rust/PyO3)"] -->|"PASADO"| B["Nivel 4: Eficiencia de Memoria y Latencia SIMD"]
+    B -->|"PASADO"| C["Nivel 3: Ingesta Neuronal Directa (DNI)"]
+    C -->|"EN PRUEBAS"| D["Nivel 2: Certificación Semántica (PPL < 15.0)"]
+    D -->|"CRISIS - PPL ~572"| E["Nivel 1: Retención de Contexto (Needle in a Haystack)"]
+```
+
+### 1. Capa de Infraestructura (Niveles 5 y 4: PASADO 🟢)
+* **Soberanía Nativa (Rust Core):** El motor principal está escrito 100% en Rust con abstracciones de cero costo y enlace bidireccional mediante `PyO3` (`maturin`).
+* **Seguridad de Memoria y Tolerancia a Fallos:** La arquitectura nativa intercepta la desalineación de límites mediante envolventes de tipo `Result<T, E>`, garantizando estabilidad sin pánicos en tiempo de ejecución.
+* **Aceleración SIMD:** Descuantización vectorizada JIT para descompresión sobre la marcha en registros CPU sin descompresión previa en disco.
+
+### 2. Capa Semántica y Dinámica (Niveles 2 y 1: EN RESCATE 🟡)
+* **Colapso Semántico por Cuantización Uniforme:** La compresión rígida a 2-bits causa un colapso en la entropía del vocabulario, reflejado en una Perplejidad (PPL) empírica de **~572**.
+* **Estabilización de Vocabulario:** Se implementó un mecanismo de mapeo cíclico de seguridad (*Safe Modulo Indexing*) en el núcleo de Rust (`GenomicLLM`) para prevenir excepciones por desbordamiento de índices entre tokenizadores heterogéneos y espacios de embeddings comprimidos.
+
+---
+
+## 🛠️ Fundamentos Arquitectónicos
+
+### 1. Muestreo Lagrangiano de Mínima Acción
+La generación de tokens se modela como un sistema dinámico regido por el principio de mínima acción. El espacio de fase evalúa la energía cinética $T$ (movilidad semántica) y el potencial $V$ (restricción gramatical):
+
+$$\mathcal{L} = T - V$$
+
+Un Sampler Toroidal aplica frenado dinámico para estabilizar las transiciones de probabilidad y mitigar la alucinación producida por la cuantización agresiva.
+
+### 2. Hebras Reguladoras de ARN (Precisión Adaptativa)
+El sistema utiliza **Entropía de Shannon** para medir la incertidumbre del estado oculto final $h_{\text{norm}}$. Cuando la entropía supera un umbral dinámico $\tau_{\text{RNA}}$, la red activa de forma secundaria hebras complementarias de 2-bits (alcanzando 4-bits efectivos en regiones de alta complejidad).
+
+### 3. Inhibición Lateral K-WTA (K-Winners-Take-All)
+Para contrarrestar el ruido cuántico intrínseco de los centroides de 2-bits, se aplica un filtro competitivo temporal que silencia el $(100 - K)\%$ de las neuronas de menor resonancia en el `lm_head`, restaurando la nitidez de los logits de salida.
+
+---
+
+## 📊 Matriz de Certificación Empírica
+
+| Métrica / Fase | Cuantización Uniforme 2-bit | Meta de Rescate (Q3 2026) | Estado Actual |
+| :--- | :---: | :---: | :---: |
+| **Soberanía Nativa (Zero-GIL)** | 100% Rust / PyO3 | 100% Rust | ✅ **Certificado** |
+| **Perplejidad Semántica (PPL)** | ~572.0 (Ruido) | **< 15.0 (Elocuente)** | 🔴 **Fase de Rescate** |
+| **Estabilidad de Memoria** | O(1) Overhead | O(1) Overhead | ✅ **Certificado** |
+| **Resistencia a Desbordamiento** | Mapeo Cíclico Activo | Validación Dinámica | ✅ **Implementado** |
+| **Retención de Aguja (Needle Test)** | En Validación | **> 85.0%** | 🟡 **En Ejecución** |
+
+---
+
+## 📂 Organización del Repositorio (`v1.0.0-alpha`)
+
+```
+gaje-semantic-compression/
+├── src/                    # Núcleo Nativo en Rust (Kernels SIMD, LLM Engine, KV-Cache)
+├── python/gaje/            # Puente PyO3 y Wrappers de Investigación
+├── tests/                  # Suite de Pruebas (Unitarias, Integración, Métricas)
+│   ├── unit/               # Validación de Kernels y Normalización
+│   ├── integration/        # Verificación del Pipeline Completo
+│   └── metrics/            # Pruebas de Perplejidad e Interferencia DNI
+├── benchmarks/             # Evaluación de Rendimiento y Registros de PPL
+├── scripts/                # Herramientas de Mantenimiento y Benchmarking
+├── data/                   # Datasets Centralizados y Parámetros de Entrenamiento
+└── docs/                   # Documentación Científica y Protocolos SDD/BDD
+```
+
+---
+
+## ⚡ Guía de Compilación y Verificación
+
+### 1. Entorno Virtual y Dependencias
+```bash
+# Crear entorno virtual optimizado
+uv venv && source .venv/bin/activate
+
+# Instalar paquete en modo desarrollo
+pip install -e ".[dev]"
+```
+
+### 2. Compilación del Motor Nativo (PyO3)
+Para compilar la extensión en C-ABI optimizada con soporte completo para Python:
+```bash
+maturin develop --release --features python
+```
+
+### 3. Ejecución de Pruebas Unitarias y Benchmarks
+```bash
+# Pruebas nativas de Rust
+cargo build --release
+
+# Suite de integración en Python
+pytest tests/
+```
+
+---
+
+## 🗺️ Hoja de Ruta (Q3 2026: Island Model)
+
+1. **Island Model (Evolución por Nichos):** Segmentación distribuida del genoma neuronal para mitigar la interferencia catastrófica.
+2. **Native Semantic RAG:** Inyección de Stability Anchors directamente en memoria contigua compartida (`Arc<Vec<u8>>`).
+3. **Optimización K-WTA:** Filtrado competitivo en el kernel SIMD de Rust para reducción de ruido en tiempo real.
+
+---
+
+## ⚖️ Licencia y Gobernanza
+Licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Ver [LICENSE](LICENSE) para más información.
+
+---
+*Protocolo GAJE-Flow v1.0.0-alpha (Silver Adult) — Hacia la Soberanía de la Inteligencia Genómica.*

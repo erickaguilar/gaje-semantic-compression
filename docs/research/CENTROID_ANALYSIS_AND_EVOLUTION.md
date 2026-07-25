@@ -1,10 +1,10 @@
 # Análisis y Evolución de los Centroides: El ADN del Protocolo GAJE
 
-**Fecha:** 11 de Mayo, 2026  
+**Fecha:** 11 de Mayo, 2026
 **Documento:** Memoria Técnica de Evolución de Cuantización
 
 ## 1. ¿Qué es un Centroide en GAJE?
-En el Protocolo GAJE, la cuantización de 2 bits reduce la precisión de un peso neuronal de 32 bits a solo 4 estados posibles (`00, 01, 10, 11`). Los **Centroides** son los valores reales (flotantes) que estos bits representan. 
+En el Protocolo GAJE, la cuantización de 2 bits reduce la precisión de un peso neuronal de 32 bits a solo 4 estados posibles (`00, 01, 10, 11`). Los **Centroides** son los valores reales (flotantes) que estos bits representan.
 
 Si el ADN (`database`) es el código, los centroides son la "fuerza" semántica que le da sentido a ese código.
 

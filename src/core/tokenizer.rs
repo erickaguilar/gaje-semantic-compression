@@ -1,6 +1,6 @@
-use tokenizers::Tokenizer;
-use std::path::Path;
 use std::error::Error;
+use std::path::Path;
+use tokenizers::Tokenizer;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -29,25 +29,33 @@ impl GajeTokenizer {
 impl GajeTokenizer {
     /// Carga el tokenizador desde un archivo JSON (formato HuggingFace)
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
-        let inner = Tokenizer::from_file(path).map_err(|e| format!("Error cargando tokenizador: {}", e))?;
+        let inner =
+            Tokenizer::from_file(path).map_err(|e| format!("Error cargando tokenizador: {}", e))?;
         Ok(Self { inner })
     }
 
     /// Carga el tokenizador desde bytes (JSON)
     pub fn from_bytes<B: AsRef<[u8]>>(bytes: B) -> Result<Self, Box<dyn Error>> {
-        let inner = Tokenizer::from_bytes(bytes).map_err(|e| format!("Error cargando tokenizador desde bytes: {}", e))?;
+        let inner = Tokenizer::from_bytes(bytes)
+            .map_err(|e| format!("Error cargando tokenizador desde bytes: {}", e))?;
         Ok(Self { inner })
     }
 
     /// Codifica un texto en una secuencia de IDs de tokens
     pub fn encode(&self, text: &str, add_special_tokens: bool) -> Result<Vec<u32>, Box<dyn Error>> {
-        let encoding = self.inner.encode(text, add_special_tokens).map_err(|e| format!("Error en codificación: {}", e))?;
+        let encoding = self
+            .inner
+            .encode(text, add_special_tokens)
+            .map_err(|e| format!("Error en codificación: {}", e))?;
         Ok(encoding.get_ids().to_vec())
     }
 
     /// Decodifica una secuencia de IDs de tokens en texto plano
     pub fn decode(&self, ids: &[u32], skip_special_tokens: bool) -> Result<String, Box<dyn Error>> {
-        let decoded = self.inner.decode(ids, skip_special_tokens).map_err(|e| format!("Error en decodificación: {}", e))?;
+        let decoded = self
+            .inner
+            .decode(ids, skip_special_tokens)
+            .map_err(|e| format!("Error en decodificación: {}", e))?;
         Ok(decoded)
     }
 
@@ -63,7 +71,9 @@ impl GajeTokenizer {
 
     /// Serializa el tokenizador a una cadena JSON
     pub fn to_string(&self, pretty: bool) -> Result<String, Box<dyn Error>> {
-        self.inner.to_string(pretty).map_err(|e| format!("Error serializando tokenizador: {}", e).into())
+        self.inner
+            .to_string(pretty)
+            .map_err(|e| format!("Error serializando tokenizador: {}", e).into())
     }
 }
 
@@ -79,11 +89,11 @@ mod tests {
         if fs::metadata(path).is_ok() {
             let tokenizer = GajeTokenizer::from_file(path).unwrap();
             assert!(tokenizer.vocab_size() > 0);
-            
+
             let text = "Hola mundo genómico";
             let ids = tokenizer.encode(text, true).unwrap();
             assert!(!ids.is_empty());
-            
+
             let decoded = tokenizer.decode(&ids, true).unwrap();
             // El detokenizado podría tener ligeras variaciones de normalización (ej. espacios)
             assert!(!decoded.is_empty());

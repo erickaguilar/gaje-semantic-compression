@@ -1,18 +1,18 @@
-# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad (v0.9.5-alpha)
+# 🧬 GAJE-Flow: Protocolo de Desarrollo y Estabilidad (v1.0.0-alpha: Silver Adult)
 
 Este archivo define las reglas de flujo de trabajo, la arquitectura del repositorio y los estándares técnicos para el proyecto **DNA Semantic Compression**. Es de cumplimiento obligatorio para todas las sesiones de desarrollo asistido.
 
-## 1. Arquitectura del Repositorio (Organización v0.8.0)
+## 1. Arquitectura del Repositorio (Organización v0.9.0)
 
 El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos en la raíz que no sean de configuración esencial.
 
-- **`/docs`**: Documentación segmentada (`guides/`, `plans/`, `reports/`, `meta/`, `research/`).
-- **`/scripts`**: Utilidades de entrenamiento y mantenimiento (`maintenance/`).
-- **`/data`**: Centralización de datos generados (`training/`, `experiments/`, `datasets/`).
-- **`/examples`**: Demos categorizadas (`core_demos/`, `visual_demos/`, `legacy_research/`). Incluye pruebas de chat interactivas (`neuromorphic_chat.py`, `chat_genomico.py`) esenciales para validar la coherencia del modelo.
-- **`/tests`**: Suite de validación (`unit/`, `integration/`, `metrics/`, `training/`).
-- **`/benchmarks`**: Evaluación de rendimiento con logs centralizados en `benchmarks/logs/`.
-- **`/src` & `/python`**: Núcleo nativo (Rust) y lógica de investigación/puente (Python).
+- **`/docs`**: Documentación segmentada (`guides/`, `plans/`, `reports/`, `meta/`, `research/`). Archivos obsoletos se mueven a `docs/archive/`.
+- **`/scripts`**: Utilidades de mantenimiento (`maintenance/`).
+- **`/data`**: Centralización de datos (`training/`, `experiments/`, `datasets/`).
+- **`/examples`**: Demos categorizadas (`core_demos/`, `visual_demos/`). Uso obligatorio de `silver_adult_anchored.gaje` para validación.
+- **`/tests`**: Suite de validación (`unit/`, `integration/`, `metrics/`).
+- **`/benchmarks`**: Evaluación de rendimiento con logs en `benchmarks/logs/`.
+- **`/src` & `/python`**: Núcleo nativo (Rust) y puente de investigación (Python).
 
 ## 2. Reglas de Oro para el Agente (Gemini CLI)
 
@@ -24,16 +24,21 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
     - Prohibidas las pre-asignaciones masivas de tensores `f32` en el `forward`.
     - Priorizar el uso de punteros y memoria compartida (`Arc<Vec<u8>>`).
 4.  **Soberanía del Tooling (Anti-Python):**
-    - PROHIBIDO crear nuevos scripts de utilidad en Python para tareas de inspección, diagnóstico o mantenimiento.
-    - Cualquier funcionalidad administrativa o de utilidad debe ser implementada como un subcomando en `gaje-cli`.
-5.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente según la arquitectura definida en la sección 1.
-5.  **Benchmarking Interactivo y No Bloqueante:** Las herramientas de benchmarking y evaluación deben estar diseñadas para aceptar entrada de texto (simulando flujos de chat) y no deben quedar en espera infinita de procesos externos. Deben implementar timeouts y manejo asíncrono para garantizar que el flujo de trabajo (especialmente en Monte Carlo) no se interrumpa. El uso de las demos en `examples/core_demos/` es obligatorio para validar la experiencia de usuario.
+    - PROHIBIDO crear nuevos scripts de utilidad en Python. Cualquier funcionalidad administrativa debe ser un subcomando en `gaje-cli`.
+5.  **Mantenimiento de la Estructura:** Cualquier archivo nuevo debe ser ubicado en su subdirectorio correspondiente. No ensuciar la raíz.
+6.  **Soberanía Nativa y Colisiones:** PROHIBIDO crear carpetas en `python/gaje/` que colisionen con nombres de módulos nativos (ej. `_impl`). Usar prefijos `_legacy_` si es necesario.
+7.  **Robustez Rust:** El código nativo debe usar siempre validación de límites (`.get().unwrap_or()`) para prevenir pánicos por discrepancias epigenéticas.
+8.  **Benchmarking Interactivo:** Las herramientas deben aceptar entrada de texto y tener timeouts para no bloquear el flujo de trabajo.
 
-## 3. Estado Técnico y Metas (v0.9.7)
+## 3. Estado Técnico y Estándar Empírico (Operación Rescate)
 
-- **Soberanía Nativa Total Alcanzada:** El motor es 100% independiente de Python (Inferencia, Entrenamiento, Administración).
-- **Arquitectura Zero-GIL:** Uso obligatorio de feature gating (`python`) y métodos `_core` para preservar la estabilidad de binarios nativos.
-- **Rendimiento Nativo:** Entrenamiento integrado en `gaje-cli` con latencias <100ms por secuencia en ARM.
+El proyecto se encuentra en estado **Alpha Real**. La infraestructura base compila, pero la validación semántica falla (PPL ~572).
+
+*   **Mandato de Verdad Empírica:** ESTÁ PROHIBIDO declarar cualquier fase o característica como "completada" basándose únicamente en que el código compila.
+*   **Certificación Requerida:** Toda declaración de éxito debe cumplir los umbrales definidos en `docs/meta/EMPIRICAL_TRUTH_STATE.md`.
+*   **Fundamentación Matemática:** Antes de intentar reducir la PPL, es OBLIGATORIO consultar `docs/research/FORMALIZATION_LAYER.md` para entender el equilibrio Lagrangiano requerido entre movilidad (energía cinética) y precisión (potencial semántico).
+*   **Prioridad Actual:** Congelamiento de nuevas características (Island Model, RAG) hasta superar la Certificación Semántica (Nivel 2: lograr PPL < 15.0).
+*   **Lectura Obligatoria:** Antes de iniciar desarrollo, consultar `docs/meta/EMPIRICAL_TRUTH_STATE.md` para conocer la realidad matemática y funcional del modelo.
 
 ## 4. Estilo de Commits
 
@@ -42,11 +47,20 @@ Seguir el estándar de **Conventional Commits**:
 
 ## 5. Ciclo de Desarrollo Integral (SDD -> BDD -> TDD)
 
-Para garantizar la excelencia técnica, el proyecto sigue un flujo de tres capas:
+1.  **SDD:** Diseño de arquitectura y contratos técnicos.
+2.  **BDD:** Escenarios *Given-When-Then*. Ver [docs/bdd/BDD_GUIDE.md](docs/bdd/BDD_GUIDE.md).
+3.  **TDD:** Implementación iterativa Red-Green-Refactor.
 
-1.  **SDD (Software Design Document):** Definición de arquitectura, estructuras de datos y contratos técnicos. Ver [docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md).
-2.  **BDD (Behavior-Driven Development):** Definición del comportamiento esperado mediante escenarios *Given-When-Then*. Ver [docs/bdd/BDD_GUIDE.md](docs/bdd/BDD_GUIDE.md).
-3.  **TDD (Test-Driven Development):** Implementación técnica iterativa (Red-Green-Refactor) para asegurar la solidez del código.
+## 6. Pilares Arquitectónicos de Fase Circular
+
+- **Stability Anchors:** Inyección estratégica de precisión para evitar la fragmentación semántica.
+- **K-WTA Lateral Inhibition:** Filtrado de ruido mediante competencia temporal.
+- **Direct Neural Ingestion (DNI):** Capacidad de inyección de conocimiento directo en el genoma.
+
+## 7. Próximos Pasos (Q3 2026)
+
+- **Island Model:** Implementación de evolución distribuida por nichos semánticos.
+- **Native Semantic RAG:** Recuperación de información integrada directamente en los kernels de Rust.
 
 ---
-*Este protocolo es vinculante y actualiza todas las versiones previas.*
+*Este protocolo es vinculante y actualiza todas las versiones previas (Protocolo v1.3).*

@@ -1,8 +1,8 @@
-use _impl::io::loader::{NativeLoader, save_genomic_model};
+use _impl::io::loader::{save_genomic_model, NativeLoader};
 use _impl::nn::trainer::GenomicTrainerCore;
-use std::path::Path;
-use std::io::{BufRead, BufReader};
 use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = "models/checkpoints/gold_embryo.gaje";
@@ -15,10 +15,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🧬 GAJE Large-Scale Native Resonance Training (Phase 4.2)");
     println!("[*] Loading model from: {}", model_path);
 
-    let loader = NativeLoader::new(model_path)?;
-    let config = loader.load_config()?;
-    let mut model = loader.load_llm()?;
-    let tokenizer = loader.load_tokenizer()?;
+    let (mut model, config, tokenizer) = {
+        let loader = NativeLoader::new(model_path)?;
+        let config = loader.load_config()?;
+        let model = loader.load_llm()?;
+        let tokenizer = loader.load_tokenizer()?;
+        (model, config, tokenizer)
+    };
 
     if Path::new(topology_path).exists() {
         println!("[*] Injecting topology: {}", topology_path);
@@ -31,10 +34,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file = File::open(dataset_path)?;
     let reader = BufReader::new(file);
     let mut dataset = Vec::new();
-    
+
     for line in reader.lines() {
         let line = line?;
-        if line.trim().is_empty() { continue; }
+        if line.trim().is_empty() {
+            continue;
+        }
         let tokens = tokenizer.encode(&line, false)?;
         dataset.push(tokens.into_iter().map(|t| t as usize).collect());
     }
@@ -43,11 +48,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dataset_ref: Vec<Vec<usize>> = dataset;
     let trainer = GenomicTrainerCore::new(lr, 0.05);
     println!("[*] Starting Resonance phase...");
-    
-    trainer.fit(&mut model, &dataset_ref, epochs).map_err(|e| e.to_string())?;
 
-    println!("[*] Saving refined model to: {}", output_path);
-    save_genomic_model(output_path, &model, &config, Some(&tokenizer))?;
+    let p1_end = (epochs as f32 * 0.2) as usize;
+    let p2_end = (epochs as f32 * 0.7) as usize;
+
+    for epoch in 0..epochs {
+        let phase = if epoch < p1_end {
+            1
+        } else if epoch < p2_end {
+            2
+        } else {
+            3
+        };
+        trainer
+            .fit_epoch(
+                &mut model,
+                &dataset_ref,
+                epoch,
+                epochs,
+                phase,
+                0,
+                |_, _, _| Ok(()),
+            )
+            .map_err(|e| e.to_string())?;
+
+        // Checkpoint: Sobre-escribir el archivo de salida en cada época
+        save_genomic_model(output_path, &model, &config, Some(&tokenizer))?;
+        println!("    [Checkpoint] Progreso guardado en: {}", output_path);
+    }
 
     println!("✨ Training completed successfully.");
     Ok(())

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GAJE — Genomic Adaptive Journal Engine</title>
+<meta name="description" content="Motor de inferencia LLM nativo en Rust, comprimido a 2–4 bits, diseñado para correr sin nube ni GPU sobre hardware ARM.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink: #12151A;
+    --panel: #191D24;
+    --panel-2: #1D222A;
+    --bone: #EDE9E0;
+    --muted: #909AA6;
+    --signal: #5FD8C9;
+    --amber: #E8A33D;
+    --violet: #A98BD1;
+    --line: #262B33;
+    --radius: 10px;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+
+  body{
+    margin:0;
+    background: var(--ink);
+    color: var(--bone);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection{ background: var(--signal); color: var(--ink); }
+
+  a{ color: var(--signal); text-decoration: none; }
+  a:hover{ text-decoration: underline; }
+  a:focus-visible, button:focus-visible{
+    outline: 2px solid var(--signal);
+    outline-offset: 3px;
+  }
+
+  h1, h2, h3{
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    line-height: 1.15;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .mono{ font-family: 'JetBrains Mono', monospace; }
+
+  .wrap{
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  section{ padding: 96px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type{ border-bottom: none; }
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    position: sticky; top:0; z-index: 50;
+    background: rgba(18,21,26,0.85);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .wrap{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 28px;
+    max-width: 880px;
+  }
+  .brand{
+    font-family:'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    color: var(--bone);
+  }
+  .brand span{ color: var(--signal); }
+  .topbar nav a{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    margin-left: 22px;
+  }
+  .topbar nav a:hover{ color: var(--bone); text-decoration:none; }
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding-top: 88px;
+    padding-bottom: 72px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--amber);
+    letter-spacing: 0.06em;
+    display:flex; align-items:center; gap:8px;
+    margin-bottom: 22px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:7px; height:7px; border-radius:50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px rgba(232,163,61,0.18);
+  }
+  .hero h1{
+    font-size: clamp(34px, 5.2vw, 54px);
+    max-width: 15ch;
+  }
+  .hero p.lede{
+    margin-top: 20px;
+    max-width: 56ch;
+    font-size: 18px;
+    color: var(--muted);
+  }
+  .hero-cta{
+    margin-top: 32px;
+    display:flex; gap: 14px; flex-wrap: wrap;
+  }
+  .btn{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    padding: 12px 20px;
+    border-radius: 6px;
+    display:inline-block;
+  }
+  .btn-primary{
+    background: var(--signal);
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .btn-primary:hover{ text-decoration:none; filter: brightness(1.08); }
+  .btn-ghost{
+    border: 1px solid var(--line);
+    color: var(--bone);
+  }
+  .btn-ghost:hover{ text-decoration:none; border-color: var(--muted); }
+
+  /* ---------- terminal ---------- */
+  .terminal{
+    margin-top: 44px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .terminal-bar{
+    display:flex; align-items:center; gap:7px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .terminal-bar .dot{ width:10px; height:10px; border-radius:50%; background:#3A404A; }
+  .terminal-bar .path{
+    margin-left: 10px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .terminal-body{
+    padding: 20px 22px 26px;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: #B7C4C1;
+    min-height: 168px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .terminal-body .caret{
+    display:inline-block;
+    width: 8px; height: 15px;
+    background: var(--signal);
+    margin-left: 2px;
+    vertical-align: -2px;
+    animation: blink 1s steps(1) infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  /* ---------- section headers ---------- */
+  .s-head{
+    display:flex; align-items:baseline; gap: 12px;
+    margin-bottom: 40px;
+  }
+  .s-tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--signal);
+    border: 1px solid rgba(95,216,201,0.3);
+    background: rgba(95,216,201,0.06);
+    padding: 3px 9px;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+  .s-head h2{ font-size: 28px; }
+
+  /* ---------- pillars ---------- */
+  .pillars{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .pillar{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px 22px;
+  }
+  .pillar .tag{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--violet);
+    letter-spacing: 0.04em;
+  }
+  .pillar h3{
+    font-size: 19px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+  .pillar p{
+    color: var(--muted);
+    font-size: 14.5px;
+    margin: 0;
+  }
+
+  /* ---------- architecture ---------- */
+  .flow{
+    display:flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .flow-node{
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 26px;
+  }
+  .flow-node::after{
+    content: "↓";
+    position: absolute;
+    left: 32px;
+    bottom: -26px;
+    color: var(--line);
+    font-size: 15px;
+  }
+  .flow-node:last-child{ margin-bottom: 0; }
+  .flow-node:last-child::after{ content: ""; }
+  .flow-node .flabel{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 11.5px;
+    color: var(--amber);
+    letter-spacing: 0.03em;
+    margin-bottom: 6px;
+  }
+  .flow-node h3{ font-size: 17px; margin-bottom: 6px; }
+  .flow-node p{ color: var(--muted); font-size: 14px; margin:0; }
+  .eq{
+    margin-top: 40px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    text-align: center;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 15px;
+    color: var(--signal);
+    overflow-x: auto;
+  }
+  .eq span{ display:block; margin-top:10px; font-size: 12px; color: var(--muted); }
+
+  /* ---------- bitacora ---------- */
+  .log-entry{
+    display:grid;
+    grid-template-columns: 108px 1fr;
+    gap: 22px;
+    padding: 22px 0;
+    border-top: 1px solid var(--line);
+  }
+  .log-entry:last-child{ padding-bottom: 0; }
+  .log-meta{
+    font-family:'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .log-meta .ver{ color: var(--bone); display:block; margin-bottom:4px; }
+  .log-tag{
+    display:inline-block;
+    font-family:'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    letter-spacing: 0.03em;
+  }
+  .log-tag.infra{ background: rgba(95,216,201,0.1); color: var(--signal); border:1px solid rgba(95,216,201,0.25); }
+  .log-tag.teoria{ background: rgba(169,139,209,0.1); color: var(--violet); border:1px solid rgba(169,139,209,0.25); }
+  .log-tag.debug{ background: rgba(232,163,61,0.1); color: var(--amber); border:1px solid rgba(232,163,61,0.25); }
+  .log-tag.abierto{ background: rgba(233,90,90,0.08); color: #E58B8B; border:1px solid rgba(233,90,90,0.22); }
+  .log-body p{ margin:0; font-size: 14.5px; color: var(--bone); }
+  .log-body .sub{ color: var(--muted); font-size: 13.5px; margin-top:4px; }
+
+  /* ---------- spec sheet ---------- */
+  .spec{
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .spec-row{
+    display:grid;
+    grid-template-columns: 200px 1fr;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    border-bottom: 1px solid var(--line);
+  }
+  .spec-row:last-child{ border-bottom: none; }
+  .spec-row .k{
+    padding: 14px 18px;
+    color: var(--muted);
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+  }
+  .spec-row .v{
+    padding: 14px 18px;
+    color: var(--bone);
+    background: var(--panel-2);
+  }
+
+  /* ---------- roadmap ---------- */
+  .checklist{ list-style:none; margin:0; padding:0; }
+  .checklist li{
+    display:flex; align-items:flex-start; gap: 12px;
+    padding: 13px 0;
+    border-top: 1px solid var(--line);
+    font-size: 15px;
+  }
+  .checklist li:first-child{ border-top:none; }
+  .box{
+    flex-shrink:0;
+    width: 18px; height:18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--muted);
+    margin-top: 2px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .checklist li.done .box{
+    background: var(--signal);
+    border-color: var(--signal);
+  }
+  .checklist li.done .box::after{ content:"✓"; font-size:12px; color: var(--ink); font-weight:700; }
+  .checklist li.done span{ color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(144,154,166,0.4); }
+  .checklist li.now .box{ border-color: var(--amber); }
+  .checklist li.now .box::after{ content:""; width:8px; height:8px; border-radius:50%; background: var(--amber); }
+
+  /* ---------- footer ---------- */
+  footer{ padding: 64px 0 80px; }
+  footer .wrap{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap: 18px; }
+  footer .fnote{ color: var(--muted); font-size: 13px; font-family:'JetBrains Mono', monospace; }
+
+  /* ---------- reveal ---------- */
+  .reveal{ opacity:0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in{ opacity:1; transform: translateY(0); }
+
+  @media (prefers-reduced-motion: reduce){
+    html{ scroll-behavior: auto; }
+    .reveal{ opacity:1; transform:none; transition:none; }
+    .terminal-body .caret{ animation:none; }
+  }
+
+  @media (max-width: 760px){
+    section{ padding: 64px 0; }
+    .pillars{ grid-template-columns: 1fr; }
+    .log-entry{ grid-template-columns: 1fr; gap: 8px; }
+    .spec-row{ grid-template-columns: 150px 1fr; }
+    .topbar nav a{ margin-left: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">GAJE<span>_</span></div>
+    <nav>
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#bitacora">Bitácora</a>
+      <a href="#stack">Stack</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+  </div>
+</div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">GAJE — GENOMIC ADAPTIVE JOURNAL ENGINE · ALPHA / INVESTIGACIÓN ACTIVA</div>
+    <h1>Un motor de inferencia que vive dentro del hardware, no en la nube.</h1>
+    <p class="lede">
+      GAJE comprime modelos de lenguaje a 2–4 bits y los ejecuta nativamente en Rust
+      sobre ARM — sin Python, sin GPU, sin conexión. Este proyecto documenta el proceso
+      real: lo que ya funciona, y lo que todavía no.
+    </p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="https://github.com/erickaguilar/gaje-semantic-compression" target="_blank" rel="noopener">Ver el código en GitHub</a>
+      <a class="btn btn-ghost" href="#bitacora">Leer la bitácora ↓</a>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <div class="path">gaje-cli — termux</div>
+      </div>
+      <div class="terminal-body" id="term"></div>
+    </div>
+  </div>
+</header>
+
+<section id="que-es">
+  <div class="wrap reveal">
+    <div class="s-head">
+      <span class="s-tag">[QUÉ ES]</span>
+      <h2>Un organismo genómico, no un binario más</h2>
+    </div>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="tag">01 — INFRAESTRUCTURA</div>
+        <h3>Motor nativo en Rust</h3>
+        <p>Zero-GIL, SIMD NEON, carga por mmap. Corre directamente en Termux/Android sin runtime de Python de por medio.</p>
+      </div>
+      <div class="pillar">
+        <div class="tag">02 — COMPRESIÓN</div>
+        <h3>Cuantización genómica</h3>
+        <p>Pesos reducidos a 2–4 bits mediante centroides, con un top 1% protegido como anclas de alta precisión.</p>
+      </div>
+      <div class="pillar">
+        <div class="tag">03 — FORMALIZACIÓN</div>
+        <h3>Rigor, no solo intuición</h3>
+        <p>Cada decisión de compresión está respaldada por un marco de gradiente natural proximal con métrica de Fisher heterogénea.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="arquitectura">
+  <div class="wrap reveal">
+    <div class="s-head">
+      <span class="s-tag">[ARQUITECTURA]</span>
+      <h2>De la variedad discreta al organismo .gaje</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-node">
+        <div class="flabel">ESPACIO DE FASES</div>
+        <h3>Variedad toroidal T^n</h3>
+        <p>Los pesos se modelan como fases θ ∈ [0, 2π) en lugar de valores lineales — la base conceptual que justifica por qué la cuantización extrema no colapsa la señal.</p>
+      </div>
+      <div class="flow-node">
+        <div class="flabel">MÉTRICA</div>
+        <h3>Fisher diagonal heterogénea</h3>
+        <p>Un precondicionador M(θ) que endurece las anclas (Γ = 8.0) y deja plasticidad al resto del genoma — la misma idea detrás de Elastic Weight Consolidation, aplicada a compresión.</p>
+      </div>
+      <div class="flow-node">
+        <div class="flabel">ARQUITECTURA</div>
+        <h3>Mixed-Bit</h3>
+        <p>Atención a 4 bits (16 centroides) donde la resolución semántica importa más; FFN a 2 bits donde la redundancia lo permite.</p>
+      </div>
+      <div class="flow-node">
+        <div class="flabel">OPERADOR</div>
+        <h3>Proyección proximal compuesta</h3>
+        <p>Φ proyecta sobre la ε-net de centroides; Ω aplica K-WTA como hard thresholding — dos operadores, un solo paso de actualización.</p>
+      </div>
+      <div class="flow-node">
+        <div class="flabel">SALIDA</div>
+        <h3>Organismo .gaje</h3>
+        <p>Un archivo autocontenido que el motor de Rust despierta, reconstruye y ejecuta sin dependencias externas.</p>
+      </div>
+    </div>
+
+    <div class="eq">
+      θ<sub>t+1</sub> = Prox<sub>Φ,Ω</sub> ( θ<sub>t</sub> − η · M(θ)<sup>-1</sup> · ∇<sub>θ</sub>L(θ) )
+      <span>La regla de actualización unificada — gradiente natural proximal sobre una métrica heterogénea</span>
+    </div>
+  </div>
+</section>
+
+<section id="bitacora">
+  <div class="wrap reveal">
+    <div class="s-head">
+      <span class="s-tag">[BITÁCORA]</span>
+      <h2>El proceso real, sin editar</h2>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">v0.1.0</span>May 2026</div>
+      <div class="log-body">
+        <span class="log-tag infra">INFRA</span>
+        <p>Primer motor de cuantización 2-bit en Rust puro. Nace el protocolo de compresión semántica genómica.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">v0.7.0</span>May 2026</div>
+      <div class="log-body">
+        <span class="log-tag infra">INFRA</span>
+        <p>Soberanía nativa: independencia total del runtime de Python para cargar, muestrear y entrenar.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">v1.0.0-alpha</span>May 2026</div>
+      <div class="log-body">
+        <span class="log-tag teoria">TEORÍA</span>
+        <p>Se formaliza la topología toroidal y las anclas de estabilidad como esqueleto de coherencia del modelo.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">v1.2.0-alpha</span>Jun 2026</div>
+      <div class="log-body">
+        <span class="log-tag infra">INFRA</span>
+        <p>GAJE-Core: sampler lagrangiano, bindings C-FFI para Android/iOS, chat binario nativo.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">sin release</span>Jun–Jul 2026</div>
+      <div class="log-body">
+        <span class="log-tag debug">DEBUG</span>
+        <p>Pivot a PTQ Mixed-Bit sobre SmolLM2. Se detecta corrupción severa: similitud de coseno de 0.04 entre pesos originales y reconstruidos.</p>
+        <p class="sub">Causa raíz: el cargador nativo adivinaba el bit-depth por el nombre de la capa en lugar de medir el buffer real.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">sin release</span>Jul 2026</div>
+      <div class="log-body">
+        <span class="log-tag debug">DEBUG</span>
+        <p>Corregidos el bit-depth del loader, la sincronización de la KV-Cache y la asimetría de Grouped-Query Attention. Similitud de pesos sube a &gt; 0.99 en F32.</p>
+      </div>
+    </div>
+
+    <div class="log-entry">
+      <div class="log-meta"><span class="ver">actual</span>Jul 2026</div>
+      <div class="log-body">
+        <span class="log-tag abierto">ABIERTO</span>
+        <p>Baseline F32 en validación. La infraestructura ya es confiable; la coherencia lingüística del modelo todavía no. La PPL sigue muy por encima del objetivo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap reveal">
+    <div class="s-head">
+      <span class="s-tag">[STACK]</span>
+      <h2>Especificación técnica</h2>
+    </div>
+    <div class="spec">
+      <div class="spec-row"><div class="k">RUNTIME</div><div class="v">Rust nativo · Zero-GIL</div></div>
+      <div class="spec-row"><div class="k">SIMD</div><div class="v">NEON (ARM) · AVX2/FMA (x86)</div></div>
+      <div class="spec-row"><div class="k">CUANTIZACIÓN</div><div class="v">Mixed-Bit — 2-bit FFN / 4-bit Atención</div></div>
+      <div class="spec-row"><div class="k">MÉTRICA</div><div class="v">Fisher diagonal heterogénea (estilo EWC)</div></div>
+      <div class="spec-row"><div class="k">MEMORIA</div><div class="v">Carga zero-copy (mmap) · KV-Cache comprimida 16×</div></div>
+      <div class="spec-row"><div class="k">PLATAFORMAS</div><div class="v">Android / Termux · Linux · C-FFI (iOS, C++)</div></div>
+      <div class="spec-row"><div class="k">INTERFAZ</div><div class="v">gaje-cli · bindings PyO3 para experimentación</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="roadmap">
+  <div class="wrap reveal">
+    <div class="s-head">
+      <span class="s-tag">[ROADMAP]</span>
+      <h2>Lo que sigue</h2>
+    </div>
+    <ul class="checklist">
+      <li class="done"><div class="box"></div><span>Infraestructura Rust estable y sin fugas de memoria</span></li>
+      <li class="done"><div class="box"></div><span>Loader con detección robusta de bit-depth por tamaño real de buffer</span></li>
+      <li class="done"><div class="box"></div><span>KV-Cache sincronizada con el orden de bits del motor</span></li>
+      <li class="done"><div class="box"></div><span>Corrección de la asimetría Grouped-Query Attention</span></li>
+      <li class="now"><div class="box"></div><span>Validar coherencia semántica del baseline F32</span></li>
+      <li><div class="box"></div><span>Recalibración de centroides Mixed-Bit sobre corpus estratificado</span></li>
+      <li><div class="box"></div><span>Certificación Nivel 1 — recuperación Needle-in-a-Haystack</span></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fnote">GAJE · proyecto de investigación individual · construido en Termux</div>
+    <a class="mono" href="https://github.com/erickaguilar/gaje-semantic-compression" target="_blank" rel="noopener" style="font-size:13px;">github.com/erickaguilar/gaje-semantic-compression →</a>
+  </div>
+</footer>
+
+<script>
+  // Terminal typing effect — real engine logs, honest state
+  const lines = [
+    "$ ./target/release/gaje-cli --load silver_adult_sovereign.gaje",
+    "🧬 Despertando organismo GAJE desde base de datos...",
+    "✅ Reconstructed 30 transformer blocks.",
+    "[*] Reconstrucción desde BD finalizada en 3.05s",
+    "[STATUS] infraestructura: verificada — similitud de pesos > 0.99",
+    "[STATUS] capa semántica: en reparación activa — PPL bajo investigación",
+  ];
+  const el = document.getElementById('term');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function renderStatic(){
+    el.textContent = lines.join('\n');
+  }
+
+  function typeLoop(){
+    let li = 0, ci = 0;
+    let out = '';
+    function step(){
+      if(li >= lines.length){
+        el.innerHTML = out + '<span class="caret"></span>';
+        return;
+      }
+      const line = lines[li];
+      if(ci <= line.length){
+        el.innerHTML = out + line.slice(0, ci) + '<span class="caret"></span>';
+        ci++;
+        setTimeout(step, 14 + Math.random()*22);
+      } else {
+        out += line + '\n';
+        li++; ci = 0;
+        setTimeout(step, 260);
+      }
+    }
+    step();
+  }
+
+  if(reduced){ renderStatic(); } else { typeLoop(); }
+
+  // Scroll reveal
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>

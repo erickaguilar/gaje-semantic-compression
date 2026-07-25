@@ -38,6 +38,7 @@ gaje = "gaje.utils.cli:main"
 [tool.maturin]
 module-name = "gaje.core._impl"
 python-source = "python"
+features = ["python"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

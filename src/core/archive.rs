@@ -25,7 +25,10 @@ impl GAJEArchive {
         let mut magic = [0u8; 4];
         f.read_exact(&mut magic)?;
         if &magic != b"GAJE" {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid magic"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid magic",
+            ));
         }
 
         let mut ver_buf = [0u8; 2];
@@ -46,8 +49,11 @@ impl GAJEArchive {
             let epi_cb_len = u32::from_le_bytes(len_buf) as usize;
             let mut epi_cb_json = vec![0u8; epi_cb_len];
             f.read_exact(&mut epi_cb_json)?;
-            if epi_cb_len > 2 { // Not just "{}"
-                epigenetic_codebook = Some(serde_json::from_slice::<HashMap<String, Vec<f32>>>(&epi_cb_json)?);
+            if epi_cb_len > 2 {
+                // Not just "{}"
+                epigenetic_codebook = Some(serde_json::from_slice::<HashMap<String, Vec<f32>>>(
+                    &epi_cb_json,
+                )?);
             }
         }
 

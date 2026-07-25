@@ -13,13 +13,18 @@ impl CentroidGraph {
         self.topology.get(&layer_idx.to_string())
     }
 
-    pub fn get_modulation_factors(&self, layer_idx: usize, current_state: usize, alpha: f32) -> [f32; 4] {
+    pub fn get_modulation_factors(
+        &self,
+        layer_idx: usize,
+        current_state: usize,
+        alpha: f32,
+    ) -> [f32; 4] {
         let mut factors = [1.0f32; 4];
         if let Some(matrix) = self.get_transition_matrix(layer_idx) {
             if current_state < matrix.len() {
                 let probs = &matrix[current_state];
                 for (s, &p) in probs.iter().enumerate().take(4) {
-                    // Modulación por estado: 
+                    // Modulación por estado:
                     // 0, 1 -> Inhibición (0.9 a 1.0)
                     // 2, 3 -> Excitación (1.0 a 1.15)
                     let base = if s < 2 { -0.1 } else { 0.15 };
@@ -30,11 +35,17 @@ impl CentroidGraph {
         factors
     }
 
-    pub fn apply_relational_bias(&self, layer_idx: usize, current_state: usize, hidden: &mut [f32], alpha: f32) {
+    pub fn apply_relational_bias(
+        &self,
+        layer_idx: usize,
+        current_state: usize,
+        hidden: &mut [f32],
+        alpha: f32,
+    ) {
         if let Some(matrix) = self.get_transition_matrix(layer_idx) {
             if current_state < matrix.len() {
                 let probs = &matrix[current_state];
-                
+
                 // Encontrar el estado de destino más probable y su confianza (probabilidad)
                 let mut best_state = 0;
                 let mut max_p = 0.0;
@@ -48,9 +59,9 @@ impl CentroidGraph {
                 // Modulación Relacional Refinada (No Lineal) con Estabilización
                 let base_modulation = match best_state {
                     0 => -0.05, // Inhibición leve (reducido de -0.15 para estabilidad)
-                    1 => -0.02, 
-                    2 => 0.02,  
-                    3 => 0.05,  // Excitación leve (reducido de 0.15)
+                    1 => -0.02,
+                    2 => 0.02,
+                    3 => 0.05, // Excitación leve (reducido de 0.15)
                     _ => 0.0,
                 };
 
@@ -59,7 +70,9 @@ impl CentroidGraph {
 
                 // Calcular norma para evitar explosión
                 let mut sum_sq = 0.0f32;
-                for &val in hidden.iter() { sum_sq += val * val; }
+                for &val in hidden.iter() {
+                    sum_sq += val * val;
+                }
                 let norm = (sum_sq / hidden.len() as f32 + 1e-6).sqrt();
 
                 for val in hidden.iter_mut() {
@@ -71,10 +84,13 @@ impl CentroidGraph {
                         // Inhibición controlada
                         *val = current * (1.0 + final_bias).max(0.9);
                     }
-                    
+
                     // Clamping final de seguridad
-                    if val.is_nan() { *val = 0.0; }
-                    else if val.is_infinite() { *val = val.signum() * 10.0; }
+                    if val.is_nan() {
+                        *val = 0.0;
+                    } else if val.is_infinite() {
+                        *val = val.signum() * 10.0;
+                    }
                 }
             }
         }

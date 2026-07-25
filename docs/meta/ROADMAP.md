@@ -59,8 +59,8 @@ El Protocolo GAJE ha validado su núcleo científico superando el **85% de preci
 
 ## 🚀 Iniciativa Prioritaria 1: Independencia Total (Rust-Native)
 **El Objetivo:** Eliminar la fricción y cuellos de botella de memoria migrando el ciclo de vida del modelo al 100% a Rust.
-*   [ ] **GGUF-Native-Ingestor:** Implementar un lector binario nativo en `src/loader.rs` para cargar tensores GGUF directamente desde el disco a memoria Rust.
-*   [ ] **Genomic-Evolution-Runner:** Convertir el script `hola-mundo-evolution` en un framework general CLI capaz de "criar" modelos a partir de cualquier tarea de texto objetivo.
+*   [x] **GGUF-Native-Ingestor:** Implementación de lector binario nativo (`src/io/gguf.rs` y `src/io/loader.rs`) para cargar tensores GGUF directamente desde el disco a memoria Rust.
+*   [x] **Genomic-Evolution-Runner:** Framework CLI (`gaje-cli`) implementado con capacidad de "criar" modelos y soporte de *Semantic Niches*.
 
 ## 🧬 Iniciativa Prioritaria 2: Escalabilidad del Algoritmo (Monte Carlo)
 **El Objetivo:** Ampliar el poder del motor evolutivo para pasar de secuencias cortas a gramática real.

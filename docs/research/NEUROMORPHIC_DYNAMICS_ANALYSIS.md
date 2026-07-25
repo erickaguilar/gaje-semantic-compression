@@ -16,7 +16,7 @@ Se ha identificado que la pérdida de coherencia en los modelos GAJE de 2-bits n
 Las neuronas no deben ser 100% digitales. Al permitir que el spike transporte el residuo de energía (`intensidad = energía - umbral`), devolvemos la gradación al sistema sin necesidad de multiplicaciones. El "golpe" del centroide en la siguiente capa se modula por esta intensidad.
 
 ### B. Temporal/Phase Coding (Latencia de Disparo)
-En lugar de contar disparos, mediremos **cuándo** ocurren dentro de un tick. 
+En lugar de contar disparos, mediremos **cuándo** ocurren dentro de un tick.
 *   **Fase Temprana (0ms):** Valor alto (0.9).
 *   **Fase Tardía (1ms):** Valor bajo (0.1).
 Esto permite una precisión infinita dentro de un solo tick lógico, aprovechando la infraestructura de la **Timing Wheel O(1)**.

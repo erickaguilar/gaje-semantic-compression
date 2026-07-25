@@ -1,0 +1,41 @@
+/// # Safety
+/// Esta función es unsafe porque utiliza instrucciones intrínsecas SIMD, accede a
+/// tablas de shuffle estáticas y realiza aritmética de punteros sin comprobación de límites.
+#[inline(always)]
+pub unsafe fn genomic_dot_product(
+    weights: &[u8],
+    input: &[f32],
+    centroids: &[f32],
+    stride: usize,
+    n_blocks: usize,
+    modulation: &[f32; 4],
+) -> f32 {
+    // Audit Forense: Deshabilitamos SIMD temporalmente para aislar NaNs
+    /*
+    #[cfg(target_arch = "aarch64")]
+    {
+        let mut sum_v = vdupq_n_f32(0.0);
+        let m_v = vld1q_f32(modulation.as_ptr());
+        #[allow(static_mut_refs)]
+        let table_ptr = SHUFFLE_MASK_TABLE.as_ptr();
+        for j in 0..n_blocks {
+            let raw_c = vld1q_f32(centroids.as_ptr().add(j * 4));
+            let c_mod = vmulq_f32(raw_c, m_v);
+            let c_v = vreinterpretq_u8_f32(c_mod);
+
+            let input_block_ptr = input.as_ptr().add(j * stride * 4);
+            let weights_block_ptr = weights.as_ptr().add(j * stride);
+            for k in 0..stride {
+                let byte = *weights_block_ptr.add(k);
+                let mask = vld1q_u8(table_ptr.add(byte as usize) as *const u8);
+                let v_vals = vqtbl1q_u8(c_v, mask);
+                let v_weights = vreinterpretq_f32_u8(v_vals);
+                sum_v = vfmaq_f32(sum_v, v_weights, vld1q_f32(input_block_ptr.add(k * 4)));
+            }
+        }
+        return vaddvq_f32(sum_v);
+    }
+    */
+
+    genomic_dot_product_scalar(weights, input, centroids, stride, n_blocks, modulation)
+}

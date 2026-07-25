@@ -1,7 +1,12 @@
-pub mod kernels;
-pub mod math;
+pub mod diagnostics;
 pub mod event_queue;
-pub mod scheduler;
-pub mod power;
+pub mod kernels;
+pub mod kv_cache;
+pub mod lagrangian;
+pub mod math;
 pub mod mcts;
+pub mod power;
+pub mod rag;
+pub mod sampler;
+pub mod scheduler;
 pub mod timing_wheel;

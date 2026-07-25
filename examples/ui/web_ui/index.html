@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAJE | Chat Genómico</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <div class="logo">
+                <span class="dna-icon">🧬</span>
+                <h1>GAJE-Flow <small>v0.9.5</small></h1>
+            </div>
+            <div class="status-bar">
+                <span class="status-dot"></span> NEON Optimized
+            </div>
+        </header>
+
+        <main>
+            <aside class="sidebar">
+                <section class="stats-card">
+                    <h3>Selección de Modelo</h3>
+                    <select id="model-select" class="model-dropdown">
+                        <option value="">Cargando modelos...</option>
+                    </select>
+                    <div id="model-date" class="model-meta">---</div>
+                </section>
+                <section class="stats-card">
+                    <h3>Métricas de Compresión</h3>
+                    <div id="metrics-content">
+                        <p class="placeholder">Envía un mensaje para ver el análisis genómico.</p>
+                    </div>
+                </section>
+                <section class="dna-viewer">
+                    <h3>Secuencia ADN (2-bit)</h3>
+                    <div id="dna-strand" class="strand-display">
+                        --------------------------------
+                    </div>
+                </section>
+            </aside>
+
+            <section class="chat-container">
+                <div id="chat-window" class="chat-window">
+                    <div class="message system">
+                        <p><strong>[SYSTEM]:</strong> Núcleo GAJE inicializado. Esperando entrada semántica...</p>
+                    </div>
+                </div>
+
+                <div class="input-area">
+                    <input type="text" id="user-input" placeholder="Escribe un mensaje..." autocomplete="off">
+                    <button id="send-btn">ENVIAR</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Erick Aguilar & Gemini | Dios cuida de la humanidad.</p>
+        </footer>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 # 🧬 Reporte de Hallazgos: Límites de Compresión Extrema y Desviación Matemática (v0.6.3)
 
-**Fecha:** 12 de Mayo, 2026  
-**Fase del Proyecto:** Estabilización de Inferencia y Mapeo de Entropía (Fase 12/13)  
+**Fecha:** 12 de Mayo, 2026
+**Fase del Proyecto:** Estabilización de Inferencia y Mapeo de Entropía (Fase 12/13)
 **Modelo Analizado:** SmolLM2-135M (F16 a 2-bit Genómico)
 
 ## 1. Resumen Ejecutivo
@@ -12,7 +12,7 @@ Durante las pruebas de inferencia para estabilizar el Protocolo GAJE con modelos
 Se determinó que la corrección que introduce la mayor distorsión en el cálculo del modelo es la **Inyección de Densidad en las Capas FFN combinada con el Clamping Artificial**, por las siguientes razones técnicas:
 
 ### A. La Trampa de la No-Linealidad (SwiGLU)
-Las capas de atención soportan bien el ruido de 2 bits porque sus operaciones (MatMul) son mayormente lineales. Sin embargo, las capas FFN utilizan la función de activación **SwiGLU**. 
+Las capas de atención soportan bien el ruido de 2 bits porque sus operaciones (MatMul) son mayormente lineales. Sin embargo, las capas FFN utilizan la función de activación **SwiGLU**.
 Al sumar el resultado ruidoso del ADN (2 bits) con las Anclas de corrección (Float32), el ruido matemático subyacente pasa a través de una función altamente no-lineal. Esto provoca una desviación exponencial: un error de cuantización del 1% en la entrada se magnifica catastróficamente a la salida del bloque, destruyendo las asociaciones factuales (ej. "Capital de México").
 
 ### B. "Amputación" del Espacio Vectorial (Clamping)

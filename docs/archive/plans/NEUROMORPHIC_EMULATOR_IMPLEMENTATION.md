@@ -6,7 +6,7 @@ Este documento detalla la hoja de ruta para la implementación del motor neurom�
 **Objetivo:** Establecer la infraestructura de memoria para los pesos GAJE de 2-bits.
 
 - [ ] **Módulo `src/core/types.rs`**: Implementar el enum `GajeWeight2Bit` con soporte para empaquetado de bits (4 pesos por `u8`).
-- [ ] **Módulo `src/nn/spiking/neuron.rs`**: 
+- [ ] **Módulo `src/nn/spiking/neuron.rs`**:
     - Implementación de la estructura `SpikingNeuron` (LIF).
     - Métodos `integrate` (suma directa de centroides) y `check_spike`.
 - [ ] **Unit Tests**: Validar que la integración de 4 spikes produce un disparo correcto según el umbral.
@@ -39,7 +39,7 @@ Este documento detalla la hoja de ruta para la implementación del motor neurom�
 **Objetivo:** Conectar el cargador de modelos y medir rendimiento real.
 
 - [ ] **Módulo `src/io/loader.rs`**: Adaptar el cargador GGUF para inicializar `SpikingNeuron` con pesos de 2-bits.
-- [ ] **Benchmark Suite**: 
+- [ ] **Benchmark Suite**:
     - Comparativa de consumo de CPU/Energía vs. Inferencia densa tradicional.
     - Test de contexto de 1M de tokens (RoPE 1,000,000.0).
 

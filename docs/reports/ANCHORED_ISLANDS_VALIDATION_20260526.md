@@ -5,7 +5,7 @@
 **Herramienta de Prueba:** `src/bin/demo-anchored-islands.rs`
 
 ## 1. El Concepto Probado
-El objetivo de esta validación fue demostrar que la inyección estratégica de una **Ancla de alta precisión (16-bits)** puede estabilizar una población de **neuronas de 2-bits (Centroides)**, creando lo que denominamos una **Isla de Estabilidad**. 
+El objetivo de esta validación fue demostrar que la inyección estratégica de una **Ancla de alta precisión (16-bits)** puede estabilizar una población de **neuronas de 2-bits (Centroides)**, creando lo que denominamos una **Isla de Estabilidad**.
 
 Este concepto se basa en los hallazgos de OpenAI sobre el "Problema de Distancia Unitaria" (Erdős), donde el conocimiento se organiza en clústeres densos o "islas".
 
@@ -22,7 +22,7 @@ Este concepto se basa en los hallazgos de OpenAI sobre el "Problema de Distancia
 
 ## 3. Análisis Técnico: Cristalización Semántica
 
-El experimento confirma que no es necesario aumentar la precisión de todo el modelo para alcanzar la inteligencia de frontera (como Gemma 4). 
+El experimento confirma que no es necesario aumentar la precisión de todo el modelo para alcanzar la inteligencia de frontera (como Gemma 4).
 
 1.  **Nucleación:** El Ancla absorbe el error de alta frecuencia que los centroides de 2-bits no pueden representar.
 2.  **Alineación Topológica:** Los centroides se organizan alrededor del Ancla siguiendo la geometría de distancias unitarias.

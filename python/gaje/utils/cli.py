@@ -40,7 +40,7 @@ def main():
 
         for i in range(min(3, len(results))):
             idx, dist = results[i]
-            print(f"  {i+1}. {archive.entries[idx][0]} | Dist: {dist:.4f}")
+            print(f"  {i + 1}. {archive.entries[idx][0]} | Dist: {dist:.4f}")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ Esto causaría un severo *branch prediction penalty* en el hardware y haría cas
 ## 🛠️ La Solución: Perfilado Estático y Struct of Arrays (SoA)
 
 ### 1. Perfilado Estático en Python (Export Time)
-La decisión de qué partes del modelo reciben 4-bit o 6-bit NO se toma en tiempo real. 
+La decisión de qué partes del modelo reciben 4-bit o 6-bit NO se toma en tiempo real.
 El `SignalToNoiseBalancer` de Python analiza el modelo *una vez* y define de forma permanente la "Máscara Metabólica". Python exporta tres buffers distintos para cada capa:
 
 ### 2. Disposición de Memoria SoA en Rust
@@ -32,17 +32,17 @@ En lugar de mezclar precisiones, cada capa en Rust se compone de tres vectores p
 // DISEÑO OPTIMIZADO (Rápido)
 pub struct SoAGenomicLayer {
     // El 95%+ de los datos: Matriz Densa 2-bit
-    pub base_strands: Vec<u8>,       
+    pub base_strands: Vec<u8>,
     pub base_centroids: Vec<f32>,
 
     // El ~4% de los datos: Sparse Anchors 4-bit
     // Formato comprimido (ej. CSR) o denso parcial
-    pub epi_strands: Vec<u8>,        
+    pub epi_strands: Vec<u8>,
     pub epi_indices: Vec<u32>,       // Para sumar al resultado base
 
     // El <1% de los datos: Super Anchors 6-bit
-    pub tri_strands: Vec<u8>,        
-    pub tri_indices: Vec<u32>,       
+    pub tri_strands: Vec<u8>,
+    pub tri_indices: Vec<u32>,
 }
 ```
 

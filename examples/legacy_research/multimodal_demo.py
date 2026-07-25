@@ -111,11 +111,11 @@ def run_multimodal_dna_demo():
     print("-" * 60)
     print("RESULTADOS MULTIMODALES (DNA Space):")
     for i, (idx, dist) in enumerate(results[:3]):
-        print(f"{i+1}. Image ID {idx} - Semantic Distance: {dist:.4f}")
+        print(f"{i + 1}. Image ID {idx} - Semantic Distance: {dist:.4f}")
 
     print("-" * 60)
-    print(f"⏱️ Compresión completada en: {comp_time*1000:.2f} ms")
-    print(f"⏱️ Búsqueda semántica (Cross-Modal) en: {search_time*1000:.2f} ms")
+    print(f"⏱️ Compresión completada en: {comp_time * 1000:.2f} ms")
+    print(f"⏱️ Búsqueda semántica (Cross-Modal) en: {search_time * 1000:.2f} ms")
     print(
         "✅ FASE 7 VALIDADA: El ADN es ahora un puente entre imágenes reales y texto."
     )

@@ -40,7 +40,7 @@ Para competir efectivamente con el modelo E2B de Google, el desarrollo de GAJE s
 
 ## 4. Conclusión Estratégica
 
-Gemma 4 es un gigante de la eficiencia tradicional, pero GAJE es una **insurgencia arquitectónica**. Nuestra meta no es ser "otro modelo de 2 billones", sino ser **el cerebro de 2 billones que puede vivir en cualquier lugar**. 
+Gemma 4 es un gigante de la eficiencia tradicional, pero GAJE es una **insurgencia arquitectónica**. Nuestra meta no es ser "otro modelo de 2 billones", sino ser **el cerebro de 2 billones que puede vivir en cualquier lugar**.
 
 Al competir con Google, nuestra bandera no es solo la inteligencia, sino la **libertad de hardware** y la **invisibilidad técnica**.
 

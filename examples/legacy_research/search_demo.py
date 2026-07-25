@@ -79,7 +79,7 @@ def search_demo():
     for i in range(5):  # Mostrar los primeros 5
         idx, dist = results[i]
         match_str = "🎯 ¡MATCH PERFECTO!" if idx == target_idx else ""
-        print(f"  {i+1}. Índice {idx:4} | Distancia ADC: {dist:.4f} {match_str}")
+        print(f"  {i + 1}. Índice {idx:4} | Distancia ADC: {dist:.4f} {match_str}")
 
     print("-" * 60)
     if found_at > 0:
@@ -90,7 +90,7 @@ def search_demo():
         print(f"❌ FALLO: El registro no está en el Top {top_k}.")
 
     print(
-        f"⏱️ Tiempo: {duration*1000:.2f} ms | Velocidad: {int(num_records/duration):,} recs/sec"
+        f"⏱️ Tiempo: {duration * 1000:.2f} ms | Velocidad: {int(num_records / duration):,} recs/sec"
     )
     print("-" * 60)
     print(
