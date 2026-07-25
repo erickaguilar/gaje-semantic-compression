@@ -95,101 +95,98 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
                 print(f"[*] Procesando mensaje con modelo: {model_name}")
 
-            llm = get_model(model_name)
-            if not llm:
+                llm = get_model(model_name)
+                if not llm:
+                    response_data = {
+                        "error": f"Modelo {model_name} no disponible o error al cargar."
+                    }
+                    self.send_response(500)
+                    self.send_header("Content-type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response_data).encode())
+                    return
+
+                # 1. Obtener Embedding (simulado del input para visualización)
+                try:
+                    tokens = llm.tokenizer.encode(message, add_special_tokens=False)
+                    if hasattr(tokens, "ids"):
+                        tokens = tokens.ids
+                except:
+                    tokens = [0]
+
+                # 2. Generación Genómica
+                response_text = ""
+                print("[*] Generando respuesta...")
+                try:
+                    for token_text in llm.generate(
+                        message, max_new_tokens=50, temperature=0.6, repetition_penalty=1.2
+                    ):
+                        response_text += token_text
+                        if len(response_text) > 400:
+                            break
+                except Exception as e:
+                    response_text = f"Error en generación: {e}"
+
+                # 3. Visualización del primer token (para la UI de ADN)
+                try:
+                    first_token_id = tokens[0] if tokens else 0
+                    if hasattr(llm.embeddings, "get_row"):
+                        emb_row = llm.embeddings.get_row(first_token_id).tolist()
+                    else:
+                        import numpy as np
+                        emb_row = np.random.randn(llm.n_embd).tolist()
+
+                    thresholds = [-0.34, 0.0, 0.34]
+                    dna_strand_bytes = dna_semantic_compression.quantize_embedding(
+                        emb_row, thresholds
+                    )
+
+                    mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
+                    bases = []
+                    for byte in dna_strand_bytes[:32]:
+                        for shift in [6, 4, 2, 0]:
+                            val = (byte >> shift) & 0b11
+                            bases.append(mapping[val])
+
+                    dna_visual = "".join(bases)
+                except Exception as ex_dna:
+                    print(f"⚠️ Warning visualizando ADN: {ex_dna}")
+                    dna_visual = "ACGT" * 8
+
+                # 5. Métricas
+                dims = llm.n_embd
+                orig_size = dims * 4
+                dna_size = (dims + 3) // 4
+                ratio = orig_size / dna_size
+                saved = (1 - (dna_size / orig_size)) * 100
+
                 response_data = {
-                    "error": f"Modelo {model_name} no disponible o error al cargar."
+                    "response": response_text or "Procesamiento completado.",
+                    "dna": dna_visual,
+                    "metrics": {
+                        "dims": dims,
+                        "original_size": orig_size,
+                        "dna_size": dna_size,
+                        "ratio": ratio,
+                        "saved": saved,
+                    },
                 }
-                self.send_response(500)
+
+                self.send_response(200)
                 self.send_header("Content-type", "application/json")
                 self.end_headers()
                 self.wfile.write(json.dumps(response_data).encode())
-                return
+            except Exception as exc:
+                import traceback
 
-            # 1. Obtener Embedding (simulado del input para visualización)
-            try:
-                tokens = llm.tokenizer.encode(message, add_special_tokens=False)
-                if hasattr(tokens, "ids"):
-                    tokens = tokens.ids
-            except:
-                tokens = [0]
-
-            # 2. Generación Genómica
-            response_text = ""
-            print("[*] Generando respuesta...")
-            try:
-                # Usamos un número pequeño de tokens para la web por latencia
-                # Aumentamos el repetition_penalty para evitar bucles
-                for token_text in llm.generate(
-                    message, max_new_tokens=50, temperature=0.6, repetition_penalty=1.2
-                ):
-                    response_text += token_text
-                    if len(response_text) > 400:
-                        break  # Límite de seguridad
-            except Exception as e:
-                response_text = f"Error en generación: {e}"
-
-            # 3. Visualización del primer token (para la UI de ADN)
-            try:
-                first_token_id = tokens[0] if tokens else 0
-                if hasattr(llm.embeddings, "get_row"):
-                    emb_row = llm.embeddings.get_row(first_token_id).tolist()
-                else:
-                    import numpy as np
-                    emb_row = np.random.randn(llm.n_embd).tolist()
-
-                thresholds = [-0.34, 0.0, 0.34]
-                dna_strand_bytes = dna_semantic_compression.quantize_embedding(
-                    emb_row, thresholds
-                )
-
-                # Convertir a Bases (A, C, G, T)
-                mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
-                bases = []
-                for byte in dna_strand_bytes[:32]:
-                    for shift in [6, 4, 2, 0]:
-                        val = (byte >> shift) & 0b11
-                        bases.append(mapping[val])
-
-                dna_visual = "".join(bases)
-            except Exception as ex_dna:
-                print(f"⚠️ Warning visualizando ADN: {ex_dna}")
-                dna_visual = "ACGT" * 8
-
-            # 5. Métricas
-            dims = llm.n_embd
-            orig_size = dims * 4
-            dna_size = (dims + 3) // 4
-            ratio = orig_size / dna_size
-            saved = (1 - (dna_size / orig_size)) * 100
-
-            response_data = {
-                "response": response_text or "Procesamiento completado.",
-                "dna": dna_visual,
-                "metrics": {
-                    "dims": dims,
-                    "original_size": orig_size,
-                    "dna_size": dna_size,
-                    "ratio": ratio,
-                    "saved": saved,
-                },
-            }
-
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps(response_data).encode())
-        except Exception as exc:
-            import traceback
-
-            print(f"❌ Error fatal en do_POST: {exc}")
-            traceback.print_exc()
-            self.send_response(500)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": str(exc)}).encode())
-    else:
-        self.send_error(404)
+                print(f"❌ Error fatal en do_POST: {exc}")
+                traceback.print_exc()
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(exc)}).encode())
+        else:
+            self.send_error(404)
 
 
 class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
