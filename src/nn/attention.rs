@@ -90,15 +90,6 @@ impl GenomicAttention {
         let attn_out: Vec<f32> = (0..n_head)
             .into_par_iter()
             .flat_map(|h| {
-                if h == 0 {
-                    println!(
-                        "[ENGINE CRITICAL] h=0, pos={}, cache_len_before={}, base={}, style={}",
-                        pos,
-                        self.k_cache.len(),
-                        self.rope_base,
-                        self.rope_style
-                    );
-                }
                 let kv_h = h / n_groups;
                 let kv_h_off = kv_h * head_dim;
                 let q_slice = &q_rope[h * head_dim..(h + 1) * head_dim];

@@ -241,12 +241,6 @@ impl GenomicLinear {
                     // Aseguramos que la longitud coincide antes de llamar al kernel SIMD
                     if row_weights.len() == input.len() {
                         sum = unsafe { crate::compute::kernels::dot_product(&input, row_weights) };
-                        if i == 0 {
-                             let mut manual_sum = 0.0f32;
-                             for k in 0..input.len() { manual_sum += input[k] * row_weights[k]; }
-                             println!("[Debug F32 Proj] row 0: kernel_sum={:.4}, manual_sum={:.4}, input_abs={:.4}, weight_abs={:.4}",
-                                      sum, manual_sum, input.iter().map(|v| v.abs()).sum::<f32>(), row_weights.iter().map(|v| v.abs()).sum::<f32>());
-                        }
                     } else {
                         // Fallback seguro si hay padding o desajuste
                         sum = input.iter().zip(row_weights.iter()).map(|(x, w)| x * w).sum();
