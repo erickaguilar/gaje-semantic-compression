@@ -120,18 +120,27 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 except:
                     tokens = [0]
 
-                # 2. Generación Genómica
+                # 2. Generación Genómica (con medición de tiempo)
+                import time
+                import platform
+
+                start_time = time.time()
                 response_text = ""
+                tokens_count = 0
                 print("[*] Generando respuesta...")
                 try:
                     for token_text in llm.generate(
                         message, max_new_tokens=50, temperature=0.6, repetition_penalty=1.2
                     ):
                         response_text += token_text
+                        tokens_count += 1
                         if len(response_text) > 400:
                             break
                 except Exception as e:
                     response_text = f"Error en generación: {e}"
+
+                gen_time_ms = round((time.time() - start_time) * 1000, 2)
+                tok_per_sec = round(tokens_count / (gen_time_ms / 1000), 2) if gen_time_ms > 0 else 0
 
                 # 3. Visualización del primer token (para la UI de ADN)
                 try:
@@ -159,12 +168,27 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     print(f"⚠️ Warning visualizando ADN: {ex_dna}")
                     dna_visual = "ACGT" * 8
 
-                # 5. Métricas
+                # 5. Métricas e Info del Sistema (SF & HD)
                 dims = llm.n_embd
                 orig_size = dims * 4
                 dna_size = (dims + 3) // 4
                 ratio = orig_size / dna_size
                 saved = (1 - (dna_size / orig_size)) * 100
+
+                # Detallar Software (SF) y Hardware (HD)
+                sf_info = f"Rust 2021 (NEON/SIMD) + PyO3 / Python {platform.python_version()}"
+                cpu_name = platform.processor() or platform.machine()
+                try:
+                    if os.path.exists("/proc/cpuinfo"):
+                        with open("/proc/cpuinfo", "r") as f:
+                            for line in f:
+                                if "model name" in line:
+                                    cpu_name = line.split(":")[1].strip()
+                                    break
+                except:
+                    pass
+
+                hd_info = f"{cpu_name} ({platform.machine()}) - Native CPU"
 
                 response_data = {
                     "response": response_text or "Procesamiento completado.",
@@ -175,6 +199,10 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                         "dna_size": dna_size,
                         "ratio": ratio,
                         "saved": saved,
+                        "latency_ms": gen_time_ms,
+                        "tokens_sec": tok_per_sec,
+                        "sf_info": sf_info,
+                        "hd_info": hd_info,
                     },
                 }
 

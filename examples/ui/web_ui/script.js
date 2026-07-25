@@ -56,6 +56,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="metric-row"><span>Ratio:</span> <span class="metric-val">${metrics.ratio.toFixed(1)}x</span></div>
             <div class="metric-row"><span>Ahorro:</span> <span class="metric-val">${metrics.saved.toFixed(2)}%</span></div>
         `;
+
+        if (metrics.sf_info) {
+            document.getElementById('sf-val').innerText = metrics.sf_info;
+        }
+        if (metrics.hd_info) {
+            document.getElementById('hd-val').innerText = metrics.hd_info;
+        }
+        if (metrics.latency_ms) {
+            document.getElementById('latency-val').innerText = `${metrics.latency_ms} ms (${metrics.tokens_sec || 0} tok/s)`;
+        }
     }
 
     function updateDNA(strand) {
