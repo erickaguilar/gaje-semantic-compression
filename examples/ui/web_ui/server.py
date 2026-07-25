@@ -12,40 +12,41 @@ from gaje.core import _impl as dna_semantic_compression
 from gaje.nn.stabilized import GenomicLLM
 
 PORT = 8080
-DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+import threading
 
-# Cache de modelos para no recargar en cada mensaje
+# Cache de modelos y lock para evitar cargas duplicadas o fallos por concurrencia
 loaded_models = {}
+model_lock = threading.Lock()
 
 
 def get_model(model_name):
-    if model_name in loaded_models:
-        return loaded_models[model_name]
+    with model_lock:
+        if model_name in loaded_models:
+            return loaded_models[model_name]
 
-    # Buscar en múltiples ubicaciones
-    possible_paths = [
-        os.path.join(PROJECT_ROOT, "models", model_name),
-        os.path.join(PROJECT_ROOT, "models", "checkpoints", model_name),
-        os.path.join(PROJECT_ROOT, "models", "archive", model_name),
-    ]
+        possible_paths = [
+            os.path.join(PROJECT_ROOT, "models", model_name),
+            os.path.join(PROJECT_ROOT, "models", "checkpoints", model_name),
+            os.path.join(PROJECT_ROOT, "models", "archive", model_name),
+        ]
 
-    model_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            model_path = p
-            break
+        model_path = None
+        for p in possible_paths:
+            if os.path.exists(p):
+                model_path = p
+                break
 
-    if not model_path:
-        return None
+        if not model_path:
+            return None
 
-    print(f"🧬 Cargando modelo real: {model_path}")
-    try:
-        llm = GenomicLLM.load_genomic(model_path)
-        loaded_models[model_name] = llm
-        return llm
-    except Exception as e:
-        print(f"❌ Error cargando modelo {model_name}: {e}")
-        return None
+        print(f"🧬 Cargando modelo real: {model_path}")
+        try:
+            llm = GenomicLLM.load_genomic(model_path)
+            loaded_models[model_name] = llm
+            return llm
+        except Exception as e:
+            print(f"❌ Error cargando modelo {model_name}: {e}")
+            return None
 
 
 class GajeHandler(http.server.SimpleHTTPRequestHandler):
