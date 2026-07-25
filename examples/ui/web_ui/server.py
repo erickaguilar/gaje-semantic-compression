@@ -203,8 +203,12 @@ if __name__ == "__main__":
     import threading
 
     def preload_models():
-        print("[*] Pre-cargando modelo genómico en segundo plano...")
-        get_model("qwen2-0_5b-coherent.gaje")
+        print("[*] ⏳ Pre-cargando modelo genómico 'qwen2-0_5b-coherent.gaje' en RAM (~40s)...")
+        m = get_model("qwen2-0_5b-coherent.gaje")
+        if m:
+            print("✅ ¡Modelo genómico listo en RAM! Ya puedes enviar mensajes desde el navegador.")
+        else:
+            print("⚠️ No se pudo pre-cargar el modelo.")
 
     threading.Thread(target=preload_models, daemon=True).start()
 
