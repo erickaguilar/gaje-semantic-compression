@@ -6,6 +6,7 @@ pub mod lagrangian;
 pub mod math;
 pub mod mcts;
 pub mod power;
+pub mod rag;
 pub mod sampler;
 pub mod scheduler;
 pub mod timing_wheel;

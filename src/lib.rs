@@ -45,6 +45,7 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::nn::distiller::Teacher>()?;
     m.add_class::<crate::nn::distiller::CouncilOfTeachers>()?;
     m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
+    m.add_class::<crate::compute::rag::NativeSemanticRAG>()?;
     m.add_class::<crate::nn::iqat::NativeIQATEngine>()?;
     m.add_function(wrap_pyfunction!(
         crate::io::loader::init_born_genomic_model_py,
