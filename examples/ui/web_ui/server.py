@@ -12,6 +12,7 @@ from gaje.core import _impl as dna_semantic_compression
 from gaje.nn.stabilized import GenomicLLM
 
 PORT = 8080
+DIRECTORY = os.path.dirname(os.path.abspath(__file__))
 import threading
 
 # Cache de modelos y lock para evitar cargas duplicadas o fallos por concurrencia
