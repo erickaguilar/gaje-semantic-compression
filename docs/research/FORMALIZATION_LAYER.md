@@ -23,7 +23,7 @@ $$\theta_{t+1} = \text{Prox}_{\Phi, \Omega} \left( \theta_t - \eta \mathbf{M}(\t
 ---
 
 ## 2. Geometría Riemanniana y "Stiffening"
-Presentamos el uso de la métrica heterogénea como una estrategia de **Métrica Conforme por Partes**. 
+Presentamos el uso de la métrica heterogénea como una estrategia de **Métrica Conforme por Partes**.
 
 *   **Elasticidad Mixta:** Las anclas F16 no son restricciones holonómicas ($g(\theta)=0$), sino dimensiones con una métrica mucho más rígida. Esto asegura que la "plasticidad" del aprendizaje se concentre en el genoma de 2 bits, mientras que la estructura gramatical se preserva mediante un precondicionamiento que escala inversamente con la importancia métrica.
 *   **La ε-net Semántica:** La hipótesis central de GAJE es que una cuantización de 2 bits (4 centroides) es suficiente para aproximar la variedad semántica del lenguaje, siempre que las anclas corrijan el error de aproximación $\delta = \theta - \text{proj}_{\Phi}(\theta)$ en las regiones de máxima curvatura de Fisher.

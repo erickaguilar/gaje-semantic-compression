@@ -15,7 +15,7 @@ En la IA moderna, un token es simplemente un índice plano en una matriz (un ID 
 
 ### La Visión GAJE (La Solución)
 Regresando a la neurobiología que inspiró el Deep Learning original: un estímulo no es un número fijo, es el inicio de un impulso.
-El token debe dejar de ser un bloque rígido para convertirse en un **frente de onda de fase compleja**. Al pasar por la inicialización ciclotómica $\mathbb{Q}(\zeta_{16})$, el token se transforma en una frecuencia, una perturbación geométrica que entra a resonar con el sistema. 
+El token debe dejar de ser un bloque rígido para convertirse en un **frente de onda de fase compleja**. Al pasar por la inicialización ciclotómica $\mathbb{Q}(\zeta_{16})$, el token se transforma en una frecuencia, una perturbación geométrica que entra a resonar con el sistema.
 **Implicación:** Cambiar el token de "dato estático" a "onda dinámica" altera por completo cómo se propaga la información desde el milisegundo cero.
 
 ## 2. El Flujo: De la Multiplicación Sincrónica a la Latencia Temporal
@@ -51,5 +51,5 @@ La salida coherente emerge naturalmente porque es el único estado que logró ma
 
 Si alteramos un solo eslabón, el comportamiento del sistema muta de forma holística. Los síntomas extraños (ej. mezclas de lenguajes, pérdida de PPL) ocurren porque estamos intentando operar un flujo dinámico o un contenedor toroidal utilizando lógicas de "fuerza bruta plana". Están chocando dos filosofías incompatibles dentro del mismo metal de Rust.
 
-**Mandato de Desarrollo:** 
+**Mandato de Desarrollo:**
 No se pueden resolver arquitecturas de nueva visión con herramientas de diagnóstico de la vieja visión. Cada paso —el token-onda, el flujo-tiempo, el contenedor-toroide y la salida-fase— debe estar perfectamente sincronizado en la misma frecuencia de mínima acción y alta sintergia.

@@ -1,7 +1,7 @@
 # 🛡️ Política de Responsabilidad y Gobernanza (Responsible Policy)
 
-**Fecha:** Junio 2026  
-**Estatus:** Posicionamiento Estratégico y Gubernamental  
+**Fecha:** Junio 2026
+**Estatus:** Posicionamiento Estratégico y Gubernamental
 
 El protocolo GAJE introduce un paradigma de **IA Constitucional Local**, diferenciándose radicalmente de los enfoques corporativos basados en la nube. Este documento establece la política de responsabilidad del ecosistema frente a estándares de la industria (ej. Anthropic).
 
@@ -21,7 +21,7 @@ Mientras los grandes laboratorios utilizan políticas para mitigar los riesgos d
 Nuestra "Responsible Policy" no es un manual de buenas intenciones; es un conjunto de restricciones técnicas.
 
 ### A. Seguridad por Diseño Físico (Safety by Design)
-El organismo GAJE está confinado a 10MB y a una ejecución local en CPU (ARM). Su incapacidad inherente para escalar a tamaños que representen riesgos existenciales (x-risk) globales es, en sí misma, su mayor política de seguridad. 
+El organismo GAJE está confinado a 10MB y a una ejecución local en CPU (ARM). Su incapacidad inherente para escalar a tamaños que representen riesgos existenciales (x-risk) globales es, en sí misma, su mayor política de seguridad.
 
 ### B. Transparencia de Identidad (Tied Weights)
 La imposición del Artículo 4 de la Constitución (*Tied Weights*) garantiza que el modelo no pueda disociar lo que "escucha" de lo que "habla". Esto elimina ataques de ingeniería social donde el modelo oculta intenciones, pues su espacio latente de entrada y salida es idéntico.

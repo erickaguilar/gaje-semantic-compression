@@ -2,8 +2,8 @@
 
 Este documento detalla el proceso paso a paso para replicar el "nacimiento" de un organismo genómico de 2-bits en un entorno Android (Termux), integrando la **Física de Euler-Lagrange** y el **Análisis de Entropía de Shannon**.
 
-**Fecha:** 1 de junio de 2026  
-**Entorno:** Android 13 (Termux) / Rust 1.75+ / Python 3.13  
+**Fecha:** 1 de junio de 2026
+**Entorno:** Android 13 (Termux) / Rust 1.75+ / Python 3.13
 **Objetivo:** Crear un modelo funcional de ~10 MB desde cero.
 
 ---
@@ -38,7 +38,7 @@ A diferencia de la compresión tradicional, GAJE analiza dónde reside la inform
 
 1.  **Ejecución del Analizador:** El motor de Rust escanea las dimensiones de los pesos originales.
 2.  **Cálculo de Densidad:** Se utiliza la fórmula de Shannon ($H = -\sum p_i \log_2 p_i$) para detectar la incertidumbre informativa.
-3.  **Resultados de la Prueba:** 
+3.  **Resultados de la Prueba:**
     *   Entropía Media detectada: **6.20 bits**.
     *   Dimensiones Críticas identificadas: **267** (donde la señal es frágil).
 

@@ -13,7 +13,7 @@ Este documento unifica la estrategia de **Direct Neural Ingestion (DNI)**, integ
 
 ### Acciones Técnicas:
 - **Módulo `src/core/dni.rs`:** Implementar el `DNIEngine`, optimizado para procesar "cromosomas" (datos nuevos) contra el micro-genoma de 2 bits.
-- **Mutación Quirúrgica (Targeted Mutation):** 
+- **Mutación Quirúrgica (Targeted Mutation):**
     - Selección inteligente de capas basada en **Phase Entropy Map** (capas con menor entropía priorizadas).
     - Blindaje de **Stability Anchors (F16)**: Los pesos de alta precisión son inmutables para preservar la lógica fundamental.
     - Foco en bloques intermedios (Semántica), evitando bloques de entrada/salida para no degradar la sintaxis base.

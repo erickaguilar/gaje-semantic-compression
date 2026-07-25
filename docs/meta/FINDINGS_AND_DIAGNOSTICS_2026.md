@@ -5,7 +5,7 @@ Este documento registra las pruebas empíricas realizadas para validar la viabil
 ## 1. El Mito de la Transmutación Directa (Vía A)
 Se intentó importar el modelo `SmolLM2-135M` mediante cuantización pura a 2 bits con anclas F16.
 *   **Resultado:** ❌ **FALLO ABSOLUTO**.
-*   **Síntomas:** El modelo generaba ruido estructural ("terol", "Bohem", "hashlib"). 
+*   **Síntomas:** El modelo generaba ruido estructural ("terol", "Bohem", "hashlib").
 *   **Diagnóstico:** La compresión a 2 bits es demasiado agresiva para preservar la jerarquía de un vocabulario de 49k tokens sin un entrenamiento de adaptación. El "trasplante" de cerebro no funciona en este nivel de compresión.
 
 ## 2. Validación del Motor de Rust (Unit Test)

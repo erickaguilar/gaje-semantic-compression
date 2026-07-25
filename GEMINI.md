@@ -34,7 +34,7 @@ El repositorio sigue una estructura lógica estricta. PROHIBIDO crear archivos e
 
 El proyecto se encuentra en estado **Alpha Real**. La infraestructura base compila, pero la validación semántica falla (PPL ~572).
 
-*   **Mandato de Verdad Empírica:** ESTÁ PROHIBIDO declarar cualquier fase o característica como "completada" basándose únicamente en que el código compila. 
+*   **Mandato de Verdad Empírica:** ESTÁ PROHIBIDO declarar cualquier fase o característica como "completada" basándose únicamente en que el código compila.
 *   **Certificación Requerida:** Toda declaración de éxito debe cumplir los umbrales definidos en `docs/meta/EMPIRICAL_TRUTH_STATE.md`.
 *   **Fundamentación Matemática:** Antes de intentar reducir la PPL, es OBLIGATORIO consultar `docs/research/FORMALIZATION_LAYER.md` para entender el equilibrio Lagrangiano requerido entre movilidad (energía cinética) y precisión (potencial semántico).
 *   **Prioridad Actual:** Congelamiento de nuevas características (Island Model, RAG) hasta superar la Certificación Semántica (Nivel 2: lograr PPL < 15.0).

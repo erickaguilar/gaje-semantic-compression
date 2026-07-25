@@ -1,6 +1,6 @@
 # 🏛️ Carpeta Legacy (Archivo Histórico)
 
-Esta carpeta contiene experimentos, scripts y binarios de etapas tempranas del proyecto **DNA Semantic Compression**. 
+Esta carpeta contiene experimentos, scripts y binarios de etapas tempranas del proyecto **DNA Semantic Compression**.
 
 ## Contenido en `archive/`:
 

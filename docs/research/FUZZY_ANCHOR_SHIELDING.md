@@ -1,7 +1,7 @@
 # 🧬 Investigación: Blindaje Difuso de Anclas (Fuzzy Anchor Shielding)
 
-**Fecha:** 2 de junio de 2026  
-**Estatus:** Propuesta de Implementación (Fase Silver Adult)  
+**Fecha:** 2 de junio de 2026
+**Estatus:** Propuesta de Implementación (Fase Silver Adult)
 **Concepto Clave:** Transición de Blindaje Booleano a Lógica Difusa en DNI.
 
 ---
@@ -43,7 +43,7 @@ fn calculate_fuzzy_intensity(weight_idx: usize, base_rate: f32, anchors: &Anchor
         let dist = anchors.distance_to_nearest_anchor(weight_idx);
         (- (dist * dist) / (2.0 * sigma * sigma)).exp()
     };
-    
+
     base_rate * (1.0 - membership)
 }
 ```

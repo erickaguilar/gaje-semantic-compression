@@ -1,6 +1,6 @@
 # ⚖️ Estado de Verdad Empírica: Auditoría de Certificación V1.5
 
-**Fecha:** Junio 2026  
+**Fecha:** Junio 2026
 **Referencia:** `docs/certifications/CERTIFICATION_REPORT_V1.5.md`
 
 Este documento homologa el estado real del código frente a los 5 Niveles de Certificación Oficial del protocolo GAJE.

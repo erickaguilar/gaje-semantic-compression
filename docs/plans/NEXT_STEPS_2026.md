@@ -30,7 +30,7 @@ Tras la homologación empírica del proyecto, se ha definido una hoja de ruta cr
     *   **Meta:** Diluir la obsesión técnica y restaurar la gramática básica del español.
 
 3.  **Afinación de Anclas (Rigidez):**
-    *   **Acción:** Experimentar con un `anchor_threshold` más dinámico. 
+    *   **Acción:** Experimentar con un `anchor_threshold` más dinámico.
     *   **Meta:** Permitir que los pesos de 2 bits se muevan con más libertad durante el aprendizaje de lenguaje natural.
 
 ---
