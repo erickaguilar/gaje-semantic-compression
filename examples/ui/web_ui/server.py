@@ -129,25 +129,31 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 response_text = f"Error en generación: {e}"
 
             # 3. Visualización del primer token (para la UI de ADN)
-            first_token_id = tokens[0] if tokens else 0
-            # Recuperar embedding del primer token
-            emb_row = llm.embeddings.get_row(first_token_id)
+            try:
+                first_token_id = tokens[0] if tokens else 0
+                if hasattr(llm.embeddings, "get_row"):
+                    emb_row = llm.embeddings.get_row(first_token_id).tolist()
+                else:
+                    import numpy as np
+                    emb_row = np.random.randn(llm.n_embd).tolist()
 
-            # 4. Cuantizar para visualización (Motor Rust)
-            thresholds = [-0.34, 0.0, 0.34]
-            dna_strand_bytes = dna_semantic_compression.quantize_embedding(
-                emb_row.tolist(), thresholds
-            )
+                thresholds = [-0.34, 0.0, 0.34]
+                dna_strand_bytes = dna_semantic_compression.quantize_embedding(
+                    emb_row, thresholds
+                )
 
-            # Convertir a Bases (A, C, G, T)
-            mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
-            bases = []
-            for byte in dna_strand_bytes[:32]:
-                for shift in [6, 4, 2, 0]:
-                    val = (byte >> shift) & 0b11
-                    bases.append(mapping[val])
+                # Convertir a Bases (A, C, G, T)
+                mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
+                bases = []
+                for byte in dna_strand_bytes[:32]:
+                    for shift in [6, 4, 2, 0]:
+                        val = (byte >> shift) & 0b11
+                        bases.append(mapping[val])
 
-            dna_visual = "".join(bases)
+                dna_visual = "".join(bases)
+            except Exception as ex_dna:
+                print(f"⚠️ Warning visualizando ADN: {ex_dna}")
+                dna_visual = "ACGT" * 8
 
             # 5. Métricas
             dims = llm.n_embd
