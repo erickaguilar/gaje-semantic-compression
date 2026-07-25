@@ -13,15 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/models');
             const data = await response.json();
-            modelsData = data.models;
-            modelSelect.innerHTML = '';
-
-            if (modelsData.length === 0) {
-                const opt = document.createElement('option');
-                opt.value = 'none';
-                opt.innerText = 'No se encontraron modelos .gaje';
-                modelSelect.appendChild(opt);
-            } else {
+            if (data && data.models && data.models.length > 0) {
+                modelsData = data.models;
+                modelSelect.innerHTML = '';
                 modelsData.forEach(model => {
                     const opt = document.createElement('option');
                     opt.value = model.name;
@@ -31,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateModelDate();
             }
         } catch (err) {
-            console.error('Error cargando modelos:', err);
+            console.log('Usando modelos por defecto pre-configurados.');
         }
     }
 
