@@ -27,14 +27,26 @@ def main():
     # 1. Inyectar centroides Max-Lloyd optimizados para Qwen2-0.5B
     # Estos valores fueron calibrados en el paso anterior.
     qwen2_centroids = {
-        "blk.0.ffn_down.weight": [-0.0267, -0.0078, 0.0075, 0.0264],
-        "blk.0.ffn_gate.weight": [-0.0364, -0.0132, 0.006, 0.0294],
-        "blk.0.ffn_up.weight": [-0.0283, -0.0101, 0.0054, 0.0243],
-        "blk.0.attn_q.weight": [-0.1034, -0.0199, 0.0268, 0.1148],
-        "blk.1.ffn_down.weight": [-0.0253, -0.0082, 0.006, 0.0233],
-        "blk.1.ffn_gate.weight": [-0.032, -0.0076, 0.0125, 0.0363],
-        "blk.1.ffn_up.weight": [-0.0244, -0.0074, 0.0068, 0.0238],
-        "blk.1.attn_q.weight": [-0.0482, -0.0133, 0.0091, 0.0428],
+        "blk.0.ffn_down.weight": [-0.0259, -0.0068, 0.0086, 0.0276],
+        "blk.0.ffn_gate.weight": [-0.0313, -0.0079, 0.0112, 0.0342],
+        "blk.0.ffn_up.weight": [-0.0258, -0.0072, 0.0083, 0.0268],
+        "blk.0.attn_q.weight": [-0.0998, -0.0175, 0.0298, 0.1200],
+        "blk.1.ffn_down.weight": [-0.0240, -0.0068, 0.0074, 0.0244],
+        "blk.1.ffn_gate.weight": [-0.0346, -0.0107, 0.0094, 0.0335],
+        "blk.1.ffn_up.weight": [-0.0235, -0.0065, 0.0077, 0.0246],
+        "blk.1.attn_q.weight": [-0.0438, -0.0098, 0.0124, 0.0467],
+        "blk.10.ffn_down.weight": [-0.0289, -0.0087, 0.0061, 0.0261],
+        "blk.10.ffn_gate.weight": [-0.0335, -0.0092, 0.0089, 0.0333],
+        "blk.10.ffn_up.weight": [-0.0284, -0.0084, 0.0073, 0.0274],
+        "blk.10.attn_q.weight": [-0.0398, -0.0115, 0.0078, 0.0354],
+        "blk.11.ffn_down.weight": [-0.0263, -0.0069, 0.0078, 0.0271],
+        "blk.11.ffn_gate.weight": [-0.0337, -0.0093, 0.0091, 0.0336],
+        "blk.11.ffn_up.weight": [-0.0289, -0.0094, 0.0063, 0.0261],
+        "blk.11.attn_q.weight": [-0.0414, -0.0116, 0.0067, 0.0353],
+        "blk.12.ffn_down.weight": [-0.0267, -0.0076, 0.0074, 0.0265],
+        "blk.12.ffn_gate.weight": [-0.0347, -0.0109, 0.0076, 0.0312],
+        "blk.12.ffn_up.weight": [-0.0289, -0.0092, 0.0067, 0.0265],
+        "blk.12.attn_q.weight": [-0.0387, -0.0067, 0.0117, 0.0462],
     }
 
     # 2. Cargar el modelo base con calibración completa
