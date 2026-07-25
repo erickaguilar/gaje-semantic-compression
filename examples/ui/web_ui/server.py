@@ -85,14 +85,15 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if self.path == "/api/chat":
-            content_length = int(self.headers["Content-Length"])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data)
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data)
 
-            message = data.get("message", "")
-            model_name = data.get("model", "")
+                message = data.get("message", "")
+                model_name = data.get("model", "")
 
-            print(f"[*] Procesando mensaje con modelo: {model_name}")
+                print(f"[*] Procesando mensaje con modelo: {model_name}")
 
             llm = get_model(model_name)
             if not llm:
@@ -178,13 +179,37 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps(response_data).encode())
-        else:
-            self.send_error(404)
+        except Exception as exc:
+            import traceback
+
+            print(f"❌ Error fatal en do_POST: {exc}")
+            traceback.print_exc()
+            self.send_response(500)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(exc)}).encode())
+    else:
+        self.send_error(404)
+
+
+class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    daemon_threads = True
+    allow_reuse_address = True
 
 
 if __name__ == "__main__":
     os.chdir(DIRECTORY)
-    with socketserver.TCPServer(("", PORT), GajeHandler) as httpd:
+
+    # Pre-cargar modelos en segundo plano para evitar latencia inicial de 40s en HTTP
+    import threading
+
+    def preload_models():
+        print("[*] Pre-cargando modelo genómico en segundo plano...")
+        get_model("qwen2-0_5b-coherent.gaje")
+
+    threading.Thread(target=preload_models, daemon=True).start()
+
+    with ThreadingTCPServer(("", PORT), GajeHandler) as httpd:
         print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
         print("Presiona Ctrl+C para detener.")
         try:
