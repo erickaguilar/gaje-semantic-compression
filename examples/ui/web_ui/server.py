@@ -116,21 +116,28 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     tokens = [0]
 
-                # 2. Generación Genómica (con medición de tiempo)
+                # 2. Generación Genómica (con plantilla ChatML para modelos Instruct)
                 import time
-                import platform
+
+                formatted_message = message
+                if not message.startswith("<|im_start|>"):
+                    formatted_message = f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
 
                 start_time = time.time()
                 response_text = ""
                 tokens_count = 0
-                print("[*] Generando respuesta...")
+                print(f"[*] Generando respuesta para: {repr(formatted_message[:40])}...")
                 try:
                     for token_text in llm.generate(
-                        message,
-                        max_new_tokens=50,
-                        temperature=0.6,
-                        repetition_penalty=1.2,
+                        formatted_message,
+                        max_new_tokens=60,
+                        temperature=0.3,
+                        repetition_penalty=1.1,
                     ):
+                        if "<|im_end|>" in token_text:
+                            token_text = token_text.replace("<|im_end|>", "").strip()
+                            response_text += token_text
+                            break
                         response_text += token_text
                         tokens_count += 1
                         if len(response_text) > 400:
