@@ -6,16 +6,14 @@ from gaje.nn.stabilized import GenomicLLM
 
 def test_fp32_baseline():
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    model_path = os.path.join(
-        project_root, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
-    )
+    model_path = os.path.join(project_root, "models", "qwen2-0_5b-anchored.gaje")
     model_id = "Qwen/Qwen2-0.5B-Instruct"
 
     print("[*] Cargando Tokenizer...")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    print(f"[*] Cargando modelo GAJE FP32 puro desde '{model_path}'...")
-    gaje_llm = GenomicLLM(model_path)
+    print(f"[*] Cargando Organismo Genómico Anclado desde '{model_path}'...")
+    gaje_llm = GenomicLLM.load_genomic(model_path)
 
     messages = [
         {

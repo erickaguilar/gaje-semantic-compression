@@ -20,6 +20,8 @@ class ArchitectureConfig:
     anchor_threshold: float = -1.0  # -1.0 means disable by default
     ffn_anchor_threshold: float = -1.0
     rna_threshold: float = 0.5  # Umbral para activación dinámica de hebras de ARN
+    attn_bit_depth: int = 4  # Mixed-Bit: 4-bit para proyecciones de Atención
+    ffn_bit_depth: int = 4  # Ablación: 4-bit para proyecciones de FFN
 
     # Custom patches or fixes
     apply_smollm_rope_patch: bool = False
@@ -34,10 +36,13 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         name="llama",
         version="0.9.5",
         tokenizer_id="HuggingFaceTB/SmolLM2-135M-Instruct",  # Default for small llama-like
-        rope_base=10000.0,
+        rope_base=100000.0,  # SmolLM2 uses 100k
         has_bias=False,
         rope_style="split",
-        unpermute_weights=False,
+        unpermute_weights=True,
+        apply_smollm_rope_patch=False,
+        attn_bit_depth=4,
+        ffn_bit_depth=4,
     ),
     "qwen2": ArchitectureConfig(
         name="qwen2",
@@ -47,6 +52,7 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         has_bias=True,
         rope_style="interleaved",
         unpermute_weights=False,
+        ffn_anchor_threshold=0.05,  # 5% Selective FFN anchoring
         default_centroids={
             "blk.0.ffn_down.weight": [-0.0267, -0.0078, 0.0075, 0.0264],
             "blk.0.ffn_gate.weight": [-0.0364, -0.0132, 0.006, 0.0294],

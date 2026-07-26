@@ -85,9 +85,9 @@ impl GenomicAttention {
         self.k_cache.push(k_rope);
         self.v_cache.push(v);
         let seq_len = self.k_cache.len();
-        let attn_out: Vec<f32> = (0..n_head)
+        let heads_out: Vec<Vec<f32>> = (0..n_head)
             .into_par_iter()
-            .flat_map(|h| {
+            .map(|h| {
                 let kv_h = h / n_groups;
                 let kv_h_off = kv_h * head_dim;
                 let q_slice = &q_rope[h * head_dim..(h + 1) * head_dim];
@@ -118,6 +118,12 @@ impl GenomicAttention {
                 head_out
             })
             .collect();
+
+        let mut attn_out = vec![0.0f32; n_head * head_dim];
+        for h in 0..n_head {
+            let start = h * head_dim;
+            attn_out[start..start + head_dim].copy_from_slice(&heads_out[h]);
+        }
         Ok(attn_out)
     }
 

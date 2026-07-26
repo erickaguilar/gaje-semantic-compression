@@ -280,7 +280,10 @@ impl GenomicLinear {
                 let a_s = self.anchor_row_ptrs[i];
                 let a_e = self.anchor_row_ptrs[i + 1];
                 for k in a_s..a_e {
-                    sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32();
+                    let col_idx = (self.anchor_indices[k] as usize) % self.in_features;
+                    if let Some(&in_val) = input.get(col_idx) {
+                        sum += in_val * self.anchor_values[k].to_f32();
+                    }
                 }
                 if !self.bias.is_empty() {
                     sum += self.bias[i];

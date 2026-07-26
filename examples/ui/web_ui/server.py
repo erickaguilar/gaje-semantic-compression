@@ -243,23 +243,6 @@ class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 if __name__ == "__main__":
     os.chdir(DIRECTORY)
 
-    # Pre-cargar modelos en segundo plano para evitar latencia inicial de 40s en HTTP
-    import threading
-
-    def preload_models():
-        print(
-            "[*] ⏳ Pre-cargando modelo genómico anclado 'qwen2-0_5b-anchored.gaje' en RAM (~40s)..."
-        )
-        m = get_model("qwen2-0_5b-anchored.gaje")
-        if m:
-            print(
-                "✅ ¡Modelo genómico anclado listo en RAM! Ya puedes enviar mensajes desde el navegador."
-            )
-        else:
-            print("⚠️ No se pudo pre-cargar el modelo.")
-
-    threading.Thread(target=preload_models, daemon=True).start()
-
     with ThreadingTCPServer(("", PORT), GajeHandler) as httpd:
         print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
         print("Presiona Ctrl+C para detener.")

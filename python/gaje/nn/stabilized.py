@@ -1,3 +1,4 @@
+import gc
 import os
 import numpy as np
 import gaje.core._impl as dna_semantic_compression
@@ -37,6 +38,7 @@ class GenomicLayer:
         head_dim=None,
         config=None,
         custom_base_c=None,
+        bit_depth=None,
     ):
         self.name = name
         self.block_size = block_size
@@ -49,9 +51,20 @@ class GenomicLayer:
             anchor_threshold = self.config.anchor_threshold if self.config else -1.0
 
         is_q_or_k = "attn_q" in name or "attn_k" in name
-        # También consideramos attn_v y attn_output para 4-bit en Mixed-Bit strategy
-        # Para el test de rescate, probamos F32 en TODO para aislar errores del motor.
-        bit_depth = 32
+
+        # Mixed-Bit topology assignment logic:
+        if bit_depth is not None:
+            actual_bit_depth = bit_depth
+        elif "token_embd" in name or "lm_head" in name:
+            actual_bit_depth = 32
+        elif "attn" in name:
+            actual_bit_depth = self.config.attn_bit_depth if self.config else 4
+        elif "ffn" in name or "gate" in name or "up" in name:
+            actual_bit_depth = self.config.ffn_bit_depth if self.config else 2
+        else:
+            actual_bit_depth = 2
+
+        bit_depth = actual_bit_depth
 
         if hasattr(weights_f32_or_tensor, "tensor_type"):
             tensor = weights_f32_or_tensor
@@ -410,6 +423,7 @@ class GenomicAttentionLayer:
         config=None,
     ):
         self.config = config
+        attn_bit = self.config.attn_bit_depth if self.config else 4
         self.q_gen = GenomicLayer(
             p + "attn_q",
             loader.get(p + "attn_q.weight"),
@@ -419,6 +433,7 @@ class GenomicAttentionLayer:
             balancer=None,
             anchor_threshold=self.config.anchor_threshold,
             config=config,
+            bit_depth=attn_bit,
         )
         self.k_gen = GenomicLayer(
             p + "attn_k",
@@ -429,6 +444,7 @@ class GenomicAttentionLayer:
             balancer=None,
             anchor_threshold=self.config.anchor_threshold,
             config=config,
+            bit_depth=attn_bit,
         )
         self.v_gen = GenomicLayer(
             p + "attn_v",
@@ -437,6 +453,7 @@ class GenomicAttentionLayer:
             balancer=None,
             anchor_threshold=self.config.anchor_threshold,
             config=config,
+            bit_depth=attn_bit,
         )
         self.w_o = GenomicLayer(
             p + "attn_output",
@@ -445,6 +462,7 @@ class GenomicAttentionLayer:
             balancer=None,
             anchor_threshold=self.config.anchor_threshold,
             config=config,
+            bit_depth=attn_bit,
         )
         self.attn = dna_semantic_compression.GenomicAttention(
             n_head,
@@ -502,6 +520,7 @@ class GenomicTransformerBlock:
             ).astype(np.float32)
         else:
             attn_norm_data = np.frombuffer(attn_norm_tensor.data, dtype=np.float32)
+        self.attn_norm = attn_norm_data.tolist()
 
         # Resolve custom centroids for this block
         layer_c = custom_centroids or {}
@@ -527,6 +546,7 @@ class GenomicTransformerBlock:
                 custom_base_c=layer_c[p + "attn_q.weight"],
             )
 
+        ffn_bit = self.config.ffn_bit_depth if self.config else 2
         g, u = loader.get(p + "ffn_gate.weight"), loader.get(p + "ffn_up.weight")
         self.gate_gen, self.up_gen = (
             GenomicLayer(
@@ -536,6 +556,7 @@ class GenomicTransformerBlock:
                 anchor_threshold=ffn_anchor_threshold,
                 config=config,
                 custom_base_c=layer_c.get(p + "ffn_gate.weight"),
+                bit_depth=ffn_bit,
             ),
             GenomicLayer(
                 p + "up",
@@ -544,6 +565,7 @@ class GenomicTransformerBlock:
                 anchor_threshold=ffn_anchor_threshold,
                 config=config,
                 custom_base_c=layer_c.get(p + "ffn_up.weight"),
+                bit_depth=ffn_bit,
             ),
         )
         self.w_down = GenomicLayer(
@@ -553,6 +575,7 @@ class GenomicTransformerBlock:
             anchor_threshold=ffn_anchor_threshold,
             config=config,
             custom_base_c=layer_c.get(p + "ffn_down.weight"),
+            bit_depth=ffn_bit,
         )
         ffn_norm_tensor = loader.get(p + "ffn_norm.weight")
         if ffn_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
@@ -744,15 +767,14 @@ class GenomicLLM:
         # Initialization logic
         if loader:
             embd_tensor = loader.get("token_embd.weight")
-            print(
-                "    [*] Preservando Embeddings (token_embd) con 100% de Anclas (FP16/FP32)..."
-            )
+            print("    [*] Carga nativa de Embeddings (token_embd) en FP16/FP32...")
             self.embeddings = GenomicLayer(
                 "token_embd",
                 embd_tensor,
                 balancer=None,
-                anchor_threshold=1.0,
+                anchor_threshold=-1.0,
                 config=self.config,
+                bit_depth=32,
             )
             out_norm_tensor = loader.get("output_norm.weight")
             if out_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
@@ -768,24 +790,24 @@ class GenomicLLM:
 
             head_tensor = loader.get("output.weight", required=False)
             if head_tensor is None or head_tensor.name == embd_tensor.name:
-                print(
-                    "    [*] Compartiendo pesos entre Embeddings y LM Head (Preservando LM Head con 100% de Anclas)..."
-                )
+                print("    [*] Carga nativa compartida de LM Head en FP16/FP32...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor or embd_tensor,
                     balancer=None,
-                    anchor_threshold=1.0,
+                    anchor_threshold=-1.0,
                     config=self.config,
+                    bit_depth=32,
                 )
             else:
-                print("    [*] Preservando LM Head con 100% de Anclas (FP16/FP32)...")
+                print("    [*] Carga nativa de LM Head en FP16/FP32...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor,
                     balancer=None,
-                    anchor_threshold=1.0,
+                    anchor_threshold=-1.0,
                     config=self.config,
+                    bit_depth=32,
                 )
         else:
             emb_w = np.random.normal(0, 0.02, (vocab_size, self.n_embd)).astype(
@@ -1109,10 +1131,11 @@ class GenomicLLM:
         save_layer(self.lm_head, "lm_head")
 
         # Save Global Output Norm
-        if hasattr(self.rust_llm, "output_norm"):
+        out_norm_vec = getattr(self, "output_norm", None)
+        if out_norm_vec is not None:
             db_writer.write_tensor_compressed(
                 "output_norm",
-                np.array(self.rust_llm.output_norm, dtype=np.float32).tobytes(),
+                np.array(out_norm_vec, dtype=np.float32).tobytes(),
             )
 
         # Save blocks
@@ -1127,20 +1150,21 @@ class GenomicLLM:
             save_layer(block.w_down, p + "ffn_down")
 
             # Save Block Norms
-            if hasattr(block.rust_block, "ffn_norm"):
-                db_writer.write_tensor_compressed(
-                    p + "ffn_norm",
-                    np.array(block.rust_block.ffn_norm, dtype=np.float32).tobytes(),
-                )
-            if hasattr(block.rust_block, "attn") and hasattr(
-                block.rust_block.attn, "rmsnorm_weight"
-            ):
+            attn_norm_vec = getattr(block, "attn_norm", None)
+            if attn_norm_vec is not None:
                 db_writer.write_tensor_compressed(
                     p + "attn_norm",
-                    np.array(
-                        block.rust_block.attn.rmsnorm_weight, dtype=np.float32
-                    ).tobytes(),
+                    np.array(attn_norm_vec, dtype=np.float32).tobytes(),
                 )
+
+            ffn_norm_vec = getattr(block, "ffn_norm", None)
+            if ffn_norm_vec is not None:
+                db_writer.write_tensor_compressed(
+                    p + "ffn_norm",
+                    np.array(ffn_norm_vec, dtype=np.float32).tobytes(),
+                )
+            if (i + 1) % 4 == 0:
+                gc.collect()
 
         print(f"📦 Organismo genómico guardado en: {output_path}")
 
@@ -1149,6 +1173,7 @@ class GenomicLLM:
         """Loads a previously saved genomic organism from a .gaje database."""
         import json
         import os
+        import tempfile
         import time
         from gaje.nn.configs import ArchitectureConfig
         from gaje.nn import constants as C
@@ -1326,6 +1351,9 @@ class GenomicLLM:
                 def get_row(self, idx):
                     return np.array(self.linear.get_row(idx), dtype=np.float32)
 
+                def get_row_core(self, idx):
+                    return self.linear.get_row(idx)
+
             return MockLayer(linear, anchors_u8)
 
         vocab_size = meta.get("vocab_size")
@@ -1336,7 +1364,10 @@ class GenomicLLM:
             print(f"[*] Vocab size detectado automáticamente: {vocab_size}")
 
         model.embeddings = load_linear("token_embd", vocab_size, model.n_embd)
-        model.lm_head = load_linear("lm_head", vocab_size, model.n_embd)
+
+        lm_head_dna = db_reader.read_tensor("lm_head.dna")
+        lm_head_vocab_size = (len(lm_head_dna) // 4) // model.n_embd
+        model.lm_head = load_linear("lm_head", lm_head_vocab_size, model.n_embd)
 
         output_norm = np.ones(model.n_embd).astype(np.float32).tolist()
         if db_reader.has_tensor("output_norm"):
@@ -1432,6 +1463,7 @@ class GenomicLLM:
                     db_reader.read_tensor(p + "ffn_norm"), dtype=np.float32
                 ).tolist()
 
+            rope_style = model.config.rope_style if model.config else "split"
             attn = dna_semantic_compression.GenomicAttention(
                 model.n_head,
                 model.n_head_kv,
@@ -1439,10 +1471,12 @@ class GenomicLLM:
                 attn_norm_data,
                 model.eps,
                 model.rope_base,
+                rope_style,
             )
 
             act_fn = model.config.ffn_act if model.config else "swiglu"
             use_gen_norm = model.config.use_genomic_norm if model.config else False
+            rna_threshold = model.config.rna_threshold if model.config else 0.5
 
             rust_block = dna_semantic_compression.RustGenomicBlock(
                 i,
@@ -1458,10 +1492,12 @@ class GenomicLLM:
                 model.eps,
                 act_fn,
                 use_gen_norm,
+                1.0,
+                rna_threshold,
             )
 
             class MockBlock:
-                def __init__(self, rb, q, k, v, o, gate, up, down):
+                def __init__(self, rb, q, k, v, o, gate, up, down, attn_norm, ffn_norm):
                     self.rust_block = rb
                     self.attn_layer = type(
                         "obj", (object,), {"q_gen": q, "k_gen": k, "v_gen": v, "w_o": o}
@@ -1469,10 +1505,21 @@ class GenomicLLM:
                     self.gate_gen = gate
                     self.up_gen = up
                     self.w_down = down
+                    self.attn_norm = attn_norm
+                    self.ffn_norm = ffn_norm
 
             model.blocks.append(
                 MockBlock(
-                    rust_block, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down
+                    rust_block,
+                    q_gen,
+                    k_gen,
+                    v_gen,
+                    w_o,
+                    gate_gen,
+                    up_gen,
+                    w_down,
+                    attn_norm_data,
+                    ffn_norm_data,
                 )
             )
             rust_blocks.append(rust_block)
@@ -1494,9 +1541,6 @@ class GenomicLLM:
 
         try:
             if db_reader.has_metadata("tokenizer"):
-                import tempfile
-                import json
-
                 with tempfile.NamedTemporaryFile(
                     mode="w", suffix=".json", delete=False
                 ) as tmp:

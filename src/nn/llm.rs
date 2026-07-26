@@ -30,11 +30,6 @@ impl GenomicLLM {
         } else {
             self.blocks[0].attn.k_cache_len()
         };
-        let token_id = if self.embeddings.out_features > 0 {
-            token_id % self.embeddings.out_features
-        } else {
-            return Err("Embeddings layer has 0 out_features".to_string());
-        };
 
         // Modulación granular para la capa de salida (usamos la última capa como referencia)
         let modulation = self
@@ -97,11 +92,6 @@ impl GenomicLLM {
             0
         } else {
             self.blocks[0].attn.k_cache_len()
-        };
-        let token_id = if self.embeddings.out_features > 0 {
-            token_id % self.embeddings.out_features
-        } else {
-            return Err("Embeddings layer has 0 out_features".to_string());
         };
 
         let modulation = self
