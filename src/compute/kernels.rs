@@ -178,7 +178,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
             i += 1;
         }
         // Suelo de seguridad para evitar NaNs en Android
-        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
+        let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
         let inv_rms_v = vdupq_n_f32(inv_rms);
         i = 0;
         while i + 4 <= n {
@@ -216,7 +216,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 sum_sq += x[i] * x[i];
                 i += 1;
             }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
             let inv_rms_v = _mm256_set1_ps(inv_rms);
             i = 0;
             while i + 8 <= n {
@@ -247,7 +247,7 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
                 sum_sq += x[i] * x[i];
                 i += 1;
             }
-            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
+            let inv_rms = 1.0 / (sum_sq / n as f32 + eps).sqrt();
             let inv_rms_v = _mm_set1_ps(inv_rms);
             i = 0;
             while i + 4 <= n {
@@ -328,10 +328,8 @@ pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) 
                 ex / (1.0 + ex)
             };
 
-            // Aplicamos h_scale como un factor de temperancia para suavizar
-            // la respuesta ante inputs ruidosos.
             let silu = g * sigmoid;
-            *o = (silu * u * h_scale).clamp(-96.0, 96.0);
+            *o = silu * u;
         });
 }
 

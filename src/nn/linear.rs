@@ -227,9 +227,7 @@ impl GenomicLinear {
         modulation_factors: Option<[f32; 4]>,
         _activate_rna: bool,
     ) -> Result<Vec<f32>, String> {
-        if !self.rmsnorm_weight.is_empty() {
-            input = unsafe { rms_norm(&input, &self.rmsnorm_weight, self.eps) };
-        }
+
         let n_blocks = self.in_features / self.block_size;
         let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
         let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
