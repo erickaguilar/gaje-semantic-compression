@@ -743,23 +743,21 @@ class GenomicLLM:
 
             head_tensor = loader.get("output.weight", required=False)
             if head_tensor is None or head_tensor.name == embd_tensor.name:
-                print("    [*] Compartiendo pesos entre Embeddings y LM Head...")
-                # Si comparten pesos, podemos reutilizar la lógica pero con distinto threshold?
-                # En realidad, si comparten, solemos querer el mismo threshold o simplemente
-                # re-genomizar pero sin cargar el tensor original dos veces.
+                print("    [*] Compartiendo pesos entre Embeddings y LM Head (Preservando LM Head con 100% de Anclas)...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor or embd_tensor,
                     balancer=None,
-                    anchor_threshold=self.config.anchor_threshold,
+                    anchor_threshold=1.0,
                     config=self.config,
                 )
             else:
+                print("    [*] Preservando LM Head con 100% de Anclas (FP16/FP32)...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor,
                     balancer=None,
-                    anchor_threshold=self.config.anchor_threshold,
+                    anchor_threshold=1.0,
                     config=self.config,
                 )
         else:
@@ -781,7 +779,7 @@ class GenomicLLM:
                 "lm_head",
                 lm_head_w,
                 balancer=None,
-                anchor_threshold=self.config.anchor_threshold,
+                anchor_threshold=1.0,
                 config=self.config,
             )
 
@@ -807,8 +805,10 @@ class GenomicLLM:
 
             self.blocks.append(block)
             rust_blocks.append(block.rust_block)
-            if (i + 1) % 10 == 0:
-                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado...")
+            import gc
+            gc.collect()
+            if (i + 1) % 5 == 0:
+                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado (RAM liberada)...")
 
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
             self.embeddings.linear,
