@@ -86,7 +86,37 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
     def do_POST(self):
-        if self.path == "/api/chat":
+        if self.path == "/api/load_model":
+            try:
+                content_length = int(self.headers.get("Content-Length", 0))
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data)
+                model_name = data.get("model", "")
+
+                print(f"🧬 Pre-cargando modelo: {model_name}...")
+                llm = get_model(model_name)
+                if not llm:
+                    self.send_response(500)
+                    self.send_header("Content-type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(
+                        json.dumps({"error": f"No se pudo cargar {model_name}"}).encode()
+                    )
+                    return
+
+                self.send_response(200)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(
+                    json.dumps({"status": "ok", "model": model_name}).encode()
+                )
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+
+        elif self.path == "/api/chat":
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
                 post_data = self.rfile.read(content_length)

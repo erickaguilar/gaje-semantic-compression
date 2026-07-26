@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     modelSelect.appendChild(opt);
                 });
                 updateModelDate();
+                if (modelSelect.value) {
+                    preloadModel(modelSelect.value);
+                }
             }
         } catch (err) {
             console.log('Usando modelos por defecto pre-configurados.');
@@ -37,7 +40,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    modelSelect.addEventListener('change', updateModelDate);
+    async function preloadModel(modelName) {
+        if (!modelName) return;
+
+        modelSelect.disabled = true;
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+
+        updateModelDate();
+        addMessage(`🧬 Cargando organismo genómico [${modelName}] en el servidor... Por favor espera.`, 'system');
+
+        try {
+            const response = await fetch('/api/load_model', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: modelName })
+            });
+
+            const data = await response.json();
+            if (data.status === 'ok') {
+                addMessage(`✅ Organismo [${modelName}] cargado y listo en memoria.`, 'system');
+            } else {
+                addMessage(`❌ Error cargando el modelo: ${data.error}`, 'bot');
+            }
+        } catch (err) {
+            addMessage(`❌ Error de conexión al cargar [${modelName}].`, 'bot');
+            console.error(err);
+        } finally {
+            modelSelect.disabled = false;
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+    }
+
+    modelSelect.addEventListener('change', () => {
+        preloadModel(modelSelect.value);
+    });
     loadModels();
 
     function addMessage(text, type) {
