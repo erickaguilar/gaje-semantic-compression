@@ -7,8 +7,8 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "python"))
 )
 
-from gaje.core._impl import NativeLoader
-from tokenizers import Tokenizer
+from gaje.core._impl import NativeLoader  # noqa: E402
+from tokenizers import Tokenizer  # noqa: E402
 
 
 def evaluate_k_wta_sweep(model_path, tokenizer_path):
@@ -55,12 +55,14 @@ def evaluate_k_wta_sweep(model_path, tokenizer_path):
             n_eval += 1
 
         ppl = np.exp(-total_log_prob / max(n_eval, 1))
-        print(f"[*] K-WTA Ratio: {ratio*100:5.1f}% | Perplexity (PPL): {ppl:8.2f}")
+        print(f"[*] K-WTA Ratio: {ratio * 100:5.1f}% | Perplexity (PPL): {ppl:8.2f}")
         results.append((ratio, ppl))
 
     print("-" * 60)
     best_ratio, best_ppl = min(results, key=lambda x: x[1])
-    print(f"🏆 Best Configuration: K-WTA Ratio = {best_ratio*100:.1f}% with PPL = {best_ppl:.2f}")
+    print(
+        f"🏆 Best Configuration: K-WTA Ratio = {best_ratio * 100:.1f}% with PPL = {best_ppl:.2f}"
+    )
 
 
 if __name__ == "__main__":

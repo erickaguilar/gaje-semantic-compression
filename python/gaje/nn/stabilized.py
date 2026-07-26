@@ -392,7 +392,7 @@ class GenomicLayer:
 
         try:
             return res + anchors[idx * self.in_features : (idx + 1) * self.in_features]
-        except:
+        except Exception:
             return res
 
 
@@ -497,7 +497,9 @@ class GenomicTransformerBlock:
         p = f"blk.{idx}."
         attn_norm_tensor = loader.get(p + "attn_norm.weight")
         if attn_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
-            attn_norm_data = np.frombuffer(attn_norm_tensor.data, dtype=np.float16).astype(np.float32)
+            attn_norm_data = np.frombuffer(
+                attn_norm_tensor.data, dtype=np.float16
+            ).astype(np.float32)
         else:
             attn_norm_data = np.frombuffer(attn_norm_tensor.data, dtype=np.float32)
 
@@ -554,9 +556,15 @@ class GenomicTransformerBlock:
         )
         ffn_norm_tensor = loader.get(p + "ffn_norm.weight")
         if ffn_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
-            self.ffn_norm = np.frombuffer(ffn_norm_tensor.data, dtype=np.float16).astype(np.float32).tolist()
+            self.ffn_norm = (
+                np.frombuffer(ffn_norm_tensor.data, dtype=np.float16)
+                .astype(np.float32)
+                .tolist()
+            )
         else:
-            self.ffn_norm = np.frombuffer(ffn_norm_tensor.data, dtype=np.float32).tolist()
+            self.ffn_norm = np.frombuffer(
+                ffn_norm_tensor.data, dtype=np.float32
+            ).tolist()
         self.eps = eps
 
         # Reference to the Rust block
@@ -736,7 +744,9 @@ class GenomicLLM:
         # Initialization logic
         if loader:
             embd_tensor = loader.get("token_embd.weight")
-            print("    [*] Preservando Embeddings (token_embd) con 100% de Anclas (FP16/FP32)...")
+            print(
+                "    [*] Preservando Embeddings (token_embd) con 100% de Anclas (FP16/FP32)..."
+            )
             self.embeddings = GenomicLayer(
                 "token_embd",
                 embd_tensor,
@@ -746,13 +756,21 @@ class GenomicLLM:
             )
             out_norm_tensor = loader.get("output_norm.weight")
             if out_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
-                output_norm = np.frombuffer(out_norm_tensor.data, dtype=np.float16).astype(np.float32).tolist()
+                output_norm = (
+                    np.frombuffer(out_norm_tensor.data, dtype=np.float16)
+                    .astype(np.float32)
+                    .tolist()
+                )
             else:
-                output_norm = np.frombuffer(out_norm_tensor.data, dtype=np.float32).tolist()
+                output_norm = np.frombuffer(
+                    out_norm_tensor.data, dtype=np.float32
+                ).tolist()
 
             head_tensor = loader.get("output.weight", required=False)
             if head_tensor is None or head_tensor.name == embd_tensor.name:
-                print("    [*] Compartiendo pesos entre Embeddings y LM Head (Preservando LM Head con 100% de Anclas)...")
+                print(
+                    "    [*] Compartiendo pesos entre Embeddings y LM Head (Preservando LM Head con 100% de Anclas)..."
+                )
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor or embd_tensor,
@@ -815,9 +833,12 @@ class GenomicLLM:
             self.blocks.append(block)
             rust_blocks.append(block.rust_block)
             import gc
+
             gc.collect()
             if (i + 1) % 5 == 0:
-                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado (RAM liberada)...")
+                print(
+                    f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado (RAM liberada)..."
+                )
 
         self.output_norm = output_norm
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
@@ -935,7 +956,7 @@ class GenomicLLM:
                     if id_ is not None:
                         eos_token_id = id_
                         break
-                except:
+                except Exception:
                     continue
 
         for _ in range(max_new_tokens):
@@ -1164,7 +1185,7 @@ class GenomicLLM:
                 raw_meta = json.loads(
                     db_reader.read_metadata("config")
                 )  # Re-try if just missing sub-keys
-            except:
+            except Exception:
                 raw_meta = {}
 
             meta.update(raw_meta)

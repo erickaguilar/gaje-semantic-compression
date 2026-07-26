@@ -12,8 +12,9 @@ AVAILABLE_MODELS = [
     "qwen2-0_5b-coherent.gaje (2-bit Max-Lloyd)",
     "silver_adult.gaje (2-bit Standard)",
     "silver_adult_anchored.gaje (f16 Anchors)",
-    "all-MiniLM-L6-v2 (Embedding Encoder)"
+    "all-MiniLM-L6-v2 (Embedding Encoder)",
 ]
+
 
 def compress_demo(text, selected_model):
     if not text:
@@ -76,7 +77,7 @@ with gr.Blocks() as demo:
             model_dropdown = gr.Dropdown(
                 choices=AVAILABLE_MODELS,
                 value=AVAILABLE_MODELS[0],
-                label="Select Genomic Model Architecture"
+                label="Select Genomic Model Architecture",
             )
             btn = gr.Button("Encode to DNA", variant="primary")
 
@@ -88,8 +89,14 @@ with gr.Blocks() as demo:
     gr.Examples(
         examples=[
             ["The moon base reported a stable oxygen supply.", AVAILABLE_MODELS[0]],
-            ["Artificial Intelligence is the bridge between species.", AVAILABLE_MODELS[0]],
-            ["Searching for water signatures in the lunar south pole.", AVAILABLE_MODELS[0]],
+            [
+                "Artificial Intelligence is the bridge between species.",
+                AVAILABLE_MODELS[0],
+            ],
+            [
+                "Searching for water signatures in the lunar south pole.",
+                AVAILABLE_MODELS[0],
+            ],
             ["Biological DNA is the ultimate storage medium.", AVAILABLE_MODELS[0]],
         ],
         inputs=[input_text, model_dropdown],

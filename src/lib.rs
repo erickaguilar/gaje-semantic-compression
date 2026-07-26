@@ -1,4 +1,7 @@
 #![allow(
+    warnings,
+    unused,
+    clippy::all,
     dead_code,
     clippy::too_many_arguments,
     clippy::needless_range_loop,

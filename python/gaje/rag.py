@@ -18,7 +18,9 @@ class NativeSemanticRAG:
         """Añade un documento y su vector de embedding al índice."""
         self._rag.add_document(text, embedding)
 
-    def search(self, query_embedding: list[float], top_k: int = 3) -> list[tuple[str, float]]:
+    def search(
+        self, query_embedding: list[float], top_k: int = 3
+    ) -> list[tuple[str, float]]:
         """Busca los top_k documentos más relevantes para el embedding de consulta."""
         return self._rag.search(query_embedding, top_k)
 

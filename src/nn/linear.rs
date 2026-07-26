@@ -1,6 +1,4 @@
-use crate::compute::kernels::*;
 use half::f16;
-use rand::Rng;
 use rayon::prelude::*;
 use std::sync::Arc;
 
@@ -103,10 +101,10 @@ impl GenomicLinear {
         block_size: usize,
         rmsnorm_weight: Vec<f32>,
         eps: f32,
-        precision_mask: Vec<u8>,
-        epigenetic_database: Vec<u8>,
+        _precision_mask: Vec<u8>,
+        _epigenetic_database: Vec<u8>,
         epigenetic_centroids: Vec<f32>,
-        triplet_database: Vec<u8>,
+        _triplet_database: Vec<u8>,
         triplet_centroids: Vec<f32>,
         bias: Vec<f32>,
         bit_depth: u8,
@@ -223,44 +221,73 @@ impl GenomicLinear {
 
     pub fn forward_core(
         &self,
-        mut input: Vec<f32>,
+        input: Vec<f32>,
         modulation_factors: Option<[f32; 4]>,
         _activate_rna: bool,
     ) -> Result<Vec<f32>, String> {
-
         let n_blocks = self.in_features / self.block_size;
         let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
-        let results: Vec<f32> = (0..self.out_features).into_par_iter().map(|i| {
-            let mut sum = 0.0f32;
-            match &self.weight_db {
-                WeightDatabase::GenomicF32(db) => {
-                    let row_off = i * self.in_features;
-                    let row_weights = &db[row_off..row_off + self.in_features];
-                    // Aseguramos que la longitud coincide antes de llamar al kernel SIMD
-                    if row_weights.len() == input.len() {
-                        sum = unsafe { crate::compute::kernels::dot_product(&input, row_weights) };
-                    } else {
-                        // Fallback seguro si hay padding o desajuste
-                        sum = input.iter().zip(row_weights.iter()).map(|(x, w)| x * w).sum();
+        let results: Vec<f32> = (0..self.out_features)
+            .into_par_iter()
+            .map(|i| {
+                let mut sum = 0.0f32;
+                match &self.weight_db {
+                    WeightDatabase::GenomicF32(db) => {
+                        let row_off = i * self.in_features;
+                        let row_weights = &db[row_off..row_off + self.in_features];
+                        // Aseguramos que la longitud coincide antes de llamar al kernel SIMD
+                        if row_weights.len() == input.len() {
+                            sum = unsafe {
+                                crate::compute::kernels::dot_product(&input, row_weights)
+                            };
+                        } else {
+                            // Fallback seguro si hay padding o desajuste
+                            sum = input
+                                .iter()
+                                .zip(row_weights.iter())
+                                .map(|(x, w)| x * w)
+                                .sum();
+                        }
                     }
-                },
-                WeightDatabase::Genomic2Bit(db) => {
-                    let row_off = i * n_blocks * self.stride;
-                    let c_start = i * n_blocks * 4;
-                    sum = unsafe { crate::compute::kernels::genomic_dot_product(&db[row_off..row_off + n_blocks * self.stride], &input, &self.centroids[c_start..c_start + n_blocks * 4], self.stride, n_blocks, &m_factors) };
-                },
-                WeightDatabase::Genomic4Bit(db) => {
-                    let row_off = i * n_blocks * self.stride;
-                    let c_start = i * n_blocks * 16;
-                    sum = unsafe { crate::compute::kernels::genomic_dot_product_4bit(&db[row_off..row_off + n_blocks * self.stride], &input, &self.centroids[c_start..c_start + n_blocks * 16], self.stride, n_blocks) };
+                    WeightDatabase::Genomic2Bit(db) => {
+                        let row_off = i * n_blocks * self.stride;
+                        let c_start = i * n_blocks * 4;
+                        sum = unsafe {
+                            crate::compute::kernels::genomic_dot_product(
+                                &db[row_off..row_off + n_blocks * self.stride],
+                                &input,
+                                &self.centroids[c_start..c_start + n_blocks * 4],
+                                self.stride,
+                                n_blocks,
+                                &m_factors,
+                            )
+                        };
+                    }
+                    WeightDatabase::Genomic4Bit(db) => {
+                        let row_off = i * n_blocks * self.stride;
+                        let c_start = i * n_blocks * 16;
+                        sum = unsafe {
+                            crate::compute::kernels::genomic_dot_product_4bit(
+                                &db[row_off..row_off + n_blocks * self.stride],
+                                &input,
+                                &self.centroids[c_start..c_start + n_blocks * 16],
+                                self.stride,
+                                n_blocks,
+                            )
+                        };
+                    }
                 }
-            }
-            let a_s = self.anchor_row_ptrs[i];
-            let a_e = self.anchor_row_ptrs[i + 1];
-            for k in a_s..a_e { sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32(); }
-            if !self.bias.is_empty() { sum += self.bias[i]; }
-            sum
-        }).collect();
+                let a_s = self.anchor_row_ptrs[i];
+                let a_e = self.anchor_row_ptrs[i + 1];
+                for k in a_s..a_e {
+                    sum += input[self.anchor_indices[k] as usize] * self.anchor_values[k].to_f32();
+                }
+                if !self.bias.is_empty() {
+                    sum += self.bias[i];
+                }
+                sum
+            })
+            .collect();
         Ok(results)
     }
 

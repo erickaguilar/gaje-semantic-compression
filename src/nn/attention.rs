@@ -1,5 +1,4 @@
 use crate::compute::kernels::*;
-use half::f16;
 use rayon::prelude::*;
 
 #[cfg(feature = "python")]

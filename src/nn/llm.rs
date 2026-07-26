@@ -62,7 +62,9 @@ impl GenomicLLM {
             return Err("LM Head out_features is 0!".to_string());
         }
 
-        let mut logits = self.lm_head.forward_core(h_norm, modulation, activate_rna)?;
+        let mut logits = self
+            .lm_head
+            .forward_core(h_norm, modulation, activate_rna)?;
 
         // Filtrado K-WTA en Logits de Salida para mitigar ruido de 2-bits
         if self.k_wta_ratio > 0.0 && self.k_wta_ratio < 1.0 {

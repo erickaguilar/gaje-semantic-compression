@@ -267,7 +267,7 @@ impl IslandModel {
             island.evolve();
         });
         self.generation += 1;
-        if self.generation % self.migration_rate == 0 {
+        if self.generation.is_multiple_of(self.migration_rate) {
             self.migrate();
         }
     }

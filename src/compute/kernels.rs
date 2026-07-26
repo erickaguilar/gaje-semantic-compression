@@ -315,7 +315,7 @@ pub fn swiglu(gate: &[f32], up: &[f32], out: &mut [f32]) {
 /// Versión balanceada de SwiGLU que compensa el sesgo (bias) introducido
 /// por la cuantización asimétrica de 2 bits.
 #[inline(always)]
-pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], h_scale: f32) {
+pub fn swiglu_balanced(gate: &[f32], up: &[f32], out: &mut [f32], _h_scale: f32) {
     out.par_iter_mut()
         .zip(gate.par_iter())
         .zip(up.par_iter())

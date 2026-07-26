@@ -9,11 +9,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(SERVER_DIR, "..", "..", ".."))
 DIRECTORY = SERVER_DIR
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-from gaje.core import _impl as dna_semantic_compression
-from gaje.nn.stabilized import GenomicLLM
+from gaje.core import _impl as dna_semantic_compression  # noqa: E402
+from gaje.nn.stabilized import GenomicLLM  # noqa: E402
 
 PORT = 8080
-import threading
+import threading  # noqa: E402
 
 # Cache de modelos y lock para evitar cargas duplicadas o fallos por concurrencia
 loaded_models = {}
@@ -38,7 +38,9 @@ def get_model(model_name):
                 break
 
         if not model_path:
-            print(f"❌ No se encontró el archivo de modelo '{model_name}' en los caminos: {possible_paths}")
+            print(
+                f"❌ No se encontró el archivo de modelo '{model_name}' en los caminos: {possible_paths}"
+            )
             return None
 
         print(f"🧬 Cargando modelo real: {model_path}")
@@ -117,7 +119,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     tokens = llm.tokenizer.encode(message, add_special_tokens=False)
                     if hasattr(tokens, "ids"):
                         tokens = tokens.ids
-                except:
+                except Exception:
                     tokens = [0]
 
                 # 2. Generación Genómica (con medición de tiempo)
@@ -130,7 +132,10 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 print("[*] Generando respuesta...")
                 try:
                     for token_text in llm.generate(
-                        message, max_new_tokens=50, temperature=0.6, repetition_penalty=1.2
+                        message,
+                        max_new_tokens=50,
+                        temperature=0.6,
+                        repetition_penalty=1.2,
                     ):
                         response_text += token_text
                         tokens_count += 1
@@ -140,7 +145,11 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     response_text = f"Error en generación: {e}"
 
                 gen_time_ms = round((time.time() - start_time) * 1000, 2)
-                tok_per_sec = round(tokens_count / (gen_time_ms / 1000), 2) if gen_time_ms > 0 else 0
+                tok_per_sec = (
+                    round(tokens_count / (gen_time_ms / 1000), 2)
+                    if gen_time_ms > 0
+                    else 0
+                )
 
                 # 3. Visualización del primer token (para la UI de ADN)
                 try:
@@ -149,6 +158,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                         emb_row = llm.embeddings.get_row(first_token_id).tolist()
                     else:
                         import numpy as np
+
                         emb_row = np.random.randn(llm.n_embd).tolist()
 
                     thresholds = [-0.34, 0.0, 0.34]
@@ -176,7 +186,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 saved = (1 - (dna_size / orig_size)) * 100
 
                 # Detallar Software (SF) y Hardware (HD)
-                sf_info = f"Rust 2021 (NEON/SIMD) + PyO3 / Python {platform.python_version()}"
+                sf_info = (
+                    f"Rust 2021 (NEON/SIMD) + PyO3 / Python {platform.python_version()}"
+                )
                 cpu_name = platform.processor() or platform.machine()
                 try:
                     if os.path.exists("/proc/cpuinfo"):
@@ -185,7 +197,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                                 if "model name" in line:
                                     cpu_name = line.split(":")[1].strip()
                                     break
-                except:
+                except Exception:
                     pass
 
                 hd_info = f"{cpu_name} ({platform.machine()}) - Native CPU"
@@ -235,10 +247,14 @@ if __name__ == "__main__":
     import threading
 
     def preload_models():
-        print("[*] ⏳ Pre-cargando modelo genómico anclado 'qwen2-0_5b-anchored.gaje' en RAM (~40s)...")
+        print(
+            "[*] ⏳ Pre-cargando modelo genómico anclado 'qwen2-0_5b-anchored.gaje' en RAM (~40s)..."
+        )
         m = get_model("qwen2-0_5b-anchored.gaje")
         if m:
-            print("✅ ¡Modelo genómico anclado listo en RAM! Ya puedes enviar mensajes desde el navegador.")
+            print(
+                "✅ ¡Modelo genómico anclado listo en RAM! Ya puedes enviar mensajes desde el navegador."
+            )
         else:
             print("⚠️ No se pudo pre-cargar el modelo.")
 

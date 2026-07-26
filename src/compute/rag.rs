@@ -55,7 +55,9 @@ impl NativeSemanticRAG {
 
     pub fn search(&self, query_embedding: Vec<f32>, top_k: usize) -> PyResult<Vec<(String, f32)>> {
         if query_embedding.is_empty() {
-            return Err(PyValueError::new_err("Query embedding vector cannot be empty"));
+            return Err(PyValueError::new_err(
+                "Query embedding vector cannot be empty",
+            ));
         }
         if self.documents.is_empty() {
             return Ok(Vec::new());
@@ -77,7 +79,11 @@ impl NativeSemanticRAG {
                 }
                 let dot: f32 = emb.iter().zip(query.iter()).map(|(&a, &b)| a * b).sum();
                 let e_norm: f32 = emb.iter().map(|&v| v * v).sum::<f32>().sqrt();
-                let sim = if e_norm == 0.0 { 0.0 } else { dot / (q_norm * e_norm) };
+                let sim = if e_norm == 0.0 {
+                    0.0
+                } else {
+                    dot / (q_norm * e_norm)
+                };
                 (idx, sim)
             })
             .collect();
