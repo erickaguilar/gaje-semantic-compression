@@ -3,6 +3,7 @@ import socketserver
 import json
 import os
 import sys
+import platform
 
 SERVER_DIR = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
 PROJECT_ROOT = os.path.abspath(os.path.join(SERVER_DIR, "..", "..", ".."))
