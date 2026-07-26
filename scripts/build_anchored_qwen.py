@@ -9,19 +9,20 @@ from gaje.nn.stabilized import GenomicLLM
 
 
 def build_anchored_model():
-    coherent_path = os.path.join(PROJECT_ROOT, "models", "qwen2-0_5b-coherent.gaje")
+    gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf")
     output_path = os.path.join(PROJECT_ROOT, "models", "qwen2-0_5b-anchored.gaje")
 
-    if not os.path.exists(coherent_path):
-        print(f"Error: {coherent_path} not found.")
-        return
-
-    print(f"🧬 Cargando modelo base Qwen2-0.5B Coherente desde BD: {coherent_path}")
-    llm = GenomicLLM.load_genomic(coherent_path)
+    if os.path.exists(gguf_path):
+        print(f"🧬 Cargando y genomizando desde GGUF FP16 original (Preservando token_embd y lm_head al 100%): {gguf_path}")
+        llm = GenomicLLM(gguf_path)
+    else:
+        coherent_path = os.path.join(PROJECT_ROOT, "models", "qwen2-0_5b-coherent.gaje")
+        print(f"🧬 Cargando modelo base desde BD: {coherent_path}")
+        llm = GenomicLLM.load_genomic(coherent_path)
 
     gc.collect()
 
-    print(f"\n[*] Protegiendo lm_head al 100% de precisión y guardando en: {output_path}...")
+    print(f"\n[*] Guardando organismo genómico anclado con Embeddings y LM Head protegidos en: {output_path}...")
     llm.save(output_path)
     print(f"✅ Organismo Genómico Anclado guardado exitosamente en: {output_path}")
 

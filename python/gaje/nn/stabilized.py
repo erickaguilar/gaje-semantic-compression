@@ -730,11 +730,12 @@ class GenomicLLM:
         # Initialization logic
         if loader:
             embd_tensor = loader.get("token_embd.weight")
+            print("    [*] Preservando Embeddings (token_embd) con 100% de Anclas (FP16/FP32)...")
             self.embeddings = GenomicLayer(
                 "token_embd",
                 embd_tensor,
                 balancer=None,
-                anchor_threshold=self.config.anchor_threshold,
+                anchor_threshold=1.0,
                 config=self.config,
             )
             output_norm = (
