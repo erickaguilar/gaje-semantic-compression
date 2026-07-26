@@ -219,6 +219,93 @@ impl GenomicLLM {
         Ok(total_loss / (tokens.len() - 1) as f32)
     }
 
+    pub fn generate_native_core(
+        &mut self,
+        prompt_tokens: Vec<usize>,
+        max_new_tokens: usize,
+        temperature: f32,
+        repetition_penalty: f32,
+        eos_token_ids: Vec<usize>,
+    ) -> Result<Vec<usize>, String> {
+        if prompt_tokens.is_empty() {
+            return Err("Prompt tokens cannot be empty".to_string());
+        }
+
+        self.clear_cache_core();
+
+        let mut last_logits = Vec::new();
+        for &tid in &prompt_tokens {
+            last_logits = self.forward_core(tid, false)?;
+        }
+
+        let mut generated = Vec::new();
+
+        for _ in 0..max_new_tokens {
+            if last_logits.is_empty() {
+                break;
+            }
+
+            let mut logits = last_logits.clone();
+
+            if repetition_penalty > 1.0 {
+                let mut seen = prompt_tokens.clone();
+                seen.extend_from_slice(&generated);
+                for &t in &seen {
+                    if t < logits.len() {
+                        if logits[t] < 0.0 {
+                            logits[t] *= repetition_penalty;
+                        } else {
+                            logits[t] /= repetition_penalty;
+                        }
+                    }
+                }
+            }
+
+            let next_tok = if temperature <= 1e-5 {
+                let mut max_idx = 0;
+                let mut max_val = f32::NEG_INFINITY;
+                for (idx, &val) in logits.iter().enumerate() {
+                    if val > max_val {
+                        max_val = val;
+                        max_idx = idx;
+                    }
+                }
+                max_idx
+            } else {
+                let mut max_l = f32::NEG_INFINITY;
+                for &val in &logits {
+                    if val > max_l {
+                        max_l = val;
+                    }
+                }
+                let mut probs = vec![0.0f32; logits.len()];
+                for (idx, &val) in logits.iter().enumerate() {
+                    let p = ((val - max_l) / temperature).exp();
+                    probs[idx] = p;
+                }
+                let mut max_idx = 0;
+                let mut max_p = f32::NEG_INFINITY;
+                for (idx, &p) in probs.iter().enumerate() {
+                    if p > max_p {
+                        max_p = p;
+                        max_idx = idx;
+                    }
+                }
+                max_idx
+            };
+
+            generated.push(next_tok);
+
+            if eos_token_ids.contains(&next_tok) {
+                break;
+            }
+
+            last_logits = self.forward_core(next_tok, false)?;
+        }
+
+        Ok(generated)
+    }
+
     pub fn apply_mutation_core(
         &mut self,
         layer_name: &str,
@@ -404,6 +491,25 @@ impl GenomicLLM {
     pub fn clear_cache_py(&mut self) -> PyResult<()> {
         self.clear_cache_core();
         Ok(())
+    }
+
+    #[pyo3(signature = (prompt_tokens, max_new_tokens=30, temperature=0.7, repetition_penalty=1.0, eos_token_ids=vec![2, 151643, 151645]))]
+    pub fn generate_native_py(
+        &mut self,
+        prompt_tokens: Vec<usize>,
+        max_new_tokens: usize,
+        temperature: f32,
+        repetition_penalty: f32,
+        eos_token_ids: Vec<usize>,
+    ) -> PyResult<Vec<usize>> {
+        self.generate_native_core(
+            prompt_tokens,
+            max_new_tokens,
+            temperature,
+            repetition_penalty,
+            eos_token_ids,
+        )
+        .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 
     pub fn recalibrate_all_centroids(&mut self, _shift: f32) -> PyResult<()> {

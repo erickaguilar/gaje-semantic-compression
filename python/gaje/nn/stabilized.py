@@ -949,6 +949,32 @@ class GenomicLLM:
 
         generated_tokens = list(tokens)
 
+        # FAST NATIVE RUST GENERATE PATH (Fase 1A: 0% FFI Overhead)
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm is not None
+            and hasattr(self.rust_llm, "generate_native_py")
+            and not use_spiking
+            and not use_toroidal
+        ):
+            eos_ids = [2, 151643, 151645]
+            if (
+                hasattr(self.tokenizer, "eos_token_id")
+                and self.tokenizer.eos_token_id is not None
+            ):
+                eos_ids.append(self.tokenizer.eos_token_id)
+
+            gen_ids = self.rust_llm.generate_native_py(
+                tokens,
+                max_new_tokens,
+                temperature,
+                repetition_penalty,
+                eos_ids,
+            )
+            for gid in gen_ids:
+                yield self.tokenizer.decode([gid])
+            return
+
         # Inicializar Sampler Toroidal si se solicita
         toroidal_sampler = None
         if use_toroidal and not use_spiking:
