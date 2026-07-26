@@ -73,7 +73,7 @@ class GenomicLayer:
                 else:
                     raw_data = np.frombuffer(tensor.data, dtype=np.float32)
 
-                # GGUF: first dim is fastest. Correct reshape is [out, in]
+                # GGUF tensor data is row-major [out_features, in_features]
                 w_matrix = raw_data.reshape(self.out_features, self.in_features)
 
                 unpermute = self.config.unpermute_weights if self.config else True
@@ -495,7 +495,11 @@ class GenomicTransformerBlock:
                 self.config.ffn_anchor_threshold if self.config else -1.0
             )
         p = f"blk.{idx}."
-        attn_norm_data = loader.get(p + "attn_norm.weight").data.astype(np.float32)
+        attn_norm_tensor = loader.get(p + "attn_norm.weight")
+        if attn_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
+            attn_norm_data = np.frombuffer(attn_norm_tensor.data, dtype=np.float16).astype(np.float32)
+        else:
+            attn_norm_data = np.frombuffer(attn_norm_tensor.data, dtype=np.float32)
 
         # Resolve custom centroids for this block
         layer_c = custom_centroids or {}
@@ -548,9 +552,11 @@ class GenomicTransformerBlock:
             config=config,
             custom_base_c=layer_c.get(p + "ffn_down.weight"),
         )
-        self.ffn_norm = (
-            loader.get(p + "ffn_norm.weight").data.astype(np.float32).tolist()
-        )
+        ffn_norm_tensor = loader.get(p + "ffn_norm.weight")
+        if ffn_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
+            self.ffn_norm = np.frombuffer(ffn_norm_tensor.data, dtype=np.float16).astype(np.float32).tolist()
+        else:
+            self.ffn_norm = np.frombuffer(ffn_norm_tensor.data, dtype=np.float32).tolist()
         self.eps = eps
 
         # Reference to the Rust block
@@ -730,36 +736,37 @@ class GenomicLLM:
         # Initialization logic
         if loader:
             embd_tensor = loader.get("token_embd.weight")
+            print("    [*] Preservando Embeddings (token_embd) con 100% de Anclas (FP16/FP32)...")
             self.embeddings = GenomicLayer(
                 "token_embd",
                 embd_tensor,
                 balancer=None,
-                anchor_threshold=self.config.anchor_threshold,
+                anchor_threshold=1.0,
                 config=self.config,
             )
-            output_norm = (
-                loader.get("output_norm.weight").data.astype(np.float32).tolist()
-            )
+            out_norm_tensor = loader.get("output_norm.weight")
+            if out_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F16:
+                output_norm = np.frombuffer(out_norm_tensor.data, dtype=np.float16).astype(np.float32).tolist()
+            else:
+                output_norm = np.frombuffer(out_norm_tensor.data, dtype=np.float32).tolist()
 
             head_tensor = loader.get("output.weight", required=False)
             if head_tensor is None or head_tensor.name == embd_tensor.name:
-                print("    [*] Compartiendo pesos entre Embeddings y LM Head...")
-                # Si comparten pesos, podemos reutilizar la lógica pero con distinto threshold?
-                # En realidad, si comparten, solemos querer el mismo threshold o simplemente
-                # re-genomizar pero sin cargar el tensor original dos veces.
+                print("    [*] Compartiendo pesos entre Embeddings y LM Head (Preservando LM Head con 100% de Anclas)...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor or embd_tensor,
                     balancer=None,
-                    anchor_threshold=self.config.anchor_threshold,
+                    anchor_threshold=1.0,
                     config=self.config,
                 )
             else:
+                print("    [*] Preservando LM Head con 100% de Anclas (FP16/FP32)...")
                 self.lm_head = GenomicLayer(
                     "lm_head",
                     head_tensor,
                     balancer=None,
-                    anchor_threshold=self.config.anchor_threshold,
+                    anchor_threshold=1.0,
                     config=self.config,
                 )
         else:
@@ -781,7 +788,7 @@ class GenomicLLM:
                 "lm_head",
                 lm_head_w,
                 balancer=None,
-                anchor_threshold=self.config.anchor_threshold,
+                anchor_threshold=1.0,
                 config=self.config,
             )
 
@@ -807,9 +814,12 @@ class GenomicLLM:
 
             self.blocks.append(block)
             rust_blocks.append(block.rust_block)
-            if (i + 1) % 10 == 0:
-                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado...")
+            import gc
+            gc.collect()
+            if (i + 1) % 5 == 0:
+                print(f"    [~] Bloque {i + 1}/{self.n_blocks} sincronizado (RAM liberada)...")
 
+        self.output_norm = output_norm
         self.rust_llm = dna_semantic_compression.RustGenomicLLM(
             self.embeddings.linear,
             rust_blocks,
@@ -1030,10 +1040,11 @@ class GenomicLLM:
             db_writer.write_tensor_compressed(
                 f"{name}.anchors", layer.anchors_f16_bytes
             )
-            if hasattr(layer.linear, "bias") and len(layer.linear.bias) > 0:
+            bias_val = getattr(layer, "bias", None)
+            if bias_val is not None and len(bias_val) > 0:
                 db_writer.write_tensor_compressed(
                     f"{name}.bias",
-                    np.array(layer.linear.bias, dtype=np.float32).tobytes(),
+                    np.array(bias_val, dtype=np.float32).tobytes(),
                 )
 
             if (

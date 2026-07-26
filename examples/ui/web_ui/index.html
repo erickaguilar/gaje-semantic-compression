@@ -24,14 +24,24 @@
                 <section class="stats-card">
                     <h3>Selección de Modelo</h3>
                     <select id="model-select" class="model-dropdown">
-                        <option value="">Cargando modelos...</option>
+                        <option value="qwen2-0_5b-anchored.gaje" selected>QWEN2 0.5B ANCHORED (5% Stability Anchors)</option>
+                        <option value="qwen2-0_5b-coherent.gaje">QWEN2 0.5B COHERENT (2-bit Max-Lloyd)</option>
+                        <option value="silver_adult.gaje">SILVER ADULT (2-bit Standard)</option>
                     </select>
-                    <div id="model-date" class="model-meta">---</div>
+                    <div id="model-date" class="model-meta">v1.0.0-alpha (Silver Adult)</div>
                 </section>
                 <section class="stats-card">
                     <h3>Métricas de Compresión</h3>
                     <div id="metrics-content">
                         <p class="placeholder">Envía un mensaje para ver el análisis genómico.</p>
+                    </div>
+                </section>
+                <section class="stats-card">
+                    <h3>Entorno (SF & HD)</h3>
+                    <div id="env-content">
+                        <div class="metric-row"><span>Software (SF):</span> <span id="sf-val" class="metric-val">Rust 2021 + PyO3</span></div>
+                        <div class="metric-row"><span>Hardware (HD):</span> <span id="hd-val" class="metric-val">Detectando CPU...</span></div>
+                        <div class="metric-row"><span>Tiempo Resp.:</span> <span id="latency-val" class="metric-val">---</span></div>
                     </div>
                 </section>
                 <section class="dna-viewer">

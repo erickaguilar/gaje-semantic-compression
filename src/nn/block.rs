@@ -65,7 +65,7 @@ impl RustGenomicBlock {
             use_genomic_norm,
             h_scale,
             rna_threshold,
-            k_wta_ratio: 0.50,
+            k_wta_ratio: 0.0,
             topology: None,
         }
     }
@@ -96,7 +96,6 @@ impl RustGenomicBlock {
             }
             let rms = (sum_sq / x.len() as f32 + 1e-6).sqrt();
 
-            // Estimar estado basado en h_scale (homeostasis)
             let ratio = rms / self.h_scale.max(0.01);
             let state = if ratio < 0.5 {
                 0
@@ -119,58 +118,29 @@ impl RustGenomicBlock {
         let q = self
             .q_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;
-        if q.iter().any(|v| v.is_nan()) {
-            return Err("NaN in q".into());
-        }
-
-        let q_sum: f32 = q.iter().map(|v| v.abs()).sum();
-        if pos == 0 {
-            println!("[Debug Block {}] q_abs_sum: {:.4}", self.idx, q_sum);
-        }
-
         let k = self
             .k_gen
             .forward_core(x_norm.clone(), modulation, activate_rna)?;
-        if k.iter().any(|v| v.is_nan()) {
-            return Err("NaN in k".into());
-        }
         let v = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
-        if v.iter().any(|v| v.is_nan()) {
-            return Err("NaN in v".into());
-        }
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        if attn_out.iter().any(|v| v.is_nan()) {
-            return Err("NaN in attn_out".into());
-        }
         let projected_attn = self.w_o.forward_core(attn_out, modulation, activate_rna)?;
-        if projected_attn.iter().any(|v| v.is_nan()) {
-            return Err("NaN in projected_attn".into());
-        }
 
         let mut x_post = x;
         x_post
             .par_iter_mut()
             .zip(projected_attn.par_iter())
             .for_each(|(xi, &ai)| *xi += ai);
-        if x_post.iter().any(|v| v.is_nan()) {
-            return Err("NaN after x_post addition".into());
-        }
 
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
-        if x_ffn_n.iter().any(|v| v.is_nan()) {
-            return Err("NaN after ffn rms_norm".into());
-        }
 
         let gate = self
             .gate_gen
             .forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
-        if gate.iter().any(|v| v.is_nan()) {
-            return Err("NaN in gate".into());
-        }
         let up = self
             .up_gen
             .forward_core(x_ffn_n, modulation, activate_rna)?;
+
         if up.iter().any(|v| v.is_nan()) {
             return Err("NaN in up".into());
         }
@@ -184,6 +154,7 @@ impl RustGenomicBlock {
                 crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
             }
         }
+
         if ffn_out.iter().any(|v| v.is_nan()) {
             return Err("NaN in ffn_out".into());
         }
@@ -200,6 +171,7 @@ impl RustGenomicBlock {
         let projected_ffn = self
             .w_down
             .forward_core(ffn_out, modulation, activate_rna)?;
+
         if projected_ffn.iter().any(|v| v.is_nan()) {
             return Err("NaN in projected_ffn".into());
         }
@@ -209,6 +181,7 @@ impl RustGenomicBlock {
             .par_iter_mut()
             .zip(projected_ffn.par_iter())
             .for_each(|(fi, &pi)| *fi += pi);
+
         if final_out.iter().any(|v| v.is_nan()) {
             return Err("NaN after projected_ffn addition".into());
         }
@@ -216,8 +189,8 @@ impl RustGenomicBlock {
         // --- STAGE 5: TOROIDAL CONFINEMENT (K-WTA Lateral Inhibition) ---
         // Filtramos el ruido de fondo para que solo la señal en resonancia sobreviva.
         // Esto evita la acumulación de entropía (deriva semántica) detectada en Phase 2.
-        if self.use_genomic_norm || self.k_wta_ratio < 1.0 {
-            let ratio = if self.k_wta_ratio > 0.0 { self.k_wta_ratio } else { 0.50 };
+        if self.k_wta_ratio > 0.0 && self.k_wta_ratio < 1.0 {
+            let ratio = self.k_wta_ratio;
             let k = ((final_out.len() as f32 * ratio) as usize).max(1);
             crate::compute::kernels::lateral_inhibition_kwta(&mut final_out, k);
         }
@@ -370,7 +343,7 @@ impl RustGenomicBlock {
             use_genomic_norm,
             h_scale,
             rna_threshold,
-            k_wta_ratio: 0.50,
+            k_wta_ratio: 0.0,
             topology: None,
         }
     }

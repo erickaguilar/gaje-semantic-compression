@@ -13,15 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch('/api/models');
             const data = await response.json();
-            modelsData = data.models;
-            modelSelect.innerHTML = '';
-
-            if (modelsData.length === 0) {
-                const opt = document.createElement('option');
-                opt.value = 'none';
-                opt.innerText = 'No se encontraron modelos .gaje';
-                modelSelect.appendChild(opt);
-            } else {
+            if (data && data.models && data.models.length > 0) {
+                modelsData = data.models;
+                modelSelect.innerHTML = '';
                 modelsData.forEach(model => {
                     const opt = document.createElement('option');
                     opt.value = model.name;
@@ -31,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateModelDate();
             }
         } catch (err) {
-            console.error('Error cargando modelos:', err);
+            console.log('Usando modelos por defecto pre-configurados.');
         }
     }
 
@@ -62,6 +56,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="metric-row"><span>Ratio:</span> <span class="metric-val">${metrics.ratio.toFixed(1)}x</span></div>
             <div class="metric-row"><span>Ahorro:</span> <span class="metric-val">${metrics.saved.toFixed(2)}%</span></div>
         `;
+
+        if (metrics.sf_info) {
+            document.getElementById('sf-val').innerText = metrics.sf_info;
+        }
+        if (metrics.hd_info) {
+            document.getElementById('hd-val').innerText = metrics.hd_info;
+        }
+        if (metrics.latency_ms) {
+            document.getElementById('latency-val').innerText = `${metrics.latency_ms} ms (${metrics.tokens_sec || 0} tok/s)`;
+        }
     }
 
     function updateDNA(strand) {

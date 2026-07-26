@@ -45,8 +45,8 @@ ARCHITECTURES: Dict[str, ArchitectureConfig] = {
         tokenizer_id="Qwen/Qwen2-0.5B",
         rope_base=1000000.0,  # Qwen2 usually uses 1M
         has_bias=True,
-        rope_style="split",
-        unpermute_weights=True,
+        rope_style="interleaved",
+        unpermute_weights=False,
         default_centroids={
             "blk.0.ffn_down.weight": [-0.0267, -0.0078, 0.0075, 0.0264],
             "blk.0.ffn_gate.weight": [-0.0364, -0.0132, 0.006, 0.0294],

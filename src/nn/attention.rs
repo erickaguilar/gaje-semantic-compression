@@ -12,8 +12,8 @@ pub struct GenomicAttention {
     pub n_head: usize,
     pub n_head_kv: usize,
     pub head_dim: usize,
-    pub k_cache: Vec<Vec<f16>>,
-    pub v_cache: Vec<Vec<f16>>,
+    pub k_cache: Vec<Vec<f32>>,
+    pub v_cache: Vec<Vec<f32>>,
     pub rmsnorm_weight: Vec<f32>,
     pub eps: f32,
     pub rope_base: f32,
@@ -50,11 +50,12 @@ impl GenomicAttention {
         v: Vec<f32>,
         pos: usize,
     ) -> Result<Vec<f32>, String> {
-        let head_dim = self.head_dim.max(1);
         let n_head = self.n_head;
-        let n_head_kv = self.n_head_kv.max(1);
-        let n_groups = (n_head / n_head_kv).max(1);
+        let n_head_kv = self.n_head_kv;
+        let head_dim = self.head_dim;
+        let n_groups = n_head / n_head_kv;
         let scale = 1.0 / (head_dim as f32).sqrt();
+
         let rope_base = self.rope_base;
         let is_split = self.rope_style == "split";
         let mut q_rope = q;
@@ -82,23 +83,12 @@ impl GenomicAttention {
         };
         apply_rope(&mut q_rope, n_head);
         apply_rope(&mut k_rope, n_head_kv);
-        self.k_cache
-            .push(k_rope.into_iter().map(f16::from_f32).collect());
-        self.v_cache
-            .push(v.into_iter().map(f16::from_f32).collect());
+        self.k_cache.push(k_rope);
+        self.v_cache.push(v);
         let seq_len = self.k_cache.len();
         let attn_out: Vec<f32> = (0..n_head)
             .into_par_iter()
             .flat_map(|h| {
-                if h == 0 {
-                    println!(
-                        "[ENGINE CRITICAL] h=0, pos={}, cache_len_before={}, base={}, style={}",
-                        pos,
-                        self.k_cache.len(),
-                        self.rope_base,
-                        self.rope_style
-                    );
-                }
                 let kv_h = h / n_groups;
                 let kv_h_off = kv_h * head_dim;
                 let q_slice = &q_rope[h * head_dim..(h + 1) * head_dim];
@@ -106,21 +96,11 @@ impl GenomicAttention {
                 let mut max_s = -f32::INFINITY;
                 for t in 0..seq_len {
                     let k_head = &self.k_cache[t][kv_h_off..kv_h_off + head_dim];
-                    let mut k_f32 = [0.0f32; 256];
-                    for (i, &kx) in k_head.iter().enumerate() {
-                        k_f32[i] = kx.to_f32();
-                    }
-                    let s = unsafe { dot_product(q_slice, &k_f32[..head_dim]) } * scale;
+                    let s = unsafe { dot_product(q_slice, k_head) } * scale;
                     scores[t] = s;
                     if s > max_s {
                         max_s = s;
                     }
-                }
-                if h == 0 && pos == 0 {
-                    println!(
-                        "[Debug Attn 0] max_score: {:.4}, seq_len: {}",
-                        max_s, seq_len
-                    );
                 }
                 let mut sum_e = 0.0f32;
                 for t in 0..seq_len {
@@ -133,7 +113,7 @@ impl GenomicAttention {
                     let w = scores[t] * inv_s;
                     let v_head = &self.v_cache[t][kv_h_off..kv_h_off + head_dim];
                     for i in 0..head_dim {
-                        head_out[i] += w * v_head[i].to_f32();
+                        head_out[i] += w * v_head[i];
                     }
                 }
                 head_out

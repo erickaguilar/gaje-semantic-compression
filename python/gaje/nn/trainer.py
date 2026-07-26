@@ -108,8 +108,8 @@ class GenomicTrainer:
                 h_norm_raw, grad_logits.tolist(), self.lr
             )
 
-            # En Fase 3, activamos mutaciones homeostáticas leves
-            if phase >= 3 and i % 8 == 0:
+            # En Fase 3, activamos mutaciones homeostáticas leves si están soportadas
+            if phase >= 3 and i % 8 == 0 and hasattr(self.model.rust_llm, "mutate_all_homeostasis"):
                 self.model.rust_llm.mutate_all_homeostasis(self.lr * 0.01)
 
         return loss_total / seq_len
