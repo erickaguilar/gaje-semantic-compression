@@ -46,6 +46,7 @@ def get_model(model_name):
         print(f"🧬 Cargando modelo real: {model_path}")
         try:
             llm = GenomicLLM.load_genomic(os.path.abspath(model_path))
+            llm.rust_llm.set_k_wta_ratio(0.0)
             loaded_models[model_name] = llm
             return llm
         except Exception as e:
