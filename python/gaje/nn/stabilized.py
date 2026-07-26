@@ -1241,26 +1241,31 @@ class GenomicLLM:
         def load_linear(name, out_features, in_features):
             # TENSOR NAME MAPPING LOGIC
             actual_name = name
-            is_legacy_packed = False
-
-            if not db_reader.has_tensor(f"{name}.dna"):
-                # Try aliases from LEGACY_TENSOR_MAP
-                aliases = C.LEGACY_TENSOR_MAP.get(name, [])
+            if not db_reader.has_tensor(f"{actual_name}.dna"):
+                aliases = [
+                    name.replace("ffn_gate", "gate"),
+                    name.replace("gate", "ffn_gate"),
+                    name.replace("ffn_up", "up"),
+                    name.replace("up", "ffn_up"),
+                    name.replace("ffn_down", "w_down"),
+                    name.replace("w_down", "ffn_down"),
+                    name.replace("attn_output", "w_o"),
+                    name.replace("w_o", "attn_output"),
+                    f"block_{name.split('.')[1]}_{name.split('.')[-1]}",
+                    f"{name}.packed_weights",
+                ]
                 for alias in aliases:
-                    if db_reader.has_tensor(f"{alias}.dna") or db_reader.has_tensor(
-                        alias
-                    ):
+                    if db_reader.has_tensor(f"{alias}.dna"):
                         actual_name = alias
-                        if "packed_weights" in alias or not alias.endswith(".dna"):
-                            is_legacy_packed = True
-                        print(
-                            f"🔗 Mapped tensor: '{name}' -> '{actual_name}' (Legacy Packed: {is_legacy_packed})"
-                        )
                         break
                 else:
                     if "blk." in name and not name.startswith("blk.0"):
                         print(f"⚠️ Skipping non-existent layer in small model: {name}")
                         return None
+            
+            is_legacy_packed = False
+            if actual_name.endswith(".packed_weights"):
+                is_legacy_packed = True
 
             # Loading Strategy
             if is_legacy_packed:
