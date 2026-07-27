@@ -99,10 +99,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateMetrics(metrics) {
+        const sizeLabel = metrics.bit_depth === 4 ? "Compressed:" : "DNA Size:";
         metricsContent.innerHTML = `
             <div class="metric-row"><span>Dims:</span> <span class="metric-val">${metrics.dims}</span></div>
             <div class="metric-row"><span>Original:</span> <span class="metric-val">${metrics.original_size}B</span></div>
-            <div class="metric-row"><span>DNA Size:</span> <span class="metric-val">${metrics.dna_size}B</span></div>
+            <div class="metric-row"><span>${sizeLabel}</span> <span class="metric-val">${metrics.dna_size}B (${metrics.bit_depth || 4}-bit)</span></div>
             <div class="metric-row"><span>Ratio:</span> <span class="metric-val">${metrics.ratio.toFixed(1)}x</span></div>
             <div class="metric-row"><span>Ahorro:</span> <span class="metric-val">${metrics.saved.toFixed(2)}%</span></div>
             <div class="metric-row"><span>Tokens Usados:</span> <span class="metric-val">${metrics.tokens_count || 0} tok</span></div>

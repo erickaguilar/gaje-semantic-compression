@@ -215,11 +215,12 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     dna_visual = "ACGT" * 8
 
                 # 5. Métricas e Info del Sistema (SF & HD)
+                bit_depth = getattr(llm, "bit_depth", 4)
                 dims = getattr(llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896))
                 orig_size = dims * 4
-                dna_size = (dims + 3) // 4
-                ratio = orig_size / dna_size
-                saved = (1 - (dna_size / orig_size)) * 100
+                compressed_bytes = (dims * bit_depth + 7) // 8
+                ratio = orig_size / compressed_bytes
+                saved = (1 - (compressed_bytes / orig_size)) * 100
 
                 # Detallar Software (SF) y Hardware (HD)
                 sf_info = (
@@ -244,7 +245,8 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     "metrics": {
                         "dims": dims,
                         "original_size": orig_size,
-                        "dna_size": dna_size,
+                        "dna_size": compressed_bytes,
+                        "bit_depth": bit_depth,
                         "ratio": ratio,
                         "saved": saved,
                         "latency_ms": gen_time_ms,
