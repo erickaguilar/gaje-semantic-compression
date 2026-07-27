@@ -466,22 +466,79 @@ pub unsafe fn genomic_dot_product_scalar(
         let weights_block_ptr = weights.as_ptr().add(j * stride);
         let centroids_ptr = centroids.as_ptr().add(j * 4);
 
-        for k in 0..stride {
-            let byte = *weights_block_ptr.add(k);
+        let c0 = *centroids_ptr.add(0) * modulation[0];
+        let c1 = *centroids_ptr.add(1) * modulation[1];
+        let c2 = *centroids_ptr.add(2) * modulation[2];
+        let c3 = *centroids_ptr.add(3) * modulation[3];
+        let c_arr = [c0, c1, c2, c3];
 
+        let mut k = 0;
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            let mut acc0 = _mm256_setzero_ps();
+            let mut acc1 = _mm256_setzero_ps();
+
+            while k + 4 <= stride {
+                let b0 = *weights_block_ptr.add(k);
+                let b1 = *weights_block_ptr.add(k + 1);
+                let b2 = *weights_block_ptr.add(k + 2);
+                let b3 = *weights_block_ptr.add(k + 3);
+
+                let w_vals = [
+                    c_arr[((b0 >> 6) & 0b11) as usize],
+                    c_arr[((b0 >> 4) & 0b11) as usize],
+                    c_arr[((b0 >> 2) & 0b11) as usize],
+                    c_arr[(b0 & 0b11) as usize],
+                    c_arr[((b1 >> 6) & 0b11) as usize],
+                    c_arr[((b1 >> 4) & 0b11) as usize],
+                    c_arr[((b1 >> 2) & 0b11) as usize],
+                    c_arr[(b1 & 0b11) as usize],
+                    c_arr[((b2 >> 6) & 0b11) as usize],
+                    c_arr[((b2 >> 4) & 0b11) as usize],
+                    c_arr[((b2 >> 2) & 0b11) as usize],
+                    c_arr[(b2 & 0b11) as usize],
+                    c_arr[((b3 >> 6) & 0b11) as usize],
+                    c_arr[((b3 >> 4) & 0b11) as usize],
+                    c_arr[((b3 >> 2) & 0b11) as usize],
+                    c_arr[(b3 & 0b11) as usize],
+                ];
+
+                let vw0 = _mm256_loadu_ps(w_vals.as_ptr());
+                let vw1 = _mm256_loadu_ps(w_vals.as_ptr().add(8));
+
+                let vi0 = _mm256_loadu_ps(input_block_ptr.add(k * 4));
+                let vi1 = _mm256_loadu_ps(input_block_ptr.add(k * 4 + 8));
+
+                acc0 = _mm256_fmadd_ps(vw0, vi0, acc0);
+                acc1 = _mm256_fmadd_ps(vw1, vi1, acc1);
+
+                k += 4;
+            }
+
+            let acc = _mm256_add_ps(acc0, acc1);
+            let hi = _mm256_extractf128_ps(acc, 1);
+            let lo = _mm256_castps256_ps128(acc);
+            let sum128 = _mm_add_ps(lo, hi);
+            let shuf = _mm_movehdup_ps(sum128);
+            let sums = _mm_add_ps(sum128, shuf);
+            let shuf2 = _mm_movehl_ps(sums, sums);
+            let result = _mm_add_ss(sums, shuf2);
+            sum += _mm_cvtss_f32(result);
+        }
+
+        while k < stride {
+            let byte = *weights_block_ptr.add(k);
             for b in 0..4usize {
                 let shift = (3 - b) * 2;
                 let bits = (byte >> shift) & 0b11;
-                let c_idx = (bits ^ (bits >> 1)) as usize;
-
-                let weight_val = *centroids_ptr.add(c_idx) * modulation[c_idx];
+                let weight_val = c_arr[bits as usize];
                 sum += weight_val * *input_block_ptr.add(k * 4 + b);
             }
+            k += 1;
         }
     }
 
-    // Frenado Lagrangiano: El rozamiento semántico aniquila el ruido residual (Entropía)
-    // Esto asegura que el eco toroidal sea puro en ciclos infinitos.
     if sum.abs() < 1e-5 {
         sum = 0.0;
     }
@@ -507,16 +564,76 @@ pub unsafe fn genomic_dot_product_4bit(
         let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
         let centroids_ptr = centroids.as_ptr().add(j * 16);
 
-        for k in 0..stride_4bit {
+        // Pre-cargar los 16 centroides del bloque en L1 cache local
+        let c_lut: &[f32; 16] = &*(centroids_ptr as *const [f32; 16]);
+
+        let mut k = 0;
+
+        #[cfg(target_arch = "x86_64")]
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            let mut acc0 = _mm256_setzero_ps();
+            let mut acc1 = _mm256_setzero_ps();
+
+            while k + 8 <= stride_4bit {
+                let b0 = *weights_block_ptr.add(k);
+                let b1 = *weights_block_ptr.add(k + 1);
+                let b2 = *weights_block_ptr.add(k + 2);
+                let b3 = *weights_block_ptr.add(k + 3);
+                let b4 = *weights_block_ptr.add(k + 4);
+                let b5 = *weights_block_ptr.add(k + 5);
+                let b6 = *weights_block_ptr.add(k + 6);
+                let b7 = *weights_block_ptr.add(k + 7);
+
+                let w_vals = [
+                    c_lut[(b0 >> 4) as usize],
+                    c_lut[(b0 & 0x0F) as usize],
+                    c_lut[(b1 >> 4) as usize],
+                    c_lut[(b1 & 0x0F) as usize],
+                    c_lut[(b2 >> 4) as usize],
+                    c_lut[(b2 & 0x0F) as usize],
+                    c_lut[(b3 >> 4) as usize],
+                    c_lut[(b3 & 0x0F) as usize],
+                    c_lut[(b4 >> 4) as usize],
+                    c_lut[(b4 & 0x0F) as usize],
+                    c_lut[(b5 >> 4) as usize],
+                    c_lut[(b5 & 0x0F) as usize],
+                    c_lut[(b6 >> 4) as usize],
+                    c_lut[(b6 & 0x0F) as usize],
+                    c_lut[(b7 >> 4) as usize],
+                    c_lut[(b7 & 0x0F) as usize],
+                ];
+
+                let vw0 = _mm256_loadu_ps(w_vals.as_ptr());
+                let vw1 = _mm256_loadu_ps(w_vals.as_ptr().add(8));
+
+                let vi0 = _mm256_loadu_ps(input_block_ptr.add(k * 2));
+                let vi1 = _mm256_loadu_ps(input_block_ptr.add(k * 2 + 8));
+
+                acc0 = _mm256_fmadd_ps(vw0, vi0, acc0);
+                acc1 = _mm256_fmadd_ps(vw1, vi1, acc1);
+
+                k += 8;
+            }
+
+            let acc = _mm256_add_ps(acc0, acc1);
+            let hi = _mm256_extractf128_ps(acc, 1);
+            let lo = _mm256_castps256_ps128(acc);
+            let sum128 = _mm_add_ps(lo, hi);
+            let shuf = _mm_movehdup_ps(sum128);
+            let sums = _mm_add_ps(sum128, shuf);
+            let shuf2 = _mm_movehl_ps(sums, sums);
+            let result = _mm_add_ss(sums, shuf2);
+            sum += _mm_cvtss_f32(result);
+        }
+
+        while k < stride_4bit {
             let byte = *weights_block_ptr.add(k);
-
-            // Peso 1 (High nibble)
             let c_idx1 = (byte >> 4) as usize;
-            sum += *centroids_ptr.add(c_idx1) * *input_block_ptr.add(k * 2);
+            sum += c_lut[c_idx1] * *input_block_ptr.add(k * 2);
 
-            // Peso 2 (Low nibble)
             let c_idx2 = (byte & 0x0F) as usize;
-            sum += *centroids_ptr.add(c_idx2) * *input_block_ptr.add(k * 2 + 1);
+            sum += c_lut[c_idx2] * *input_block_ptr.add(k * 2 + 1);
+            k += 1;
         }
     }
 
