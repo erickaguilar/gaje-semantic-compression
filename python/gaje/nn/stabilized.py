@@ -1204,6 +1204,33 @@ class GenomicLLM:
         from gaje.nn.configs import ArchitectureConfig
         from gaje.nn import constants as C
 
+        if os.path.exists(input_path) and os.path.isfile(input_path):
+            with open(input_path, "rb") as f:
+                magic = f.read(4)
+                if magic == b"GAJE":
+                    print(f"⚡ [Zero-Copy Mmap] Cargando modelo binario plano mmap instantáneo: {input_path}")
+                    t0 = time.perf_counter()
+                    rust_llm = dna_semantic_compression.load_genomic_auto(input_path)
+                    load_ms = (time.perf_counter() - t0) * 1000.0
+                    print(f"✅ Organismo GAJE v0.9.7 Flat mmap Cargado en {load_ms:.2f} ms")
+
+                    tokenizer = None
+                    try:
+                        from transformers import AutoTokenizer
+                        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+                    except Exception as ex_t:
+                        print(f"⚠️ Warning tokenizers: {ex_t}")
+                        try:
+                            from tokenizers import Tokenizer
+                            tokenizer = Tokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+                        except Exception:
+                            pass
+                    
+                    obj = cls.__new__(cls)
+                    obj.rust_llm = rust_llm
+                    obj.tokenizer = tokenizer
+                    return obj
+
         if not input_path.endswith(".gaje"):
             input_path = os.path.join(input_path, "model.gaje")
 

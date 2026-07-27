@@ -58,6 +58,10 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::io::loader::save_genomic_model_py,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::io::loader::load_genomic_auto_py,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(crate::nn::merger::merge_models_py, m)?)?;
     m.add_function(wrap_pyfunction!(
         crate::compute::math::dequantize_embedding_py,

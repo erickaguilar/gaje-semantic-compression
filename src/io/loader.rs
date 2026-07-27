@@ -628,7 +628,244 @@ impl NativeLoader {
                 .map_err(std::io::Error::other)?,
         })
     }
+}
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct FlatTensorEntry {
+    pub name: String,
+    pub bit_depth: usize,
+    pub out_features: usize,
+    pub in_features: usize,
+    pub dna_off: usize,
+    pub dna_len: usize,
+    pub c_off: usize,
+    pub c_len: usize,
+    pub anc_off: usize,
+    pub anc_len: usize,
+    pub bias_off: usize,
+    pub bias_len: usize,
+}
+
+pub struct GajeFlatFileReader {
+    pub mmap: Arc<memmap2::Mmap>,
+    pub weights_offset: usize,
+    pub tensor_map: std::collections::HashMap<String, FlatTensorEntry>,
+    pub metadata_json: String,
+}
+
+impl GajeFlatFileReader {
+    pub fn open(path: &str) -> std::io::Result<Self> {
+        let file = std::fs::File::open(path)?;
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+
+        if mmap.len() < 4096 || &mmap[0..4] != b"GAJE" {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Invalid GAJE flat binary magic bytes",
+            ));
+        }
+
+        let num_tensors = u32::from_le_bytes([mmap[12], mmap[13], mmap[14], mmap[15]]) as usize;
+        let meta_len = u64::from_le_bytes([
+            mmap[16], mmap[17], mmap[18], mmap[19], mmap[20], mmap[21], mmap[22], mmap[23],
+        ]) as usize;
+        let dir_len = u64::from_le_bytes([
+            mmap[24], mmap[25], mmap[26], mmap[27], mmap[28], mmap[29], mmap[30], mmap[31],
+        ]) as usize;
+        let weights_offset = u64::from_le_bytes([
+            mmap[32], mmap[33], mmap[34], mmap[35], mmap[36], mmap[37], mmap[38], mmap[39],
+        ]) as usize;
+
+        let meta_start = 4096;
+        let meta_end = meta_start + meta_len;
+        let metadata_json = std::str::from_utf8(&mmap[meta_start..meta_end])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+            .to_string();
+
+        let dir_start = meta_end;
+        let dir_end = dir_start + dir_len;
+        let dir_entries: Vec<FlatTensorEntry> = serde_json::from_slice(&mmap[dir_start..dir_end])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        let mut tensor_map = std::collections::HashMap::with_capacity(num_tensors);
+        for entry in dir_entries {
+            tensor_map.insert(entry.name.clone(), entry);
+        }
+
+        Ok(Self {
+            mmap: Arc::new(mmap),
+            weights_offset,
+            tensor_map,
+            metadata_json,
+        })
+    }
+
+    pub fn get_slice(&self, off: usize, len: usize) -> &[u8] {
+        if len == 0 {
+            return &[];
+        }
+        let start = self.weights_offset + off;
+        &self.mmap[start..start + len]
+    }
+
+    pub fn get_f32_slice(&self, off: usize, len: usize) -> Vec<f32> {
+        if len == 0 {
+            return Vec::new();
+        }
+        let bytes = self.get_slice(off, len);
+        let count = bytes.len() / 4;
+        let mut res = vec![0.0f32; count];
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), res.as_mut_ptr() as *mut u8, bytes.len());
+        }
+        res
+    }
+
+    pub fn get_linear(&self, name: &str, block_size: usize) -> std::io::Result<GenomicLinear> {
+        let entry = self.tensor_map.get(name).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Flat tensor entry '{}' not found", name),
+            )
+        })?;
+
+        let dna = self.get_slice(entry.dna_off, entry.dna_len).to_vec();
+        let centroids = self.get_f32_slice(entry.c_off, entry.c_len);
+        let anchors = self.get_slice(entry.anc_off, entry.anc_len).to_vec();
+        let bias = self.get_f32_slice(entry.bias_off, entry.bias_len);
+
+        Ok(GenomicLinear::new(
+            dna,
+            anchors,
+            centroids,
+            entry.out_features,
+            entry.in_features,
+            block_size,
+            Vec::new(),
+            1e-6,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            bias,
+            entry.bit_depth as u8,
+        ))
+    }
+
+    pub fn load_genomic(&self) -> std::io::Result<GenomicLLM> {
+        let config: ModelConfig = serde_json::from_str(&self.metadata_json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        let block_size = 32;
+        let head_dim = config.n_embd / config.n_head;
+
+        let embd_dna = self.get_linear("token_embd", block_size)?;
+        let output_norm = self.get_f32_slice(
+            self.tensor_map.get("output_norm").unwrap().dna_off,
+            self.tensor_map.get("output_norm").unwrap().dna_len,
+        );
+        let lm_head = self.get_linear("lm_head", block_size)?;
+
+        let mut blocks = Vec::with_capacity(config.n_blocks);
+        for i in 0..config.n_blocks {
+            let p = format!("blk.{}.", i);
+
+            let attn_norm_entry = self.tensor_map.get(&format!("{}attn_norm", p)).unwrap();
+            let attn_norm = self.get_f32_slice(attn_norm_entry.dna_off, attn_norm_entry.dna_len);
+
+            let ffn_norm_entry = self.tensor_map.get(&format!("{}ffn_norm", p)).unwrap();
+            let ffn_norm = self.get_f32_slice(ffn_norm_entry.dna_off, ffn_norm_entry.dna_len);
+
+            let has_fused_qkv = self.tensor_map.contains_key(&format!("{}attn_qkv", p));
+            let has_fused_gate_up = self.tensor_map.contains_key(&format!("{}ffn_gate_up", p));
+
+            let (q_gen, k_gen, v_gen, fused_qkv) = if has_fused_qkv {
+                let f_qkv = self.get_linear(&format!("{}attn_qkv", p), block_size)?;
+                (GenomicLinear::empty(), GenomicLinear::empty(), GenomicLinear::empty(), Some(f_qkv))
+            } else {
+                (
+                    self.get_linear(&format!("{}attn_q", p), block_size)?,
+                    self.get_linear(&format!("{}attn_k", p), block_size)?,
+                    self.get_linear(&format!("{}attn_v", p), block_size)?,
+                    None,
+                )
+            };
+
+            let w_o = self.get_linear(&format!("{}attn_output", p), block_size)?;
+
+            let (gate_gen, up_gen, fused_gate_up) = if has_fused_gate_up {
+                let f_gu = self.get_linear(&format!("{}ffn_gate_up", p), block_size)?;
+                (GenomicLinear::empty(), GenomicLinear::empty(), Some(f_gu))
+            } else {
+                (
+                    self.get_linear(&format!("{}ffn_gate", p), block_size)?,
+                    self.get_linear(&format!("{}ffn_up", p), block_size)?,
+                    None,
+                )
+            };
+
+            let w_down = self.get_linear(&format!("{}ffn_down", p), block_size)?;
+
+            let attn = GenomicAttention::new(
+                config.n_head,
+                config.n_head_kv,
+                head_dim,
+                attn_norm,
+                config.eps,
+                config.config.rope_base,
+                config.config.rope_style.clone(),
+            );
+
+            let mut block = RustGenomicBlock::new(
+                i,
+                attn,
+                q_gen,
+                k_gen,
+                v_gen,
+                w_o,
+                gate_gen,
+                up_gen,
+                w_down,
+                ffn_norm,
+                config.eps,
+                config.config.ffn_act.clone(),
+                config.config.use_genomic_norm,
+                1.0,
+                config.config.rna_threshold,
+            );
+            block.fused_qkv = fused_qkv;
+            block.fused_gate_up = fused_gate_up;
+            blocks.push(block);
+        }
+
+        Ok(GenomicLLM {
+            embeddings: embd_dna,
+            blocks,
+            output_norm,
+            lm_head,
+            eps: config.eps,
+            k_wta_ratio: 0.50,
+            topology: None,
+        })
+    }
+}
+
+pub fn load_genomic_auto(path: &str) -> std::io::Result<GenomicLLM> {
+    if let Ok(mut f) = std::fs::File::open(path) {
+        use std::io::Read;
+        let mut magic = [0u8; 4];
+        if f.read_exact(&mut magic).is_ok() && &magic == b"GAJE" {
+            println!("⚡ [Zero-Copy Mmap] Detectado formato binario plano .gaje.flat. Carga mmap instantánea...");
+            let reader = GajeFlatFileReader::open(path)?;
+            return reader.load_genomic();
+        }
+    }
+    let loader = NativeLoader::new(path)?;
+    loader.load_llm()
+}
+
+impl NativeLoader {
     pub fn load_config(&self) -> std::io::Result<ModelConfig> {
         let reader = crate::core::db::GajeDatabaseReader {
             db: self.db.clone(),
@@ -870,7 +1107,9 @@ impl NativeLoader {
         let expected_2bit = (n_elements + 3) / 4;
         let expected_4bit = (n_elements + 1) / 2;
 
-        let bit_depth = if dna.len() == expected_4bit {
+        let bit_depth = if dna.len() == n_elements * 4 {
+            32
+        } else if dna.len() == expected_4bit {
             4
         } else if dna.len() == expected_2bit {
             2
@@ -1134,4 +1373,11 @@ pub fn init_born_genomic_model_py(
     let inner = init_born_genomic_model(path, config, vocab_size)
         .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
     Ok(inner)
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(name = "load_genomic_auto")]
+pub fn load_genomic_auto_py(path: &str) -> PyResult<crate::nn::llm::GenomicLLM> {
+    load_genomic_auto(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
 }
