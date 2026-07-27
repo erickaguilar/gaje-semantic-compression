@@ -186,12 +186,16 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 # 3. Visualización del primer token (para la UI de ADN)
                 try:
                     first_token_id = tokens[0] if tokens else 0
-                    if hasattr(llm.embeddings, "get_row"):
-                        emb_row = llm.embeddings.get_row(first_token_id).tolist()
+                    emb_obj = getattr(llm, "embeddings", getattr(llm.rust_llm, "embeddings", None))
+                    n_embd_val = getattr(llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896))
+                    if emb_obj and hasattr(emb_obj, "get_row"):
+                        emb_row = emb_obj.get_row(first_token_id)
+                        if hasattr(emb_row, "tolist"):
+                            emb_row = emb_row.tolist()
                     else:
                         import numpy as np
 
-                        emb_row = np.random.randn(llm.n_embd).tolist()
+                        emb_row = np.random.randn(n_embd_val).tolist()
 
                     thresholds = [-0.34, 0.0, 0.34]
                     dna_strand_bytes = dna_semantic_compression.quantize_embedding(
@@ -211,7 +215,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     dna_visual = "ACGT" * 8
 
                 # 5. Métricas e Info del Sistema (SF & HD)
-                dims = llm.n_embd
+                dims = getattr(llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896))
                 orig_size = dims * 4
                 dna_size = (dims + 3) // 4
                 ratio = orig_size / dna_size

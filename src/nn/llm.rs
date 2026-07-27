@@ -450,6 +450,16 @@ impl GenomicLLM {
     }
 
     #[getter]
+    pub fn n_embd(&self) -> usize {
+        self.embeddings.in_features
+    }
+
+    #[getter]
+    pub fn embeddings(&self) -> GenomicLinear {
+        self.embeddings.clone()
+    }
+
+    #[getter]
     pub fn k_wta_ratio(&self) -> f32 {
         self.k_wta_ratio
     }

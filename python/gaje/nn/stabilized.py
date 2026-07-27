@@ -1229,6 +1229,12 @@ class GenomicLLM:
                     obj = cls.__new__(cls)
                     obj.rust_llm = rust_llm
                     obj.tokenizer = tokenizer
+                    obj.n_embd = rust_llm.n_embd if hasattr(rust_llm, "n_embd") else 896
+                    obj.embeddings = rust_llm.embeddings if hasattr(rust_llm, "embeddings") else None
+                    obj.n_head = 14
+                    obj.n_head_kv = 2
+                    obj.head_dim = 64
+                    obj.n_blocks = len(rust_llm.blocks) if hasattr(rust_llm, "blocks") else 24
                     return obj
 
         if not input_path.endswith(".gaje"):
