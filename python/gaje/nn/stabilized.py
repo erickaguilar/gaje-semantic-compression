@@ -939,7 +939,7 @@ class GenomicLLM:
         spiking_steps=24,
         spiking_threshold=0.5,
         spiking_decay=0.8,
-        use_toroidal=True,
+        use_toroidal=False,
         toroidal_mass=1.0,
         toroidal_curvature=0.1,
     ):
