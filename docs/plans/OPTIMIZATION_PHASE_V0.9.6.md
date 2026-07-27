@@ -1,96 +1,56 @@
-# 🚀 Roadmap de Optimización, Profiling y Estabilidad v0.9.6+
+# 🚀 Roadmap de Optimización, Profiling y Estabilidad v0.9.6+ (Actualizado Fase B)
 
-## 📋 Resumen Ejecutivo
+## 📋 Resumen Ejecutivo y Resultados de Profiling
 
-Basado en el análisis crítico de ingeniería y la evaluación del motor nativo en producción con **Qwen2-0.5B (4-bit)**, este documento reordena las prioridades para maximizar el rendimiento en CPU, eliminar la latencia de FFI PyO3 y garantizar 100% de estabilidad sin crashes.
+Basado en la medición empírica microsegundo a microsegundo (`std::time::Instant`) en el procesador Intel i7-8550U:
+
+```
+[Tiempo Total Decode: ~270 ms/token]
+├── 24 Bloques Transformer (168 Capas 4-bit) ──► 237.26 ms  (87.5% del tiempo de CPU)
+└── LM Head (Proyección 151,936 Logits)       ──►  32.08 ms  (12.5% del tiempo de CPU)
+```
+
+**Verdad Empírica**: Los 24 Bloques Transformer representan el **87.5% del tiempo de decodificación**, confirmando que la prioridad número uno es reducir el número de invocaciones de kernels y la fragmentación de caché L1/L2 en los bloques transformer.
 
 ---
 
-## 🎯 Hoja de Ruta Ajustada por Prioridad (Sprint Plan v0.9.6+)
+## 🎯 Hoja de Ruta de Optimización Basada en Datos
 
 ```mermaid
 graph TD
-    P0["Fase 0: Profiling con Flamegraph & Estabilidad (P0)"] --> P1["Fase 1: Bucle Nativo en Rust (FFI Overhead 0%)"]
-    P1 --> P2["Fase 2: Kernels Fused SIMD 4-bit (AVX2/NEON)"]
-    P2 --> P3["Fase 3: Streaming SSE en Servidor Web"]
-    P3 --> P4["Fase 4: Calibración Dinámica de Métricas UI"]
+    P0["Fase 0: Profiling Empírico Completo (0% Leaks)"] --> P1A["Fase 1A: Bucle Nativo Rust (10.8x Speedup)"]
+    P1A --> P1B["Fase 1B: Fusión Física de Matrices (.gaje v0.9.7)"]
+    P1B --> P1C["Fase 1C: Carga Zero-Copy con mmap (memmap2)"]
+    P1C --> P2["Fase 2: Benchmarking con SIMD Vectorial (AVX2/NEON)"]
 ```
 
 ---
 
-### 🔍 Fase 0: Profiling Empírico & Estabilidad (Prioridad P0 - URGENTE)
+### 🔬 Fase 1B: Fusión Física de Matrices ($W_{qkv}$ y $W_{gate\_up}$)
 
-**Objetivo**: Aislar científicamente el consumo de tiempo por componente antes de escribir código de optimización.
+**Objetivo**: Reestructurar el empaquetado binario del modelo de 7 capas por bloque a **4 capas fusionadas por bloque**, reduciendo las llamadas a multiplicaciones matriciales de 168 a **solo 96 por token** (43% menos overhead de hilo).
 
-1. **Profiling con `cargo flamegraph` / `perf`**:
-   - Medir el desglose porcentual exacto del tiempo de ejecución en un forward pass de Qwen2-0.5B:
-     - `LM Head` (151,936 logits)
-     - `PyO3 FFI Boundary` (llamada token por token desde Python)
-     - `GenomicLinear` (desempaquetado escalar 4-bit)
-     - `KV Cache` (copias de vectores en memoria)
-2. **Prueba de Estrés y Estabilidad (0 Crashes)**:
-   - Diagnosticar el timeout HTTP / crash `"Error de conexión"`.
-   - Garantizar la ejecución limpia de **50 interacciones consecutivas sin fuga de RAM ni panics en Rust**.
+1. **Formato Fusionado Físico (`.gaje` v0.9.7)**:
+   - $W_{qkv} = \text{concat}([W_q, W_k, W_v], \text{axis}=0)$: Matrix contigua de $(896 + 128 + 128) \times 896 = 1152 \times 896$ filas.
+   - $W_{gate\_up} = \text{concat}([W_{gate}, W_{up}], \text{axis}=0)$: Matrix contigua de $(4864 + 4864) \times 896 = 9728 \times 896$ filas.
+   - Preservar dimensiones asimétricas de GQA ($Q=896, K=128, V=128$).
+2. **Versionado de Formato**:
+   - Cabecera `version: 0x000907` para mantener compatibilidad e informar al cargador nativo.
 
 ---
 
-### ⚙️ Fase 1: Bucle Autorregresivo 100% Nativo en Rust (Prioridad P1)
+### ⚡ Fase 1C: Zero-Copy `mmap` Memory Mapping
 
-**Objetivo**: Eliminar el baile FFI PyO3 (Python ↔ Rust) por cada token.
-
-1. **Llamada Única FFI por Generación**:
-   - Python invoca una sola vez `rust_llm.generate_native(prompt, max_tokens)` y recibe la secuencia completa o un generador iterativo de C-ABI.
-2. **Gestión de KV Cache Contiguo**:
-   - Pre-asignación contigua de la memoria de claves/valores en Rust (`AlignedVec<f32>`) evitando relocalizaciones de RAM (`Vec::push`).
-
-**Métrica Objetivo**: Incremento de velocidad de **0.41 tok/s a > 4.0 tok/s**.
+**Objetivo**: Reemplazar la extracción secuencial SQLite/Heap por mapeo de memoria directo (`memmap2`), eliminando la latencia de arranque y permitiendo *lazy page loading* administrado por el SO.
 
 ---
 
-### 🏎️ Fase 2: Kernels Fused SIMD 4-bit (AVX2 / NEON) (Prioridad P2)
+### 📊 Matriz de Métricas Objetivo
 
-**Objetivo**: Acelerar el producto punto de tensores 4-bit en CPU.
-
-1. **Unpacking + Dot Product Fusionado**:
-   - En lugar de desempaquetar a un buffer temporal en FP32 y luego multiplicar, implementar `fused_dequant_dot_4bit` en [`src/compute/kernels.rs`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/src/compute/kernels.rs).
-2. **Instrucciones Vectoriales**:
-   - x86_64: `_mm256_shuffle_epi8` + `_mm256_fmadd_ps` (AVX2/FMA).
-   - ARM64: `vld1q_u8` + `vshlq_n_u8` (NEON).
-3. **Criterio de Regresión Obligatorio**:
-   - Ejecutar [`scripts/gaje_diff.py`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/scripts/gaje_diff.py) tras cada modificación de kernel para verificar que **CosSim se mantenga > 0.92**.
-
-**Métrica Objetivo**: Velocidad final de generación en CPU **> 8.0 - 12.0 tok/s**.
-
----
-
-### 📡 Fase 3: Streaming SSE en Servidor Web (Prioridad P3)
-
-**Objetivo**: Renderizado continuo de texto y tiempo al primer token (TTFT) inmediato.
-
-1. **Endpoint Server-Sent Events (`/api/chat_stream`)**:
-   - Transmitir eventos `text/event-stream` token por token desde Python a la UI.
-2. **Eliminación de Timeouts HTTP**:
-   - La interfaz mantiene el canal abierto sin bloquear el socket HTTP.
-
-**Métrica Objetivo**: **TTFT < 500 ms** y 0 desconexiones.
-
----
-
-### 📊 Fase 4: Transparencia de Métricas en UI (Prioridad P4)
-
-**Objetivo**: Reflejar exactamente la compresión real del organismo cargado.
-
-- **4-bit Uniforme**: Explicitar **8.0x Ratio** (87.5% Ahorro).
-- **2-bit Genómico**: Explicitar **16.0x Ratio** (93.75% Ahorro).
-
----
-
-## 📊 Matriz de Métricas Objetivo
-
-| Métrica | Estado Actual | Objetivo v0.9.6+ | Herramienta de Validación |
-| :--- | :---: | :---: | :--- |
-| **Velocidad de Inferencia** | 0.41 tok/s | **> 8.0 tok/s** | Logs de `server.py` |
-| **Estabilidad de Servidor** | Crash en ~4 preguntas | **0 Crashes (50+ prompts)** | Test de estrés en bucle |
-| **Overhead FFI PyO3** | Alto (por token) | **1 sola llamada FFI** | Flamegraph |
-| **Paridad / Coherencia** | CosSim 0.9247 | **CosSim > 0.9250** | `gaje_diff.py` |
-| **Transparencia en UI** | Ratios fijos | **Ratios dinámicos por Bit-Depth** | `script.js` |
+| Métrica | Fase 0 (Baseline) | Fase 1A (Rust Loop) | Objetivo Fase 1B+1C | Herramienta de Validación |
+| :--- | :---: | :---: | :---: | :--- |
+| **Tiempo de Carga (.gaje)** | 205.10 s | 36.35 s | **< 0.10 s (mmap)** | `profile_generation_breakdown.py` |
+| **TTFT / Prefill (18 tok)** | 27,500 ms | 2,546 ms | **< 1,200 ms** | `profile_generation_breakdown.py` |
+| **Decode Latency (ms/tok)** | 1,724 ms | 163 ms | **< 80 ms** | `profile_generation_breakdown.py` |
+| **Velocidad Inferencia** | 0.23 tok/s | 2.49 tok/s | **> 8.0 - 12.0 tok/s** | `server.py` Web UI |
+| **Paridad Matemática** | CosSim 1.0000 | CosSim 1.0000 | **CosSim = 1.0000** | `scripts/gaje_diff.py` |
