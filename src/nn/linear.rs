@@ -219,6 +219,90 @@ impl GenomicLinear {
         }
     }
 
+    pub fn empty() -> Self {
+        GenomicLinear {
+            weight_db: WeightDatabase::GenomicF32(Arc::new(Vec::new())),
+            epi_strands: Arc::new(Vec::new()),
+            tri_strands: Arc::new(Vec::new()),
+            epi_cols: Arc::new(Vec::new()),
+            tri_cols: Arc::new(Vec::new()),
+            anchor_indices: Arc::new(Vec::new()),
+            anchor_values: Arc::new(Vec::new()),
+            anchor_row_ptrs: Arc::new(vec![0]),
+            centroids: Vec::new(),
+            epigenetic_centroids: Vec::new(),
+            triplet_centroids: Vec::new(),
+            out_features: 0,
+            in_features: 0,
+            block_size: 32,
+            stride: 8,
+            rmsnorm_weight: Vec::new(),
+            eps: 1e-6,
+            bias: Vec::new(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn compute_single_row(
+        &self,
+        i: usize,
+        input: &[f32],
+        m_factors: &[f32; 4],
+        n_blocks: usize,
+    ) -> f32 {
+        let mut sum = 0.0f32;
+        match &self.weight_db {
+            WeightDatabase::GenomicF32(db) => {
+                let row_off = i * self.in_features;
+                let row_weights = &db[row_off..row_off + self.in_features];
+                if row_weights.len() == input.len() {
+                    sum = unsafe { crate::compute::kernels::dot_product(input, row_weights) };
+                } else {
+                    sum = input.iter().zip(row_weights.iter()).map(|(x, w)| x * w).sum();
+                }
+            }
+            WeightDatabase::Genomic2Bit(db) => {
+                let row_off = i * n_blocks * self.stride;
+                let c_start = i * n_blocks * 4;
+                sum = unsafe {
+                    crate::compute::kernels::genomic_dot_product(
+                        &db[row_off..row_off + n_blocks * self.stride],
+                        input,
+                        &self.centroids[c_start..c_start + n_blocks * 4],
+                        self.stride,
+                        n_blocks,
+                        m_factors,
+                    )
+                };
+            }
+            WeightDatabase::Genomic4Bit(db) => {
+                let row_off = i * n_blocks * self.stride;
+                let c_start = i * n_blocks * 16;
+                sum = unsafe {
+                    crate::compute::kernels::genomic_dot_product_4bit(
+                        &db[row_off..row_off + n_blocks * self.stride],
+                        input,
+                        &self.centroids[c_start..c_start + n_blocks * 16],
+                        self.stride,
+                        n_blocks,
+                    )
+                };
+            }
+        }
+        let a_s = self.anchor_row_ptrs[i];
+        let a_e = self.anchor_row_ptrs[i + 1];
+        for k in a_s..a_e {
+            let col_idx = (self.anchor_indices[k] as usize) % self.in_features;
+            if let Some(&in_val) = input.get(col_idx) {
+                sum += in_val * self.anchor_values[k].to_f32();
+            }
+        }
+        if !self.bias.is_empty() {
+            sum += self.bias[i];
+        }
+        sum
+    }
+
     pub fn forward_core(
         &self,
         input: Vec<f32>,
@@ -229,69 +313,70 @@ impl GenomicLinear {
         let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
         let results: Vec<f32> = (0..self.out_features)
             .into_par_iter()
-            .map(|i| {
-                let mut sum = 0.0f32;
-                match &self.weight_db {
-                    WeightDatabase::GenomicF32(db) => {
-                        let row_off = i * self.in_features;
-                        let row_weights = &db[row_off..row_off + self.in_features];
-                        // Aseguramos que la longitud coincide antes de llamar al kernel SIMD
-                        if row_weights.len() == input.len() {
-                            sum = unsafe {
-                                crate::compute::kernels::dot_product(&input, row_weights)
-                            };
-                        } else {
-                            // Fallback seguro si hay padding o desajuste
-                            sum = input
-                                .iter()
-                                .zip(row_weights.iter())
-                                .map(|(x, w)| x * w)
-                                .sum();
-                        }
-                    }
-                    WeightDatabase::Genomic2Bit(db) => {
-                        let row_off = i * n_blocks * self.stride;
-                        let c_start = i * n_blocks * 4;
-                        sum = unsafe {
-                            crate::compute::kernels::genomic_dot_product(
-                                &db[row_off..row_off + n_blocks * self.stride],
-                                &input,
-                                &self.centroids[c_start..c_start + n_blocks * 4],
-                                self.stride,
-                                n_blocks,
-                                &m_factors,
-                            )
-                        };
-                    }
-                    WeightDatabase::Genomic4Bit(db) => {
-                        let row_off = i * n_blocks * self.stride;
-                        let c_start = i * n_blocks * 16;
-                        sum = unsafe {
-                            crate::compute::kernels::genomic_dot_product_4bit(
-                                &db[row_off..row_off + n_blocks * self.stride],
-                                &input,
-                                &self.centroids[c_start..c_start + n_blocks * 16],
-                                self.stride,
-                                n_blocks,
-                            )
-                        };
-                    }
-                }
-                let a_s = self.anchor_row_ptrs[i];
-                let a_e = self.anchor_row_ptrs[i + 1];
-                for k in a_s..a_e {
-                    let col_idx = (self.anchor_indices[k] as usize) % self.in_features;
-                    if let Some(&in_val) = input.get(col_idx) {
-                        sum += in_val * self.anchor_values[k].to_f32();
-                    }
-                }
-                if !self.bias.is_empty() {
-                    sum += self.bias[i];
-                }
-                sum
-            })
+            .map(|i| self.compute_single_row(i, &input, &m_factors, n_blocks))
             .collect();
         Ok(results)
+    }
+
+    pub fn forward_fused_3(
+        l1: &GenomicLinear,
+        l2: &GenomicLinear,
+        l3: &GenomicLinear,
+        input: &[f32],
+        modulation_factors: Option<[f32; 4]>,
+    ) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), String> {
+        let n_blocks = l1.in_features / l1.block_size;
+        let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
+        let o1 = l1.out_features;
+        let o2 = l2.out_features;
+        let o3 = l3.out_features;
+        let total = o1 + o2 + o3;
+
+        let fused_out: Vec<f32> = (0..total)
+            .into_par_iter()
+            .map(|idx| {
+                if idx < o1 {
+                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                } else if idx < o1 + o2 {
+                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                } else {
+                    l3.compute_single_row(idx - o1 - o2, input, &m_factors, n_blocks)
+                }
+            })
+            .collect();
+
+        let res1 = fused_out[0..o1].to_vec();
+        let res2 = fused_out[o1..o1 + o2].to_vec();
+        let res3 = fused_out[o1 + o2..total].to_vec();
+        Ok((res1, res2, res3))
+    }
+
+    pub fn forward_fused_2(
+        l1: &GenomicLinear,
+        l2: &GenomicLinear,
+        input: &[f32],
+        modulation_factors: Option<[f32; 4]>,
+    ) -> Result<(Vec<f32>, Vec<f32>), String> {
+        let n_blocks = l1.in_features / l1.block_size;
+        let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
+        let o1 = l1.out_features;
+        let o2 = l2.out_features;
+        let total = o1 + o2;
+
+        let fused_out: Vec<f32> = (0..total)
+            .into_par_iter()
+            .map(|idx| {
+                if idx < o1 {
+                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                } else {
+                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                }
+            })
+            .collect();
+
+        let res1 = fused_out[0..o1].to_vec();
+        let res2 = fused_out[o1..total].to_vec();
+        Ok((res1, res2))
     }
 
     pub fn get_row_core(&self, idx: usize) -> Result<Vec<f32>, String> {

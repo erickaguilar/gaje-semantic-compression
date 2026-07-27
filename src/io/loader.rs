@@ -669,27 +669,42 @@ impl NativeLoader {
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
             let p = format!("blk.{}.", i);
-            let q_gen = self.get_linear(
-                &read_txn,
-                &format!("{}attn_q", p),
-                config.n_embd,
-                config.n_head * head_dim,
-                block_size,
-            );
-            let k_gen = self.get_linear(
-                &read_txn,
-                &format!("{}attn_k", p),
-                config.n_embd,
-                config.n_head_kv * head_dim,
-                block_size,
-            );
-            let v_gen = self.get_linear(
-                &read_txn,
-                &format!("{}attn_v", p),
-                config.n_embd,
-                config.n_head_kv * head_dim,
-                block_size,
-            );
+            let has_fused_qkv = !Self::get_tensor(&read_txn, &format!("{}attn_qkv.dna", p)).is_empty();
+            let (q_gen, k_gen, v_gen, fused_qkv) = if has_fused_qkv {
+                let qkv_out_features = config.n_head * head_dim + 2 * config.n_head_kv * head_dim;
+                let qkv_linear = self.get_linear(
+                    &read_txn,
+                    &format!("{}attn_qkv", p),
+                    config.n_embd,
+                    qkv_out_features,
+                    block_size,
+                );
+                (GenomicLinear::empty(), GenomicLinear::empty(), GenomicLinear::empty(), Some(qkv_linear))
+            } else {
+                let q_gen = self.get_linear(
+                    &read_txn,
+                    &format!("{}attn_q", p),
+                    config.n_embd,
+                    config.n_head * head_dim,
+                    block_size,
+                );
+                let k_gen = self.get_linear(
+                    &read_txn,
+                    &format!("{}attn_k", p),
+                    config.n_embd,
+                    config.n_head_kv * head_dim,
+                    block_size,
+                );
+                let v_gen = self.get_linear(
+                    &read_txn,
+                    &format!("{}attn_v", p),
+                    config.n_embd,
+                    config.n_head_kv * head_dim,
+                    block_size,
+                );
+                (q_gen, k_gen, v_gen, None)
+            };
+
             let w_o = self.get_linear(
                 &read_txn,
                 &format!("{}attn_output", p),
@@ -697,35 +712,60 @@ impl NativeLoader {
                 config.n_embd,
                 block_size,
             );
-            let ffn_h = {
-                let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate.centroids", p));
-                if c.is_empty() {
-                    config.n_embd * 4
-                } else {
-                    c.len() / (config.n_embd / block_size * 4)
-                }
+
+            let has_fused_gate_up = !Self::get_tensor(&read_txn, &format!("{}ffn_gate_up.dna", p)).is_empty();
+            let (gate_gen, up_gen, w_down, fused_gate_up) = if has_fused_gate_up {
+                let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate_up.centroids", p));
+                let n_b = config.n_embd / block_size;
+                let total_rows = if c.is_empty() { config.n_embd * 8 } else { c.len() / (n_b * 16) };
+                let ffn_h = total_rows / 2;
+                let gate_up_linear = self.get_linear(
+                    &read_txn,
+                    &format!("{}ffn_gate_up", p),
+                    config.n_embd,
+                    total_rows,
+                    block_size,
+                );
+                let w_down = self.get_linear(
+                    &read_txn,
+                    &format!("{}ffn_down", p),
+                    ffn_h,
+                    config.n_embd,
+                    block_size,
+                );
+                (GenomicLinear::empty(), GenomicLinear::empty(), w_down, Some(gate_up_linear))
+            } else {
+                let ffn_h = {
+                    let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate.centroids", p));
+                    if c.is_empty() {
+                        config.n_embd * 4
+                    } else {
+                        c.len() / (config.n_embd / block_size * 4)
+                    }
+                };
+                let gate_gen = self.get_linear(
+                    &read_txn,
+                    &format!("{}ffn_gate", p),
+                    config.n_embd,
+                    ffn_h,
+                    block_size,
+                );
+                let up_gen = self.get_linear(
+                    &read_txn,
+                    &format!("{}ffn_up", p),
+                    config.n_embd,
+                    ffn_h,
+                    block_size,
+                );
+                let w_down = self.get_linear(
+                    &read_txn,
+                    &format!("{}ffn_down", p),
+                    ffn_h,
+                    config.n_embd,
+                    block_size,
+                );
+                (gate_gen, up_gen, w_down, None)
             };
-            let gate_gen = self.get_linear(
-                &read_txn,
-                &format!("{}ffn_gate", p),
-                config.n_embd,
-                ffn_h,
-                block_size,
-            );
-            let up_gen = self.get_linear(
-                &read_txn,
-                &format!("{}ffn_up", p),
-                config.n_embd,
-                ffn_h,
-                block_size,
-            );
-            let w_down = self.get_linear(
-                &read_txn,
-                &format!("{}ffn_down", p),
-                ffn_h,
-                config.n_embd,
-                block_size,
-            );
             let attn_norm = {
                 let n = Self::get_tensor_f32(&read_txn, &format!("{}attn_norm", p));
                 if n.is_empty() {
@@ -760,7 +800,7 @@ impl NativeLoader {
                 config.config.rope_base,
                 config.config.rope_style.clone(),
             );
-            blocks.push(RustGenomicBlock::new(
+            let mut block = RustGenomicBlock::new(
                 i,
                 attn,
                 q_gen,
@@ -776,7 +816,10 @@ impl NativeLoader {
                 config.config.use_genomic_norm,
                 h_scale,
                 config.config.rna_threshold,
-            ));
+            );
+            block.fused_qkv = fused_qkv;
+            block.fused_gate_up = fused_gate_up;
+            blocks.push(block);
         }
         Ok(GenomicLLM {
             embeddings,

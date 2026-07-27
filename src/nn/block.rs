@@ -29,6 +29,8 @@ pub struct RustGenomicBlock {
     pub rna_threshold: f32,
     pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
+    pub fused_qkv: Option<GenomicLinear>,
+    pub fused_gate_up: Option<GenomicLinear>,
 }
 
 impl RustGenomicBlock {
@@ -67,6 +69,8 @@ impl RustGenomicBlock {
             rna_threshold,
             k_wta_ratio: 0.0,
             topology: None,
+            fused_qkv: None,
+            fused_gate_up: None,
         }
     }
 
@@ -115,13 +119,23 @@ impl RustGenomicBlock {
             (2, None)
         };
 
-        let q = self
-            .q_gen
-            .forward_core(x_norm.clone(), modulation, activate_rna)?;
-        let k = self
-            .k_gen
-            .forward_core(x_norm.clone(), modulation, activate_rna)?;
-        let v = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
+        let (q, k, v) = if let Some(ref qkv_gen) = self.fused_qkv {
+            let qkv_out = qkv_gen.forward_core(x_norm, modulation, activate_rna)?;
+            let q_dim = self.attn.n_head * self.attn.head_dim;
+            let kv_dim = self.attn.n_head_kv * self.attn.head_dim;
+            let q = qkv_out[0..q_dim].to_vec();
+            let k = qkv_out[q_dim..q_dim + kv_dim].to_vec();
+            let v = qkv_out[q_dim + kv_dim..q_dim + 2 * kv_dim].to_vec();
+            (q, k, v)
+        } else {
+            GenomicLinear::forward_fused_3(
+                &self.q_gen,
+                &self.k_gen,
+                &self.v_gen,
+                &x_norm,
+                modulation,
+            )?
+        };
 
         let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
         let projected_attn = self.w_o.forward_core(attn_out, modulation, activate_rna)?;
@@ -134,12 +148,20 @@ impl RustGenomicBlock {
 
         let x_ffn_n = unsafe { rms_norm(&x_post, &self.ffn_norm, self.eps) };
 
-        let gate = self
-            .gate_gen
-            .forward_core(x_ffn_n.clone(), modulation, activate_rna)?;
-        let up = self
-            .up_gen
-            .forward_core(x_ffn_n, modulation, activate_rna)?;
+        let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
+            let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
+            let ffn_dim = gate_up_out.len() / 2;
+            let gate = gate_up_out[0..ffn_dim].to_vec();
+            let up = gate_up_out[ffn_dim..2 * ffn_dim].to_vec();
+            (gate, up)
+        } else {
+            GenomicLinear::forward_fused_2(
+                &self.gate_gen,
+                &self.up_gen,
+                &x_ffn_n,
+                modulation,
+            )?
+        };
 
         if up.iter().any(|v| v.is_nan()) {
             return Err("NaN in up".into());
@@ -345,6 +367,8 @@ impl RustGenomicBlock {
             rna_threshold,
             k_wta_ratio: 0.0,
             topology: None,
+            fused_qkv: None,
+            fused_gate_up: None,
         }
     }
     pub fn forward(&mut self, x: Vec<f32>, pos: usize) -> PyResult<Vec<f32>> {

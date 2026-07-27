@@ -45,3 +45,8 @@ inspect
 *.bin
 *.pth
 *.ckpt
+*.npy
+*.zip
+*.jsonl
+gaje_v2_premium/
+.antigravitycli/
