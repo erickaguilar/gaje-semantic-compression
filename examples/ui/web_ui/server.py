@@ -68,7 +68,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             if os.path.exists(models_root):
                 for root, _, files in os.walk(models_root):
                     for f in files:
-                        if f.endswith(".gaje") and f not in seen_models:
+                        if (f.endswith(".gaje") or f.endswith(".flat")) and f not in seen_models:
                             fpath = os.path.join(root, f)
                             mtime = os.path.getmtime(fpath)
                             from datetime import datetime

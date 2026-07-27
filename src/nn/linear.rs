@@ -380,33 +380,52 @@ impl GenomicLinear {
     }
 
     pub fn get_row_core(&self, idx: usize) -> Result<Vec<f32>, String> {
-        let n_blocks = self.in_features / self.block_size;
         let mut res = vec![0.0f32; self.in_features];
+        if self.out_features == 0 || self.in_features == 0 {
+            return Ok(res);
+        }
+        let safe_idx = idx % self.out_features;
+        let n_blocks = self.in_features / self.block_size;
+
         match &self.weight_db {
             WeightDatabase::GenomicF32(db) => {
-                res.copy_from_slice(&db[idx * self.in_features..(idx + 1) * self.in_features]);
+                let row_off = safe_idx * self.in_features;
+                if row_off + self.in_features <= db.len() {
+                    res.copy_from_slice(&db[row_off..row_off + self.in_features]);
+                }
             }
             WeightDatabase::Genomic2Bit(db) => {
-                let row_start = idx * n_blocks * self.stride;
-                for b in 0..n_blocks {
-                    let c_off = (idx * n_blocks + b) * 4;
-                    let decoded = crate::compute::math::dequantize_embedding_core(
-                        &db[row_start + b * self.stride..row_start + (b + 1) * self.stride],
-                        self.block_size,
-                        Some(&self.centroids[c_off..c_off + 4]),
-                    )?;
-                    res[b * self.block_size..(b + 1) * self.block_size].copy_from_slice(&decoded);
+                let row_off = safe_idx * n_blocks * self.stride;
+                let req_bytes = n_blocks * self.stride;
+                if row_off + req_bytes <= db.len() {
+                    for b in 0..n_blocks {
+                        let c_off = (safe_idx * n_blocks + b) * 4;
+                        if c_off + 4 <= self.centroids.len() {
+                            if let Ok(decoded) = crate::compute::math::dequantize_embedding_core(
+                                &db[row_off + b * self.stride..row_off + (b + 1) * self.stride],
+                                self.block_size,
+                                Some(&self.centroids[c_off..c_off + 4]),
+                            ) {
+                                res[b * self.block_size..(b + 1) * self.block_size].copy_from_slice(&decoded);
+                            }
+                        }
+                    }
                 }
             }
             WeightDatabase::Genomic4Bit(db) => {
-                let row_start = idx * n_blocks * self.stride;
-                for b in 0..n_blocks {
-                    let c_off = (idx * n_blocks + b) * 16;
-                    let centroids = &self.centroids[c_off..c_off + 16];
-                    for k in 0..self.stride {
-                        let byte = db[row_start + b * self.stride + k];
-                        res[b * self.block_size + k * 2] = centroids[(byte >> 4) as usize];
-                        res[b * self.block_size + k * 2 + 1] = centroids[(byte & 0x0F) as usize];
+                let row_off = safe_idx * n_blocks * self.stride;
+                let req_bytes = n_blocks * self.stride;
+                if row_off + req_bytes <= db.len() {
+                    for b in 0..n_blocks {
+                        let c_off = (safe_idx * n_blocks + b) * 16;
+                        if c_off + 16 <= self.centroids.len() {
+                            let centroids = &self.centroids[c_off..c_off + 16];
+                            for k in 0..self.stride {
+                                let byte = db[row_off + b * self.stride + k];
+                                res[b * self.block_size + k * 2] = centroids[(byte >> 4) as usize];
+                                res[b * self.block_size + k * 2 + 1] = centroids[(byte & 0x0F) as usize];
+                            }
+                        }
                     }
                 }
             }
