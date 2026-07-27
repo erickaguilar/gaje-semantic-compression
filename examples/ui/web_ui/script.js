@@ -79,10 +79,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     loadModels();
 
-    function addMessage(text, type) {
+    function addMessage(text, type, meta = null) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${type}`;
-        msgDiv.innerHTML = `<p>${text}</p>`;
+        
+        let html = `<p>${text}</p>`;
+        if (type === 'bot' && meta) {
+            html += `
+                <div class="message-meta">
+                    <span class="meta-badge">⏱️ ${meta.latency_ms} ms (${meta.tokens_sec || 0} tok/s)</span>
+                    <span class="meta-badge">🔢 ${meta.tokens_count || 0} tokens</span>
+                </div>
+            `;
+        }
+
+        msgDiv.innerHTML = html;
         chatWindow.appendChild(msgDiv);
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
@@ -94,6 +105,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="metric-row"><span>DNA Size:</span> <span class="metric-val">${metrics.dna_size}B</span></div>
             <div class="metric-row"><span>Ratio:</span> <span class="metric-val">${metrics.ratio.toFixed(1)}x</span></div>
             <div class="metric-row"><span>Ahorro:</span> <span class="metric-val">${metrics.saved.toFixed(2)}%</span></div>
+            <div class="metric-row"><span>Tokens Usados:</span> <span class="metric-val">${metrics.tokens_count || 0} tok</span></div>
+            <div class="metric-row"><span>Tiempo Resp:</span> <span class="metric-val">${metrics.latency_ms || 0} ms</span></div>
         `;
 
         if (metrics.sf_info) {
@@ -148,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.error) {
                 addMessage(`Error: ${data.error}`, 'bot');
             } else {
-                addMessage(data.response, 'bot');
+                addMessage(data.response, 'bot', data.metrics);
                 updateMetrics(data.metrics);
                 updateDNA(data.dna);
             }

@@ -245,6 +245,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                         "saved": saved,
                         "latency_ms": gen_time_ms,
                         "tokens_sec": tok_per_sec,
+                        "tokens_count": tokens_count,
                         "sf_info": sf_info,
                         "hd_info": hd_info,
                     },
