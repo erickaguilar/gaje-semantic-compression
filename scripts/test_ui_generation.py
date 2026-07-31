@@ -4,7 +4,7 @@ import sys
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-from gaje.nn.stabilized import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM  # noqa: E402
 
 
 def test_gen():
