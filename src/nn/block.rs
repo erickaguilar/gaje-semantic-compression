@@ -155,12 +155,7 @@ impl RustGenomicBlock {
             let up = gate_up_out[ffn_dim..2 * ffn_dim].to_vec();
             (gate, up)
         } else {
-            GenomicLinear::forward_fused_2(
-                &self.gate_gen,
-                &self.up_gen,
-                &x_ffn_n,
-                modulation,
-            )?
+            GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
         };
 
         if up.iter().any(|v| v.is_nan()) {

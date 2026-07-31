@@ -9,12 +9,22 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
 
+
 def run_qwen2_diff():
     print("\n=======================================================")
-    print("🔬 GAJE DIFF QWEN2: Certificación Numérica (HuggingFace vs GAJE v0.9.7 Fused 4-bit)")
+    print(
+        "🔬 GAJE DIFF QWEN2: Certificación Numérica (HuggingFace vs GAJE v0.9.7 Fused 4-bit)"
+    )
     print("=======================================================")
 
-    gaje_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
+    gaje_flat = os.path.join(
+        PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat"
+    )
+    gaje_path = (
+        gaje_flat
+        if os.path.exists(gaje_flat)
+        else os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
+    )
     model_id = "Qwen/Qwen2-0.5B-Instruct"
 
     print(f"[*] Cargando PyTorch FP32 de referencia ({model_id})...")
@@ -57,6 +67,7 @@ def run_qwen2_diff():
     print(f"  - HuggingFace Top-1: '{hf_top1_word}' ({hf_top1})")
     print(f"  - GAJE v0.9.7 Top-1:  '{gaje_top1_word}' ({gaje_top1})")
     print(f"  - Top-1 Match vs HF: {'✅ SÍ' if gaje_top1 == hf_top1 else '❌ NO'}")
+
 
 if __name__ == "__main__":
     run_qwen2_diff()

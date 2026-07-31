@@ -248,9 +248,9 @@ mod tests {
         neuron.integrate_lagrangian(0, &c_r, &c_im, 0.5);
         let spike_delayed = neuron.check_spike_lagrangian(100, 1, 1.5).unwrap();
 
-        // Con resistencia 1.5 (en el momento del disparo), el retraso es ln(1+1.5) ≈ 0.91 ticks.
-        // Tick 100 + 0 = 100. Fase = 0.91 * 16 ≈ 14.
-        assert_eq!(spike_delayed.timestamp, 100);
+        // Con resistencia 1.5 (en el momento del disparo), el retraso es ln(1+1.5) * 1.5 ≈ 1.37 ticks.
+        // Tick 100 + 1 = 101. Fase = 0.37 * 16 ≈ 5.
+        assert_eq!(spike_delayed.timestamp, 101);
         assert!(spike_delayed.phase_offset > 0);
 
         // Escenario 3: Resistencia Semántica Muy Alta (Bloqueo)

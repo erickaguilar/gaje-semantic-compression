@@ -684,8 +684,9 @@ impl GajeFlatFileReader {
 
         let dir_start = meta_end;
         let dir_end = dir_start + dir_len;
-        let dir_entries: Vec<FlatTensorEntry> = serde_json::from_slice(&mmap[dir_start..dir_end])
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let dir_entries: Vec<FlatTensorEntry> =
+            serde_json::from_slice(&mmap[dir_start..dir_end])
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let mut tensor_map = std::collections::HashMap::with_capacity(num_tensors);
         for entry in dir_entries {
@@ -782,7 +783,12 @@ impl GajeFlatFileReader {
 
             let (q_gen, k_gen, v_gen, fused_qkv) = if has_fused_qkv {
                 let f_qkv = self.get_linear(&format!("{}attn_qkv", p), block_size)?;
-                (GenomicLinear::empty(), GenomicLinear::empty(), GenomicLinear::empty(), Some(f_qkv))
+                (
+                    GenomicLinear::empty(),
+                    GenomicLinear::empty(),
+                    GenomicLinear::empty(),
+                    Some(f_qkv),
+                )
             } else {
                 (
                     self.get_linear(&format!("{}attn_q", p), block_size)?,
@@ -906,7 +912,8 @@ impl NativeLoader {
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
             let p = format!("blk.{}.", i);
-            let has_fused_qkv = !Self::get_tensor(&read_txn, &format!("{}attn_qkv.dna", p)).is_empty();
+            let has_fused_qkv =
+                !Self::get_tensor(&read_txn, &format!("{}attn_qkv.dna", p)).is_empty();
             let (q_gen, k_gen, v_gen, fused_qkv) = if has_fused_qkv {
                 let qkv_out_features = config.n_head * head_dim + 2 * config.n_head_kv * head_dim;
                 let qkv_linear = self.get_linear(
@@ -916,7 +923,12 @@ impl NativeLoader {
                     qkv_out_features,
                     block_size,
                 );
-                (GenomicLinear::empty(), GenomicLinear::empty(), GenomicLinear::empty(), Some(qkv_linear))
+                (
+                    GenomicLinear::empty(),
+                    GenomicLinear::empty(),
+                    GenomicLinear::empty(),
+                    Some(qkv_linear),
+                )
             } else {
                 let q_gen = self.get_linear(
                     &read_txn,
@@ -950,11 +962,16 @@ impl NativeLoader {
                 block_size,
             );
 
-            let has_fused_gate_up = !Self::get_tensor(&read_txn, &format!("{}ffn_gate_up.dna", p)).is_empty();
+            let has_fused_gate_up =
+                !Self::get_tensor(&read_txn, &format!("{}ffn_gate_up.dna", p)).is_empty();
             let (gate_gen, up_gen, w_down, fused_gate_up) = if has_fused_gate_up {
                 let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate_up.centroids", p));
                 let n_b = config.n_embd / block_size;
-                let total_rows = if c.is_empty() { config.n_embd * 8 } else { c.len() / (n_b * 16) };
+                let total_rows = if c.is_empty() {
+                    config.n_embd * 8
+                } else {
+                    c.len() / (n_b * 16)
+                };
                 let ffn_h = total_rows / 2;
                 let gate_up_linear = self.get_linear(
                     &read_txn,
@@ -970,7 +987,12 @@ impl NativeLoader {
                     config.n_embd,
                     block_size,
                 );
-                (GenomicLinear::empty(), GenomicLinear::empty(), w_down, Some(gate_up_linear))
+                (
+                    GenomicLinear::empty(),
+                    GenomicLinear::empty(),
+                    w_down,
+                    Some(gate_up_linear),
+                )
             } else {
                 let ffn_h = {
                     let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate.centroids", p));

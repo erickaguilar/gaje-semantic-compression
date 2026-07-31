@@ -9,12 +9,21 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
 
+
 def get_process_memory_mb():
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / (1024 * 1024)
 
+
 def run_benchmark():
-    gaje_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
+    gaje_flat = os.path.join(
+        PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat"
+    )
+    gaje_path = (
+        gaje_flat
+        if os.path.exists(gaje_flat)
+        else os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
+    )
     print("=================================================================")
     print("🚀 GAJE-Flow v0.9.7: Suite de Benchmarking de Rendimiento Múltiple")
     print("=================================================================")
@@ -28,7 +37,9 @@ def run_benchmark():
     llm.rust_llm.set_k_wta_ratio(0.0)
     ram_after_load = get_process_memory_mb()
 
-    print(f"✅ Organismo GAJE v0.9.7 Cargado en {t_load:.2f} ms | RAM: {ram_after_load:.2f} MB")
+    print(
+        f"✅ Organismo GAJE v0.9.7 Cargado en {t_load:.2f} ms | RAM: {ram_after_load:.2f} MB"
+    )
 
     prompts = [
         "¿Cuál es la capital de Francia?",
@@ -62,30 +73,38 @@ def run_benchmark():
             logits = llm.rust_llm.forward(generated_tokens[-1], False)
             tok = int(np.argmax(logits))
             generated_tokens.append(tok)
-            if tok in [151643, 151645]: # End tokens
+            if tok in [151643, 151645]:  # End tokens
                 break
 
         t_decode_total = (time.perf_counter() - t_decode_start) * 1000.0
         n_generated = len(generated_tokens)
-        decode_ms_per_tok = t_decode_total / max(1, n_generated - 1) if n_generated > 1 else t_decode_total
+        decode_ms_per_tok = (
+            t_decode_total / max(1, n_generated - 1)
+            if n_generated > 1
+            else t_decode_total
+        )
         tok_per_sec = 1000.0 / decode_ms_per_tok if decode_ms_per_tok > 0 else 0.0
 
         gen_text = llm.tokenizer.decode(generated_tokens)
         ram_current = get_process_memory_mb()
 
         print(f"  └─ TTFT (Prefill): {ttft_ms:.2f} ms")
-        print(f"  └─ Decode Latencia: {decode_ms_per_tok:.2f} ms/tok ({tok_per_sec:.2f} tok/s)")
+        print(
+            f"  └─ Decode Latencia: {decode_ms_per_tok:.2f} ms/tok ({tok_per_sec:.2f} tok/s)"
+        )
         print(f"  └─ Respuesta: '{gen_text}'")
         print(f"  └─ RAM Proceso: {ram_current:.2f} MB")
 
-        results.append({
-            "prompt": prompt,
-            "ttft_ms": ttft_ms,
-            "decode_ms_per_tok": decode_ms_per_tok,
-            "tok_per_sec": tok_per_sec,
-            "gen_tokens": n_generated,
-            "output": gen_text
-        })
+        results.append(
+            {
+                "prompt": prompt,
+                "ttft_ms": ttft_ms,
+                "decode_ms_per_tok": decode_ms_per_tok,
+                "tok_per_sec": tok_per_sec,
+                "gen_tokens": n_generated,
+                "output": gen_text,
+            }
+        )
 
     avg_ttft = np.mean([r["ttft_ms"] for r in results])
     avg_decode_ms = np.mean([r["decode_ms_per_tok"] for r in results])
@@ -100,8 +119,9 @@ def run_benchmark():
     print(f"  - Latencia Decode Promedio:  {avg_decode_ms:.2f} ms/tok")
     print(f"  - Velocidad Inferencia Avg:  {avg_tok_sec:.2f} tok/s")
     print(f"  - Delta de Memoria RAM:      +{ram_final - ram_after_load:.2f} MB")
-    print(f"  - Fugas de Memoria (Leaks): 0 Leaks Detectados (RAM Estable)")
+    print("  - Fugas de Memoria (Leaks): 0 Leaks Detectados (RAM Estable)")
     print("=================================================================")
+
 
 if __name__ == "__main__":
     run_benchmark()

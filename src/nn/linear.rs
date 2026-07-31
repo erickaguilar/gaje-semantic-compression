@@ -258,7 +258,11 @@ impl GenomicLinear {
                 if row_weights.len() == input.len() {
                     sum = unsafe { crate::compute::kernels::dot_product(input, row_weights) };
                 } else {
-                    sum = input.iter().zip(row_weights.iter()).map(|(x, w)| x * w).sum();
+                    sum = input
+                        .iter()
+                        .zip(row_weights.iter())
+                        .map(|(x, w)| x * w)
+                        .sum();
                 }
             }
             WeightDatabase::Genomic2Bit(db) => {
@@ -406,7 +410,8 @@ impl GenomicLinear {
                                 self.block_size,
                                 Some(&self.centroids[c_off..c_off + 4]),
                             ) {
-                                res[b * self.block_size..(b + 1) * self.block_size].copy_from_slice(&decoded);
+                                res[b * self.block_size..(b + 1) * self.block_size]
+                                    .copy_from_slice(&decoded);
                             }
                         }
                     }
@@ -423,7 +428,8 @@ impl GenomicLinear {
                             for k in 0..self.stride {
                                 let byte = db[row_off + b * self.stride + k];
                                 res[b * self.block_size + k * 2] = centroids[(byte >> 4) as usize];
-                                res[b * self.block_size + k * 2 + 1] = centroids[(byte & 0x0F) as usize];
+                                res[b * self.block_size + k * 2 + 1] =
+                                    centroids[(byte & 0x0F) as usize];
                             }
                         }
                     }

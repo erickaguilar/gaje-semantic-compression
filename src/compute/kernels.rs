@@ -557,124 +557,53 @@ pub unsafe fn genomic_dot_product_4bit(
     n_blocks: usize,
 ) -> f32 {
     let block_size = stride_4bit * 2;
+    let mut sum0 = 0.0f32;
+    let mut sum1 = 0.0f32;
+    let mut sum2 = 0.0f32;
+    let mut sum3 = 0.0f32;
 
-    #[cfg(target_arch = "x86_64")]
-    if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
-        let mut acc0 = _mm256_setzero_ps();
-        let mut acc1 = _mm256_setzero_ps();
-        let mut acc2 = _mm256_setzero_ps();
-        let mut acc3 = _mm256_setzero_ps();
-
-        for j in 0..n_blocks {
-            let input_block_ptr = input.as_ptr().add(j * block_size);
-            let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
-            let centroids_ptr = centroids.as_ptr().add(j * 16);
-            let c_lut: &[f32; 16] = &*(centroids_ptr as *const [f32; 16]);
-
-            let mut k = 0;
-            while k + 16 <= stride_4bit {
-                let b0 = *weights_block_ptr.add(k);
-                let b1 = *weights_block_ptr.add(k + 1);
-                let b2 = *weights_block_ptr.add(k + 2);
-                let b3 = *weights_block_ptr.add(k + 3);
-                let b4 = *weights_block_ptr.add(k + 4);
-                let b5 = *weights_block_ptr.add(k + 5);
-                let b6 = *weights_block_ptr.add(k + 6);
-                let b7 = *weights_block_ptr.add(k + 7);
-                let b8 = *weights_block_ptr.add(k + 8);
-                let b9 = *weights_block_ptr.add(k + 9);
-                let b10 = *weights_block_ptr.add(k + 10);
-                let b11 = *weights_block_ptr.add(k + 11);
-                let b12 = *weights_block_ptr.add(k + 12);
-                let b13 = *weights_block_ptr.add(k + 13);
-                let b14 = *weights_block_ptr.add(k + 14);
-                let b15 = *weights_block_ptr.add(k + 15);
-
-                let w_vals0 = [
-                    c_lut[(b0 >> 4) as usize], c_lut[(b0 & 0x0F) as usize],
-                    c_lut[(b1 >> 4) as usize], c_lut[(b1 & 0x0F) as usize],
-                    c_lut[(b2 >> 4) as usize], c_lut[(b2 & 0x0F) as usize],
-                    c_lut[(b3 >> 4) as usize], c_lut[(b3 & 0x0F) as usize],
-                    c_lut[(b4 >> 4) as usize], c_lut[(b4 & 0x0F) as usize],
-                    c_lut[(b5 >> 4) as usize], c_lut[(b5 & 0x0F) as usize],
-                    c_lut[(b6 >> 4) as usize], c_lut[(b6 & 0x0F) as usize],
-                    c_lut[(b7 >> 4) as usize], c_lut[(b7 & 0x0F) as usize],
-                ];
-
-                let w_vals1 = [
-                    c_lut[(b8 >> 4) as usize], c_lut[(b8 & 0x0F) as usize],
-                    c_lut[(b9 >> 4) as usize], c_lut[(b9 & 0x0F) as usize],
-                    c_lut[(b10 >> 4) as usize], c_lut[(b10 & 0x0F) as usize],
-                    c_lut[(b11 >> 4) as usize], c_lut[(b11 & 0x0F) as usize],
-                    c_lut[(b12 >> 4) as usize], c_lut[(b12 & 0x0F) as usize],
-                    c_lut[(b13 >> 4) as usize], c_lut[(b13 & 0x0F) as usize],
-                    c_lut[(b14 >> 4) as usize], c_lut[(b14 & 0x0F) as usize],
-                    c_lut[(b15 >> 4) as usize], c_lut[(b15 & 0x0F) as usize],
-                ];
-
-                let vw0 = _mm256_loadu_ps(w_vals0.as_ptr());
-                let vw1 = _mm256_loadu_ps(w_vals0.as_ptr().add(8));
-                let vw2 = _mm256_loadu_ps(w_vals1.as_ptr());
-                let vw3 = _mm256_loadu_ps(w_vals1.as_ptr().add(8));
-
-                let vi0 = _mm256_loadu_ps(input_block_ptr.add(k * 2));
-                let vi1 = _mm256_loadu_ps(input_block_ptr.add(k * 2 + 8));
-                let vi2 = _mm256_loadu_ps(input_block_ptr.add(k * 2 + 16));
-                let vi3 = _mm256_loadu_ps(input_block_ptr.add(k * 2 + 24));
-
-                acc0 = _mm256_fmadd_ps(vw0, vi0, acc0);
-                acc1 = _mm256_fmadd_ps(vw1, vi1, acc1);
-                acc2 = _mm256_fmadd_ps(vw2, vi2, acc2);
-                acc3 = _mm256_fmadd_ps(vw3, vi3, acc3);
-
-                k += 16;
-            }
-
-            while k < stride_4bit {
-                let byte = *weights_block_ptr.add(k);
-                let c1 = c_lut[(byte >> 4) as usize];
-                let c2 = c_lut[(byte & 0x0F) as usize];
-                let in1 = *input_block_ptr.add(k * 2);
-                let in2 = *input_block_ptr.add(k * 2 + 1);
-                let v_tail = _mm256_setr_ps(c1 * in1 + c2 * in2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-                acc0 = _mm256_add_ps(acc0, v_tail);
-                k += 1;
-            }
-        }
-
-        let acc_a = _mm256_add_ps(acc0, acc1);
-        let acc_b = _mm256_add_ps(acc2, acc3);
-        let acc = _mm256_add_ps(acc_a, acc_b);
-
-        let hi = _mm256_extractf128_ps(acc, 1);
-        let lo = _mm256_castps256_ps128(acc);
-        let sum128 = _mm_add_ps(lo, hi);
-        let shuf = _mm_movehdup_ps(sum128);
-        let sums = _mm_add_ps(sum128, shuf);
-        let shuf2 = _mm_movehl_ps(sums, sums);
-        let result = _mm_add_ss(sums, shuf2);
-        let res_f32 = _mm_cvtss_f32(result);
-        return if res_f32.abs() < 1e-6 { 0.0 } else { res_f32 };
-    }
-
-    let mut scalar_sum = 0.0f32;
     for j in 0..n_blocks {
-        let block_size = stride_4bit * 2;
         let input_block_ptr = input.as_ptr().add(j * block_size);
         let weights_block_ptr = weights.as_ptr().add(j * stride_4bit);
         let centroids_ptr = centroids.as_ptr().add(j * 16);
         let c_lut: &[f32; 16] = &*(centroids_ptr as *const [f32; 16]);
 
-        for k in 0..stride_4bit {
-            let byte = *weights_block_ptr.add(k);
-            let c_idx1 = (byte >> 4) as usize;
-            scalar_sum += c_lut[c_idx1] * *input_block_ptr.add(k * 2);
+        let mut k = 0;
+        while k + 4 <= stride_4bit {
+            let b0 = *weights_block_ptr.add(k);
+            let b1 = *weights_block_ptr.add(k + 1);
+            let b2 = *weights_block_ptr.add(k + 2);
+            let b3 = *weights_block_ptr.add(k + 3);
 
-            let c_idx2 = (byte & 0x0F) as usize;
-            scalar_sum += c_lut[c_idx2] * *input_block_ptr.add(k * 2 + 1);
+            let in_ptr = input_block_ptr.add(k * 2);
+
+            sum0 += c_lut[(b0 >> 4) as usize] * *in_ptr;
+            sum1 += c_lut[(b0 & 0x0F) as usize] * *in_ptr.add(1);
+            sum2 += c_lut[(b1 >> 4) as usize] * *in_ptr.add(2);
+            sum3 += c_lut[(b1 & 0x0F) as usize] * *in_ptr.add(3);
+
+            sum0 += c_lut[(b2 >> 4) as usize] * *in_ptr.add(4);
+            sum1 += c_lut[(b2 & 0x0F) as usize] * *in_ptr.add(5);
+            sum2 += c_lut[(b3 >> 4) as usize] * *in_ptr.add(6);
+            sum3 += c_lut[(b3 & 0x0F) as usize] * *in_ptr.add(7);
+
+            k += 4;
+        }
+
+        while k < stride_4bit {
+            let byte = *weights_block_ptr.add(k);
+            sum0 += c_lut[(byte >> 4) as usize] * *input_block_ptr.add(k * 2);
+            sum1 += c_lut[(byte & 0x0F) as usize] * *input_block_ptr.add(k * 2 + 1);
+            k += 1;
         }
     }
-    if scalar_sum.abs() < 1e-6 { 0.0 } else { scalar_sum }
+
+    let total = sum0 + sum1 + sum2 + sum3;
+    if total.abs() < 1e-6 {
+        0.0
+    } else {
+        total
+    }
 }
 
 // =============================================================================

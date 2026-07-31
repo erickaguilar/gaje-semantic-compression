@@ -185,6 +185,7 @@ mod tests {
             rna_threshold: 0.5,
             unpermute_weights: false,
             apply_smollm_rope_patch: false,
+            tie_word_embeddings: false,
             dni: "test-dni".to_string(),
             state: "born".to_string(),
         };
