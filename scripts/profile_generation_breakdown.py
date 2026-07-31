@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 from gaje.nn.stabilized import GenomicLLM
 
 model_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
-print(f"🔬 FASE 1A: PROFILING EMPÍRICO (Qwen2-0.5B 4-bit Nativo Rust)")
+print("🔬 FASE 1A: PROFILING EMPÍRICO (Qwen2-0.5B 4-bit Nativo Rust)")
 print(f"  - Cargar modelo: {model_path}...")
 
 t0 = time.time()
@@ -45,7 +45,9 @@ llm.rust_llm.clear_cache_py()
 t_step_prev = time.time()
 first_token_time = 0
 
-for i, tok_text in enumerate(llm.generate(formatted_prompt, max_new_tokens=15, temperature=0.0)):
+for i, tok_text in enumerate(
+    llm.generate(formatted_prompt, max_new_tokens=15, temperature=0.0)
+):
     t_now = time.time()
     step_ms = (t_now - t_step_prev) * 1000
     t_step_prev = t_now
@@ -58,10 +60,14 @@ for i, tok_text in enumerate(llm.generate(formatted_prompt, max_new_tokens=15, t
 
 t_total_gen_ms = (time.time() - t_gen_start) * 1000
 num_tokens = len(generated_tokens)
-avg_step_ms = sum(token_times[1:]) / max(len(token_times) - 1, 1) if len(token_times) > 1 else token_times[0]
+avg_step_ms = (
+    sum(token_times[1:]) / max(len(token_times) - 1, 1)
+    if len(token_times) > 1
+    else token_times[0]
+)
 tok_per_sec = (num_tokens / (t_total_gen_ms / 1000)) if t_total_gen_ms > 0 else 0
 
-print(f"\n📊 DESGLOSE DE TIEMPOS DE INFERENCIA:")
+print("\n📊 DESGLOSE DE TIEMPOS DE INFERENCIA:")
 print(f"  - Tiempo al Primer Token (TTFT / Prefill): {first_token_time:.2f} ms")
 print(f"  - Promedio por Token Autorregresivo (Decode): {avg_step_ms:.2f} ms/tok")
 print(f"  - Tiempo Total de Generación: {t_total_gen_ms:.2f} ms ({num_tokens} tokens)")
@@ -69,4 +75,6 @@ print(f"  - Velocidad Final: {tok_per_sec:.2f} tok/s")
 print(f"  - Texto Generado: '{''.join(generated_tokens).strip()}'")
 
 mem_final_mb = process.memory_info().rss / (1024 * 1024)
-print(f"  - RAM Final del Proceso: {mem_final_mb:.2f} MB (Delta: {mem_final_mb - mem_mb:+.2f} MB)")
+print(
+    f"  - RAM Final del Proceso: {mem_final_mb:.2f} MB (Delta: {mem_final_mb - mem_mb:+.2f} MB)"
+)

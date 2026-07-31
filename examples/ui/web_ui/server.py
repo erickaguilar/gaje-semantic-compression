@@ -28,7 +28,7 @@ def get_model(model_name):
 
         model_dir = os.path.join(PROJECT_ROOT, "models")
         model_path = None
-        
+
         # Search recursively in PROJECT_ROOT/models
         for root, _, files in os.walk(model_dir):
             if model_name in files:
@@ -68,7 +68,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             if os.path.exists(models_root):
                 for root, _, files in os.walk(models_root):
                     for f in files:
-                        if (f.endswith(".gaje") or f.endswith(".flat")) and f not in seen_models:
+                        if (
+                            f.endswith(".gaje") or f.endswith(".flat")
+                        ) and f not in seen_models:
                             fpath = os.path.join(root, f)
                             mtime = os.path.getmtime(fpath)
                             from datetime import datetime
@@ -101,7 +103,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_header("Content-type", "application/json")
                     self.end_headers()
                     self.wfile.write(
-                        json.dumps({"error": f"No se pudo cargar {model_name}"}).encode()
+                        json.dumps(
+                            {"error": f"No se pudo cargar {model_name}"}
+                        ).encode()
                     )
                     return
 
@@ -157,7 +161,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 start_time = time.time()
                 response_text = ""
                 tokens_count = 0
-                print(f"[*] Generando respuesta para: {repr(formatted_message[:40])}...")
+                print(
+                    f"[*] Generando respuesta para: {repr(formatted_message[:40])}..."
+                )
                 try:
                     for token_text in llm.generate(
                         formatted_message,
@@ -186,8 +192,12 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 # 3. Visualización del primer token (para la UI de ADN)
                 try:
                     first_token_id = tokens[0] if tokens else 0
-                    emb_obj = getattr(llm, "embeddings", getattr(llm.rust_llm, "embeddings", None))
-                    n_embd_val = getattr(llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896))
+                    emb_obj = getattr(
+                        llm, "embeddings", getattr(llm.rust_llm, "embeddings", None)
+                    )
+                    n_embd_val = getattr(
+                        llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896)
+                    )
                     if emb_obj and hasattr(emb_obj, "get_row"):
                         emb_row = emb_obj.get_row(first_token_id)
                         if hasattr(emb_row, "tolist"):

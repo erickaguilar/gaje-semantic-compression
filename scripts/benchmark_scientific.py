@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import json
 import psutil
 import torch
 import numpy as np
@@ -12,45 +11,95 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 from gaje.core import _impl as dna_semantic_compression
-from gaje.nn.stabilized import GenomicLLM
 
 # 25 Prompts divididos en 5 Dominios Científicos
 EVAL_BATTERY = [
     # 1. Conocimiento General y Geografía
-    {"category": "Conocimiento General", "prompt": "A cuál país pertenece la capital París?"},
+    {
+        "category": "Conocimiento General",
+        "prompt": "A cuál país pertenece la capital París?",
+    },
     {"category": "Conocimiento General", "prompt": "Cuál es la capital de España?"},
-    {"category": "Conocimiento General", "prompt": "Cuál es el planeta más grande del Sistema Solar?"},
-    {"category": "Conocimiento General", "prompt": "En qué continente se encuentra Japón?"},
-    {"category": "Conocimiento General", "prompt": "Quién escribió Don Quijote de la Mancha?"},
-
+    {
+        "category": "Conocimiento General",
+        "prompt": "Cuál es el planeta más grande del Sistema Solar?",
+    },
+    {
+        "category": "Conocimiento General",
+        "prompt": "En qué continente se encuentra Japón?",
+    },
+    {
+        "category": "Conocimiento General",
+        "prompt": "Quién escribió Don Quijote de la Mancha?",
+    },
     # 2. Razonamiento y Lógica
-    {"category": "Razonamiento y Lógica", "prompt": "Si todos los gatos son mamíferos y los mamíferos tienen corazón, tienen los gatos corazón?"},
-    {"category": "Razonamiento y Lógica", "prompt": "Qué pesa más: un kilogramo de plumas o un kilogramo de hierro?"},
-    {"category": "Razonamiento y Lógica", "prompt": "Si tengo 3 manzanas y me quitan 2, cuántas manzanas me quedan?"},
-    {"category": "Razonamiento y Lógica", "prompt": "El padre de Ana tiene cuatro hijas: Lala, Lela, Lila y... quién es la cuarta?"},
-    {"category": "Razonamiento y Lógica", "prompt": "Si un tren eléctrico viaja hacia el norte, hacia dónde sale el humo?"},
-
+    {
+        "category": "Razonamiento y Lógica",
+        "prompt": "Si todos los gatos son mamíferos y los mamíferos tienen corazón, tienen los gatos corazón?",
+    },
+    {
+        "category": "Razonamiento y Lógica",
+        "prompt": "Qué pesa más: un kilogramo de plumas o un kilogramo de hierro?",
+    },
+    {
+        "category": "Razonamiento y Lógica",
+        "prompt": "Si tengo 3 manzanas y me quitan 2, cuántas manzanas me quedan?",
+    },
+    {
+        "category": "Razonamiento y Lógica",
+        "prompt": "El padre de Ana tiene cuatro hijas: Lala, Lela, Lila y... quién es la cuarta?",
+    },
+    {
+        "category": "Razonamiento y Lógica",
+        "prompt": "Si un tren eléctrico viaja hacia el norte, hacia dónde sale el humo?",
+    },
     # 3. Matemáticas y Aritmética
     {"category": "Matemáticas", "prompt": "Cuánto es 15 multiplicado por 6?"},
-    {"category": "Matemáticas", "prompt": "Cuál es el resultado de 100 dividido entre 4?"},
+    {
+        "category": "Matemáticas",
+        "prompt": "Cuál es el resultado de 100 dividido entre 4?",
+    },
     {"category": "Matemáticas", "prompt": "Escribe los primeros 5 números primos."},
     {"category": "Matemáticas", "prompt": "Resuelve la ecuación básica: 2x + 4 = 10."},
     {"category": "Matemáticas", "prompt": "Cuánto es la raíz cuadrada de 64?"},
-
     # 4. Programación y Código
-    {"category": "Programación", "prompt": "Write a Python function to calculate the Fibonacci sequence."},
-    {"category": "Programación", "prompt": "Write a Python snippet to reverse a string."},
+    {
+        "category": "Programación",
+        "prompt": "Write a Python function to calculate the Fibonacci sequence.",
+    },
+    {
+        "category": "Programación",
+        "prompt": "Write a Python snippet to reverse a string.",
+    },
     {"category": "Programación", "prompt": "What does the HTTP 404 status code mean?"},
     {"category": "Programación", "prompt": "How do you define a list in Python?"},
-    {"category": "Programación", "prompt": "What is the difference between stack and heap memory?"},
-
+    {
+        "category": "Programación",
+        "prompt": "What is the difference between stack and heap memory?",
+    },
     # 5. Síntesis y Redacción
-    {"category": "Síntesis y Redacción", "prompt": "Explica qué es la fotosíntesis en las plantas en una oración simple."},
-    {"category": "Síntesis y Redacción", "prompt": "Explica qué es un agujero negro en una oración simple."},
-    {"category": "Síntesis y Redacción", "prompt": "Escribe un haiku breve sobre el viento."},
-    {"category": "Síntesis y Redacción", "prompt": "Resume qué es la inteligencia artificial en dos líneas."},
-    {"category": "Síntesis y Redacción", "prompt": "Dime tres consejos para mantener una vida saludable."},
+    {
+        "category": "Síntesis y Redacción",
+        "prompt": "Explica qué es la fotosíntesis en las plantas en una oración simple.",
+    },
+    {
+        "category": "Síntesis y Redacción",
+        "prompt": "Explica qué es un agujero negro en una oración simple.",
+    },
+    {
+        "category": "Síntesis y Redacción",
+        "prompt": "Escribe un haiku breve sobre el viento.",
+    },
+    {
+        "category": "Síntesis y Redacción",
+        "prompt": "Resume qué es la inteligencia artificial en dos líneas.",
+    },
+    {
+        "category": "Síntesis y Redacción",
+        "prompt": "Dime tres consejos para mantener una vida saludable.",
+    },
 ]
+
 
 def run_scientific_benchmark():
     print("=================================================================")
@@ -58,14 +107,18 @@ def run_scientific_benchmark():
     print("=================================================================")
 
     model_id = "Qwen/Qwen2-0.5B-Instruct"
-    flat_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat")
+    flat_path = os.path.join(
+        PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat"
+    )
 
     print(f"[*] Cargando Tokenizador y Modelo PyTorch FP32 ({model_id})...")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     hf_model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float32)
     hf_model.eval()
 
-    print(f"[*] Cargando Modelo GAJE v0.9.7 Zero-Copy Flat Mmap desde:\n    {flat_path}")
+    print(
+        f"[*] Cargando Modelo GAJE v0.9.7 Zero-Copy Flat Mmap desde:\n    {flat_path}"
+    )
     t0_load = time.perf_counter()
     gaje_llm = dna_semantic_compression.load_genomic_auto(flat_path)
     gaje_llm.set_k_wta_ratio(0.0)
@@ -112,43 +165,56 @@ def run_scientific_benchmark():
         gaje_top1_str = tokenizer.decode([gaje_top1])
 
         # Métricas de Paridad
-        cos_sim = float(np.dot(hf_logits, gaje_logits) / (np.linalg.norm(hf_logits) * np.linalg.norm(gaje_logits)))
+        cos_sim = float(
+            np.dot(hf_logits, gaje_logits)
+            / (np.linalg.norm(hf_logits) * np.linalg.norm(gaje_logits))
+        )
         cossim_list.append(cos_sim)
 
-        top1_match = (hf_top1 == gaje_top1)
+        top1_match = hf_top1 == gaje_top1
         if top1_match:
             top1_matches += 1
 
         # Generación Autorregresiva Nativa GAJE
         t0_gen = time.perf_counter()
-        gen_tokens = gaje_llm.generate_native_py(input_ids, 30, 0.3, 1.1, [2, 151643, 151645])
+        gen_tokens = gaje_llm.generate_native_py(
+            input_ids, 30, 0.3, 1.1, [2, 151643, 151645]
+        )
         gen_time_ms = (time.perf_counter() - t0_gen) * 1000.0
-        
+
         n_gen = len(gen_tokens)
-        tok_sec = (n_gen / (gen_time_ms / 1000.0)) if gen_time_ms > 0 and n_gen > 0 else 0.0
+        tok_sec = (
+            (n_gen / (gen_time_ms / 1000.0)) if gen_time_ms > 0 and n_gen > 0 else 0.0
+        )
         decode_ms_tok = (gen_time_ms / n_gen) if n_gen > 0 else 0.0
         if decode_ms_tok > 0:
             decode_latencies.append(decode_ms_tok)
 
         gen_text = tokenizer.decode(gen_tokens).strip()
 
-        print(f"  └─ HF Top-1: {hf_top1_str!r} ({hf_top1}) | GAJE Top-1: {gaje_top1_str!r} ({gaje_top1}) -> Match: {'✅' if top1_match else '❌'}")
-        print(f"  └─ CosSim: {cos_sim:.6f} | Decode: {decode_ms_tok:.2f} ms/tok ({tok_sec:.2f} tok/s)")
+        print(
+            f"  └─ HF Top-1: {hf_top1_str!r} ({hf_top1}) | GAJE Top-1: {gaje_top1_str!r} ({gaje_top1}) -> Match: {'✅' if top1_match else '❌'}"
+        )
+        print(
+            f"  └─ CosSim: {cos_sim:.6f} | Decode: {decode_ms_tok:.2f} ms/tok ({tok_sec:.2f} tok/s)"
+        )
         print(f"  └─ Generado: {gen_text!r}")
 
-        results.append({
-            "id": idx,
-            "category": cat,
-            "prompt": prompt,
-            "hf_top1": hf_top1_str,
-            "gaje_top1": gaje_top1_str,
-            "top1_match": top1_match,
-            "cossim": cos_sim,
-            "prefill_ms": prefill_ms,
-            "decode_ms_tok": decode_ms_tok,
-            "tok_sec": tok_sec,
-            "generated_text": gen_text
-        })
+        results.append(
+            {
+                "id": idx,
+                "category": cat,
+                "prompt": prompt,
+                "hf_top1": hf_top1_str,
+                "gaje_top1": gaje_top1_str,
+                "top1_match": top1_match,
+                "cossim": cos_sim,
+                "prefill_ms": prefill_ms,
+                "decode_ms_tok": decode_ms_tok,
+                "tok_sec": tok_sec,
+                "generated_text": gen_text,
+            }
+        )
 
     avg_cossim = np.mean(cossim_list)
     top1_acc = (top1_matches / len(EVAL_BATTERY)) * 100.0
@@ -162,7 +228,9 @@ def run_scientific_benchmark():
     print(f"  - Tiempo Carga Modelo (mmap): {load_time_ms:.2f} ms")
     print(f"  - Consumo Memoria RAM:       {ram_mb:.2f} MB")
     print(f"  - Promedio Cosine Similarity: {avg_cossim:.6f}")
-    print(f"  - Acuerdo Top-1 Match vs HF:  {top1_acc:.2f}% ({top1_matches}/{len(EVAL_BATTERY)})")
+    print(
+        f"  - Acuerdo Top-1 Match vs HF:  {top1_acc:.2f}% ({top1_matches}/{len(EVAL_BATTERY)})"
+    )
     print(f"  - Latencia Prefill Promedio:  {avg_prefill_ms:.2f} ms")
     print(f"  - Latencia Decode Promedio:   {avg_decode_ms:.2f} ms/tok")
     print(f"  - Rendimiento Inferencia:     {avg_tok_sec:.2f} tok/s")
@@ -171,9 +239,9 @@ def run_scientific_benchmark():
     # Generar Reporte Markdown Artifact
     report_content = f"""# 🔬 REPORTE DE EVALUACIÓN CIENTÍFICA Y BENCHMARKING DE PARIDAD (GAJE v0.9.7 Flat)
 
-**Fecha de Ejecución:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
-**Modelo Target:** GAJE Qwen2-0.5B Fused 4-bit (`qwen2_0_5b_4bit.gaje.flat`)  
-**Modelo de Referencia:** HuggingFace PyTorch FP32 (`Qwen/Qwen2-0.5B-Instruct`)  
+**Fecha de Ejecución:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+**Modelo Target:** GAJE Qwen2-0.5B Fused 4-bit (`qwen2_0_5b_4bit.gaje.flat`)
+**Modelo de Referencia:** HuggingFace PyTorch FP32 (`Qwen/Qwen2-0.5B-Instruct`)
 **Entorno de Ejecución:** Native Linux x86_64 (AVX2 SIMD / Zero-Copy Mmap)
 
 ---
@@ -210,12 +278,15 @@ def run_scientific_benchmark():
 2. **Eficiencia Infraestructural**: El mecanismo de memoria virtual mapeada en disco elimina el retraso de arranque, estabilizando la carga fría en **{load_time_ms / 1000.0:.2f} segundos** con cero fugas de memoria (*0 Leaks*).
 """
 
-    report_path = os.path.join(PROJECT_ROOT, "docs", "reports", "SCIENTIFIC_BENCHMARK_v097.md")
+    report_path = os.path.join(
+        PROJECT_ROOT, "docs", "reports", "SCIENTIFIC_BENCHMARK_v097.md"
+    )
     os.makedirs(os.path.dirname(report_path), exist_ok=True)
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(report_content)
 
     print(f"\n[+] Reporte Científico exportado exitosamente a:\n    {report_path}")
+
 
 if __name__ == "__main__":
     run_scientific_benchmark()

@@ -9,16 +9,18 @@ from transformers import AutoTokenizer
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-import gaje.core._impl as dna_semantic_compression
-from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0
-from gaje.nn.configs import ARCHITECTURES
+import gaje.core._impl as dna_semantic_compression  # noqa: E402
+from gaje.nn.configs import ARCHITECTURES  # noqa: E402
+from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0  # noqa: E402
 
-gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf")
+gguf_path = os.path.join(
+    PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
+)
 out_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
 
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-print(f"🚀 Exportación Streaming Ultra-Baja RAM de Qwen2-0.5B (4-bit Uniforme)")
+print("🚀 Exportación Streaming Ultra-Baja RAM de Qwen2-0.5B (4-bit Uniforme)")
 print(f"  - Origen GGUF: {gguf_path}")
 print(f"  - Destino GAJE: {out_path}")
 
@@ -50,7 +52,9 @@ for field_name, field in reader.fields.items():
         eps = float(field.parts[field.data[0]][0])
 
 head_dim = n_embd // n_head
-print(f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}")
+print(
+    f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}"
+)
 
 # Map tensor names
 tensors_by_name = {t.name: t for t in reader.tensors}
@@ -81,6 +85,7 @@ tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
 if hasattr(tokenizer, "backend_tokenizer"):
     db_writer.write_metadata("tokenizer", tokenizer.backend_tokenizer.to_str())
 
+
 def save_layer_data(name, layer):
     db_writer.write_tensor_compressed(
         f"{name}.dna",
@@ -90,15 +95,14 @@ def save_layer_data(name, layer):
         f"{name}.centroids",
         np.array(layer.linear.centroids, dtype=np.float32).tobytes(),
     )
-    db_writer.write_tensor_compressed(
-        f"{name}.anchors", layer.anchors_f16_bytes
-    )
+    db_writer.write_tensor_compressed(f"{name}.anchors", layer.anchors_f16_bytes)
     bias_val = getattr(layer, "bias", None)
     if bias_val is not None and len(bias_val) > 0:
         db_writer.write_tensor_compressed(
             f"{name}.bias",
             np.array(bias_val, dtype=np.float32).tobytes(),
         )
+
 
 def process_and_write(name, tensor_obj, bit_depth=4, bias_obj=None):
     if isinstance(bias_obj, np.ndarray):
@@ -121,16 +125,26 @@ def process_and_write(name, tensor_obj, bit_depth=4, bias_obj=None):
     del layer
     gc.collect()
 
+
 # Save Embeddings & LM Head
 print("[*] Guardando token_embd y lm_head...")
 process_and_write("token_embd", tensors_by_name["token_embd.weight"], bit_depth=32)
 
 output_norm_tensor = tensors_by_name["output_norm.weight"]
-out_norm_bytes = np.frombuffer(output_norm_tensor.data, dtype=np.float32).tobytes() if output_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F32 else np.frombuffer(output_norm_tensor.data, dtype=np.float16).astype(np.float32).tobytes()
+out_norm_bytes = (
+    np.frombuffer(output_norm_tensor.data, dtype=np.float32).tobytes()
+    if output_norm_tensor.tensor_type == gguf.GGMLQuantizationType.F32
+    else np.frombuffer(output_norm_tensor.data, dtype=np.float16)
+    .astype(np.float32)
+    .tobytes()
+)
 db_writer.write_tensor_compressed("output_norm", out_norm_bytes)
 
-lm_head_tensor = tensors_by_name.get("lm_head.weight", tensors_by_name["token_embd.weight"])
+lm_head_tensor = tensors_by_name.get(
+    "lm_head.weight", tensors_by_name["token_embd.weight"]
+)
 process_and_write("lm_head", lm_head_tensor, bit_depth=32)
+
 
 def get_tensor_f32_matrix(tensor_obj, n_h=None, h_d=None, is_q_k=False):
     if tensor_obj.tensor_type == gguf.GGMLQuantizationType.F32:
@@ -147,19 +161,31 @@ def get_tensor_f32_matrix(tensor_obj, n_h=None, h_d=None, is_q_k=False):
     w_matrix = raw_data.reshape(out_f, in_f)
     if is_q_k and n_h is not None and h_d is not None:
         from gaje.utils.quantization import unpermute_to_split
+
         w_matrix = unpermute_to_split(w_matrix, n_h, h_d)
     return w_matrix
+
 
 # Stream each block to keep RAM minimal (< 1.5 GB)
 for i in range(n_blocks):
     p = f"blk.{i}."
-    
+
     # Norms
     for norm_suffix in ["attn_norm", "ffn_norm"]:
-        g_norm_key = f"blk.{i}.attn_norm.weight" if norm_suffix == "attn_norm" else f"blk.{i}.ffn_norm.weight"
+        g_norm_key = (
+            f"blk.{i}.attn_norm.weight"
+            if norm_suffix == "attn_norm"
+            else f"blk.{i}.ffn_norm.weight"
+        )
         if g_norm_key in tensors_by_name:
             t = tensors_by_name[g_norm_key]
-            norm_bytes = np.frombuffer(t.data, dtype=np.float32).tobytes() if t.tensor_type == gguf.GGMLQuantizationType.F32 else np.frombuffer(t.data, dtype=np.float16).astype(np.float32).tobytes()
+            norm_bytes = (
+                np.frombuffer(t.data, dtype=np.float32).tobytes()
+                if t.tensor_type == gguf.GGMLQuantizationType.F32
+                else np.frombuffer(t.data, dtype=np.float16)
+                .astype(np.float32)
+                .tobytes()
+            )
             db_writer.write_tensor_compressed(p + norm_suffix, norm_bytes)
 
     # 1. Fused QKV Layer (896 + 128 + 128 = 1152 rows)
@@ -210,6 +236,7 @@ for i in range(n_blocks):
     gc.collect()
 
 import shutil
+
 shutil.copy(out_path, os.path.join(PROJECT_ROOT, "models", "qwen2_0_5b_4bit.gaje"))
 
 print(f"\n✅ Exportación Fusionada v0.9.7 Finalizada Exitosamente: {out_path}")

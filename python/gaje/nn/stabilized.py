@@ -1208,33 +1208,47 @@ class GenomicLLM:
             with open(input_path, "rb") as f:
                 magic = f.read(4)
                 if magic == b"GAJE":
-                    print(f"⚡ [Zero-Copy Mmap] Cargando modelo binario plano mmap instantáneo: {input_path}")
+                    print(
+                        f"⚡ [Zero-Copy Mmap] Cargando modelo binario plano mmap instantáneo: {input_path}"
+                    )
                     t0 = time.perf_counter()
                     rust_llm = dna_semantic_compression.load_genomic_auto(input_path)
                     load_ms = (time.perf_counter() - t0) * 1000.0
-                    print(f"✅ Organismo GAJE v0.9.7 Flat mmap Cargado en {load_ms:.2f} ms")
+                    print(
+                        f"✅ Organismo GAJE v0.9.7 Flat mmap Cargado en {load_ms:.2f} ms"
+                    )
 
                     tokenizer = None
                     try:
                         from transformers import AutoTokenizer
-                        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+
+                        tokenizer = AutoTokenizer.from_pretrained(
+                            "Qwen/Qwen2-0.5B-Instruct"
+                        )
                     except Exception as ex_t:
                         print(f"⚠️ Warning tokenizers: {ex_t}")
                         try:
                             from tokenizers import Tokenizer
-                            tokenizer = Tokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+
+                            tokenizer = Tokenizer.from_pretrained(
+                                "Qwen/Qwen2-0.5B-Instruct"
+                            )
                         except Exception:
                             pass
-                    
+
                     obj = cls.__new__(cls)
                     obj.rust_llm = rust_llm
                     obj.tokenizer = tokenizer
                     obj.n_embd = rust_llm.n_embd if hasattr(rust_llm, "n_embd") else 896
-                    obj.embeddings = rust_llm.embeddings if hasattr(rust_llm, "embeddings") else None
+                    obj.embeddings = (
+                        rust_llm.embeddings if hasattr(rust_llm, "embeddings") else None
+                    )
                     obj.n_head = 14
                     obj.n_head_kv = 2
                     obj.head_dim = 64
-                    obj.n_blocks = len(rust_llm.blocks) if hasattr(rust_llm, "blocks") else 24
+                    obj.n_blocks = (
+                        len(rust_llm.blocks) if hasattr(rust_llm, "blocks") else 24
+                    )
                     return obj
 
         if not input_path.endswith(".gaje"):
@@ -1321,7 +1335,7 @@ class GenomicLLM:
                     if "blk." in name and not name.startswith("blk.0"):
                         print(f"⚠️ Skipping non-existent layer in small model: {name}")
                         return None
-            
+
             is_legacy_packed = False
             if actual_name.endswith(".packed_weights"):
                 is_legacy_packed = True

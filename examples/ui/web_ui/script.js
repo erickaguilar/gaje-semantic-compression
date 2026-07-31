@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(text, type, meta = null) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${type}`;
-        
+
         let html = `<p>${text}</p>`;
         if (type === 'bot' && meta) {
             html += `

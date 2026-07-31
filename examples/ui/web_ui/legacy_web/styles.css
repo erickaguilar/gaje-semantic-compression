@@ -108,7 +108,7 @@ section:last-of-type {
 .bg-grid {
   position: absolute;
   inset: 0;
-  background-image: 
+  background-image:
     radial-gradient(circle at 50% 0%, rgba(95, 216, 201, 0.04) 0%, transparent 60%),
     linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
