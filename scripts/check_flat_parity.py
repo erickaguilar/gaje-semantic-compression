@@ -5,7 +5,7 @@ import numpy as np
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-from gaje.core import _impl as dna_semantic_compression
+from gaje.core import _impl as dna_semantic_compression  # noqa: E402
 
 
 def check_parity():

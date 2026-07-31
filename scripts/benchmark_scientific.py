@@ -10,7 +10,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-from gaje.core import _impl as dna_semantic_compression
+from gaje.core import _impl as dna_semantic_compression  # noqa: E402
 
 # 25 Prompts divididos en 5 Dominios Científicos
 EVAL_BATTERY = [

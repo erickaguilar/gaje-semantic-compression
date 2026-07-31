@@ -10,8 +10,8 @@ from transformers import AutoTokenizer
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
-from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0
-from gaje.nn.configs import ARCHITECTURES
+from gaje.nn.configs import ARCHITECTURES  # noqa: E402
+from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0  # noqa: E402
 
 
 def export_gaje_flat():

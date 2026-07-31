@@ -1,7 +1,8 @@
-import os
-import sys
 import gc
 import json
+import os
+import shutil
+import sys
 import numpy as np
 import gguf
 from transformers import AutoTokenizer
@@ -235,7 +236,6 @@ for i in range(n_blocks):
     print(f"  [~] Bloque {i+1}/{n_blocks} fusionado (4 capas) y liberado de RAM.")
     gc.collect()
 
-import shutil
 
 shutil.copy(out_path, os.path.join(PROJECT_ROOT, "models", "qwen2_0_5b_4bit.gaje"))
 
