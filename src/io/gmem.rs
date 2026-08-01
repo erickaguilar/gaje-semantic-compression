@@ -14,9 +14,10 @@ pub struct GmemHeader {
     pub magic: [u8; 4],
     pub version: u32,
     pub dim: u32,
-    pub num_entries: u64,
     pub index_type: u8,
-    pub reserved: [u8; 43],
+    pub _pad: [u8; 3],
+    pub num_entries: u64,
+    pub reserved: [u8; 40],
 }
 
 impl Default for GmemHeader {
@@ -25,9 +26,10 @@ impl Default for GmemHeader {
             magic: *GMEM_MAGIC,
             version: 1,
             dim: 896,
-            num_entries: 0,
             index_type: 0,
-            reserved: [0u8; 43],
+            _pad: [0u8; 3],
+            num_entries: 0,
+            reserved: [0u8; 40],
         }
     }
 }
@@ -83,6 +85,50 @@ impl GmemMemoryIndex {
         }
 
         Ok(())
+    }
+
+    /// Carga el índice binario .gmem desde disco
+    pub fn load_from_file(path: &str) -> IoResult<Self> {
+        let mut file = File::open(path)?;
+        let mut header_bytes = [0u8; 64];
+        file.read_exact(&mut header_bytes)?;
+
+        let header: GmemHeader = unsafe { std::mem::transmute(header_bytes) };
+        if &header.magic != GMEM_MAGIC {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Formato de archivo binario .gmem inválido",
+            ));
+        }
+
+        let mut entries = Vec::with_capacity(header.num_entries as usize);
+        let dim = header.dim as usize;
+
+        for _ in 0..header.num_entries {
+            let mut id_bytes = [0u8; 8];
+            file.read_exact(&mut id_bytes)?;
+            let id = u64::from_le_bytes(id_bytes);
+
+            let mut vector = vec![0.0f32; dim];
+            for i in 0..dim {
+                let mut val_bytes = [0u8; 4];
+                file.read_exact(&mut val_bytes)?;
+                vector[i] = f32::from_le_bytes(val_bytes);
+            }
+
+            let mut len_bytes = [0u8; 4];
+            file.read_exact(&mut len_bytes)?;
+            let text_len = u32::from_le_bytes(len_bytes) as usize;
+
+            let mut text_bytes = vec![0u8; text_len];
+            file.read_exact(&mut text_bytes)?;
+            let text = String::from_utf8(text_bytes)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+
+            entries.push(GmemEntry { id, vector, text });
+        }
+
+        Ok(Self { header, entries })
     }
 
     /// Busca los K vecinos más cercanos por Similitud Coseno vectorizada
