@@ -151,36 +151,51 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     tokens = [0]
 
-                # 2. Generación Genómica (con plantilla ChatML para modelos Instruct)
+                # 2. Generación Genómica Nativa (con ChatML completo para Qwen2 Instruct)
                 import time
 
-                formatted_message = message
-                if not message.startswith("<|im_start|>"):
-                    formatted_message = f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
+                formatted_message = (
+                    f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+                    f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
+                )
+
+                tokens = llm.tokenizer.encode(formatted_message, add_special_tokens=False)
+                if hasattr(tokens, "ids"):
+                    tokens = tokens.ids
 
                 start_time = time.time()
-                response_text = ""
-                tokens_count = 0
                 print(
-                    f"[*] Generando respuesta para: {repr(formatted_message[:40])}..."
+                    f"[*] Generando respuesta nativa para: {repr(formatted_message[:50])}..."
                 )
                 try:
-                    for token_text in llm.generate(
-                        formatted_message,
-                        max_new_tokens=60,
-                        temperature=0.3,
-                        repetition_penalty=1.1,
+                    eos_ids = [2, 151643, 151645]
+                    if (
+                        hasattr(llm.tokenizer, "eos_token_id")
+                        and llm.tokenizer.eos_token_id is not None
                     ):
-                        if "<|im_end|>" in token_text:
-                            token_text = token_text.replace("<|im_end|>", "").strip()
-                            response_text += token_text
-                            break
-                        response_text += token_text
-                        tokens_count += 1
-                        if len(response_text) > 400:
-                            break
+                        eos_ids.append(llm.tokenizer.eos_token_id)
+
+                    gen_ids = llm.rust_llm.generate_native_py(
+                        tokens,
+                        32,  # max_new_tokens para baja latencia
+                        0.2,  # temperatura baja para precisión factual
+                        1.15,  # penalti de repetición
+                        eos_ids,
+                    )
+
+                    response_text = llm.tokenizer.decode(gen_ids)
+                    for stop_token in ["<|im_end|>", "<|im_start|>", "<|endoftext|>"]:
+                        if stop_token in response_text:
+                            response_text = response_text.split(stop_token)[0]
+
+                    response_text = response_text.strip()
+                    tokens_count = len(gen_ids)
                 except Exception as e:
+                    import traceback
+
+                    traceback.print_exc()
                     response_text = f"Error en generación: {e}"
+                    tokens_count = 0
 
                 gen_time_ms = round((time.time() - start_time) * 1000, 2)
                 tok_per_sec = (
