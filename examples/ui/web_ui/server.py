@@ -159,7 +159,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
                 )
 
-                tokens = llm.tokenizer.encode(formatted_message, add_special_tokens=False)
+                tokens = llm.tokenizer.encode(
+                    formatted_message, add_special_tokens=False
+                )
                 if hasattr(tokens, "ids"):
                     tokens = tokens.ids
 
