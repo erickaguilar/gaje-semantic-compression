@@ -267,42 +267,64 @@ impl GenomicLinear {
             }
             WeightDatabase::Genomic2Bit(db) => {
                 let row_off = i * n_blocks * self.stride;
+                let db_slice = db.get(row_off..row_off + n_blocks * self.stride).unwrap_or(&[]);
                 let c_start = i * n_blocks * 4;
-                sum = unsafe {
-                    crate::compute::kernels::genomic_dot_product(
-                        &db[row_off..row_off + n_blocks * self.stride],
-                        input,
-                        &self.centroids[c_start..c_start + n_blocks * 4],
-                        self.stride,
-                        n_blocks,
-                        m_factors,
-                    )
+                let c_slice = if self.centroids.len() >= c_start + n_blocks * 4 {
+                    &self.centroids[c_start..c_start + n_blocks * 4]
+                } else if self.centroids.len() >= 4 {
+                    &self.centroids[0..4]
+                } else {
+                    &[]
                 };
+                if !db_slice.is_empty() && !c_slice.is_empty() {
+                    sum = unsafe {
+                        crate::compute::kernels::genomic_dot_product(
+                            db_slice,
+                            input,
+                            c_slice,
+                            self.stride,
+                            n_blocks,
+                            m_factors,
+                        )
+                    };
+                }
             }
             WeightDatabase::Genomic4Bit(db) => {
                 let row_off = i * n_blocks * self.stride;
+                let db_slice = db.get(row_off..row_off + n_blocks * self.stride).unwrap_or(&[]);
                 let c_start = i * n_blocks * 16;
-                sum = unsafe {
-                    crate::compute::kernels::genomic_dot_product_4bit(
-                        &db[row_off..row_off + n_blocks * self.stride],
-                        input,
-                        &self.centroids[c_start..c_start + n_blocks * 16],
-                        self.stride,
-                        n_blocks,
-                    )
+                let c_slice = if self.centroids.len() >= c_start + n_blocks * 16 {
+                    &self.centroids[c_start..c_start + n_blocks * 16]
+                } else if self.centroids.len() >= 16 {
+                    &self.centroids[0..16]
+                } else {
+                    &[]
                 };
+                if !db_slice.is_empty() && !c_slice.is_empty() {
+                    sum = unsafe {
+                        crate::compute::kernels::genomic_dot_product_4bit(
+                            db_slice,
+                            input,
+                            c_slice,
+                            self.stride,
+                            n_blocks,
+                        )
+                    };
+                }
             }
         }
-        let a_s = self.anchor_row_ptrs[i];
-        let a_e = self.anchor_row_ptrs[i + 1];
-        for k in a_s..a_e {
-            let col_idx = (self.anchor_indices[k] as usize) % self.in_features;
-            if let Some(&in_val) = input.get(col_idx) {
-                sum += in_val * self.anchor_values[k].to_f32();
+        let a_s = self.anchor_row_ptrs.get(i).copied().unwrap_or(0);
+        let a_e = self.anchor_row_ptrs.get(i + 1).copied().unwrap_or(a_s);
+        if a_s < a_e && a_e <= self.anchor_indices.len() && a_e <= self.anchor_values.len() {
+            for k in a_s..a_e {
+                let col_idx = (self.anchor_indices[k] as usize) % self.in_features;
+                if let Some(&in_val) = input.get(col_idx) {
+                    sum += in_val * self.anchor_values[k].to_f32();
+                }
             }
         }
-        if !self.bias.is_empty() {
-            sum += self.bias[i];
+        if let Some(&b_val) = self.bias.get(i) {
+            sum += b_val;
         }
         sum
     }
