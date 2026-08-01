@@ -267,7 +267,9 @@ impl GenomicLinear {
             }
             WeightDatabase::Genomic2Bit(db) => {
                 let row_off = i * n_blocks * self.stride;
-                let db_slice = db.get(row_off..row_off + n_blocks * self.stride).unwrap_or(&[]);
+                let db_slice = db
+                    .get(row_off..row_off + n_blocks * self.stride)
+                    .unwrap_or(&[]);
                 let c_start = i * n_blocks * 4;
                 let c_slice = if self.centroids.len() >= c_start + n_blocks * 4 {
                     &self.centroids[c_start..c_start + n_blocks * 4]
@@ -291,7 +293,9 @@ impl GenomicLinear {
             }
             WeightDatabase::Genomic4Bit(db) => {
                 let row_off = i * n_blocks * self.stride;
-                let db_slice = db.get(row_off..row_off + n_blocks * self.stride).unwrap_or(&[]);
+                let db_slice = db
+                    .get(row_off..row_off + n_blocks * self.stride)
+                    .unwrap_or(&[]);
                 let c_start = i * n_blocks * 16;
                 let c_slice = if self.centroids.len() >= c_start + n_blocks * 16 {
                     &self.centroids[c_start..c_start + n_blocks * 16]
