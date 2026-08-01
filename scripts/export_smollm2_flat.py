@@ -161,16 +161,17 @@ def export_smollm2_flat():
         tensor_directory.append(
             {
                 "name": name,
-                "out_features": out_features,
-                "in_features": in_features,
-                "block_size": block_size,
-                "bit_depth": bit_depth,
-                "offsets": {
-                    "dna": [off_dna, len_dna],
-                    "anc": [off_anc, len_anc],
-                    "cen": [off_cen, len_cen],
-                    "bias": [off_bias, len_bias],
-                },
+                "bit_depth": int(bit_depth),
+                "out_features": int(out_features),
+                "in_features": int(in_features),
+                "dna_off": int(off_dna),
+                "dna_len": int(len_dna),
+                "c_off": int(off_cen),
+                "c_len": int(len_cen),
+                "anc_off": int(off_anc),
+                "anc_len": int(len_anc),
+                "bias_off": int(off_bias),
+                "bias_len": int(len_bias),
             }
         )
 
@@ -192,7 +193,20 @@ def export_smollm2_flat():
         ).flatten()
         off_anorm, len_anorm = add_blob_data(f"{p}attn_norm", attn_norm.tobytes())
         tensor_directory.append(
-            {"name": f"{p}attn_norm", "offsets": {"data": [off_anorm, len_anorm]}}
+            {
+                "name": f"{p}attn_norm",
+                "bit_depth": 32,
+                "out_features": int(n_embd),
+                "in_features": 1,
+                "dna_off": int(off_anorm),
+                "dna_len": int(len_anorm),
+                "c_off": 0,
+                "c_len": 0,
+                "anc_off": 0,
+                "anc_len": 0,
+                "bias_off": 0,
+                "bias_len": 0,
+            }
         )
 
         ffn_norm = get_tensor_f32_matrix(
@@ -200,7 +214,20 @@ def export_smollm2_flat():
         ).flatten()
         off_fnorm, len_fnorm = add_blob_data(f"{p}ffn_norm", ffn_norm.tobytes())
         tensor_directory.append(
-            {"name": f"{p}ffn_norm", "offsets": {"data": [off_fnorm, len_fnorm]}}
+            {
+                "name": f"{p}ffn_norm",
+                "bit_depth": 32,
+                "out_features": int(n_embd),
+                "in_features": 1,
+                "dna_off": int(off_fnorm),
+                "dna_len": int(len_fnorm),
+                "c_off": 0,
+                "c_len": 0,
+                "anc_off": 0,
+                "anc_len": 0,
+                "bias_off": 0,
+                "bias_len": 0,
+            }
         )
 
         # 1. Fused QKV
@@ -246,7 +273,20 @@ def export_smollm2_flat():
         output_norm = np.ones(n_embd, dtype=np.float32)
     off_onorm, len_onorm = add_blob_data("output_norm", output_norm.tobytes())
     tensor_directory.append(
-        {"name": "output_norm", "offsets": {"data": [off_onorm, len_onorm]}}
+        {
+            "name": "output_norm",
+            "bit_depth": 32,
+            "out_features": int(n_embd),
+            "in_features": 1,
+            "dna_off": int(off_onorm),
+            "dna_len": int(len_onorm),
+            "c_off": 0,
+            "c_len": 0,
+            "anc_off": 0,
+            "anc_len": 0,
+            "bias_off": 0,
+            "bias_len": 0,
+        }
     )
 
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
