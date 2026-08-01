@@ -356,3 +356,43 @@ footer {
 .dna-char-C { color: var(--dna-c); }
 .dna-char-G { color: var(--dna-g); }
 .dna-char-T { color: var(--dna-t); }
+
+/* Island Model Styles */
+.island-badge-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.island-pill {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pill-episodic {
+    background: rgba(255, 95, 95, 0.15);
+    color: #ff8585;
+    border-color: rgba(255, 95, 95, 0.4);
+}
+
+.pill-documental {
+    background: rgba(95, 191, 255, 0.15);
+    color: #85d5ff;
+    border-color: rgba(95, 191, 255, 0.4);
+}
+
+.pill-conversational {
+    background: rgba(95, 255, 95, 0.15);
+    color: #85ff85;
+    border-color: rgba(95, 255, 95, 0.4);
+}
+
+.meta-island {
+    background: rgba(46, 160, 67, 0.2);
+    border: 1px solid rgba(46, 160, 67, 0.5);
+    color: #7ee787;
+}

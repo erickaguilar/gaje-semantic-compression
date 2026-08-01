@@ -91,10 +91,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let html = `<p>${text}</p>`;
         if (type === 'bot' && meta) {
+            let islandBadge = '';
+            if (meta.island) {
+                islandBadge = `<span class="meta-badge meta-island">🏝️ Island .gmem: ${meta.island.retrieval_ms} ms | +${meta.island.budget_tokens} tok (CosSim ${meta.island.cossim})</span>`;
+            }
             html += `
                 <div class="message-meta">
                     <span class="meta-badge">⏱️ ${meta.latency_ms} ms (${meta.tokens_sec || 0} tok/s)</span>
                     <span class="meta-badge">🔢 ${meta.tokens_count || 0} tokens</span>
+                    ${islandBadge}
                 </div>
             `;
         }

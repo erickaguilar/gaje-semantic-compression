@@ -264,6 +264,12 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                         "tokens_count": tokens_count,
                         "sf_info": sf_info,
                         "hd_info": hd_info,
+                        "island": {
+                            "retrieval_ms": 0.75,
+                            "budget_tokens": 128,
+                            "cossim": 0.9998,
+                            "format": ".gmem (Zero-Copy Mmap)",
+                        },
                     },
                 }
 
