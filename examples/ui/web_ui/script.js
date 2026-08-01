@@ -19,7 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 modelsData.forEach(model => {
                     const opt = document.createElement('option');
                     opt.value = model.name;
-                    opt.innerText = model.name.replace('.gaje', '').replace(/_/g, ' ').toUpperCase();
+                    let label = model.name;
+                    if (label.endsWith('.flat')) {
+                        label = '⚡ ' + label.replace('.gaje.flat', '').replace('.flat', '') + ' (ZERO-COPY FLAT MMAP)';
+                    } else {
+                        label = label.replace('.gaje', '');
+                    }
+                    opt.innerText = label.replace(/_/g, ' ').toUpperCase();
                     modelSelect.appendChild(opt);
                 });
                 updateModelDate();
