@@ -47,16 +47,25 @@ impl IslandOrchestrator {
         }
     }
 
-    /// Recupera contexto relevante consultando las 3 islas en paralelo
+    /// Recupera contexto relevante consultando las 3 islas en paralelo mediante Rayon
     pub fn retrieve_context(
         &self,
         query_vector: &[f32],
         k_per_niche: usize,
     ) -> Vec<IslandSearchResult> {
-        let mut results = Vec::new();
+        let (res_epi, (res_doc, res_conv)) = rayon::join(
+            || self.episodic.search_top_k(query_vector, k_per_niche),
+            || {
+                rayon::join(
+                    || self.documental.search_top_k(query_vector, k_per_niche),
+                    || self.conversational.search_top_k(query_vector, k_per_niche),
+                )
+            },
+        );
 
-        // 1. Consultar Isla Episódica
-        for (entry, sim) in self.episodic.search_top_k(query_vector, k_per_niche) {
+        let mut results = Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
+
+        for (entry, sim) in res_epi {
             results.push(IslandSearchResult {
                 niche: IslandNiche::Episodic,
                 id: entry.id,
@@ -64,9 +73,7 @@ impl IslandOrchestrator {
                 text: entry.text.clone(),
             });
         }
-
-        // 2. Consultar Isla Documental
-        for (entry, sim) in self.documental.search_top_k(query_vector, k_per_niche) {
+        for (entry, sim) in res_doc {
             results.push(IslandSearchResult {
                 niche: IslandNiche::Documental,
                 id: entry.id,
@@ -74,9 +81,7 @@ impl IslandOrchestrator {
                 text: entry.text.clone(),
             });
         }
-
-        // 3. Consultar Isla Conversacional
-        for (entry, sim) in self.conversational.search_top_k(query_vector, k_per_niche) {
+        for (entry, sim) in res_conv {
             results.push(IslandSearchResult {
                 niche: IslandNiche::Conversational,
                 id: entry.id,
@@ -94,27 +99,34 @@ impl IslandOrchestrator {
         results
     }
 
-    /// Genera la cadena de contexto enriquecida para el prefill del LLM
-    pub fn build_augmented_prompt(
+    /// Ensambla el prompt aumentado usando resultados previamente recuperados
+    pub fn build_augmented_prompt_from_matches(
         &self,
         prompt: &str,
-        query_vector: &[f32],
+        matches: &[IslandSearchResult],
         max_tokens_context: usize,
     ) -> String {
-        let matches = self.retrieve_context(query_vector, 2);
         if matches.is_empty() {
             return prompt.to_string();
         }
 
         let mut context_snippets = Vec::new();
+        let mut char_count = 0;
+        let max_chars = max_tokens_context * 4; // Aproximación estándar 1 token ~ 4 chars
+
         for m in matches {
             if m.similarity > 0.65 {
                 let prefix = match m.niche {
                     IslandNiche::Episodic => "[Memoria Episódica]",
                     IslandNiche::Documental => "[Conocimiento Base]",
-                    IslandNiche::Conversational => "[Historial Prevío]",
+                    IslandNiche::Conversational => "[Historial Previo]",
                 };
-                context_snippets.push(format!("{} {}", prefix, m.text));
+                let snippet = format!("{} {}", prefix, m.text);
+                if char_count + snippet.len() > max_chars && !context_snippets.is_empty() {
+                    break;
+                }
+                char_count += snippet.len();
+                context_snippets.push(snippet);
             }
         }
 
@@ -127,6 +139,17 @@ impl IslandOrchestrator {
                 prompt
             )
         }
+    }
+
+    /// Genera la cadena de contexto enriquecida para el prefill del LLM
+    pub fn build_augmented_prompt(
+        &self,
+        prompt: &str,
+        query_vector: &[f32],
+        max_tokens_context: usize,
+    ) -> String {
+        let matches = self.retrieve_context(query_vector, 2);
+        self.build_augmented_prompt_from_matches(prompt, &matches, max_tokens_context)
     }
 }
 
