@@ -155,7 +155,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 import time
 
                 formatted_message = (
-                    f"<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+                    f"<|im_start|>system\nEres un asistente útil y preciso.<|im_end|>\n"
                     f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
                 )
 
@@ -180,8 +180,8 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     gen_ids = llm.rust_llm.generate_native_py(
                         tokens,
                         32,  # max_new_tokens para baja latencia
-                        0.2,  # temperatura baja para precisión factual
-                        1.15,  # penalti de repetición
+                        0.0,  # temperatura 0.0 (greedy decoding)
+                        1.0,  # sin penalti de repetición (evita distorsión en secuencias)
                         eos_ids,
                     )
 
