@@ -125,9 +125,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     "saving_pct": 87.5,
                 },
                 "island_info": {
-                    "latency_ms": 0.75,
-                    "tokens_added": 128,
-                    "cossim": 0.9998,
+                    "latency_ms": 0.0,
+                    "tokens_added": 0,
+                    "cossim": 0.0,
                 },
                 "dna_seq": dna_sample,
                 "env": {

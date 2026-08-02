@@ -39,9 +39,9 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
 
         print(f"🧬 Cargando modelo real: {model_path}")
         try:
-            # Unload previous models to free RAM if memory usage is tight
-            if len(loaded_models) > 2:
-                print("🧹 Liberando modelos inactivos de la memoria RAM...")
+            # Strictly keep only ONE active model in RAM at any time
+            if loaded_models:
+                print("🧹 Liberando modelo previo de la memoria RAM...")
                 loaded_models.clear()
                 gc.collect()
 
