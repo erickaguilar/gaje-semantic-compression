@@ -154,10 +154,13 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 # 2. Generación Genómica Nativa (con ChatML completo para Qwen2 Instruct)
                 import time
 
-                formatted_message = (
-                    f"<|im_start|>system\nEres un asistente útil y preciso.<|im_end|>\n"
-                    f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
-                )
+                if "smollm" in model_name.lower():
+                    formatted_message = f"User: {message}\nAssistant:"
+                else:
+                    formatted_message = (
+                        f"<|im_start|>system\nEres un asistente útil y preciso.<|im_end|>\n"
+                        f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
+                    )
 
                 tokens = llm.tokenizer.encode(
                     formatted_message, add_special_tokens=False
