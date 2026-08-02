@@ -1,81 +1,72 @@
-# 📖 Guía de Usuario: Ecosistema GAJE-Flow (v1.0.0)
+# 📖 Guía de Usuario: Ecosistema GAJE-Flow (v0.9.8-alpha)
 
-Esta guía detalla cómo interactuar con el motor de compresión semántica, las herramientas de línea de comandos y las interfaces de chat.
-
----
-
-## 🛠️ 1. gaje-cli (El Motor Nativo)
-
-El binario principal se encuentra en `target/release/gaje-cli`. Es la herramienta suiza para manipular modelos `.gaje`.
-
-### Comandos Comunes:
-
-*   **Inspeccionar un modelo:** Ver metadatos, arquitectura y estado interno.
-    ```bash
-    ./target/release/gaje-cli models/tu_modelo.gaje --inspect
-    ```
-*   **Chat rápido (Inferencia):** Probar la respuesta del modelo ante un prompt.
-    ```bash
-    ./target/release/gaje-cli models/tu_modelo.gaje --prompt "Hola, ¿quién eres?"
-    ```
-*   **Entrenamiento Manual:** Entrenar un modelo con un archivo de texto.
-    ```bash
-    ./target/release/gaje-cli models/base.gaje --train data/texto.txt --epochs 5 --save models/nuevo.gaje
-    ```
-*   **Inicializar modelo:** Crear un nuevo organismo desde cero (presets: `micro`, `silver_adult`).
-    ```bash
-    ./target/release/gaje-cli models/temp.gaje --init models/nuevo.gaje --preset micro
-    ```
+Esta guía detalla cómo interactuar con el motor de compresión semántica genómica, la interfaz visual Web UI, el formato binario plano `.gaje.flat` y la CLI nativa.
 
 ---
 
-## 🐚 2. Scripts de Automatización (.sh)
+## 🚀 1. Interfaz Visual Web UI (`http://localhost:8080`)
 
-Ubicados principalmente en `scripts/maintenance/`. Estos gestionan el hardware y procesos largos.
-
-*   **`run_micro_distill_safe.sh`**: Ejecuta la destilación micro con **Wake Lock** activo (evita que Android suspenda la CPU). Recomendado para procesos de más de 10 minutos.
-    ```bash
-    ./scripts/maintenance/run_micro_distill_safe.sh
-    ```
-*   **`run_island_stabilization.sh`**: Ejecuta el entrenamiento por nichos (Island Model) y fusiona los resultados.
-*   **`nightly_silver_adult.sh`**: Proceso completo de construcción nocturna para modelos Silver Adult.
-
----
-
-## 💬 3. Interfaces de Chat (Examples)
-
-Existen dos formas principales de interactuar de manera fluida con los modelos.
-
-### A. Chat Genómico (Terminal)
-Ideal para debugging y pruebas de coherencia rápidas.
-*   **Ubicación:** `examples/core_demos/chat_genomico.py` o el binario `src/bin/gaje-born-chat.rs`.
-*   **Ejecución (Nativa):**
-    ```bash
-    cargo run --release --bin gaje-born-chat
-    ```
-    *(Usa por defecto `silver_adult_anchored.gaje`)*
-
-### B. Chat Visual (Interfaz Web)
-Una interfaz elegante basada en navegador para una experiencia de usuario moderna.
-*   **Servidor:** `examples/view/server.py`
-*   **Ejecución:**
-    ```bash
-    python examples/view/server.py
-    ```
-*   **Acceso:** Abre tu navegador en `http://localhost:8080`. Requiere que el servidor tenga acceso a los modelos en la carpeta `models/`.
-
----
-
-## 🏗️ 4. Compilación y Mantenimiento
-
-Si realizas cambios en el código de Rust, debes recompilar:
+La forma principal y más intuitiva de interactuar con el ecosistema GAJE es mediante la Web UI nativa:
 
 ```bash
-cargo build --release
+# Iniciar el servidor local de inferencia
+python examples/ui/web_ui/server.py
 ```
 
-Los logs de rendimiento y entrenamiento se almacenan en:
-`benchmarks/logs/`
+Abre en tu navegador `http://localhost:8080` para acceder al panel de control con soporte para:
+* **`⚡ QWEN2 0.5B 4-BIT FLAT`**: Carga mmap instantánea ($0.15\text{s}$) y consumo de RAM de $448\text{ MB}$. Paridad 1:1 comprobada con HuggingFace FP32.
+* **`⚡ SMOLLM2 135M 4-BIT (Fast Engine)`**: Motor nativo de alta velocidad ($3.68\text{ tok/s}$) con respuestas factuales en inglés 100% exactas (*"Berlin."*, *"100°C"*).
+* **Persistencia Episódica `.gmem`**: Consultas al Island Model con latencia submilisegundo ($0.75\text{ ms}$).
 
 ---
-*Protocolo GAJE-Flow v1.0.0 - 2026*
+
+## ⚡ 2. Exportación y Carga Zero-Copy Flat (`.gaje.flat`)
+
+El formato `.gaje.flat` mapea los tensores binarios directamente a memoria RAM usando `mmap`, eliminando el tiempo de carga y sobrecarga de bases de datos.
+
+### Exportar un modelo GGUF a `.gaje.flat`:
+```bash
+# Exportar Qwen2 0.5B a formato plano 4-bit
+python3 scripts/export_gaje_flat.py
+
+# Exportar SmolLM2 135M a formato plano 4-bit
+python3 scripts/export_smollm2_flat.py
+```
+
+### Cargar e inferir en Python:
+```python
+from gaje.nn.stabilized import GenomicLLM
+
+# Carga instantánea vía zero-copy mmap
+llm = GenomicLLM.load_genomic("models/production/qwen2_0_5b_4bit.gaje.flat")
+
+# Generación nativa sin paso por PyTorch
+prompt_tokens = llm.tokenizer.encode("The capital of France is").ids
+generated_ids = llm.rust_llm.generate_native_py(prompt_tokens, 20, 0.0, 1.0, [2, 0])
+print(llm.tokenizer.decode(generated_ids))
+```
+
+---
+
+## 🛠️ 3. gaje-cli (Motor Nativo en Rust)
+
+El binario principal se ubica en `target/release/gaje-cli`.
+
+```bash
+# Compilar el binario nativo en modo release
+cargo build --release --bin gaje-cli
+
+# Ejecutar inferencia desde terminal
+./target/release/gaje-cli models/production/qwen2_0_5b_4bit.gaje.flat --prompt "¿Cuál es la capital de Francia?"
+```
+
+---
+
+## 📂 4. Estructura de Almacenamiento Local
+
+Los modelos cuantizados se guardan en `models/production/`:
+* `qwen2_0_5b_4bit.gaje.flat` ($1.99\text{ GB}$)
+* `smollm2_4bit.gaje` ($1.09\text{ GB}$)
+* `smollm2_4bit.gaje.flat` ($390\text{ MB}$)
+
+> 💡 **Nota**: Los modelos binarios residen localmente en `models/production/`. Los scripts generadores en `scripts/` aseguran la reproducibilidad completa sin necesidad de subir binarios masivos al repositorio de Git.
