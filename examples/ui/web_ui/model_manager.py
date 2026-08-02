@@ -65,7 +65,9 @@ def list_available_models(models_root: str) -> list:
     if os.path.exists(models_root):
         for root, _, files in os.walk(models_root):
             for f in files:
-                if (f.endswith(".gaje") or f.endswith(".flat")) and f not in seen_models:
+                if (
+                    f.endswith(".gaje") or f.endswith(".flat")
+                ) and f not in seen_models:
                     fpath = os.path.join(root, f)
                     mtime = os.path.getmtime(fpath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")

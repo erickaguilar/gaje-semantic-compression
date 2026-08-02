@@ -52,7 +52,9 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
             llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
             if not llm:
-                self._send_json({"error": f"No se pudo cargar {model_name}"}, status=500)
+                self._send_json(
+                    {"error": f"No se pudo cargar {model_name}"}, status=500
+                )
                 return
 
             self._send_json({"status": "ok", "model": model_name})
