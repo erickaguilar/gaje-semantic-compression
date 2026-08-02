@@ -120,24 +120,18 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                 "response": cleaned_response,
                 "metrics": {
                     "latency_ms": round(elapsed_ms, 2),
-                    "tokens": num_tokens,
-                    "tok_per_sec": round(tok_per_sec, 2),
+                    "tokens_count": num_tokens,
+                    "tokens_sec": round(tok_per_sec, 2),
                     "dims": dims,
-                    "original_bytes": dims * 4,
-                    "compressed_bytes": dims // 2,
+                    "original_size": dims * 4,
+                    "dna_size": dims // 2,
+                    "bit_depth": 4,
                     "ratio": 8.0,
-                    "saving_pct": 87.5,
+                    "saved": 87.5,
+                    "sf_info": f"Rust 2021 (NEON/SIMD) + PyO3 / Python {sys.version.split()[0]}",
+                    "hd_info": f"{platform.processor() or 'CPU Native'} - Native CPU",
                 },
-                "island_info": {
-                    "latency_ms": 0.0,
-                    "tokens_added": 0,
-                    "cossim": 0.0,
-                },
-                "dna_seq": dna_sample,
-                "env": {
-                    "sf": f"Rust 2021 (NEON/SIMD) + PyO3 / Python {sys.version.split()[0]}",
-                    "hd": f"{platform.processor() or 'CPU Native'} - Native CPU",
-                },
+                "dna": dna_sample,
             }
             self._send_json(response_data)
 
