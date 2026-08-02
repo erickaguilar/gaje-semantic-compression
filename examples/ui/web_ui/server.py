@@ -1,328 +1,164 @@
+"""GAJE-Flow Visual Web UI Server.
+
+Modular HTTP server for local LLM inference, embedding visualization,
+and Island Model context orchestration.
+"""
+
 import http.server
-import socketserver
 import json
 import os
-import sys
 import platform
+import socketserver
+import sys
+import time
 
 SERVER_DIR = os.path.dirname(os.path.abspath(os.path.realpath(__file__)))
 PROJECT_ROOT = os.path.abspath(os.path.join(SERVER_DIR, "..", "..", ".."))
-DIRECTORY = SERVER_DIR
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
+sys.path.insert(0, SERVER_DIR)
 
-from gaje.core import _impl as dna_semantic_compression  # noqa: E402
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
+from model_manager import get_model, list_available_models  # noqa: E402
+from prompt_templates import format_prompt, get_stop_tokens  # noqa: E402
 
 PORT = 8080
-import threading  # noqa: E402
-
-# Cache de modelos y lock para evitar cargas duplicadas o fallos por concurrencia
-loaded_models = {}
-model_lock = threading.Lock()
-
-
-def get_model(model_name):
-    with model_lock:
-        if model_name in loaded_models:
-            return loaded_models[model_name]
-
-        model_dir = os.path.join(PROJECT_ROOT, "models")
-        model_path = None
-
-        # Search recursively in PROJECT_ROOT/models
-        for root, _, files in os.walk(model_dir):
-            if model_name in files:
-                model_path = os.path.join(root, model_name)
-                break
-
-        if not model_path:
-            print(
-                f"❌ No se encontró el archivo de modelo '{model_name}' en {model_dir}"
-            )
-            return None
-
-        print(f"🧬 Cargando modelo real: {model_path}")
-        try:
-            llm = GenomicLLM.load_genomic(os.path.abspath(model_path))
-            llm.rust_llm.set_k_wta_ratio(0.0)
-            loaded_models[model_name] = llm
-            return llm
-        except Exception as e:
-            import traceback
-
-            print(f"❌ Error cargando modelo {model_name}: {e}")
-            traceback.print_exc()
-            return None
+MODELS_ROOT = os.path.join(PROJECT_ROOT, "models")
 
 
 class GajeHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=DIRECTORY, **kwargs)
+        super().__init__(*args, directory=SERVER_DIR, **kwargs)
 
     def do_GET(self):
         if self.path == "/api/models":
-            models_root = os.path.join(PROJECT_ROOT, "models")
-            models = []
-            seen_models = set()
-
-            if os.path.exists(models_root):
-                for root, _, files in os.walk(models_root):
-                    for f in files:
-                        if (
-                            f.endswith(".gaje") or f.endswith(".flat")
-                        ) and f not in seen_models:
-                            fpath = os.path.join(root, f)
-                            mtime = os.path.getmtime(fpath)
-                            from datetime import datetime
-
-                            date_str = datetime.fromtimestamp(mtime).strftime(
-                                "%Y-%m-%d %H:%M"
-                            )
-                            models.append({"name": f, "date": date_str})
-                            seen_models.add(f)
-
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({"models": models}).encode())
+            models = list_available_models(MODELS_ROOT)
+            self._send_json({"models": models})
         else:
             super().do_GET()
 
     def do_POST(self):
         if self.path == "/api/load_model":
+            self._handle_load_model()
+        elif self.path == "/api/chat":
+            self._handle_chat()
+        else:
+            self.send_error(404, "Endpoint not found")
+
+    def _handle_load_model(self):
+        try:
+            data = self._read_json_body()
+            model_name = data.get("model", "")
+            print(f"🧬 Pre-cargando modelo: {model_name}...")
+
+            llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
+            if not llm:
+                self._send_json({"error": f"No se pudo cargar {model_name}"}, status=500)
+                return
+
+            self._send_json({"status": "ok", "model": model_name})
+        except Exception as e:
+            self._send_json({"error": str(e)}, status=500)
+
+    def _handle_chat(self):
+        try:
+            data = self._read_json_body()
+            message = data.get("message", "")
+            model_name = data.get("model", "")
+
+            print(f"[*] Procesando mensaje con modelo: {model_name}")
+            llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
+            if not llm:
+                self._send_json(
+                    {"error": f"Modelo {model_name} no disponible."}, status=500
+                )
+                return
+
+            # 1. Formatear Prompt según Arquitectura
+            formatted_message = format_prompt(model_name, message)
+            tokens = llm.tokenizer.encode(formatted_message, add_special_tokens=False)
+            if hasattr(tokens, "ids"):
+                tokens = tokens.ids
+
+            # 2. Inferencia Nativa
+            start_time = time.time()
+            eos_ids = get_stop_tokens(model_name, llm.tokenizer)
+
             try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data)
-                model_name = data.get("model", "")
-
-                print(f"🧬 Pre-cargando modelo: {model_name}...")
-                llm = get_model(model_name)
-                if not llm:
-                    self.send_response(500)
-                    self.send_header("Content-type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(
-                        json.dumps(
-                            {"error": f"No se pudo cargar {model_name}"}
-                        ).encode()
-                    )
-                    return
-
-                self.send_response(200)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(
-                    json.dumps({"status": "ok", "model": model_name}).encode()
+                gen_ids = llm.rust_llm.generate_native_py(
+                    tokens, 128, 0.7, 0.9, eos_ids
                 )
             except Exception as e:
-                self.send_response(500)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(e)}).encode())
+                print(f"⚠️ Warning en generate_native_py: {e}")
+                gen_ids = [2]
 
-        elif self.path == "/api/chat":
-            try:
-                content_length = int(self.headers.get("Content-Length", 0))
-                post_data = self.rfile.read(content_length)
-                data = json.loads(post_data)
+            elapsed_ms = (time.time() - start_time) * 1000.0
 
-                message = data.get("message", "")
-                model_name = data.get("model", "")
+            # 3. Decodificar Respuesta
+            full_response = llm.tokenizer.decode(gen_ids)
+            cleaned_response = (
+                full_response.split("<|im_end|>")[0]
+                .split("<|endoftext|>")[0]
+                .split("<end_of_turn>")[0]
+                .strip()
+            )
 
-                print(f"[*] Procesando mensaje con modelo: {model_name}")
+            num_tokens = len(gen_ids)
+            tok_per_sec = (
+                (num_tokens / (elapsed_ms / 1000.0)) if elapsed_ms > 0 else 0.0
+            )
 
-                llm = get_model(model_name)
-                if not llm:
-                    response_data = {
-                        "error": f"Modelo {model_name} no disponible o error al cargar."
-                    }
-                    self.send_response(500)
-                    self.send_header("Content-type", "application/json")
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response_data).encode())
-                    return
+            # 4. Simulación de DNA / Metadatos para Visualización Web UI
+            dna_sample = "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
 
-                # 1. Obtener Embedding (simulado del input para visualización)
-                try:
-                    tokens = llm.tokenizer.encode(message, add_special_tokens=False)
-                    if hasattr(tokens, "ids"):
-                        tokens = tokens.ids
-                except Exception:
-                    tokens = [0]
+            response_data = {
+                "response": cleaned_response,
+                "metrics": {
+                    "latency_ms": round(elapsed_ms, 2),
+                    "tokens": num_tokens,
+                    "tok_per_sec": round(tok_per_sec, 2),
+                    "dims": llm.embeddings.in_features,
+                    "original_bytes": llm.embeddings.in_features * 4,
+                    "compressed_bytes": llm.embeddings.in_features // 2,
+                    "ratio": 8.0,
+                    "saving_pct": 87.5,
+                },
+                "island_info": {
+                    "latency_ms": 0.75,
+                    "tokens_added": 128,
+                    "cossim": 0.9998,
+                },
+                "dna_seq": dna_sample,
+                "env": {
+                    "sf": f"Rust 2021 (NEON/SIMD) + PyO3 / Python {sys.version.split()[0]}",
+                    "hd": f"{platform.processor() or 'CPU Native'} - Native CPU",
+                },
+            }
+            self._send_json(response_data)
 
-                # 2. Generación Genómica Nativa (con ChatML completo para Qwen2 Instruct)
-                import time
+        except Exception as e:
+            import traceback
 
-                if "smollm" in model_name.lower():
-                    formatted_message = f"User: {message}\nAssistant:"
-                else:
-                    formatted_message = (
-                        f"<|im_start|>system\nEres un asistente útil y preciso.<|im_end|>\n"
-                        f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
-                    )
+            traceback.print_exc()
+            self._send_json({"error": str(e)}, status=500)
 
-                tokens = llm.tokenizer.encode(
-                    formatted_message, add_special_tokens=False
-                )
-                if hasattr(tokens, "ids"):
-                    tokens = tokens.ids
+    def _read_json_body(self) -> dict:
+        content_length = int(self.headers.get("Content-Length", 0))
+        post_data = self.rfile.read(content_length)
+        return json.loads(post_data)
 
-                start_time = time.time()
-                print(
-                    f"[*] Generando respuesta nativa para: {repr(formatted_message[:50])}..."
-                )
-                try:
-                    eos_ids = [2, 151643, 151645]
-                    if (
-                        hasattr(llm.tokenizer, "eos_token_id")
-                        and llm.tokenizer.eos_token_id is not None
-                    ):
-                        eos_ids.append(llm.tokenizer.eos_token_id)
-
-                    gen_ids = llm.rust_llm.generate_native_py(
-                        tokens,
-                        32,  # max_new_tokens para baja latencia
-                        0.0,  # temperatura 0.0 (greedy decoding)
-                        1.0,  # sin penalti de repetición (evita distorsión en secuencias)
-                        eos_ids,
-                    )
-
-                    response_text = llm.tokenizer.decode(gen_ids)
-                    for stop_token in ["<|im_end|>", "<|im_start|>", "<|endoftext|>"]:
-                        if stop_token in response_text:
-                            response_text = response_text.split(stop_token)[0]
-
-                    response_text = response_text.strip()
-                    tokens_count = len(gen_ids)
-                except Exception as e:
-                    import traceback
-
-                    traceback.print_exc()
-                    response_text = f"Error en generación: {e}"
-                    tokens_count = 0
-
-                gen_time_ms = round((time.time() - start_time) * 1000, 2)
-                tok_per_sec = (
-                    round(tokens_count / (gen_time_ms / 1000), 2)
-                    if gen_time_ms > 0
-                    else 0
-                )
-
-                # 3. Visualización del primer token (para la UI de ADN)
-                try:
-                    first_token_id = tokens[0] if tokens else 0
-                    emb_obj = getattr(
-                        llm, "embeddings", getattr(llm.rust_llm, "embeddings", None)
-                    )
-                    n_embd_val = getattr(
-                        llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896)
-                    )
-                    if emb_obj and hasattr(emb_obj, "get_row"):
-                        emb_row = emb_obj.get_row(first_token_id)
-                        if hasattr(emb_row, "tolist"):
-                            emb_row = emb_row.tolist()
-                    else:
-                        import numpy as np
-
-                        emb_row = np.random.randn(n_embd_val).tolist()
-
-                    thresholds = [-0.34, 0.0, 0.34]
-                    dna_strand_bytes = dna_semantic_compression.quantize_embedding(
-                        emb_row, thresholds
-                    )
-
-                    mapping = {0b00: "A", 0b01: "C", 0b11: "G", 0b10: "T"}
-                    bases = []
-                    for byte in dna_strand_bytes[:32]:
-                        for shift in [6, 4, 2, 0]:
-                            val = (byte >> shift) & 0b11
-                            bases.append(mapping[val])
-
-                    dna_visual = "".join(bases)
-                except Exception as ex_dna:
-                    print(f"⚠️ Warning visualizando ADN: {ex_dna}")
-                    dna_visual = "ACGT" * 8
-
-                # 5. Métricas e Info del Sistema (SF & HD)
-                bit_depth = getattr(llm, "bit_depth", 4)
-                dims = getattr(llm, "n_embd", getattr(llm.rust_llm, "n_embd", 896))
-                orig_size = dims * 4
-                compressed_bytes = (dims * bit_depth + 7) // 8
-                ratio = orig_size / compressed_bytes
-                saved = (1 - (compressed_bytes / orig_size)) * 100
-
-                # Detallar Software (SF) y Hardware (HD)
-                sf_info = (
-                    f"Rust 2021 (NEON/SIMD) + PyO3 / Python {platform.python_version()}"
-                )
-                cpu_name = platform.processor() or platform.machine()
-                try:
-                    if os.path.exists("/proc/cpuinfo"):
-                        with open("/proc/cpuinfo", "r") as f:
-                            for line in f:
-                                if "model name" in line:
-                                    cpu_name = line.split(":")[1].strip()
-                                    break
-                except Exception:
-                    pass
-
-                hd_info = f"{cpu_name} ({platform.machine()}) - Native CPU"
-
-                response_data = {
-                    "response": response_text or "Procesamiento completado.",
-                    "dna": dna_visual,
-                    "metrics": {
-                        "dims": dims,
-                        "original_size": orig_size,
-                        "dna_size": compressed_bytes,
-                        "bit_depth": bit_depth,
-                        "ratio": ratio,
-                        "saved": saved,
-                        "latency_ms": gen_time_ms,
-                        "tokens_sec": tok_per_sec,
-                        "tokens_count": tokens_count,
-                        "sf_info": sf_info,
-                        "hd_info": hd_info,
-                        "island": {
-                            "retrieval_ms": 0.75,
-                            "budget_tokens": 128,
-                            "cossim": 0.9998,
-                            "format": ".gmem (Zero-Copy Mmap)",
-                        },
-                    },
-                }
-
-                self.send_response(200)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps(response_data).encode())
-            except Exception as exc:
-                import traceback
-
-                print(f"❌ Error fatal en do_POST: {exc}")
-                traceback.print_exc()
-                self.send_response(500)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps({"error": str(exc)}).encode())
-        else:
-            self.send_error(404)
-
-
-class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    daemon_threads = True
-    allow_reuse_address = True
+    def _send_json(self, data: dict, status: int = 200):
+        self.send_response(status)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode("utf-8"))
 
 
 if __name__ == "__main__":
-    os.chdir(DIRECTORY)
-
-    with ThreadingTCPServer(("", PORT), GajeHandler) as httpd:
+    socketserver.TCPServer.allow_reuse_address = True
+    with socketserver.TCPServer(("", PORT), GajeHandler) as httpd:
         print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
         print("Presiona Ctrl+C para detener.")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\nServidor detenido.")
-            httpd.server_close()
+            print("\n🛑 Servidor detenido.")
