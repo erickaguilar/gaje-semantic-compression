@@ -112,15 +112,19 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             # 4. Simulación de DNA / Metadatos para Visualización Web UI
             dna_sample = "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
 
+            dims = getattr(llm.embeddings, "in_features", 576)
+            if callable(dims):
+                dims = dims()
+
             response_data = {
                 "response": cleaned_response,
                 "metrics": {
                     "latency_ms": round(elapsed_ms, 2),
                     "tokens": num_tokens,
                     "tok_per_sec": round(tok_per_sec, 2),
-                    "dims": llm.embeddings.in_features,
-                    "original_bytes": llm.embeddings.in_features * 4,
-                    "compressed_bytes": llm.embeddings.in_features // 2,
+                    "dims": dims,
+                    "original_bytes": dims * 4,
+                    "compressed_bytes": dims // 2,
                     "ratio": 8.0,
                     "saving_pct": 87.5,
                 },
