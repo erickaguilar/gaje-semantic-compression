@@ -258,9 +258,14 @@ impl GenomicLLM {
             let mut logits = last_logits.clone();
 
             if repetition_penalty > 1.0 {
-                let mut seen = prompt_tokens.clone();
-                seen.extend_from_slice(&generated);
-                for &t in &seen {
+                let mut seen_set = std::collections::HashSet::new();
+                for &t in &generated {
+                    seen_set.insert(t);
+                }
+                for &eos_id in &eos_token_ids {
+                    seen_set.remove(&eos_id);
+                }
+                for &t in &seen_set {
                     if t < logits.len() {
                         if logits[t] < 0.0 {
                             logits[t] *= repetition_penalty;

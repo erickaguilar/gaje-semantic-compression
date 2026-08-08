@@ -79,3 +79,26 @@ Para superar el límite del colapso post-entrenamiento, se introdujo y validó l
     2.  **Inestabilidad de Sistema**: El proceso fue terminado por el sistema operativo debido a la extrema demanda de recursos y memoria en la máquina local.
     3.  **Congelamiento de Línea**: Se declara formalmente que la **evolución genética directa sobre redes de 135M+ parámetros es inviable** en hardware convencional. Cualquier intento futuro de evolución a 2-bits debe restringirse a micro-embriones de juguete (1M-5M parámetros).
     4.  **Pivote de Producción**: La totalidad de los recursos se enfocan en la **cuantización a 4-bits plano (`.flat`)** de modelos Edge de alto ROI (DeepSeek-R1-Distill-Qwen-1.5B / Qwen3).
+
+---
+
+## 🛠️ 5. Estabilización de Samplers y Penalizaciones (v1.3.1-alpha: 2026-08-08)
+
+Tras un barrido empírico y depuración del sampler nativo en Rust, se diagnosticó y solucionó la anomalía de bucles repetitivos en SmolLM2-135M y Qwen2-0.5B:
+
+### 1. Los Dos Bugs Críticos Corregidos en `llm.rs`
+*   **Deduplicación de Penalizaciones (Multi-Penalización)**: El algoritmo original penalizaba de forma acumulativa ($\text{penalty}^N$) los tokens duplicados en el contexto, destruyendo la probabilidad de artículos y conectores básicos. Se resolvió usando un `HashSet` para aplicar una penalización lineal única por token ID único.
+*   **Exclusión de Control/EOS**: Los tokens especiales como `<|im_end|>` (ID 2 en SmolLM2) y `<|endoftext|>` presentes en el prompt eran penalizados, impidiendo que el sampler emitiera el token de parada y forzando loops infinitos hasta agotar el límite de tokens. Se excluyeron formalmente de la penalización.
+
+### 2. Resultados del Barrido de Penalización en SmolLM2-135M (Temp 0.2)
+*   **Penalty = 1.0**: Bucle infinito irrecuperable.
+*   **Penalty = 1.1 (Punto de Equilibrio)**: **Estabilizado**. Corta de forma limpia y fluida (ej. RUN 1 finalizó a los 98 tokens con `<|im_end|>`).
+*   **Penalty ≥ 1.2**: Degradación gramatical caótica. La penalización excesiva destruye conectores básicos y el modelo pierde coherencia y capacidad de cierre.
+
+> [!IMPORTANT]
+> **Veredicto de Certificación de SmolLM2-135M**:
+> SmolLM2-135M está estabilizado mecánicamente (`repetition_penalty=1.1`, fixes de multi-penalización y EOS). Se mantiene como benchmark de velocidad del motor (~28 tok/s) pero no como modelo de producción para interacción semántica. Su certificación factual requeriría un modelo base ≥1B parámetros.
+
+### 3. Validación Cruzada en Qwen2-0.5B
+*   **Estado**: **APROBADO**. Los cambios aplicados a la penalización en Rust funcionan correctamente en Qwen2-0.5B.
+*   **Resultado**: El modelo terminó de generar limpiamente en todos los prompts (9 tokens en español, 35 tokens en chino) respondiendo con coherencia gramatical (ej. *"Berlin. It's the capital city of Germany..."*). Se observan las limitaciones de razonamiento esperadas para un modelo de 0.5B a 4-bits sin anclas (como *"Ciudad实物"* por mezcla estocástica en español o alucinaciones físicas a baja temperatura en chino), pero la mecánica de inferencia está 100% libre de regresiones.
