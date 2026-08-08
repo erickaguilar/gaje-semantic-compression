@@ -1,6 +1,6 @@
-# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.3.0-alpha)
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.3.1-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.3.0--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.3.1--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/plans/PLAN_2BIT_ANCHORED_QUANTIZATION.md)
@@ -9,7 +9,7 @@
 
 ---
 
-## 🔬 Estado Empírico y Certificación del Motor (v1.3.0-alpha)
+## 🔬 Estado Empírico y Certificación del Motor (v1.3.1-alpha)
 
 Siguiendo el **Mandato de Verdad Empírica** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/docs/meta/EMPIRICAL_TRUTH_STATE.md)), el motor GAJE cuenta con la siguiente certificación oficial:
 
@@ -28,9 +28,10 @@ Se ejecutó la prueba A/B ciega y cruzada en la misma máquina comparando el mod
 
 | Modelo / Arquitectura | Formato Binario | Respuesta Factual Certificada | Throughput CPU | Tiempo de Carga Cold Start | Consumo de RAM Viva |
 | :--- | :---: | :--- | :---: | :---: | :---: |
-| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Zero-Copy Mmap)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`4.44 tok/s`** | **`0.75 ms`** | **`448 MB` (`87.5%` ahorro)** |
-| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy Mmap)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 tok/s`** | **`0.75 ms`** | **`140 MB` (`93.0%` ahorro)** |
-| **Silver Adult (2-bit Fetus)** | **`.gaje` (Standard DB)** | Evaluación de perplejidad ($\text{PPL}$) | **`1.88 tok/s`** | `4.87 s` | **`98 MB` (`95.0%` ahorro)** |
+| **Qwen2.5 1.5B Instruct** | **`.gaje.flat` (Zero-Copy Mmap)** | Español: *"La capital de Francia es París."* | **`1.73 tok/s`** | **`17.3 s` (mmap metadata)** | **`4.9 GB` (Mmap Virtual)** |
+| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Zero-Copy Mmap)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`4.44 tok/s`** | **`0.75 ms`** | **`448 MB` (`87.5%` de ahorro)** |
+| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy Mmap)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 tok/s`** | **`0.75 ms`** | **`140 MB` (`93.0%` de ahorro)** |
+| **Silver Adult (2-bit Fetus)** | **`.gaje` (Standard DB)** | Conclusión de perplejidad y costo estocástico | --- | --- | **Congelado (Investigación)** |
 
 ---
 

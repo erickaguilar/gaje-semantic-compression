@@ -1,3 +1,13 @@
+## [1.3.1-alpha] - 2026-08-08
+### Added
+- **Certificación de Qwen2.5-1.5B 4-bit Flat**: Creación del script `scripts/export_qwen2_5_1_5b_flat.py` para exportar el modelo GQA de 1.5B parámetros de Hugging Face. El modelo resultante (`qwen2_5_1_5b_4bit.gaje.flat`) tiene una precisión factual del 100% en español (*"La capital de Francia es París."*) con un rendimiento de **`1.73 tok/s`** y tiempo de carga instantáneo.
+
+### Fixed
+- **Sampler de Temperatura Estocástico**: Corrección de un bug crítico en `src/nn/llm.rs` donde el muestreo con temperatura actuaba como un argmax determinista. Se implementó un algoritmo multinomial estocástico correcto usando la biblioteca `rand` para permitir una generación diversa y evitar bucles de repetición.
+
+### Changed
+- **Conclusión del Experimento de 2-Bits**: Documentación empírica y congelamiento formal del frente de evolución estocástica de pesos en 2-bits, determinando su inviabilidad en hardware comercial debido al costo de cómputo (7 minutos/generación) y el agotamiento de memoria.
+
 ## [1.3.0-alpha] - 2026-08-08
 ### Added
 - **2-Bit Evolutionary Breeder (`gaje-2bit-breeder`)**: Nuevo criador evolutivo nativo en Rust para optimizar y entrenar embriones genómicos nacidos directamente en 2-bits, mitigando la deriva semántica post-cuantización.

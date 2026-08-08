@@ -289,19 +289,26 @@ impl GenomicLLM {
                     }
                 }
                 let mut probs = vec![0.0f32; logits.len()];
+                let mut sum_exp = 0.0f32;
                 for (idx, &val) in logits.iter().enumerate() {
                     let p = ((val - max_l) / temperature).exp();
                     probs[idx] = p;
+                    sum_exp += p;
                 }
-                let mut max_idx = 0;
-                let mut max_p = f32::NEG_INFINITY;
+
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                let r = rng.gen::<f32>() * sum_exp;
+                let mut cumulative_sum = 0.0f32;
+                let mut chosen_idx = 0;
                 for (idx, &p) in probs.iter().enumerate() {
-                    if p > max_p {
-                        max_p = p;
-                        max_idx = idx;
+                    cumulative_sum += p;
+                    if r <= cumulative_sum {
+                        chosen_idx = idx;
+                        break;
                     }
                 }
-                max_idx
+                chosen_idx
             };
 
             generated.push(next_tok);
