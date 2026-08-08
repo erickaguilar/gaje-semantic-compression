@@ -745,3 +745,49 @@ pub unsafe fn calculate_distance_lut_neon(
         lut_base, lut_epi, lut_tri, strand, epi_strand, tri_strand, mask, n_dims,
     )
 }
+
+/// # Safety
+/// Implementación optimizada de producto punto para formato Q4_0 (Variant B).
+/// Reduce el número de multiplicaciones flotantes factorizando la escala y el mínimo por bloque.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_q4_0(
+    blocks: &[crate::io::header::Q4_0Block],
+    input: &[f32],
+    n_blocks: usize,
+) -> f32 {
+    let mut total_sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block = &blocks[j];
+        let scale = block.scale.to_f32();
+        let min = block.min.to_f32();
+
+        let input_offset = j * 32;
+        let mut sum_q_in = 0.0f32;
+        let mut sum_in = 0.0f32;
+
+        let qs = &block.qs;
+        
+        // El compilador desenrolla y vectoriza esta sección gracias a get_unchecked y alineamiento a 16 bytes
+        for k in 0..16 {
+            let byte = *qs.get_unchecked(k);
+            let q0 = (byte & 0x0F) as f32;
+            let q1 = (byte >> 4) as f32;
+
+            let x0 = *input.get_unchecked(input_offset + k * 2);
+            let x1 = *input.get_unchecked(input_offset + k * 2 + 1);
+
+            sum_q_in += q0 * x0 + q1 * x1;
+            sum_in += x0 + x1;
+        }
+
+        total_sum += sum_q_in * scale + sum_in * min;
+    }
+
+    if total_sum.abs() < 1e-6 {
+        0.0
+    } else {
+        total_sum
+    }
+}
+
