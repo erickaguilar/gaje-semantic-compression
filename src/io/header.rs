@@ -200,5 +200,35 @@ mod tests {
             assert!(err <= 0.11, "Original {} vs dequantized {} error {} above step/2 limit", original, dequantized, err);
         }
     }
+
+    #[test]
+    fn test_actual_q4_0_model_loading() {
+        let model_path = "models/production/qwen2_0_5b_q4_0.gaje.flat";
+        if std::path::Path::new(model_path).exists() {
+            use crate::nn::linear::WeightDatabase;
+            let reader = crate::io::loader::GajeFlatFileReader::open(model_path).unwrap();
+            assert_eq!(reader.header.quantization_type(), QuantFormat::Q4_0);
+            assert_eq!(reader.header.effective_group_size(), 32);
+            
+            // Load a linear layer blk.0.attn_output
+            let linear = reader.get_linear("blk.0.attn_output", 32).unwrap();
+            assert_eq!(linear.bit_depth(), 4);
+            assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ4_0(_)));
+            
+            // Dequantize row 0
+            let row0 = linear.get_row_core(0).unwrap();
+            assert_eq!(row0.len(), linear.in_features);
+            
+            // Verify that dequantized weights are valid (not NaN, not all 0)
+            let mut all_zero = true;
+            for &w in &row0 {
+                assert!(!w.is_nan());
+                if w != 0.0 {
+                    all_zero = false;
+                }
+            }
+            assert!(!all_zero, "Dequantized weights should not be all zeros");
+        }
+    }
 }
 

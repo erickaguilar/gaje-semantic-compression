@@ -547,19 +547,19 @@ pub fn quantize_q4_0_native(
         }
 
         let scale = (max_val - min_val) / 15.0;
-        let inv_scale = if scale > 0.0 { 1.0 / scale } else { 0.0 };
+        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
 
         let mut qs = [0u8; 16];
         for k in 0..16 {
-            let q0 = if scale > 0.0 {
+            let q0 = if scale > 1e-7 {
                 (((block_f32[k * 2] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8
             } else {
-                8
+                0
             };
-            let q1 = if scale > 0.0 {
+            let q1 = if scale > 1e-7 {
                 (((block_f32[k * 2 + 1] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8
             } else {
-                8
+                0
             };
             qs[k] = q0 | (q1 << 4);
         }

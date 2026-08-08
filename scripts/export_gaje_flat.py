@@ -19,12 +19,12 @@ def export_gaje_flat():
         PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
     )
     out_path = os.path.join(
-        PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat"
+        PROJECT_ROOT, "models", "production", "qwen2_0_5b_q4_0.gaje.flat"
     )
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    print("🚀 Exportador Flat Zero-Copy v0.9.7 (.gaje.flat)")
+    print("🚀 Exportador Flat Zero-Copy v0.9.8 (Q4_0, .gaje.flat)")
     print(f"  - Origen GGUF: {gguf_path}")
     print(f"  - Destino Flat: {out_path}")
 
@@ -139,7 +139,7 @@ def export_gaje_flat():
             }
         )
 
-    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None):
+    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None, quant_format=1):
         if isinstance(bias_obj, np.ndarray):
             b_data = bias_obj
         elif bias_obj is not None and hasattr(bias_obj, "data"):
@@ -153,6 +153,7 @@ def export_gaje_flat():
             bias_f32_or_tensor=b_data,
             bit_depth=bit_depth,
             config=cfg,
+            quant_format=quant_format if bit_depth == 4 else 0,
         )
         process_and_add_layer(name, layer)
         del layer
@@ -299,9 +300,8 @@ def export_gaje_flat():
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
 
     # Header Construction (4096 bytes)
-    # Magic (4B), Version (4B), Flags (4B), NumTensors (4B), MetaLen (8B), DirLen (8B), WeightsOffset (8B), WeightsLen (8B)
     magic = b"GAJE"
-    version = 0x000907
+    version = 0x000908  # FlatHeaderV2 format version
     flags = 0x0003  # bit 0: fused_qkv, bit 1: fused_gateup
     num_tensors = len(tensor_directory)
     meta_len = len(metadata_json_bytes)
@@ -315,9 +315,12 @@ def export_gaje_flat():
 
     weights_len = len(blob_bytes)
 
+    group_size = 32
+    quant_format = 1  # 1 = Q4_0 (Variant B: scale + min + qs)
+
     header_bin = bytearray(4096)
     struct.pack_into(
-        "<4sIIIQQQQ",
+        "<4sIIIQQQQII",
         header_bin,
         0,
         magic,
@@ -328,6 +331,8 @@ def export_gaje_flat():
         dir_len,
         weights_offset,
         weights_len,
+        group_size,
+        quant_format,
     )
 
     with open(out_path, "wb") as f:
