@@ -191,4 +191,28 @@ document.addEventListener('DOMContentLoaded', () => {
     userInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
+
+    // Gestión de Tema Claro/Oscuro
+    const themeToggle = document.getElementById('theme-toggle');
+
+    function updateThemeUI(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'light') {
+            themeToggle.innerText = '☀️';
+            themeToggle.setAttribute('aria-label', 'Activar Tema Oscuro');
+        } else {
+            themeToggle.innerText = '🌙';
+            themeToggle.setAttribute('aria-label', 'Activar Tema Claro');
+        }
+    }
+
+    // Inicializar UI al cargar
+    const currentTheme = localStorage.getItem('theme') || 'dark';
+    updateThemeUI(currentTheme);
+
+    themeToggle.addEventListener('click', () => {
+        const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        localStorage.setItem('theme', theme);
+        updateThemeUI(theme);
+    });
 });

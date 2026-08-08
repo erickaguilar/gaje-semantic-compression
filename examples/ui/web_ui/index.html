@@ -6,6 +6,12 @@
     <title>GAJE | Chat Genómico</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
 </head>
 <body>
     <div class="app-container">
@@ -16,6 +22,7 @@
             </div>
             <div class="status-bar">
                 <span class="status-dot"></span> NEON Optimized
+                <button id="theme-toggle" class="theme-btn" aria-label="Cambiar Tema">🌙</button>
             </div>
         </header>
 
