@@ -36,7 +36,7 @@ El experimento se compone de dos piezas clave de software:
 ```
 
 ### A. El Exportador: `scripts/export_smollm2_2bit_flat.py`
-Extrae las matrices de pesos del modelo de referencia `SmolLM2-135M-Instruct` en FP16 y las comprime directamente a **2-bits nativos**, generando el archivo plano `models/production/smollm2_2bit_flat.gaje.flat`. 
+Extrae las matrices de pesos del modelo de referencia `SmolLM2-135M-Instruct` en FP16 y las comprime directamente a **2-bits nativos**, generando el archivo plano `models/production/smollm2_2bit_flat.gaje.flat`.
 *   **Parámetros de cuantización**: `attn_bit_depth = 2` y `ffn_bit_depth = 2` con tamaño de bloque escalar de 32 elementos.
 
 ### B. El Criador Evolutivo: `src/bin/gaje-2bit-breeder.rs`

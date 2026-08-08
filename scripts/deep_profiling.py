@@ -42,9 +42,9 @@ def run_deep_profiling():
     ]
 
     for p_idx, prompt in enumerate(prompts, 1):
-        print(f"\n==================================================")
+        print("\n==================================================")
         print(f"🧪 PROMPING EXPERIMENTO #{p_idx}: {prompt!r}")
-        print(f"==================================================")
+        print("==================================================")
 
         # 1. TOKENIZACIÓN
         t0_tok = time.perf_counter()
@@ -68,7 +68,7 @@ def run_deep_profiling():
         total_prefill_ms = (time.perf_counter() - t0_prefill) * 1000.0
         avg_prefill_tok_ms = total_prefill_ms / len(tokens)
 
-        print(f"\n2. DESGLOSE DE PREFILL (Prompt Processing):")
+        print("\n2. DESGLOSE DE PREFILL (Prompt Processing):")
         print(
             f"  - Tiempo Total de Prefill: {total_prefill_ms:.2f} ms ({len(tokens)} tokens)"
         )
@@ -104,7 +104,7 @@ def run_deep_profiling():
         avg_py_decode_ms = np.mean(py_decode_times)
         py_tok_sec = 1000.0 / avg_py_decode_ms
 
-        print(f"  [A] Python Step Loop:")
+        print("  [A] Python Step Loop:")
         print(f"      - Total: {total_py_decode_ms:.2f} ms")
         print(
             f"      - Latencia Decode: {avg_py_decode_ms:.2f} ms/tok ({py_tok_sec:.2f} tok/s)"
@@ -132,19 +132,24 @@ def run_deep_profiling():
             (total_native_ms / gen_tokens_count) if gen_tokens_count > 0 else 0
         )
 
-        print(f"  [B] Native Rust Loop (`generate_native_py`):")
-        print(f"      - Total E2E: {total_native_ms:.2f} ms ({gen_tokens_count} tokens)")
+        print("  [B] Native Rust Loop (`generate_native_py`):")
+        print(
+            f"      - Total E2E: {total_native_ms:.2f} ms ({gen_tokens_count} tokens)"
+        )
         print(
             f"      - Latencia E2E Promedio: {native_decode_ms:.2f} ms/tok ({native_tok_sec:.2f} tok/s)"
         )
 
         # C) Overhead de Python
-        overhead_ms = (total_py_decode_ms - (avg_py_decode_ms * N_GEN))
-        print(f"  [C] Overhead de FFI / Python GIL per step:")
+        overhead_ms = total_py_decode_ms - (avg_py_decode_ms * N_GEN)
+        print("  [C] Overhead de FFI / Python GIL per step:")
+        print(f"      - Overhead Total estimado: {overhead_ms:.2f} ms")
         py_ffi_overhead_per_tok = avg_py_decode_ms - (
             (total_native_ms - total_prefill_ms) / max(gen_tokens_count, 1)
         )
-        print(f"      - FFI + Argmax Overhead estimado: {py_ffi_overhead_per_tok:.2f} ms por token")
+        print(
+            f"      - FFI + Argmax Overhead estimado: {py_ffi_overhead_per_tok:.2f} ms por token"
+        )
 
     print("\n=================================================================")
     print("📌 CONCLUSIONES DEL DEEP PROFILING")

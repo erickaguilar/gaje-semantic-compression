@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Cargar Estudiante (2-bit Flat)
     println!("[*] Cargando Estudiante (2-bit Flat): {}...", student_path);
     let mut student_llm = _impl::io::loader::load_genomic_auto(student_path)?;
-    
+
     // Auto-detectar configuración del modelo cargado
     let n_embd = student_llm.embeddings.out_features;
     let n_head = student_llm.blocks[0].attn.n_head;
@@ -149,10 +149,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("[*] Inicializando Island Model (3 Islas, 12 individuos cada una)...");
     let mut engine = IslandModel::new_llm(
         student_llm,
-        3,     // num_islands
-        12,    // pop_per_island
+        3,      // num_islands
+        12,     // pop_per_island
         0.0002, // mutation_rate (0.02% de los bits para evitar destrucción del genoma)
-        10,    // migration_rate (cada 10 gen)
+        10,     // migration_rate (cada 10 gen)
         topology,
     );
     engine.set_council(council, tokenizer.clone());
@@ -178,10 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         println!(
             "📈 Gen {:2}/{:2} | Best Coherence Fitness: {:.6} | Tiempo: {:?}",
-            gen,
-            num_generations,
-            best_fitness,
-            duration
+            gen, num_generations, best_fitness, duration
         );
 
         // C. Guardar el mejor organismo si mejora

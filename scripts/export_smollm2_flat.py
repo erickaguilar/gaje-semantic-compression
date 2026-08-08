@@ -153,7 +153,9 @@ def export_smollm2_flat():
             }
         )
 
-    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None, n_head=None, head_dim=None):
+    def process_layer_data(
+        name, tensor_obj, bit_depth=4, bias_obj=None, n_head=None, head_dim=None
+    ):
         if isinstance(bias_obj, np.ndarray):
             b_data = bias_obj
         elif bias_obj is not None and hasattr(bias_obj, "data"):
@@ -253,16 +255,38 @@ def export_smollm2_flat():
         )
 
         # 1. Attn Q, K, V
-        process_layer_data(p + "attn_q", tensors_by_name[f"blk.{i}.attn_q.weight"], bit_depth=4, n_head=n_head, head_dim=head_dim)
-        process_layer_data(p + "attn_k", tensors_by_name[f"blk.{i}.attn_k.weight"], bit_depth=4, n_head=n_head_kv, head_dim=head_dim)
-        process_layer_data(p + "attn_v", tensors_by_name[f"blk.{i}.attn_v.weight"], bit_depth=4)
+        process_layer_data(
+            p + "attn_q",
+            tensors_by_name[f"blk.{i}.attn_q.weight"],
+            bit_depth=4,
+            n_head=n_head,
+            head_dim=head_dim,
+        )
+        process_layer_data(
+            p + "attn_k",
+            tensors_by_name[f"blk.{i}.attn_k.weight"],
+            bit_depth=4,
+            n_head=n_head_kv,
+            head_dim=head_dim,
+        )
+        process_layer_data(
+            p + "attn_v", tensors_by_name[f"blk.{i}.attn_v.weight"], bit_depth=4
+        )
 
         # 2. Attn Output
-        process_layer_data(p + "attn_output", tensors_by_name[f"blk.{i}.attn_output.weight"], bit_depth=4)
+        process_layer_data(
+            p + "attn_output",
+            tensors_by_name[f"blk.{i}.attn_output.weight"],
+            bit_depth=4,
+        )
 
         # 3. FFN Gate & Up
-        process_layer_data(p + "ffn_gate", tensors_by_name[f"blk.{i}.ffn_gate.weight"], bit_depth=4)
-        process_layer_data(p + "ffn_up", tensors_by_name[f"blk.{i}.ffn_up.weight"], bit_depth=4)
+        process_layer_data(
+            p + "ffn_gate", tensors_by_name[f"blk.{i}.ffn_gate.weight"], bit_depth=4
+        )
+        process_layer_data(
+            p + "ffn_up", tensors_by_name[f"blk.{i}.ffn_up.weight"], bit_depth=4
+        )
 
         # 4. FFN Down
         process_layer_data(
@@ -283,7 +307,9 @@ def export_smollm2_flat():
     process_layer_data("lm_head", lm_head_obj, bit_depth=32)
 
     # Final Norm
-    norm_tensor = tensors_by_name.get("output_norm.weight", tensors_by_name.get("norm.weight", None))
+    norm_tensor = tensors_by_name.get(
+        "output_norm.weight", tensors_by_name.get("norm.weight", None)
+    )
     if norm_tensor is not None:
         output_norm = get_tensor_f32_matrix(norm_tensor).flatten()
     else:
@@ -350,8 +376,12 @@ def export_smollm2_flat():
 
         f.write(blob_bytes)
 
-    print(f"\n✅ Exportación Flat Zero-Copy para SmolLM2 Finalizada Exitosamente: {out_path}")
-    print(f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB")
+    print(
+        f"\n✅ Exportación Flat Zero-Copy para SmolLM2 Finalizada Exitosamente: {out_path}"
+    )
+    print(
+        f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB"
+    )
 
 
 if __name__ == "__main__":

@@ -70,6 +70,3 @@ Con la infraestructura de punto flotante certificada, se midió la respuesta del
 Para superar el límite del colapso post-entrenamiento, hemos introducido la **metodología de embriones evolutivos nativos (`gaje-2bit-breeder`)**.
 *   **Enfoque**: Evolve los pesos directamente en la representación discreta de 2-bits utilizando operadores genéticos de mutación y recombinación en poblaciones paralelas (Island Model).
 *   **Plasticidad Genómica**: Al nacer y adaptarse bajo restricciones de 2-bits, las capas del embrión aprenden a auto-compensar el ruido de cuantización y las rotaciones de fase, abriendo el camino para recuperar coherencia a niveles de compresión ultra-densos.
-
-
-

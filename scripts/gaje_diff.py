@@ -85,7 +85,7 @@ def build_smollm2_2bit_anchored(density=0.05):
     old_ffn = cfg.ffn_bit_depth
     old_anchor = cfg.anchor_threshold
     old_ffn_anchor = cfg.ffn_anchor_threshold
-    
+
     cfg.attn_bit_depth = 2
     cfg.ffn_bit_depth = 2
     cfg.anchor_threshold = density
@@ -170,7 +170,11 @@ def run_gaje_diff():
     for density in densities:
         try:
             path_2bit = build_smollm2_2bit_anchored(density)
-            print(f"[*] Evaluando 2-bit con {density*100:.1f}% anclas..." if density >= 0 else "[*] Evaluando 2-bit puro (sin anclas)...")
+            print(
+                f"[*] Evaluando 2-bit con {density*100:.1f}% anclas..."
+                if density >= 0
+                else "[*] Evaluando 2-bit puro (sin anclas)..."
+            )
             llm_2bit = GenomicLLM.load_genomic(path_2bit)
             llm_2bit.rust_llm.set_k_wta_ratio(0.0)
 
@@ -187,13 +191,15 @@ def run_gaje_diff():
             pred_tok = tokenizer.decode([top1_2])
 
             name_str = "Puro (Sin Anclas)" if density < 0 else f"{density*100:.1f}%"
-            results_2bit.append({
-                "density": name_str,
-                "cossim": f"{cos_2:.6f}",
-                "pred": f"'{pred_tok}' ({top1_2})",
-                "match": match
-            })
-            
+            results_2bit.append(
+                {
+                    "density": name_str,
+                    "cossim": f"{cos_2:.6f}",
+                    "pred": f"'{pred_tok}' ({top1_2})",
+                    "match": match,
+                }
+            )
+
             # Delete and collect
             del llm_2bit
             gc.collect()
@@ -205,8 +211,12 @@ def run_gaje_diff():
     print("=======================================================")
     print("Baseline:")
     print(f"  - HF PyTorch FP32: '{tokenizer.decode([hf_top1])}' ({hf_top1})")
-    print(f"  - GAJE FP32: CosSim={cos_fp32:.6f}, Pred='{tokenizer.decode([fp32_top1])}'")
-    print(f"  - GAJE Mixed-Bit: CosSim={cos_mixed:.6f}, Pred='{tokenizer.decode([mixed_top1])}'")
+    print(
+        f"  - GAJE FP32: CosSim={cos_fp32:.6f}, Pred='{tokenizer.decode([fp32_top1])}'"
+    )
+    print(
+        f"  - GAJE Mixed-Bit: CosSim={cos_mixed:.6f}, Pred='{tokenizer.decode([mixed_top1])}'"
+    )
     print("\nCurva de Similitud 2-Bit:")
     print("| Densidad de Anclas | Cosine Similarity | Predicción Top-1 | Match vs HF |")
     print("| :---: | :---: | :--- | :---: |")
