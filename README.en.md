@@ -1,6 +1,6 @@
-# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.0.0-alpha)
+# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.3.0-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.0.0--alpha_Silver_Adult-purple)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.3.0--alpha_Silver_Adult-purple)](CHANGELOG.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](README.md)
@@ -66,7 +66,7 @@ Provides sub-millisecond vector similarity search over compressed genomic text c
 
 ---
 
-## 📂 Repository Structure (`v1.0.0-alpha`)
+## 📂 Repository Structure (`v1.3.0-alpha`)
 
 ```
 gaje-semantic-compression/
@@ -125,4 +125,4 @@ Licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See [L
 
 ---
 
-*GAJE-Flow Protocol v1.0.0-alpha (Silver Adult) — Advancing Genomic Intelligence & High-Density Compression.*
+*GAJE-Flow Protocol v1.3.0-alpha (Silver Adult) — Advancing Genomic Intelligence & High-Density Compression.*

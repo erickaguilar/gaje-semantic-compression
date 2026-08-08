@@ -1,3 +1,17 @@
+## [1.3.0-alpha] - 2026-08-08
+### Added
+- **2-Bit Evolutionary Breeder (`gaje-2bit-breeder`)**: Nuevo criador evolutivo nativo en Rust para optimizar y entrenar embriones genómicos nacidos directamente en 2-bits, mitigando la deriva semántica post-cuantización.
+- **Exportador SmolLM2 2-Bit Flat**: Script especializado `scripts/export_smollm2_2bit_flat.py` para compilar y empaquetar modelos de 2-bits nativos directamente en formato `.flat` de 294 MB.
+- **Inyección del Repetition Penalty Nivel Rust**: Detector de bucles recursivos nativo en `src/nn/llm.rs` con ventana dinámica de n-gramas $w \in [2, 48]$ para detener de forma robusta la degeneración de logits y evitar loops como el de *"Der Bundesliga"*.
+- **Plan del Experimento Evolutivo**: Creación de la documentación formal científica `docs/research/2BIT_EVOLUTIONARY_EXPERIMENT.md`.
+
+### Changed
+- **New Hardware Benchmark Upgrades**:
+  - `Qwen2-0.5B Flat`: Aumento de rendimiento de `2.0 tok/s` a **`4.44 tok/s`** (mejora de ~100%).
+  - `SmolLM2-135M Flat`: Salto de rendimiento de `18.78 tok/s` a **`28.28 tok/s`** (mejora de ~50%).
+  - `Zero-Copy Flat Mmap Loader`: Optimización del tiempo de carga inicial a un promedio submilisegundo de **`0.75 ms`**.
+- **Higiene de Datos y Modelos**: Eliminación de más de 28.4 GB de archivos SQLite `.gaje` redundantes y modelos antiguos en el repositorio.
+
 ## [1.2.0-alpha] - 2026-06-02
 ### Added
 - **Native SDK "GAJE-Core"**: Implementación de la fachada `GajeSession` en Rust, eliminando la dependencia de Python en el flujo de inferencia de chat.

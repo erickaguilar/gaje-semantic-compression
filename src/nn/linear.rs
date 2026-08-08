@@ -173,6 +173,38 @@ impl GenomicLinear {
                 (Vec::new(), Vec::new(), vec![0; out_features + 1])
             };
 
+        let n_blocks = in_features / block_size;
+        let mut final_centroids = centroids;
+        if bit_depth == 4 {
+            if final_centroids.len() == 16 {
+                let mut expanded = Vec::with_capacity(out_features * n_blocks * 16);
+                for _ in 0..(out_features * n_blocks) {
+                    expanded.extend_from_slice(&final_centroids[0..16]);
+                }
+                final_centroids = expanded;
+            } else if final_centroids.len() == n_blocks * 16 {
+                let mut expanded = Vec::with_capacity(out_features * n_blocks * 16);
+                for _ in 0..out_features {
+                    expanded.extend_from_slice(&final_centroids);
+                }
+                final_centroids = expanded;
+            }
+        } else if bit_depth != 32 {
+            if final_centroids.len() == 4 {
+                let mut expanded = Vec::with_capacity(out_features * n_blocks * 4);
+                for _ in 0..(out_features * n_blocks) {
+                    expanded.extend_from_slice(&final_centroids[0..4]);
+                }
+                final_centroids = expanded;
+            } else if final_centroids.len() == n_blocks * 4 {
+                let mut expanded = Vec::with_capacity(out_features * n_blocks * 4);
+                for _ in 0..out_features {
+                    expanded.extend_from_slice(&final_centroids);
+                }
+                final_centroids = expanded;
+            }
+        }
+
         GenomicLinear {
             weight_db,
             epi_strands: Arc::new(Vec::new()),
@@ -182,7 +214,7 @@ impl GenomicLinear {
             anchor_indices: Arc::new(anchor_indices),
             anchor_values: Arc::new(anchor_values),
             anchor_row_ptrs: Arc::new(anchor_row_ptrs),
-            centroids,
+            centroids: final_centroids,
             epigenetic_centroids,
             triplet_centroids,
             out_features,
@@ -430,15 +462,22 @@ impl GenomicLinear {
                 if row_off + req_bytes <= db.len() {
                     for b in 0..n_blocks {
                         let c_off = (safe_idx * n_blocks + b) * 4;
-                        if c_off + 4 <= self.centroids.len() {
-                            if let Ok(decoded) = crate::compute::math::dequantize_embedding_core(
-                                &db[row_off + b * self.stride..row_off + (b + 1) * self.stride],
-                                self.block_size,
-                                Some(&self.centroids[c_off..c_off + 4]),
-                            ) {
-                                res[b * self.block_size..(b + 1) * self.block_size]
-                                    .copy_from_slice(&decoded);
-                            }
+                        let c_slice = if self.centroids.len() == 4 {
+                            &self.centroids[0..4]
+                        } else if c_off + 4 <= self.centroids.len() {
+                            &self.centroids[c_off..c_off + 4]
+                        } else if !self.centroids.is_empty() {
+                            &self.centroids[0..4.min(self.centroids.len())]
+                        } else {
+                            &[0.0, 0.0, 0.0, 0.0]
+                        };
+                        if let Ok(decoded) = crate::compute::math::dequantize_embedding_core(
+                            &db[row_off + b * self.stride..row_off + (b + 1) * self.stride],
+                            self.block_size,
+                            Some(c_slice),
+                        ) {
+                            res[b * self.block_size..(b + 1) * self.block_size]
+                                .copy_from_slice(&decoded);
                         }
                     }
                 }
@@ -449,14 +488,20 @@ impl GenomicLinear {
                 if row_off + req_bytes <= db.len() {
                     for b in 0..n_blocks {
                         let c_off = (safe_idx * n_blocks + b) * 16;
-                        if c_off + 16 <= self.centroids.len() {
-                            let centroids = &self.centroids[c_off..c_off + 16];
-                            for k in 0..self.stride {
-                                let byte = db[row_off + b * self.stride + k];
-                                res[b * self.block_size + k * 2] = centroids[(byte >> 4) as usize];
-                                res[b * self.block_size + k * 2 + 1] =
-                                    centroids[(byte & 0x0F) as usize];
-                            }
+                        let centroids = if self.centroids.len() == 16 {
+                            &self.centroids[0..16]
+                        } else if c_off + 16 <= self.centroids.len() {
+                            &self.centroids[c_off..c_off + 16]
+                        } else if !self.centroids.is_empty() {
+                            &self.centroids[0..16.min(self.centroids.len())]
+                        } else {
+                            &[0.0; 16]
+                        };
+                        for k in 0..self.stride {
+                            let byte = db[row_off + b * self.stride + k];
+                            res[b * self.block_size + k * 2] = centroids[(byte >> 4) as usize];
+                            res[b * self.block_size + k * 2 + 1] =
+                                centroids[(byte & 0x0F) as usize];
                         }
                     }
                 }

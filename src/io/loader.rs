@@ -995,11 +995,17 @@ impl NativeLoader {
                 )
             } else {
                 let ffn_h = {
+                    let dna = Self::get_tensor(&read_txn, &format!("{}ffn_gate.dna", p));
                     let c = Self::get_tensor_f32(&read_txn, &format!("{}ffn_gate.centroids", p));
                     if c.is_empty() {
                         config.n_embd * 4
                     } else {
-                        c.len() / (config.n_embd / block_size * 4)
+                        let is_4bit = c.len() >= dna.len();
+                        if is_4bit {
+                            dna.len() * 2 / config.n_embd
+                        } else {
+                            dna.len() * 4 / config.n_embd
+                        }
                     }
                 };
                 let gate_gen = self.get_linear(

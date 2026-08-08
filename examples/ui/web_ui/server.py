@@ -87,7 +87,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
             try:
                 gen_ids = llm.rust_llm.generate_native_py(
-                    tokens, 128, 0.7, 0.9, eos_ids
+                    tokens, 512, 0.7, 0.9, eos_ids
                 )
             except Exception as e:
                 print(f"⚠️ Warning en generate_native_py: {e}")
@@ -112,9 +112,19 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             # 4. Simulación de DNA / Metadatos para Visualización Web UI
             dna_sample = "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
 
-            dims = getattr(llm.embeddings, "in_features", 576)
+            dims = getattr(llm, "n_embd", 576)
             if callable(dims):
                 dims = dims()
+
+            bit_depth = getattr(llm, "bit_depth", 4)
+            if bit_depth == 32:
+                ratio = 1.0
+                saved = 0.0
+                compressed_size = dims * 4
+            else:
+                ratio = 32.0 / bit_depth
+                saved = 100.0 * (1.0 - (bit_depth / 32.0))
+                compressed_size = int(dims * bit_depth / 8.0)
 
             response_data = {
                 "response": cleaned_response,
@@ -124,10 +134,10 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     "tokens_sec": round(tok_per_sec, 2),
                     "dims": dims,
                     "original_size": dims * 4,
-                    "dna_size": dims // 2,
-                    "bit_depth": 4,
-                    "ratio": 8.0,
-                    "saved": 87.5,
+                    "dna_size": compressed_size,
+                    "bit_depth": bit_depth,
+                    "ratio": round(ratio, 1),
+                    "saved": round(saved, 2),
                     "sf_info": f"Rust 2021 (NEON/SIMD) + PyO3 / Python {sys.version.split()[0]}",
                     "hd_info": f"{platform.processor() or 'CPU Native'} - Native CPU",
                 },

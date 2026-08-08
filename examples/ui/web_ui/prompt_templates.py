@@ -8,18 +8,15 @@ def format_prompt(model_name: str, message: str) -> str:
     """Format an incoming user message into the correct template for the given model architecture."""
     model_name_lower = model_name.lower()
 
-    if "smollm" in model_name_lower:
-        # SmolLM2 / LLaMA direct instruction format
-        return f"User: {message}\nAssistant:"
+    if "smollm" in model_name_lower or "qwen" in model_name_lower:
+        # ChatML template
+        return (
+            f"<|im_start|>system\nYou are a helpful and precise assistant.<|im_end|>\n"
+            f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
+        )
     elif "gemma" in model_name_lower:
         # Gemma 2B instruction template
         return f"<start_of_turn>user\n{message}<end_of_turn>\n<start_of_turn>model\n"
-    elif "qwen" in model_name_lower:
-        # Qwen2 ChatML template
-        return (
-            f"<|im_start|>system\nEres un asistente útil y preciso.<|im_end|>\n"
-            f"<|im_start|>user\n{message}<|im_end|>\n<|im_start|>assistant\n"
-        )
     else:
         # Fallback standard prompt
         return f"User: {message}\nAssistant:"

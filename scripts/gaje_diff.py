@@ -68,9 +68,46 @@ def build_smollm2_mixed():
     return mixed_output_path
 
 
+def build_smollm2_2bit_anchored(density=0.05):
+    """Genera un organismo SmolLM2-135M en 2-bit puro con un porcentaje específico de Stability Anchors."""
+    gguf_path = os.path.join(
+        PROJECT_ROOT, "data", "models", "smollm2-135m-instruct-fp16.gguf"
+    )
+    output_path = os.path.join(
+        PROJECT_ROOT, "models", f"smollm2-135m-2bit-anchored-{int(density*100)}pct.gaje"
+    )
+
+    print(
+        f"🧬 [gaje_diff] Generando SmolLM2 2-bit ({density*100:.1f}% Anchors) en: {output_path}..."
+    )
+    cfg = ARCHITECTURES["llama"]
+    old_attn = cfg.attn_bit_depth
+    old_ffn = cfg.ffn_bit_depth
+    old_anchor = cfg.anchor_threshold
+    old_ffn_anchor = cfg.ffn_anchor_threshold
+    
+    cfg.attn_bit_depth = 2
+    cfg.ffn_bit_depth = 2
+    cfg.anchor_threshold = density
+    cfg.ffn_anchor_threshold = density
+
+    try:
+        llm = GenomicLLM(gguf_path)
+        gc.collect()
+        llm.save(output_path)
+        print(f"✅ Organismo 2-bit ({density*100:.1f}% Anchors) creado exitosamente.")
+    finally:
+        cfg.attn_bit_depth = old_attn
+        cfg.ffn_bit_depth = old_ffn
+        cfg.anchor_threshold = old_anchor
+        cfg.ffn_anchor_threshold = old_ffn_anchor
+
+    return output_path
+
+
 def run_gaje_diff():
     print("\n=======================================================")
-    print("🔬 GAJE DIFF: Certificación Capa por Capa (SmolLM2 FP32 y Mixed-Bit)")
+    print("🔬 GAJE DIFF: Certificación Capa por Capa (SmolLM2 FP32 y 2-Bit)")
     print("=======================================================")
 
     fp32_path = build_smollm2_fp32()
@@ -126,16 +163,55 @@ def run_gaje_diff():
     fp32_top1 = int(np.argmax(gaje_logits_fp32))
     mixed_top1 = int(np.argmax(gaje_logits_mixed))
 
-    print("\n======================================================")
-    print("GAJE Validation Report (SmolLM2 FP32 vs Mixed-Bit)")
-    print("======================================================")
-    print("FP32 Baseline:")
-    print(f"  - Cosine Similarity: {cos_fp32:.6f}")
-    print(f"  - Top-1 Prediction:  '{tokenizer.decode([fp32_top1])}' ({fp32_top1})")
-    print("\nMixed-Bit (4-bit Attn, 2-bit FFN):")
-    print(f"  - Cosine Similarity: {cos_mixed:.6f}")
-    print(f"  - Top-1 Prediction:  '{tokenizer.decode([mixed_top1])}' ({mixed_top1})")
-    print(f"  - Top-1 Match vs HF: {'✅ SÍ' if mixed_top1 == hf_top1 else '❌ NO'}")
+    # --- EVALUACIÓN MULTI-DENSIDAD 2-BIT ---
+    densities = [-1.0, 0.0, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+    results_2bit = []
+
+    for density in densities:
+        try:
+            path_2bit = build_smollm2_2bit_anchored(density)
+            print(f"[*] Evaluando 2-bit con {density*100:.1f}% anclas..." if density >= 0 else "[*] Evaluando 2-bit puro (sin anclas)...")
+            llm_2bit = GenomicLLM.load_genomic(path_2bit)
+            llm_2bit.rust_llm.set_k_wta_ratio(0.0)
+
+            logits_2bit = None
+            for p_idx, tok_id in enumerate(input_ids):
+                clear_cache = p_idx == 0
+                logits_2bit = np.array(llm_2bit.rust_llm.forward(tok_id, clear_cache))
+
+            cos_2 = np.dot(hf_logits, logits_2bit) / (
+                np.linalg.norm(hf_logits) * np.linalg.norm(logits_2bit) + 1e-9
+            )
+            top1_2 = int(np.argmax(logits_2bit))
+            match = "✅ SÍ" if top1_2 == hf_top1 else "❌ NO"
+            pred_tok = tokenizer.decode([top1_2])
+
+            name_str = "Puro (Sin Anclas)" if density < 0 else f"{density*100:.1f}%"
+            results_2bit.append({
+                "density": name_str,
+                "cossim": f"{cos_2:.6f}",
+                "pred": f"'{pred_tok}' ({top1_2})",
+                "match": match
+            })
+            
+            # Delete and collect
+            del llm_2bit
+            gc.collect()
+        except Exception as e:
+            print(f"❌ Error evaluando {density*100:.1f}%: {e}")
+
+    print("\n=======================================================")
+    print("GAJE Validation Report: Curva de Estabilidad 2-Bit")
+    print("=======================================================")
+    print("Baseline:")
+    print(f"  - HF PyTorch FP32: '{tokenizer.decode([hf_top1])}' ({hf_top1})")
+    print(f"  - GAJE FP32: CosSim={cos_fp32:.6f}, Pred='{tokenizer.decode([fp32_top1])}'")
+    print(f"  - GAJE Mixed-Bit: CosSim={cos_mixed:.6f}, Pred='{tokenizer.decode([mixed_top1])}'")
+    print("\nCurva de Similitud 2-Bit:")
+    print("| Densidad de Anclas | Cosine Similarity | Predicción Top-1 | Match vs HF |")
+    print("| :---: | :---: | :--- | :---: |")
+    for r in results_2bit:
+        print(f"| {r['density']} | {r['cossim']} | {r['pred']} | {r['match']} |")
 
 
 if __name__ == "__main__":

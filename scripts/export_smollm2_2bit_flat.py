@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-"""
-🚀 Exportador Flat Zero-Copy v0.9.7 para SmolLM2 135M (.gaje.flat)
-------------------------------------------------------------------
-Convierte data/models/smollm2-135m-instruct-fp16.gguf al formato binario
-plano alineado a 64 bytes para carga mmap instantánea en 0.15s.
-"""
-
 import os
 import sys
 import gc
@@ -22,25 +14,25 @@ from gaje.nn.configs import ARCHITECTURES  # noqa: E402
 from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0  # noqa: E402
 
 
-def export_smollm2_flat():
+def export_smollm2_2bit_flat():
     gguf_path = os.path.join(
         PROJECT_ROOT, "data", "models", "smollm2-135m-instruct-fp16.gguf"
     )
     out_path = os.path.join(
-        PROJECT_ROOT, "models", "production", "smollm2_4bit.gaje.flat"
+        PROJECT_ROOT, "models", "production", "smollm2_2bit_flat.gaje.flat"
     )
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    print("🚀 Exportador Flat Zero-Copy v0.9.7 para SmolLM2 135M")
+    print("🚀 Exportador Flat Zero-Copy v0.9.7 para SmolLM2 135M (2-BIT)")
     print(f"  - Origen GGUF: {gguf_path}")
     print(f"  - Destino Flat: {out_path}")
 
     reader = gguf.GGUFReader(gguf_path)
     cfg = ARCHITECTURES["llama"]
     cfg.block_size = 32
-    cfg.attn_bit_depth = 4
-    cfg.ffn_bit_depth = 4
+    cfg.attn_bit_depth = 2
+    cfg.ffn_bit_depth = 2
     cfg.ffn_anchor_threshold = -1.0
 
     n_embd = 576
@@ -153,7 +145,7 @@ def export_smollm2_flat():
             }
         )
 
-    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None, n_head=None, head_dim=None):
+    def process_layer_data(name, tensor_obj, bit_depth=2, bias_obj=None, n_head=None, head_dim=None):
         if isinstance(bias_obj, np.ndarray):
             b_data = bias_obj
         elif bias_obj is not None and hasattr(bias_obj, "data"):
@@ -252,26 +244,26 @@ def export_smollm2_flat():
             }
         )
 
-        # 1. Attn Q, K, V
-        process_layer_data(p + "attn_q", tensors_by_name[f"blk.{i}.attn_q.weight"], bit_depth=4, n_head=n_head, head_dim=head_dim)
-        process_layer_data(p + "attn_k", tensors_by_name[f"blk.{i}.attn_k.weight"], bit_depth=4, n_head=n_head_kv, head_dim=head_dim)
-        process_layer_data(p + "attn_v", tensors_by_name[f"blk.{i}.attn_v.weight"], bit_depth=4)
+        # 1. Attn Q, K, V (2-bit)
+        process_layer_data(p + "attn_q", tensors_by_name[f"blk.{i}.attn_q.weight"], bit_depth=2, n_head=n_head, head_dim=head_dim)
+        process_layer_data(p + "attn_k", tensors_by_name[f"blk.{i}.attn_k.weight"], bit_depth=2, n_head=n_head_kv, head_dim=head_dim)
+        process_layer_data(p + "attn_v", tensors_by_name[f"blk.{i}.attn_v.weight"], bit_depth=2)
 
-        # 2. Attn Output
-        process_layer_data(p + "attn_output", tensors_by_name[f"blk.{i}.attn_output.weight"], bit_depth=4)
+        # 2. Attn Output (2-bit)
+        process_layer_data(p + "attn_output", tensors_by_name[f"blk.{i}.attn_output.weight"], bit_depth=2)
 
-        # 3. FFN Gate & Up
-        process_layer_data(p + "ffn_gate", tensors_by_name[f"blk.{i}.ffn_gate.weight"], bit_depth=4)
-        process_layer_data(p + "ffn_up", tensors_by_name[f"blk.{i}.ffn_up.weight"], bit_depth=4)
+        # 3. FFN Gate & Up (2-bit)
+        process_layer_data(p + "ffn_gate", tensors_by_name[f"blk.{i}.ffn_gate.weight"], bit_depth=2)
+        process_layer_data(p + "ffn_up", tensors_by_name[f"blk.{i}.ffn_up.weight"], bit_depth=2)
 
-        # 4. FFN Down
+        # 4. FFN Down (2-bit)
         process_layer_data(
             p + "ffn_down",
             tensors_by_name[f"blk.{i}.ffn_down.weight"],
-            bit_depth=4,
+            bit_depth=2,
         )
 
-        print(f"  [~] Bloque {i + 1}/{n_blocks} empaquetado.")
+        print(f"  [~] Bloque {i + 1}/{n_blocks} empaquetado (2-bit).")
         gc.collect()
 
     # LM Head (con soporte para weight tying)
@@ -311,7 +303,7 @@ def export_smollm2_flat():
 
     magic = b"GAJE"
     version = 0x000907
-    flags = 0x0003
+    flags = 0x0002  # Flag for 2-bit
     num_tensors = len(tensor_directory)
     meta_len = len(metadata_json_bytes)
     dir_len = len(dir_json_bytes)
@@ -350,9 +342,9 @@ def export_smollm2_flat():
 
         f.write(blob_bytes)
 
-    print(f"\n✅ Exportación Flat Zero-Copy para SmolLM2 Finalizada Exitosamente: {out_path}")
+    print(f"\n✅ Exportación Flat Zero-Copy para SmolLM2 2-Bit Finalizada: {out_path}")
     print(f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB")
 
 
 if __name__ == "__main__":
-    export_smollm2_flat()
+    export_smollm2_2bit_flat()

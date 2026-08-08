@@ -470,7 +470,10 @@ pub unsafe fn genomic_dot_product_scalar(
         let c1 = *centroids_ptr.add(1) * modulation[1];
         let c2 = *centroids_ptr.add(2) * modulation[2];
         let c3 = *centroids_ptr.add(3) * modulation[3];
-        let c_arr = [c0, c1, c2, c3];
+        // Swapped mapping to align with Gray code:
+        // Index 2 (0b10) maps to c3 (4th centroid).
+        // Index 3 (0b11) maps to c2 (3rd centroid).
+        let c_arr = [c0, c1, c3, c2];
 
         let mut k = 0;
 

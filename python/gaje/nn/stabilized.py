@@ -544,6 +544,8 @@ class GenomicTransformerBlock:
                 anchor_threshold=anchor_threshold,
                 config=config,
                 custom_base_c=layer_c[p + "attn_q.weight"],
+                n_head=n_head,
+                head_dim=head_dim,
             )
 
         ffn_bit = self.config.ffn_bit_depth if self.config else 2
@@ -1218,36 +1220,61 @@ class GenomicLLM:
                         f"✅ Organismo GAJE v0.9.7 Flat mmap Cargado en {load_ms:.2f} ms"
                     )
 
+                    # Read metadata from flat file
+                    import struct
+                    f.seek(16)
+                    meta_len = struct.unpack("<Q", f.read(8))[0]
+                    f.seek(4096)
+                    meta_bytes = f.read(meta_len)
+                    meta = json.loads(meta_bytes.decode("utf-8"))
+
+                    tokenizer_id = meta["config"].get("tokenizer_id", "Qwen/Qwen2-0.5B-Instruct")
+                    n_embd = meta.get("n_embd", 896)
+                    n_head = meta.get("n_head", 14)
+                    n_head_kv = meta.get("n_head_kv", 2)
+                    n_blocks = meta.get("n_blocks", 24)
+
                     tokenizer = None
                     try:
                         from transformers import AutoTokenizer
-
-                        tokenizer = AutoTokenizer.from_pretrained(
-                            "Qwen/Qwen2-0.5B-Instruct"
-                        )
+                        tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
                     except Exception as ex_t:
                         print(f"⚠️ Warning tokenizers: {ex_t}")
                         try:
                             from tokenizers import Tokenizer
-
-                            tokenizer = Tokenizer.from_pretrained(
-                                "Qwen/Qwen2-0.5B-Instruct"
-                            )
+                            tokenizer = Tokenizer.from_pretrained(tokenizer_id)
                         except Exception:
                             pass
 
                     obj = cls.__new__(cls)
                     obj.rust_llm = rust_llm
                     obj.tokenizer = tokenizer
-                    obj.n_embd = rust_llm.n_embd if hasattr(rust_llm, "n_embd") else 896
+                    obj.n_embd = rust_llm.n_embd if hasattr(rust_llm, "n_embd") else n_embd
                     obj.embeddings = (
                         rust_llm.embeddings if hasattr(rust_llm, "embeddings") else None
                     )
-                    obj.n_head = 14
-                    obj.n_head_kv = 2
-                    obj.head_dim = 64
+                    obj.n_head = n_head
+                    obj.n_head_kv = n_head_kv
+                    obj.head_dim = n_embd // n_head
                     obj.n_blocks = (
-                        len(rust_llm.blocks) if hasattr(rust_llm, "blocks") else 24
+                        len(rust_llm.blocks) if hasattr(rust_llm, "blocks") else n_blocks
+                    )
+                    obj.eps = meta.get("eps", 1e-6)
+                    obj.rope_base = meta["config"].get("rope_base", 10000.0)
+
+                    # Create basic config object
+                    class DummyConfig:
+                        pass
+                    obj.config = DummyConfig()
+                    obj.config.name = meta["config"].get("name", "smollm2")
+                    obj.config.tokenizer_id = tokenizer_id
+                    obj.config.ffn_act = meta["config"].get("ffn_act", "swiglu")
+                    obj.config.use_genomic_norm = meta["config"].get("use_genomic_norm", False)
+                    obj.config.rope_style = meta["config"].get("rope_style", "split")
+                    obj.config.unpermute_weights = False
+
+                    print(
+                        f"⚡ [Zero-Copy Mmap] Metadata parsed: {obj.config.name} (n_embd={obj.n_embd}, n_head={obj.n_head}, n_head_kv={obj.n_head_kv}, head_dim={obj.head_dim}, rope_base={obj.rope_base})"
                     )
                     return obj
 
@@ -1422,7 +1449,7 @@ class GenomicLLM:
 
                 def forward(self, x):
                     return np.array(
-                        self.linear.forward(x.tolist() if hasattr(x, "tolist") else x),
+                        self.linear.forward(x.tolist() if hasattr(x, "tolist") else x, False),
                         dtype=np.float32,
                     )
 

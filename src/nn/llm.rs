@@ -310,6 +310,23 @@ impl GenomicLLM {
                 break;
             }
 
+            // Detector de repeticiones para evitar bucles infinitos en cuantizaciones inestables
+            let mut repeated = false;
+            for w in 2..=48 {
+                if generated.len() >= w * 3 {
+                    let last_chunk = &generated[generated.len() - w..];
+                    let prev1 = &generated[generated.len() - w * 2..generated.len() - w];
+                    let prev2 = &generated[generated.len() - w * 3..generated.len() - w * 2];
+                    if last_chunk == prev1 && last_chunk == prev2 {
+                        repeated = true;
+                        break;
+                    }
+                }
+            }
+            if repeated {
+                break;
+            }
+
             last_logits = self.forward_core(next_tok, false)?;
         }
 

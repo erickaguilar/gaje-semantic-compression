@@ -58,16 +58,15 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
 
 
 def list_available_models(models_root: str) -> list:
-    """List all available .gaje and .flat models with modification dates."""
+    """List all certified .flat models from models/production/."""
     models = []
     seen_models = set()
+    production_root = os.path.join(models_root, "production")
 
-    if os.path.exists(models_root):
-        for root, _, files in os.walk(models_root):
+    if os.path.exists(production_root):
+        for root, _, files in os.walk(production_root):
             for f in files:
-                if (
-                    f.endswith(".gaje") or f.endswith(".flat")
-                ) and f not in seen_models:
+                if f.endswith(".flat") and f not in seen_models:
                     fpath = os.path.join(root, f)
                     mtime = os.path.getmtime(fpath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
