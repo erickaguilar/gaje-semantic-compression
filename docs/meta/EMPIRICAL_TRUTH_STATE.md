@@ -67,6 +67,15 @@ Con la infraestructura de punto flotante certificada, se midió la respuesta del
 ---
 
 ## 🚀 4. Frente de Investigación: Embriones Nacidos en 2-Bits
-Para superar el límite del colapso post-entrenamiento, hemos introducido la **metodología de embriones evolutivos nativos (`gaje-2bit-breeder`)**.
-*   **Enfoque**: Evolve los pesos directamente en la representación discreta de 2-bits utilizando operadores genéticos de mutación y recombinación en poblaciones paralelas (Island Model).
-*   **Plasticidad Genómica**: Al nacer y adaptarse bajo restricciones de 2-bits, las capas del embrión aprenden a auto-compensar el ruido de cuantización y las rotaciones de fase, abriendo el camino para recuperar coherencia a niveles de compresión ultra-densos.
+
+Para superar el límite del colapso post-entrenamiento, se introdujo y validó la **metodología de embriones evolutivos nativos (`gaje-2bit-breeder`)**.
+
+### 📊 Resultados de la Corrida de Control (2026-08-08)
+*   **Configuración**: 3 islas, 12 individuos por isla, tasa de mutación `0.0002` (0.02% de bits para evitar destrucción genómica).
+*   **Métrica Gen 1**: `Best Coherence Fitness = 0.016071` (casi ruido aleatorio absoluto).
+*   **Costo de Tiempo**: **`421.21 segundos` (~7.02 minutos)** por generación.
+*   **Veredicto Final**:
+    1.  **Costo Exponencial**: A 7 minutos por generación, un ciclo de 20 generaciones consume más de 2.3 horas de CPU a carga completa, lo cual es inviable para iterar.
+    2.  **Inestabilidad de Sistema**: El proceso fue terminado por el sistema operativo debido a la extrema demanda de recursos y memoria en la máquina local.
+    3.  **Congelamiento de Línea**: Se declara formalmente que la **evolución genética directa sobre redes de 135M+ parámetros es inviable** en hardware convencional. Cualquier intento futuro de evolución a 2-bits debe restringirse a micro-embriones de juguete (1M-5M parámetros).
+    4.  **Pivote de Producción**: La totalidad de los recursos se enfocan en la **cuantización a 4-bits plano (`.flat`)** de modelos Edge de alto ROI (DeepSeek-R1-Distill-Qwen-1.5B / Qwen3).
