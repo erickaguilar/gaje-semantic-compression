@@ -145,7 +145,9 @@ def export_qwen2_5_1_5b_flat():
             }
         )
 
-    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None, quant_format=1):
+    def process_layer_data(
+        name, tensor_obj, bit_depth=4, bias_obj=None, quant_format=1
+    ):
         if isinstance(bias_obj, np.ndarray):
             b_data = bias_obj
         elif bias_obj is not None and hasattr(bias_obj, "data"):

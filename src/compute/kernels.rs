@@ -767,7 +767,7 @@ pub unsafe fn genomic_dot_product_q4_0(
         let mut sum_in = 0.0f32;
 
         let qs = &block.qs;
-        
+
         // El compilador desenrolla y vectoriza esta sección gracias a get_unchecked y alineamiento a 16 bytes
         for k in 0..16 {
             let byte = *qs.get_unchecked(k);
@@ -790,4 +790,3 @@ pub unsafe fn genomic_dot_product_q4_0(
         total_sum
     }
 }
-

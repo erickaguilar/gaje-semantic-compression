@@ -130,7 +130,8 @@ impl GenomicLinear {
             4 => {
                 if centroids.is_empty() {
                     let ptr = database.as_ptr() as *const crate::io::header::Q4_0Block;
-                    let count = database.len() / std::mem::size_of::<crate::io::header::Q4_0Block>();
+                    let count =
+                        database.len() / std::mem::size_of::<crate::io::header::Q4_0Block>();
                     let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
                     WeightDatabase::GenomicQ4_0(Arc::new(blocks))
                 } else {
@@ -384,16 +385,10 @@ impl GenomicLinear {
             }
             WeightDatabase::GenomicQ4_0(db) => {
                 let row_off = i * n_blocks;
-                let db_slice = db
-                    .get(row_off..row_off + n_blocks)
-                    .unwrap_or(&[]);
+                let db_slice = db.get(row_off..row_off + n_blocks).unwrap_or(&[]);
                 if !db_slice.is_empty() {
                     sum = unsafe {
-                        crate::compute::kernels::genomic_dot_product_q4_0(
-                            db_slice,
-                            input,
-                            n_blocks,
-                        )
+                        crate::compute::kernels::genomic_dot_product_q4_0(db_slice, input, n_blocks)
                     };
                 }
             }
@@ -697,9 +692,9 @@ mod tests {
         // Row 1: 0.0, -0.1, ..., -3.1
         let row0: Vec<f32> = (0..32).map(|i| i as f32 * 0.1).collect();
         let row1: Vec<f32> = (0..32).map(|i| i as f32 * -0.1).collect();
-        
+
         let mut blocks = Vec::new();
-        
+
         // Row 0 quantization
         let min0 = 0.0f32;
         let max0 = 3.1f32;
@@ -708,7 +703,9 @@ mod tests {
         let mut qs0 = [0u8; 16];
         for k in 0..16 {
             let q0 = (((row0[k * 2] - min0) * inv_scale0).round().clamp(0.0, 15.0)) as u8;
-            let q1 = (((row0[k * 2 + 1] - min0) * inv_scale0).round().clamp(0.0, 15.0)) as u8;
+            let q1 = (((row0[k * 2 + 1] - min0) * inv_scale0)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
             qs0[k] = q0 | (q1 << 4);
         }
         blocks.push(crate::io::header::Q4_0Block {
@@ -725,7 +722,9 @@ mod tests {
         let mut qs1 = [0u8; 16];
         for k in 0..16 {
             let q0 = (((row1[k * 2] - min1) * inv_scale1).round().clamp(0.0, 15.0)) as u8;
-            let q1 = (((row1[k * 2 + 1] - min1) * inv_scale1).round().clamp(0.0, 15.0)) as u8;
+            let q1 = (((row1[k * 2 + 1] - min1) * inv_scale1)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
             qs1[k] = q0 | (q1 << 4);
         }
         blocks.push(crate::io::header::Q4_0Block {
@@ -739,7 +738,8 @@ mod tests {
             std::slice::from_raw_parts(
                 blocks.as_ptr() as *const u8,
                 blocks.len() * std::mem::size_of::<crate::io::header::Q4_0Block>(),
-            ).to_vec()
+            )
+            .to_vec()
         };
 
         // Instantiate GenomicLinear with bit_depth=4 and empty centroids to trigger Q4_0 variant detection
@@ -768,7 +768,7 @@ mod tests {
         let output = linear.forward_core(input, None, false).unwrap();
 
         assert_eq!(output.len(), 2);
-        
+
         // Verify output Row 0 (sum of row0 weights)
         let dequant0: Vec<f32> = (0..32).map(|i| blocks[0].dequantize_weight(i)).collect();
         let expected0: f32 = dequant0.iter().sum();
@@ -780,4 +780,3 @@ mod tests {
         assert!((output[1] - expected1).abs() < 1e-4);
     }
 }
-

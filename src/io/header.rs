@@ -26,7 +26,7 @@ impl fmt::Display for HeaderError {
 impl std::error::Error for HeaderError {}
 
 /// Header del formato .flat v2
-/// 
+///
 /// Cambios vs v1:
 /// - Bytes 48-51: group_size (antes reservado/relleno de ceros)
 /// - Bytes 52-55: quant_format (antes reservado/relleno de ceros)
@@ -39,42 +39,40 @@ pub struct FlatHeaderV2 {
     pub version: u32,
     pub flags: u32,
     pub num_tensors: u32,
-    
+
     // === METADATOS Y DICT (24 bytes) ===
     pub meta_len: u64,
     pub dir_len: u64,
     pub weights_offset: u64,
     pub weights_len: u64,
-    
+
     // === CUANTIZACIÓN (8 bytes) ===
     pub group_size: u32,
     pub quant_format: u32,
-    
+
     // === RESERVA (4040 bytes) ===
     pub reserved: [u8; 4040],
 }
 
 impl FlatHeaderV2 {
     pub const SIZE: usize = 4096;
-    
+
     /// Lee el header desde un slice de bytes
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, HeaderError> {
         if bytes.len() < Self::SIZE {
             return Err(HeaderError::TooShort);
         }
-        
-        let header = unsafe { 
-            std::ptr::read(bytes.as_ptr() as *const Self) 
-        };
-        
+
+        let header = unsafe { std::ptr::read(bytes.as_ptr() as *const Self) };
+
         // Validar magic bytes
         if &header.magic != b"GAJE" {
             return Err(HeaderError::InvalidMagic);
         }
-        
+
         Ok(header)
     }
-    
+
     /// Determina el formato de cuantización
     pub fn quantization_type(&self) -> QuantFormat {
         match self.quant_format {
@@ -84,7 +82,7 @@ impl FlatHeaderV2 {
             _ => QuantFormat::Unknown,
         }
     }
-    
+
     /// Obtiene el tamaño del grupo de cuantización efectivo
     pub fn effective_group_size(&self) -> usize {
         if self.group_size == 0 {
@@ -115,10 +113,10 @@ impl Q4_0Block {
         } else {
             self.qs[byte_idx] >> 4
         };
-        
+
         let scale = self.scale.to_f32();
         let min = self.min.to_f32();
-        
+
         (q4_value as f32) * scale + min
     }
 }
@@ -165,7 +163,7 @@ mod tests {
     fn test_invalid_magic_bytes() {
         let mut header_bytes = [0u8; 4096];
         header_bytes[0..4].copy_from_slice(b"XGAJ");
-        
+
         let res = FlatHeaderV2::from_bytes(&header_bytes);
         assert!(res.is_err());
         assert!(matches!(res.err().unwrap(), HeaderError::InvalidMagic));
@@ -181,8 +179,12 @@ mod tests {
 
         let mut qs = [0u8; 16];
         for k in 0..16 {
-            let q0 = (((f32_weights[k * 2] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8;
-            let q1 = (((f32_weights[k * 2 + 1] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8;
+            let q0 = (((f32_weights[k * 2] - min_val) * inv_scale)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
+            let q1 = (((f32_weights[k * 2 + 1] - min_val) * inv_scale)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
             qs[k] = q0 | (q1 << 4);
         }
 
@@ -197,7 +199,13 @@ mod tests {
             let original = f32_weights[i];
             let dequantized = block.dequantize_weight(i);
             let err = (original - dequantized).abs();
-            assert!(err <= 0.11, "Original {} vs dequantized {} error {} above step/2 limit", original, dequantized, err);
+            assert!(
+                err <= 0.11,
+                "Original {} vs dequantized {} error {} above step/2 limit",
+                original,
+                dequantized,
+                err
+            );
         }
     }
 
@@ -209,16 +217,16 @@ mod tests {
             let reader = crate::io::loader::GajeFlatFileReader::open(model_path).unwrap();
             assert_eq!(reader.header.quantization_type(), QuantFormat::Q4_0);
             assert_eq!(reader.header.effective_group_size(), 32);
-            
+
             // Load a linear layer blk.0.attn_output
             let linear = reader.get_linear("blk.0.attn_output", 32).unwrap();
             assert_eq!(linear.bit_depth(), 4);
             assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ4_0(_)));
-            
+
             // Dequantize row 0
             let row0 = linear.get_row_core(0).unwrap();
             assert_eq!(row0.len(), linear.in_features);
-            
+
             // Verify that dequantized weights are valid (not NaN, not all 0)
             let mut all_zero = true;
             for &w in &row0 {
@@ -231,4 +239,3 @@ mod tests {
         }
     }
 }
-

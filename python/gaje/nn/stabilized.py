@@ -260,7 +260,9 @@ class GenomicLayer:
                 w_chunk = weights_f32[i:end].copy()
 
                 if self.quant_format == 1:
-                    ret = dna_semantic_compression.quantize_q4_0_native(w_chunk.tobytes())
+                    ret = dna_semantic_compression.quantize_q4_0_native(
+                        w_chunk.tobytes()
+                    )
                     dna_db_list.append(ret)
                 else:
                     ret = dna_semantic_compression.genomize_f32_native(
@@ -293,7 +295,11 @@ class GenomicLayer:
                 self.dna_centroids = []
                 self.anchors_f16_bytes = b""
             else:
-                dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
+                (
+                    dna_db,
+                    dna_centroids,
+                    a_bin,
+                ) = dna_semantic_compression.genomize_f32_native(
                     weights_f32.tobytes(),
                     block_size,
                     anchor_threshold,

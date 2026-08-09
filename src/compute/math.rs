@@ -516,16 +516,15 @@ pub fn genomize_f32_native(
 }
 
 #[cfg_attr(feature = "python", pyfunction)]
-pub fn quantize_q4_0_native(
-    data_u8: Vec<u8>,
-    _py: Python<'_>,
-) -> PyResult<PyObject> {
+pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObject> {
     let f32_data: &[f32] =
         unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
 
     let n_elements = f32_data.len();
     if n_elements % 32 != 0 {
-        return Err(PyTypeError::new_err("Weights length must be divisible by 32"));
+        return Err(PyTypeError::new_err(
+            "Weights length must be divisible by 32",
+        ));
     }
 
     let n_blocks = n_elements / 32;
@@ -552,12 +551,16 @@ pub fn quantize_q4_0_native(
         let mut qs = [0u8; 16];
         for k in 0..16 {
             let q0 = if scale > 1e-7 {
-                (((block_f32[k * 2] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8
+                (((block_f32[k * 2] - min_val) * inv_scale)
+                    .round()
+                    .clamp(0.0, 15.0)) as u8
             } else {
                 0
             };
             let q1 = if scale > 1e-7 {
-                (((block_f32[k * 2 + 1] - min_val) * inv_scale).round().clamp(0.0, 15.0)) as u8
+                (((block_f32[k * 2 + 1] - min_val) * inv_scale)
+                    .round()
+                    .clamp(0.0, 15.0)) as u8
             } else {
                 0
             };

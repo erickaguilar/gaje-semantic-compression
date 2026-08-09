@@ -121,7 +121,7 @@ Tras un barrido empírico y depuración del sampler nativo en Rust, se diagnosti
 - **Parada EOS**: Totalmente funcional.
 
 **Limitaciones Conocidas (Fidelidad Semántica vs Compresión):**
-- El nuevo esquema de cuantización uniforme por bloque de 32 (`scale + min`) introduce una pérdida de precisión factual en comparación con el formato heredado de centroides locales (v1). 
+- El nuevo esquema de cuantización uniforme por bloque de 32 (`scale + min`) introduce una pérdida de precisión factual en comparación con el formato heredado de centroides locales (v1).
 - *Ejemplo de regresión factual*: El modelo responde `"La capital de Francia es Nantes."` (en lugar de París) y confunde ebullición/congelación en inglés (*"Water boils at exactly 100 degrees Celsius... This is the freezing point at which water's temperature becomes exactly zero degrees Celsius."*).
 - **Decisión de Diseño**: Se asume este trade-off (pérdida de fidelidad en modelos pequeños) dado que el objetivo de `q4_0` no es optimizar modelos de <1B, sino erradicar la sobrecarga de metadatos de la v1 y desbloquear modelos grandes (>1B) sin OOM.
 
