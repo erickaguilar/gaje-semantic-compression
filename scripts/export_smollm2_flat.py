@@ -351,7 +351,7 @@ def export_smollm2_flat():
 
     header_bin = bytearray(4096)
     struct.pack_into(
-        "<4sIIIQQQQ",
+        "<4sIIIQQQQIIIIIIII",
         header_bin,
         0,
         magic,
@@ -362,6 +362,14 @@ def export_smollm2_flat():
         dir_len,
         weights_offset,
         weights_len,
+        16,         # group_size = 16 (legacy)
+        0,          # quant_format = 0 (LegacyCentroids)
+        2,          # arch_family = SmolLM
+        n_embd,
+        n_head,
+        n_head_kv,
+        n_blocks,
+        1,          # arch_qk_permute = true
     )
 
     with open(out_path, "wb") as f:

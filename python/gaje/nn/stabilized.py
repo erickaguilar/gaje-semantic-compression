@@ -39,12 +39,14 @@ class GenomicLayer:
         config=None,
         custom_base_c=None,
         bit_depth=None,
+        quant_format=0,
     ):
         self.name = name
         self.block_size = block_size
         self.balancer = balancer
         self.config = config
         self.custom_base_c = custom_base_c
+        self.quant_format = quant_format
 
         # Use config defaults if not provided
         if anchor_threshold is None:
@@ -106,6 +108,7 @@ class GenomicLayer:
                     != 32  # Si es F32, forzamos el path lento para tener f32_data
                     and not needs_unpermute
                     and tensor.tensor_type == gguf.GGMLQuantizationType.F16
+                    and self.quant_format == 0
                 ):
                     # DGI Fast Path: Direct streaming conversion in Rust
                     (
@@ -256,17 +259,23 @@ class GenomicLayer:
                 end = min(i + chunk_rows, self.out_features)
                 w_chunk = weights_f32[i:end].copy()
 
-                ret = dna_semantic_compression.genomize_f32_native(
-                    w_chunk.tobytes(),
-                    block_size,
-                    anchor_threshold,
-                    bit_depth,
-                    custom_base_c,
-                )
-                d_db, d_c, a_bin = ret
-                dna_db_list.append(d_db)
-                centroids_list.extend(d_c)
-                anchors_list.append(a_bin)
+                if self.quant_format == 1:
+                    ret = dna_semantic_compression.quantize_q4_0_native(
+                        w_chunk.tobytes()
+                    )
+                    dna_db_list.append(ret)
+                else:
+                    ret = dna_semantic_compression.genomize_f32_native(
+                        w_chunk.tobytes(),
+                        block_size,
+                        anchor_threshold,
+                        bit_depth,
+                        custom_base_c,
+                    )
+                    d_db, d_c, a_bin = ret
+                    dna_db_list.append(d_db)
+                    centroids_list.extend(d_c)
+                    anchors_list.append(a_bin)
                 del w_chunk
 
             if not dna_db_list:
@@ -279,16 +288,27 @@ class GenomicLayer:
                 self.anchors_f16_bytes = b"".join(anchors_list)
         else:
             # Procedimiento estándar para capas pequeñas
-            dna_db, dna_centroids, a_bin = dna_semantic_compression.genomize_f32_native(
-                weights_f32.tobytes(),
-                block_size,
-                anchor_threshold,
-                bit_depth,
-                custom_base_c,
-            )
-            self.dna_database = dna_db
-            self.dna_centroids = dna_centroids
-            self.anchors_f16_bytes = a_bin
+            if self.quant_format == 1:
+                self.dna_database = dna_semantic_compression.quantize_q4_0_native(
+                    weights_f32.tobytes()
+                )
+                self.dna_centroids = []
+                self.anchors_f16_bytes = b""
+            else:
+                (
+                    dna_db,
+                    dna_centroids,
+                    a_bin,
+                ) = dna_semantic_compression.genomize_f32_native(
+                    weights_f32.tobytes(),
+                    block_size,
+                    anchor_threshold,
+                    bit_depth,
+                    custom_base_c,
+                )
+                self.dna_database = dna_db
+                self.dna_centroids = dna_centroids
+                self.anchors_f16_bytes = a_bin
 
         self.bit_depth = bit_depth
 

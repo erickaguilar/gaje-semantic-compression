@@ -651,6 +651,7 @@ pub struct GajeFlatFileReader {
     pub weights_offset: usize,
     pub tensor_map: std::collections::HashMap<String, FlatTensorEntry>,
     pub metadata_json: String,
+    pub header: crate::io::header::FlatHeaderV2,
 }
 
 impl GajeFlatFileReader {
@@ -658,23 +659,13 @@ impl GajeFlatFileReader {
         let file = std::fs::File::open(path)?;
         let mmap = unsafe { memmap2::Mmap::map(&file)? };
 
-        if mmap.len() < 4096 || &mmap[0..4] != b"GAJE" {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "Invalid GAJE flat binary magic bytes",
-            ));
-        }
+        let header = crate::io::header::FlatHeaderV2::from_bytes(&mmap[..4096])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
-        let num_tensors = u32::from_le_bytes([mmap[12], mmap[13], mmap[14], mmap[15]]) as usize;
-        let meta_len = u64::from_le_bytes([
-            mmap[16], mmap[17], mmap[18], mmap[19], mmap[20], mmap[21], mmap[22], mmap[23],
-        ]) as usize;
-        let dir_len = u64::from_le_bytes([
-            mmap[24], mmap[25], mmap[26], mmap[27], mmap[28], mmap[29], mmap[30], mmap[31],
-        ]) as usize;
-        let weights_offset = u64::from_le_bytes([
-            mmap[32], mmap[33], mmap[34], mmap[35], mmap[36], mmap[37], mmap[38], mmap[39],
-        ]) as usize;
+        let num_tensors = header.num_tensors as usize;
+        let meta_len = header.meta_len as usize;
+        let dir_len = header.dir_len as usize;
+        let weights_offset = header.weights_offset as usize;
 
         let meta_start = 4096;
         let meta_end = meta_start + meta_len;
@@ -698,6 +689,7 @@ impl GajeFlatFileReader {
             weights_offset,
             tensor_map,
             metadata_json,
+            header,
         })
     }
 
@@ -755,8 +747,21 @@ impl GajeFlatFileReader {
     }
 
     pub fn load_genomic(&self) -> std::io::Result<GenomicLLM> {
-        let config: ModelConfig = serde_json::from_str(&self.metadata_json)
+        let mut config: ModelConfig = serde_json::from_str(&self.metadata_json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        // Override using ArchitectureDescriptor if present in binary header
+        if let Some(desc) = self.header.architecture_descriptor() {
+            println!("🧬 [ArchitectureDescriptor] Detectada arquitectura {:?} desde la cabecera binaria (.flat)", desc.family);
+            config.n_embd = desc.n_embd;
+            config.n_head = desc.n_head;
+            config.n_head_kv = desc.n_head_kv;
+            config.n_blocks = desc.n_blocks;
+            config.config.rope_base = desc.rope_base;
+            config.config.rope_style = desc.rope_style;
+            config.config.ffn_act = desc.ffn_act;
+            config.config.unpermute_weights = desc.qk_permute;
+        }
 
         let block_size = 32;
         let head_dim = config.n_embd / config.n_head;

@@ -50,3 +50,5 @@ inspect
 *.jsonl
 gaje_v2_premium/
 .antigravitycli/
+node_modules/
+test-results/

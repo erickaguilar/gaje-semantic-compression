@@ -66,8 +66,8 @@ def test_iqat_swiglu_convergence():
     print(
         f"[*] Suma de centroides gate (final): {np.sum(block.gate_gen.centroids):.6f}"
     )
-    gate_final = np.array(block.gate_gen.forward(x.tolist()))
-    up_final = np.array(block.up_gen.forward(x.tolist()))
+    gate_final = np.array(block.gate_gen.forward(x.tolist(), True))
+    up_final = np.array(block.up_gen.forward(x.tolist(), True))
     swiglu_final = silu(gate_final) * up_final
     final_error = np.mean((swiglu_final - swiglu_target) ** 2)
     print(f"[*] MSE SwiGLU Final:   {final_error:.8f}")

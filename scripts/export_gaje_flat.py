@@ -5,6 +5,7 @@ import json
 import struct
 import numpy as np
 import gguf
+import argparse
 from transformers import AutoTokenizer
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -15,24 +16,41 @@ from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0  # noqa: E402
 
 
 def export_gaje_flat():
-    gguf_path = os.path.join(
-        PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
-    )
-    out_path = os.path.join(
-        PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje.flat"
-    )
+    parser = argparse.ArgumentParser(description="Exportador Flat Zero-Copy v0.9.8 (Dynamic GGUF to .gaje.flat)")
+    parser.add_argument("--input", type=str, help="Ruta al archivo origen GGUF")
+    parser.add_argument("--output", type=str, help="Ruta al archivo destino .gaje.flat")
+    parser.add_argument("--tokenizer", type=str, help="Hugging Face tokenizer ID")
+    args = parser.parse_args()
+
+    gguf_path = args.input
+    if not gguf_path:
+        # Fallback por defecto a Qwen2-0.5B si no se especifica
+        gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf")
+
+    out_path = args.output
+    if not out_path:
+        out_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_q4_0.gaje.flat")
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    print("🚀 Exportador Flat Zero-Copy v0.9.7 (.gaje.flat)")
+    print("🚀 Exportador Flat Zero-Copy v0.9.8 (Dynamic Header)")
     print(f"  - Origen GGUF: {gguf_path}")
     print(f"  - Destino Flat: {out_path}")
 
+    if not os.path.exists(gguf_path):
+        print(f"❌ Error: El archivo GGUF no existe en {gguf_path}")
+        sys.exit(1)
+
     reader = gguf.GGUFReader(gguf_path)
-    cfg = ARCHITECTURES["qwen2"]
-    cfg.attn_bit_depth = 4
-    cfg.ffn_bit_depth = 4
-    cfg.ffn_anchor_threshold = -1.0
+
+    # 1. Detección dinámica de arquitectura y propiedades de GGUF
+    arch_name = "qwen2"
+    for field_name, field in reader.fields.items():
+        if field_name == "general.architecture":
+            val = field.parts[field.data[0]][0]
+            arch_name = val.decode("utf-8") if isinstance(val, bytes) else str(val)
+
+    print(f"[*] Arquitectura detectada en GGUF: {arch_name}")
 
     n_embd = 896
     n_head = 14
@@ -42,45 +60,115 @@ def export_gaje_flat():
     rope_base = 1000000.0
 
     for field_name, field in reader.fields.items():
+        val = field.parts[field.data[0]][0]
+        if isinstance(val, bytes):
+            val = val.decode("utf-8")
+
         if "embedding_length" in field_name:
-            n_embd = int(field.parts[field.data[0]][0])
+            n_embd = int(val)
         elif "head_count" in field_name and "head_count_kv" not in field_name:
-            n_head = int(field.parts[field.data[0]][0])
+            n_head = int(val)
         elif "head_count_kv" in field_name:
-            n_head_kv = int(field.parts[field.data[0]][0])
+            n_head_kv = int(val)
         elif "block_count" in field_name:
-            n_blocks = int(field.parts[field.data[0]][0])
+            n_blocks = int(val)
         elif "layer_norm_rms_epsilon" in field_name:
-            eps = float(field.parts[field.data[0]][0])
+            eps = float(val)
+        elif "rope.frequency_base" in field_name:
+            rope_base = float(val)
 
     head_dim = n_embd // n_head
-    print(
-        f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}"
-    )
+    print(f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}, rope_base={rope_base}")
+
+    # Determinar familia de arquitectura y si requiere unpermute
+    model_name_lower = os.path.basename(gguf_path).lower()
+    
+    # Mapeo de familias: 1=Llama, 2=SmolLM, 3=Qwen2, 4=Qwen2_5, 5=Gemma, 6=Unknown
+    if "qwen2.5" in model_name_lower or "qwen2.5" in arch_name.lower():
+        arch_family = 4
+        qk_permute = False
+    elif "qwen2" in model_name_lower or "qwen2" in arch_name.lower():
+        arch_family = 3
+        qk_permute = False
+    elif "smollm2" in model_name_lower or "smollm2" in arch_name.lower():
+        arch_family = 2
+        qk_permute = True
+    elif "smollm" in model_name_lower or "smollm" in arch_name.lower():
+        arch_family = 2
+        qk_permute = True
+    elif "gemma" in model_name_lower or "gemma" in arch_name.lower():
+        arch_family = 5
+        qk_permute = False
+    elif "llama" in model_name_lower or "llama" in arch_name.lower():
+        arch_family = 1
+        qk_permute = True
+    else:
+        arch_family = 6
+        qk_permute = False
+
+    print(f"[*] Mapeado a Familia ID: {arch_family}, qk_permute: {qk_permute}")
 
     tensors_by_name = {t.name: t for t in reader.tensors}
 
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+    # 2. Configurar Tokenizer
+    tokenizer_map = {
+        1: "meta-llama/Llama-3.2-1B-Instruct",
+        2: "HuggingFaceTB/SmolLM2-135M-Instruct",
+        3: "Qwen/Qwen2-0.5B-Instruct",
+        4: "Qwen/Qwen2.5-1.5B-Instruct",
+        5: "google/gemma-2-2b-it",
+        6: "Qwen/Qwen2-0.5B-Instruct",
+    }
+    tokenizer_id = args.tokenizer or tokenizer_map.get(arch_family, "Qwen/Qwen2-0.5B-Instruct")
+    try:
+        print(f"[*] Cargando tokenizer desde Hugging Face: {tokenizer_id}...")
+        tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
+    except Exception as e:
+        print(f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}. Usando Qwen2-0.5B-Instruct de respaldo.")
+        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
+
     tokenizer_str = (
         tokenizer.backend_tokenizer.to_str()
         if hasattr(tokenizer, "backend_tokenizer")
         else ""
     )
 
+    # Determinar vocab_size real desde el tensor token_embd.weight
+    embd_tensor = tensors_by_name["token_embd.weight"]
+    vocab_size = int(embd_tensor.shape[1] if len(embd_tensor.shape) == 2 else embd_tensor.shape[0])
+    if vocab_size < int(embd_tensor.shape[0]) and len(embd_tensor.shape) == 2:
+        vocab_size = int(embd_tensor.shape[0])
+
+    print(f"[*] Vocabulario detectado: {vocab_size} tokens")
+
+    # 3. Preparar Configuración de Capa Genómica
+    arch_key = "qwen2"
+    if arch_family == 2:
+        arch_key = "smollm"
+    elif arch_family == 1:
+        arch_key = "llama"
+    elif arch_family == 5:
+        arch_key = "llama"  # fallback
+
+    cfg = ARCHITECTURES.get(arch_key, ARCHITECTURES["qwen2"])
+    cfg.attn_bit_depth = 4
+    cfg.ffn_bit_depth = 4
+    cfg.ffn_anchor_threshold = -1.0
+
     metadata_dict = {
         "config": {
-            "name": "qwen2",
-            "version": "0.9.7",
-            "tokenizer_id": "Qwen/Qwen2-0.5B-Instruct",
+            "name": arch_name,
+            "version": "0.9.8",
+            "tokenizer_id": tokenizer_id,
             "rope_base": rope_base,
-            "ffn_act": "swiglu",
+            "ffn_act": "swiglu" if arch_family != 5 else "geglu",
             "use_genomic_norm": False,
         },
         "n_embd": n_embd,
         "n_head": n_head,
         "n_head_kv": n_head_kv,
         "n_blocks": n_blocks,
-        "vocab_size": 151936,
+        "vocab_size": vocab_size,
         "eps": eps,
         "tokenizer": tokenizer_str,
     }
@@ -93,7 +181,6 @@ def export_gaje_flat():
     def add_blob_data(name, raw_data_bytes):
         offset = len(blob_bytes)
         blob_bytes.extend(raw_data_bytes)
-        # Pad to 64-byte SIMD alignment boundary
         padding = (64 - (len(blob_bytes) % 64)) % 64
         blob_bytes.extend(b"\x00" * padding)
         return offset, len(raw_data_bytes)
@@ -139,7 +226,9 @@ def export_gaje_flat():
             }
         )
 
-    def process_layer_data(name, tensor_obj, bit_depth=4, bias_obj=None):
+    def process_layer_data(
+        name, tensor_obj, bit_depth=4, bias_obj=None, quant_format=1
+    ):
         if isinstance(bias_obj, np.ndarray):
             b_data = bias_obj
         elif bias_obj is not None and hasattr(bias_obj, "data"):
@@ -153,6 +242,7 @@ def export_gaje_flat():
             bias_f32_or_tensor=b_data,
             bit_depth=bit_depth,
             config=cfg,
+            quant_format=quant_format if bit_depth == 4 else 0,
         )
         process_and_add_layer(name, layer)
         del layer
@@ -252,10 +342,10 @@ def export_gaje_flat():
 
         # 1. Fused QKV
         w_q = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=False
+            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=qk_permute
         )
         w_k = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=False
+            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=qk_permute
         )
         w_v = get_tensor_f32_matrix(
             tensors_by_name[f"blk.{i}.attn_v.weight"], is_q_k=False
@@ -299,9 +389,8 @@ def export_gaje_flat():
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
 
     # Header Construction (4096 bytes)
-    # Magic (4B), Version (4B), Flags (4B), NumTensors (4B), MetaLen (8B), DirLen (8B), WeightsOffset (8B), WeightsLen (8B)
     magic = b"GAJE"
-    version = 0x000907
+    version = 0x000908  # FlatHeaderV2 format version
     flags = 0x0003  # bit 0: fused_qkv, bit 1: fused_gateup
     num_tensors = len(tensor_directory)
     meta_len = len(metadata_json_bytes)
@@ -309,15 +398,17 @@ def export_gaje_flat():
 
     header_fixed_size = 4096
     weights_offset = header_fixed_size + meta_len + dir_len
-    # Align weights_offset to 4096 boundary
     if weights_offset % 4096 != 0:
         weights_offset = ((weights_offset // 4096) + 1) * 4096
 
     weights_len = len(blob_bytes)
 
+    group_size = 32
+    quant_format = 1  # 1 = Q4_0
+
     header_bin = bytearray(4096)
     struct.pack_into(
-        "<4sIIIQQQQ",
+        "<4sIIIQQQQIIIIIIII",
         header_bin,
         0,
         magic,
@@ -328,6 +419,14 @@ def export_gaje_flat():
         dir_len,
         weights_offset,
         weights_len,
+        group_size,
+        quant_format,
+        arch_family,
+        n_embd,
+        n_head,
+        n_head_kv,
+        n_blocks,
+        1 if qk_permute else 0,
     )
 
     with open(out_path, "wb") as f:
@@ -342,7 +441,7 @@ def export_gaje_flat():
 
         f.write(blob_bytes)
 
-    print(f"\n✅ Exportación Flat Zero-Copy v0.9.7 Finalizada Exitosamente: {out_path}")
+    print(f"\n✅ Exportación Flat Zero-Copy v0.9.8 Finalizada Exitosamente: {out_path}")
     print(f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024*1024):.2f} MB")
     print(f"  - Offset de Pesos (Alineado a 4KB): {weights_offset} bytes")
 

@@ -44,6 +44,8 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::core::db::GajeDatabaseReader>()?;
     m.add_class::<crate::io::loader::ModelConfig>()?;
     m.add_class::<crate::io::loader::ArchConfig>()?;
+    m.add_class::<crate::io::arch::ArchitectureDescriptor>()?;
+    m.add_class::<crate::io::arch::ModelFamily>()?;
     m.add_class::<crate::nn::trainer::NativeGenomicTrainer>()?;
     m.add_class::<crate::nn::distiller::Teacher>()?;
     m.add_class::<crate::nn::distiller::CouncilOfTeachers>()?;
@@ -81,7 +83,15 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
+        crate::compute::math::quantize_q4_0_native,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
         crate::compute::math::genomize_f16_native,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::prune_genomic_database,
         m
     )?)?;
     m.add_function(wrap_pyfunction!(

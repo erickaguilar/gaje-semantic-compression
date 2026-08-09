@@ -86,8 +86,10 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             eos_ids = get_stop_tokens(model_name, llm.tokenizer)
 
             try:
+                # Use stable, low-entropy sampling (temperature=0.2, rep_penalty=1.1) to avoid loops
+                # and factual hallucinations in highly compressed models.
                 gen_ids = llm.rust_llm.generate_native_py(
-                    tokens, 512, 0.7, 0.9, eos_ids
+                    tokens, 512, 0.2, 1.1, eos_ids
                 )
             except Exception as e:
                 print(f"⚠️ Warning en generate_native_py: {e}")

@@ -9,6 +9,7 @@ use pyo3::prelude::*;
 pub enum WeightDatabase {
     Genomic2Bit(Arc<Vec<u8>>),
     Genomic4Bit(Arc<Vec<u8>>),
+    GenomicQ4_0(Arc<Vec<crate::io::header::Q4_0Block>>),
     GenomicF32(Arc<Vec<f32>>),
 }
 
@@ -24,6 +25,7 @@ impl GenomicOperable for WeightDatabase {
         match self {
             WeightDatabase::Genomic2Bit(_) => 2,
             WeightDatabase::Genomic4Bit(_) => 4,
+            WeightDatabase::GenomicQ4_0(_) => 4,
             WeightDatabase::GenomicF32(_) => 32,
         }
     }
@@ -35,6 +37,20 @@ impl GenomicOperable for WeightDatabase {
                     db[byte_idx] >> 4
                 } else {
                     db[byte_idx] & 0x0F
+                }
+            }
+            WeightDatabase::GenomicQ4_0(db) => {
+                let block_idx = byte_idx / 16;
+                let qs_idx = byte_idx % 16;
+                if let Some(block) = db.get(block_idx) {
+                    let byte = block.qs[qs_idx];
+                    if sub_idx == 0 {
+                        byte & 0x0F
+                    } else {
+                        byte >> 4
+                    }
+                } else {
+                    0
                 }
             }
             _ => 0,
@@ -63,6 +79,7 @@ impl GenomicOperable for WeightDatabase {
         match self {
             WeightDatabase::Genomic2Bit(db) => db.len(),
             WeightDatabase::Genomic4Bit(db) => db.len(),
+            WeightDatabase::GenomicQ4_0(db) => db.len() * 16,
             WeightDatabase::GenomicF32(db) => db.len() * 4,
         }
     }
@@ -110,7 +127,17 @@ impl GenomicLinear {
         bit_depth: u8,
     ) -> Self {
         let weight_db = match bit_depth {
-            4 => WeightDatabase::Genomic4Bit(Arc::new(database)),
+            4 => {
+                if centroids.is_empty() {
+                    let ptr = database.as_ptr() as *const crate::io::header::Q4_0Block;
+                    let count =
+                        database.len() / std::mem::size_of::<crate::io::header::Q4_0Block>();
+                    let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
+                    WeightDatabase::GenomicQ4_0(Arc::new(blocks))
+                } else {
+                    WeightDatabase::Genomic4Bit(Arc::new(database))
+                }
+            }
             32 => {
                 let f32_data: Vec<f32> = unsafe {
                     std::slice::from_raw_parts(database.as_ptr() as *const f32, database.len() / 4)
@@ -231,6 +258,7 @@ impl GenomicLinear {
         match &mut self.weight_db {
             WeightDatabase::Genomic2Bit(db) => Arc::make_mut(db),
             WeightDatabase::Genomic4Bit(db) => Arc::make_mut(db),
+            WeightDatabase::GenomicQ4_0(_) => panic!("Q4_0 is read-only"),
             _ => panic!("N/A"),
         }
     }
@@ -238,6 +266,12 @@ impl GenomicLinear {
         match &self.weight_db {
             WeightDatabase::Genomic2Bit(db) => db.as_ref(),
             WeightDatabase::Genomic4Bit(db) => db.as_ref(),
+            WeightDatabase::GenomicQ4_0(db) => unsafe {
+                std::slice::from_raw_parts(
+                    db.as_ptr() as *const u8,
+                    db.len() * std::mem::size_of::<crate::io::header::Q4_0Block>(),
+                )
+            },
             WeightDatabase::GenomicF32(db) => unsafe {
                 std::slice::from_raw_parts(db.as_ptr() as *const u8, db.len() * 4)
             },
@@ -247,6 +281,7 @@ impl GenomicLinear {
         match &self.weight_db {
             WeightDatabase::Genomic2Bit(_) => 2,
             WeightDatabase::Genomic4Bit(_) => 4,
+            WeightDatabase::GenomicQ4_0(_) => 4,
             WeightDatabase::GenomicF32(_) => 32,
         }
     }
@@ -345,6 +380,15 @@ impl GenomicLinear {
                             self.stride,
                             n_blocks,
                         )
+                    };
+                }
+            }
+            WeightDatabase::GenomicQ4_0(db) => {
+                let row_off = i * n_blocks;
+                let db_slice = db.get(row_off..row_off + n_blocks).unwrap_or(&[]);
+                if !db_slice.is_empty() {
+                    sum = unsafe {
+                        crate::compute::kernels::genomic_dot_product_q4_0(db_slice, input, n_blocks)
                     };
                 }
             }
@@ -506,6 +550,17 @@ impl GenomicLinear {
                     }
                 }
             }
+            WeightDatabase::GenomicQ4_0(db) => {
+                let row_off = safe_idx * n_blocks;
+                if row_off + n_blocks <= db.len() {
+                    for b in 0..n_blocks {
+                        let block = &db[row_off + b];
+                        for k in 0..32 {
+                            res[b * self.block_size + k] = block.dequantize_weight(k);
+                        }
+                    }
+                }
+            }
         }
         Ok(res)
     }
@@ -515,10 +570,116 @@ impl GenomicLinear {
     }
     pub fn refine_with_grads_core(
         &mut self,
-        _input: Vec<f32>,
-        _grads: Vec<f32>,
-        _lr: f32,
+        input: Vec<f32>,
+        grads: Vec<f32>,
+        lr: f32,
     ) -> Result<(), String> {
+        if self.centroids.is_empty() {
+            return Ok(());
+        }
+
+        let n_blocks = (self.in_features + self.block_size - 1) / self.block_size;
+
+        match &self.weight_db {
+            WeightDatabase::Genomic2Bit(db) => {
+                let mut centroid_grads = vec![0.0f32; self.centroids.len()];
+                let mut centroid_counts = vec![0.0f32; self.centroids.len()];
+
+                for i in 0..self.out_features {
+                    let g_val = grads.get(i).cloned().unwrap_or(0.0);
+                    if g_val == 0.0 {
+                        continue;
+                    }
+
+                    let row_off = i * n_blocks * self.stride;
+                    if row_off + n_blocks * self.stride <= db.len() {
+                        for b in 0..n_blocks {
+                            let c_off = (i * n_blocks + b) * 4;
+                            let has_block_centroids = self.centroids.len() > 4 && c_off + 4 <= self.centroids.len();
+
+                            let block_db = &db[row_off + b * self.stride..row_off + (b + 1) * self.stride];
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= self.in_features {
+                                    break;
+                                }
+                                let x_val = input.get(j).cloned().unwrap_or(0.0);
+
+                                let byte_idx = k / 4;
+                                let sub_idx = k % 4;
+                                if byte_idx < block_db.len() {
+                                    let bit_val = ((block_db[byte_idx] >> ((3 - sub_idx) * 2)) & 0b11) as usize;
+                                    let c_idx = if has_block_centroids {
+                                        c_off + bit_val
+                                    } else {
+                                        bit_val % self.centroids.len()
+                                    };
+
+                                    centroid_grads[c_idx] += g_val * x_val;
+                                    centroid_counts[c_idx] += 1.0;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for c_idx in 0..self.centroids.len() {
+                    if centroid_counts[c_idx] > 0.0 {
+                        self.centroids[c_idx] -= lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                    }
+                }
+            }
+            WeightDatabase::Genomic4Bit(db) => {
+                let mut centroid_grads = vec![0.0f32; self.centroids.len()];
+                let mut centroid_counts = vec![0.0f32; self.centroids.len()];
+
+                for i in 0..self.out_features {
+                    let g_val = grads.get(i).cloned().unwrap_or(0.0);
+                    if g_val == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blocks * self.stride;
+                    if row_off + n_blocks * self.stride <= db.len() {
+                        for b in 0..n_blocks {
+                            let c_off = (i * n_blocks + b) * 16;
+                            let has_block_centroids = self.centroids.len() > 16 && c_off + 16 <= self.centroids.len();
+
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= self.in_features {
+                                    break;
+                                }
+                                let x_val = input.get(j).cloned().unwrap_or(0.0);
+
+                                let byte_idx = k / 2;
+                                let sub_idx = k % 2;
+                                if byte_idx < self.stride {
+                                    let byte = db[row_off + b * self.stride + byte_idx];
+                                    let bit_val = if sub_idx == 0 {
+                                        (byte >> 4) as usize
+                                    } else {
+                                        (byte & 0x0F) as usize
+                                    };
+                                    let c_idx = if has_block_centroids {
+                                        c_off + bit_val
+                                    } else {
+                                        bit_val % self.centroids.len()
+                                    };
+                                    centroid_grads[c_idx] += g_val * x_val;
+                                    centroid_counts[c_idx] += 1.0;
+                                }
+                            }
+                        }
+                    }
+                }
+                for c_idx in 0..self.centroids.len() {
+                    if centroid_counts[c_idx] > 0.0 {
+                        self.centroids[c_idx] -= lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                    }
+                }
+            }
+            _ => {}
+        }
         Ok(())
     }
     pub fn apply_mutation_core(&mut self, _delta: Vec<f32>, _undo: bool) -> Result<(), String> {
@@ -623,5 +784,105 @@ impl GenomicLinear {
     #[getter]
     pub fn centroids(&self) -> PyResult<Vec<f32>> {
         Ok(self.centroids.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_q4_0_linear_forward_roundtrip() {
+        // Generate a 2x32 weight matrix
+        // Row 0: 0.0, 0.1, ..., 3.1
+        // Row 1: 0.0, -0.1, ..., -3.1
+        let row0: Vec<f32> = (0..32).map(|i| i as f32 * 0.1).collect();
+        let row1: Vec<f32> = (0..32).map(|i| i as f32 * -0.1).collect();
+
+        let mut blocks = Vec::new();
+
+        // Row 0 quantization
+        let min0 = 0.0f32;
+        let max0 = 3.1f32;
+        let scale0 = (max0 - min0) / 15.0;
+        let inv_scale0 = 1.0 / scale0;
+        let mut qs0 = [0u8; 16];
+        for k in 0..16 {
+            let q0 = (((row0[k * 2] - min0) * inv_scale0).round().clamp(0.0, 15.0)) as u8;
+            let q1 = (((row0[k * 2 + 1] - min0) * inv_scale0)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
+            qs0[k] = q0 | (q1 << 4);
+        }
+        blocks.push(crate::io::header::Q4_0Block {
+            scale: half::f16::from_f32(scale0),
+            min: half::f16::from_f32(min0),
+            qs: qs0,
+        });
+
+        // Row 1 quantization
+        let min1 = -3.1f32;
+        let max1 = 0.0f32;
+        let scale1 = (max1 - min1) / 15.0;
+        let inv_scale1 = 1.0 / scale1;
+        let mut qs1 = [0u8; 16];
+        for k in 0..16 {
+            let q0 = (((row1[k * 2] - min1) * inv_scale1).round().clamp(0.0, 15.0)) as u8;
+            let q1 = (((row1[k * 2 + 1] - min1) * inv_scale1)
+                .round()
+                .clamp(0.0, 15.0)) as u8;
+            qs1[k] = q0 | (q1 << 4);
+        }
+        blocks.push(crate::io::header::Q4_0Block {
+            scale: half::f16::from_f32(scale1),
+            min: half::f16::from_f32(min1),
+            qs: qs1,
+        });
+
+        // Convert blocks to byte vector
+        let raw_bytes = unsafe {
+            std::slice::from_raw_parts(
+                blocks.as_ptr() as *const u8,
+                blocks.len() * std::mem::size_of::<crate::io::header::Q4_0Block>(),
+            )
+            .to_vec()
+        };
+
+        // Instantiate GenomicLinear with bit_depth=4 and empty centroids to trigger Q4_0 variant detection
+        let linear = GenomicLinear::new(
+            raw_bytes,
+            Vec::new(), // anchors
+            Vec::new(), // centroids (empty!)
+            2,          // out_features
+            32,         // in_features
+            32,         // block_size
+            Vec::new(), // rmsnorm
+            1e-6,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(), // bias
+            4,          // bit_depth
+        );
+
+        assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ4_0(_)));
+
+        // Create input activation: all 1.0s
+        let input = vec![1.0f32; 32];
+        let output = linear.forward_core(input, None, false).unwrap();
+
+        assert_eq!(output.len(), 2);
+
+        // Verify output Row 0 (sum of row0 weights)
+        let dequant0: Vec<f32> = (0..32).map(|i| blocks[0].dequantize_weight(i)).collect();
+        let expected0: f32 = dequant0.iter().sum();
+        assert!((output[0] - expected0).abs() < 1e-4);
+
+        // Verify output Row 1
+        let dequant1: Vec<f32> = (0..32).map(|i| blocks[1].dequantize_weight(i)).collect();
+        let expected1: f32 = dequant1.iter().sum();
+        assert!((output[1] - expected1).abs() < 1e-4);
     }
 }

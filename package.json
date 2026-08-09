@@ -1,0 +1,29 @@
+{
+  "name": "gaje-semantic-compression",
+  "version": "1.0.0",
+  "description": "[![Version](https://img.shields.io/badge/version-1.3.1--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md) [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/plans/PLAN_2BIT_ANCHORED_QUANTIZATION.md)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erickaguilar/gaje-semantic-compression.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/erickaguilar/gaje-semantic-compression/issues"
+  },
+  "homepage": "https://github.com/erickaguilar/gaje-semantic-compression#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}
