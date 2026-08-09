@@ -9,7 +9,50 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 
 /// Bloque de Procesamiento Genómico (Pure Rust)
-#[cfg_attr(feature = "python", pyclass)]
+#[cfg(feature = "python")]
+#[pyclass]
+#[derive(Clone)]
+pub struct RustGenomicBlock {
+    #[pyo3(get, set)]
+    pub idx: usize,
+    #[pyo3(get, set)]
+    pub attn: GenomicAttention,
+    #[pyo3(get, set)]
+    pub q_gen: GenomicLinear,
+    #[pyo3(get, set)]
+    pub k_gen: GenomicLinear,
+    #[pyo3(get, set)]
+    pub v_gen: GenomicLinear,
+    #[pyo3(get, set)]
+    pub w_o: GenomicLinear,
+    #[pyo3(get, set)]
+    pub gate_gen: GenomicLinear,
+    #[pyo3(get, set)]
+    pub up_gen: GenomicLinear,
+    #[pyo3(get, set)]
+    pub w_down: GenomicLinear,
+    #[pyo3(get, set)]
+    pub ffn_norm: Vec<f32>,
+    #[pyo3(get, set)]
+    pub eps: f32,
+    #[pyo3(get, set)]
+    pub act_fn: String,
+    #[pyo3(get, set)]
+    pub use_genomic_norm: bool,
+    #[pyo3(get, set)]
+    pub h_scale: f32,
+    #[pyo3(get, set)]
+    pub rna_threshold: f32,
+    #[pyo3(get, set)]
+    pub k_wta_ratio: f32,
+    pub topology: Option<Arc<CentroidGraph>>,
+    #[pyo3(get, set)]
+    pub fused_qkv: Option<GenomicLinear>,
+    #[pyo3(get, set)]
+    pub fused_gate_up: Option<GenomicLinear>,
+}
+
+#[cfg(not(feature = "python"))]
 #[derive(Clone)]
 pub struct RustGenomicBlock {
     pub idx: usize,
@@ -312,6 +355,60 @@ impl RustGenomicBlock {
         Ok(d_x)
     }
 
+    pub fn refine_ffn_core(
+        &mut self,
+        x_norm: Vec<f32>,
+        target: Vec<f32>,
+        lr: f32,
+    ) -> Result<(), String> {
+        let modulation = None;
+        let gate = self.gate_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let up = self.up_gen.forward_core(x_norm.clone(), modulation, true)?;
+
+        let mut d_gate = vec![0.0f32; gate.len()];
+        let mut d_up = vec![0.0f32; up.len()];
+        for i in 0..gate.len() {
+            let g = gate[i];
+            let u = up[i];
+            let sig = 1.0 / (1.0 + (-g).exp());
+            let silu_val = g * sig;
+            let pred = silu_val * u;
+            let diff = pred - target[i];
+
+            let silu_p = sig * (1.0 + g * (1.0 - sig));
+            d_gate[i] = diff * u * silu_p;
+            d_up[i] = diff * silu_val;
+        }
+
+        self.gate_gen.refine_with_grads_core(x_norm.clone(), d_gate, lr)?;
+        self.up_gen.refine_with_grads_core(x_norm, d_up, lr)?;
+        Ok(())
+    }
+
+    pub fn refine_attention_core(
+        &mut self,
+        x_norm: Vec<f32>,
+        target: Vec<f32>,
+        pos: usize,
+        lr: f32,
+    ) -> Result<(), String> {
+        let modulation = None;
+        let q = self.q_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let k = self.k_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let v = self.v_gen.forward_core(x_norm.clone(), modulation, true)?;
+
+        let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
+        let pred = self.w_o.forward_core(attn_out.clone(), modulation, true)?;
+
+        let mut grads = vec![0.0f32; pred.len()];
+        for i in 0..pred.len() {
+            grads[i] = pred[i] - target[i];
+        }
+
+        self.w_o.refine_with_grads_core(attn_out, grads, lr)?;
+        Ok(())
+    }
+
     pub fn mutate_homeostasis_core(&mut self, scale: f32) -> Result<f32, String> {
         use rand::Rng;
         let mut rng = rand::thread_rng();
@@ -373,5 +470,24 @@ impl RustGenomicBlock {
     pub fn clear_cache(&mut self) -> PyResult<()> {
         self.clear_cache_core();
         Ok(())
+    }
+    pub fn refine_ffn(
+        &mut self,
+        x_norm: Vec<f32>,
+        target: Vec<f32>,
+        lr: f32,
+    ) -> PyResult<()> {
+        self.refine_ffn_core(x_norm, target, lr)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+    pub fn refine_attention(
+        &mut self,
+        x_norm: Vec<f32>,
+        target: Vec<f32>,
+        pos: usize,
+        lr: f32,
+    ) -> PyResult<()> {
+        self.refine_attention_core(x_norm, target, pos, lr)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

@@ -747,8 +747,21 @@ impl GajeFlatFileReader {
     }
 
     pub fn load_genomic(&self) -> std::io::Result<GenomicLLM> {
-        let config: ModelConfig = serde_json::from_str(&self.metadata_json)
+        let mut config: ModelConfig = serde_json::from_str(&self.metadata_json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        // Override using ArchitectureDescriptor if present in binary header
+        if let Some(desc) = self.header.architecture_descriptor() {
+            println!("🧬 [ArchitectureDescriptor] Detectada arquitectura {:?} desde la cabecera binaria (.flat)", desc.family);
+            config.n_embd = desc.n_embd;
+            config.n_head = desc.n_head;
+            config.n_head_kv = desc.n_head_kv;
+            config.n_blocks = desc.n_blocks;
+            config.config.rope_base = desc.rope_base;
+            config.config.rope_style = desc.rope_style;
+            config.config.ffn_act = desc.ffn_act;
+            config.config.unpermute_weights = desc.qk_permute;
+        }
 
         let block_size = 32;
         let head_dim = config.n_embd / config.n_head;

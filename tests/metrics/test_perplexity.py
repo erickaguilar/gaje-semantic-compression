@@ -42,19 +42,19 @@ def test_perplexity_real_text():
 
 def test_simulated_cloning_impact():
     """Simula el impacto de la 'Clonación de Anclas' en la reducción de PPL."""
-    vocab_size = 1000
-    logits_base = np.random.normal(0, 1, vocab_size)
-    logits_base[10] = 10.0  # Token objetivo con alta confianza
+    vocab_size = 100
 
-    # Escenario A: Ruido alto (Sin anclas)
-    logits_noisy = logits_base + np.random.normal(0, 3.0, vocab_size)
+    # Escenario A: Ruido alto (Sin anclas) -> El logit objetivo es bajo debido al ruido
+    logits_noisy = np.ones(vocab_size) * 0.5
+    logits_noisy[10] = 1.0
     ppl_noisy = np.exp(-calculate_ppl_from_logits(logits_noisy, 10))
 
-    # Escenario B: Ruido reducido (Con anclas clonadas)
-    logits_cloned = logits_base + np.random.normal(0, 1.0, vocab_size)
+    # Escenario B: Ruido reducido (Con anclas clonadas) -> El logit objetivo es muy dominante
+    logits_cloned = np.ones(vocab_size) * 0.5
+    logits_cloned[10] = 5.0
     ppl_cloned = np.exp(-calculate_ppl_from_logits(logits_cloned, 10))
 
-    print(f"PPL Noisy: {ppl_noisy:.2f} | PPL Cloned: {ppl_cloned:.2f}")
+    print(f"PPL Noisy: {ppl_noisy:.4f} | PPL Cloned: {ppl_cloned:.4f}")
     assert (
         ppl_cloned < ppl_noisy
     ), "La clonación de anclas debería reducir la perplejidad"

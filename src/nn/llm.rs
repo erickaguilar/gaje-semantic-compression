@@ -8,7 +8,25 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 
 /// Núcleo del Modelo de Lenguaje Genómico (Pure Rust)
-#[cfg_attr(feature = "python", pyclass(name = "RustGenomicLLM"))]
+#[cfg(feature = "python")]
+#[pyclass(name = "RustGenomicLLM")]
+#[derive(Clone)]
+pub struct GenomicLLM {
+    #[pyo3(get, set)]
+    pub embeddings: GenomicLinear,
+    #[pyo3(get, set)]
+    pub blocks: Vec<RustGenomicBlock>,
+    #[pyo3(get, set)]
+    pub output_norm: Vec<f32>,
+    #[pyo3(get, set)]
+    pub lm_head: GenomicLinear,
+    #[pyo3(get, set)]
+    pub eps: f32,
+    pub k_wta_ratio: f32,
+    pub topology: Option<Arc<CentroidGraph>>,
+}
+
+#[cfg(not(feature = "python"))]
 #[derive(Clone)]
 pub struct GenomicLLM {
     pub embeddings: GenomicLinear,
@@ -449,6 +467,26 @@ impl GenomicLLM {
         }
         Err(format!("Layer not found: {}", layer_name))
     }
+
+    pub fn mutate_all_homeostasis_core(&mut self, scale: f32) -> Result<Vec<f32>, String> {
+        let mut deltas = Vec::with_capacity(self.blocks.len());
+        for block in &mut self.blocks {
+            let delta = block.mutate_homeostasis_core(scale)?;
+            deltas.push(delta);
+        }
+        Ok(deltas)
+    }
+
+    pub fn undo_homeostasis_mutation_core(&mut self, deltas: Vec<f32>) -> Result<(), String> {
+        if deltas.len() != self.blocks.len() {
+            return Err(format!("Deltas length {} does not match blocks length {}", deltas.len(), self.blocks.len()));
+        }
+        for (block, delta) in self.blocks.iter_mut().zip(deltas) {
+            block.h_scale -= delta;
+            block.h_scale = block.h_scale.clamp(0.01, 10.0);
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -604,5 +642,15 @@ impl GenomicLLM {
             .apply_vector_equilibrium_alignment_core(strength)
             .map_err(pyo3::exceptions::PyValueError::new_err)?;
         Ok(())
+    }
+
+    pub fn mutate_all_homeostasis(&mut self, scale: f32) -> PyResult<Vec<f32>> {
+        self.mutate_all_homeostasis_core(scale)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    pub fn undo_homeostasis_mutation(&mut self, deltas: Vec<f32>) -> PyResult<()> {
+        self.undo_homeostasis_mutation_core(deltas)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

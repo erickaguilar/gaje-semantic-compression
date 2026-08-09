@@ -5,27 +5,33 @@ from gaje.nn.stabilized import GenomicLLM
 
 
 def test_coherence(model_arg=None):
-    model_path = model_arg or "models/gguf/smollm2-135m-q8_0.gguf"
-    if not os.path.exists(model_path):
-        # Intentar rutas alternativas
-        possible = [
-            "/data/data/com.termux/files/home/models/gguf/smollm2-135m-f16.gguf",
-            "data/models/qwen2-0_5b-instruct-fp16.gguf",
-            "data/models/smollm2-135m-f16.gguf",
-        ]
-        for p in possible:
-            if os.path.exists(p):
-                model_path = p
-                break
-        else:
-            print("❌ Model not found. Skipping test.")
-            return
+    # Intentar cargar un modelo plano de producción primero para evitar OOM y optimizar velocidad
+    flat_path = model_arg or "models/production/smollm2_4bit.gaje.flat"
+    if os.path.exists(flat_path) and flat_path.endswith(".flat"):
+        print(f"🧬 Loading pre-compiled GAJE Flat Model: {flat_path}")
+        llm = GenomicLLM.load_genomic(flat_path)
+    else:
+        # Fallback a GGUF
+        model_path = model_arg or "models/gguf/smollm2-135m-q8_0.gguf"
+        if not os.path.exists(model_path):
+            # Intentar rutas alternativas
+            possible = [
+                "/data/data/com.termux/files/home/models/gguf/smollm2-135m-f16.gguf",
+                "data/models/qwen2-0_5b-instruct-fp16.gguf",
+                "data/models/smollm2-135m-f16.gguf",
+            ]
+            for p in possible:
+                if os.path.exists(p):
+                    model_path = p
+                    break
+            else:
+                print("❌ Model not found. Skipping test.")
+                return
 
-    print(f"🧬 Starting Real Coherence Test (Model: {model_path})")
-    print("-" * 50)
-
-    # Using all blocks for full verification
-    llm = GenomicLLM(model_path, num_blocks=None)
+        print(f"🧬 Starting Real Coherence Test from GGUF (Model: {model_path})")
+        print("-" * 50)
+        # Limit blocks to 4 to reduce memory usage during on-the-fly python genomization
+        llm = GenomicLLM(model_path, num_blocks=4)
 
     prompt = "The capital of France is"
     # Target: " Paris"

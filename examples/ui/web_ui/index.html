@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GAJE | Chat Genómico</title>
+    <meta name="description" content="GAJE Helix - Plataforma nativa de compresión semántica de ADN y chat genómico impulsado por kernels de alto rendimiento en Rust.">
+    <title>GAJE Helix | Semantic Genomic Compression Platform</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <script>
         (function() {
             const theme = localStorage.getItem('theme') || 'dark';
@@ -14,14 +15,21 @@
     </script>
 </head>
 <body>
+    <div class="glow-bg-radial"></div>
     <div class="app-container">
         <header>
             <div class="logo">
-                <span class="dna-icon">🧬</span>
-                <h1>GAJE-Flow <small>v0.9.5</small></h1>
+                <span class="dna-icon animate-pulse">🧬</span>
+                <div class="brand-text">
+                    <h1>GAJE Helix</h1>
+                    <span class="version-tag">v1.0.0-alpha</span>
+                </div>
             </div>
-            <div class="status-bar">
-                <span class="status-dot"></span> NEON Optimized
+            <div class="header-controls">
+                <div class="status-bar">
+                    <span class="status-dot"></span>
+                    <span class="status-text">NEON Optimized</span>
+                </div>
                 <button id="theme-toggle" class="theme-btn" aria-label="Cambiar Tema">🌙</button>
             </div>
         </header>
@@ -31,11 +39,12 @@
                 <section class="stats-card">
                     <h3>Selección de Modelo</h3>
                     <select id="model-select" class="model-dropdown">
-                        <option value="qwen2_0_5b_4bit.gaje.flat" selected>⚡ QWEN2 0.5B 4-BIT FLAT (Zero-Copy Mmap v0.9.7)</option>
-                        <option value="smollm2_4bit.gaje">⚡ SMOLLM2 135M 4-BIT (Fast DB Engine - 3.68 tok/s)</option>
+                        <!-- Carga dinámica desde la API -->
+                        <option value="qwen2_0_5b_4bit.gaje.flat" selected>Cargando lista de modelos...</option>
                     </select>
-                    <div id="model-date" class="model-meta">v1.0.0-alpha (GAJE Engine)</div>
+                    <div id="model-date" class="model-meta">Nacido el: 2026-08-08 18:48</div>
                 </section>
+
                 <section class="stats-card island-card">
                     <h3>🏝️ Island Model (.gmem)</h3>
                     <div id="island-content">
@@ -45,24 +54,27 @@
                             <span class="island-pill pill-conversational">💬 Conversación</span>
                         </div>
                         <div class="metric-row"><span>Persistencia:</span> <span class="metric-val">.gmem (Zero-Copy)</span></div>
-                        <div class="metric-row"><span>Retrieval Latency:</span> <span id="island-lat-val" class="metric-val">0.75 ms</span></div>
+                        <div class="metric-row"><span>Latencia Retrieval:</span> <span id="island-lat-val" class="metric-val">0.75 ms</span></div>
                         <div class="metric-row"><span>Presupuesto Contexto:</span> <span id="island-budget-val" class="metric-val">512 tokens</span></div>
                     </div>
                 </section>
+
                 <section class="stats-card">
                     <h3>Métricas de Compresión</h3>
                     <div id="metrics-content">
                         <p class="placeholder">Envía un mensaje para ver el análisis genómico.</p>
                     </div>
                 </section>
+
                 <section class="stats-card">
-                    <h3>Entorno (SF & HD)</h3>
+                    <h3>Entorno de Ejecución</h3>
                     <div id="env-content">
-                        <div class="metric-row"><span>Software (SF):</span> <span id="sf-val" class="metric-val">Rust 2021 + PyO3</span></div>
-                        <div class="metric-row"><span>Hardware (HD):</span> <span id="hd-val" class="metric-val">Detectando CPU...</span></div>
-                        <div class="metric-row"><span>Tiempo Resp.:</span> <span id="latency-val" class="metric-val">---</span></div>
+                        <div class="metric-row"><span>Software:</span> <span id="sf-val" class="metric-val">Rust 2021 + PyO3</span></div>
+                        <div class="metric-row"><span>Hardware:</span> <span id="hd-val" class="metric-val">CPU Native</span></div>
+                        <div class="metric-row"><span>Latencia Inferencia:</span> <span id="latency-val" class="metric-val">---</span></div>
                     </div>
                 </section>
+
                 <section class="dna-viewer">
                     <h3>Secuencia ADN (2-bit)</h3>
                     <div id="dna-strand" class="strand-display">
@@ -74,19 +86,24 @@
             <section class="chat-container">
                 <div id="chat-window" class="chat-window">
                     <div class="message system">
-                        <p><strong>[SYSTEM]:</strong> Núcleo GAJE inicializado. Esperando entrada semántica...</p>
+                        <div class="msg-content">
+                            <p><strong>[SYSTEM]:</strong> Núcleo GAJE inicializado. Esperando entrada semántica...</p>
+                        </div>
                     </div>
                 </div>
 
                 <div class="input-area">
-                    <input type="text" id="user-input" placeholder="Escribe un mensaje..." autocomplete="off">
-                    <button id="send-btn">ENVIAR</button>
+                    <input type="text" id="user-input" placeholder="Escribe un mensaje genómico..." autocomplete="off">
+                    <button id="send-btn">
+                        <span>ENVIAR</span>
+                        <svg class="send-icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                    </button>
                 </div>
             </section>
         </main>
 
         <footer>
-            <p>Erick Aguilar & Gemini.</p>
+            <p>Erick Aguilar & Gemini — DNA Semantic Compression Engine © 2026</p>
         </footer>
     </div>
     <script src="script.js"></script>
