@@ -253,10 +253,10 @@ def export_gaje_flat():
 
         # 1. Fused QKV
         w_q = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=True
+            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=False
         )
         w_k = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=True
+            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=False
         )
         w_v = get_tensor_f32_matrix(
             tensors_by_name[f"blk.{i}.attn_v.weight"], is_q_k=False
