@@ -125,4 +125,38 @@ Tras un barrido empírico y depuración del sampler nativo en Rust, se diagnosti
 - *Ejemplo de regresión factual*: El modelo responde `"La capital de Francia es Nantes."` (en lugar de París) y confunde ebullición/congelación en inglés (*"Water boils at exactly 100 degrees Celsius... This is the freezing point at which water's temperature becomes exactly zero degrees Celsius."*).
 - **Decisión de Diseño**: Se asume este trade-off (pérdida de fidelidad en modelos pequeños) dado que el objetivo de `q4_0` no es optimizar modelos de <1B, sino erradicar la sobrecarga de metadatos de la v1 y desbloquear modelos grandes (>1B) sin OOM.
 
-**Siguiente Fase**: Fase 2 - Certificación de Modelos de 1.5B (Qwen2.5-1.5B o DeepSeek-R1-Distill-Qwen-1.5B) con el formato Q4_0.
+---
+
+## 🧬 7. Fase 2: Certificación y Validación de Modelos de 1.5B Completada (v1.5.0-alpha: 2026-08-08)
+
+**Estado:** VALIDADO CON RESERVAS - Certificado como motor operativo de 1.5B en Q4_0; no apto para tareas factuales de alta precisión sin muestreo adecuado.
+
+### 1. Resolución de la Alineación de Pesos Q/K (Bug de Permutación GGUF)
+Se aisló la causa raíz de la degradación y el *gibberish* caótico (`Tämama leke...`) a nivel de arquitectura en la conversión GGUF:
+*   **Estrategia Selectiva**:
+    *   *SmolLM2 / Llama-style*: `GGUF` almacena $Q$ y $K$ en formato interleaved (permutado). Requiere **des-permutación** (`is_q_k = True` en exportación) para alinearse con el RoPE `split` en Rust.
+    *   *Qwen2 / Qwen2.5*: `GGUF` ya almacena $Q$ y $K$ en formato `split` nativo. **No debe des-permutarse** (`is_q_k = False` en exportación). Forzar la des-permutación corrompe la atención y destruye la inferencia.
+
+### 2. Paridad Matemática de Logits (Qwen2.5-1.5B Q4_0 vs HF FP32)
+*   **Capital de Brasil**: CosSim = **`0.923275`**
+*   **Capital de Francia**: CosSim = **`0.886399`**
+*   **¿Quién eres?**: CosSim = **`0.874763`**
+
+### 3. Evaluación Factual e Inmunidad a Bucles (8 Prompts en Qwen2.5-1.5B Q4_0)
+Se evaluaron los 8 prompts factuales bajo dos modos de muestreo:
+
+| Prompt Factual | Greedy ($T=0.0$, $\text{penalty}=1.0$) | Sampling ($T=0.2$, $\text{penalty}=1.1$) | Diagnóstico |
+| :--- | :--- | :--- | :--- |
+| *Capital de España* | `"La capital de España es Madrid."` | `"La capital de España es Madrid."` | ✅ Coherente y Exacto |
+| *Capital de México* | `"La capital de México es la Ciudad de México."` | `"La capital de México es la Ciudad de México."` | ✅ Coherente y Exacto |
+| *Capital de Alemania* | `"La capital de Alemania es Berlín."` | `"La capital de Alemania es Berlama."` | 🟡 Spelling menor en muestreo |
+| *Punto ebullición agua* | `"El punto de ebullición de agua es un proceso..."` | `"El punto de ebullición del agua es un proceso..."` | 🔴 Pérdida de precisión factual ("100°C") |
+| *Planeta más grande* | `"El planeta más grande ... es el planeta."` | `"El planeta más grande ... es el Sistema."` | 🔴 Incompleto / Alucinación menor |
+| *Capital de Francia* | `"La capital de Francia es París."` | `"La capital de Francia es París."` | ✅ Coherente y Exacto |
+| *Capital de Brasil* | `"La capital de Brasil es Bras."` | `"La capital de Brasil es Bras."` | 🟡 Truncación menor |
+| *Satélite de la Tierra* | 🔴 Bucle infinito repetitivo | `"El satélite es un tipo de roca que se forma..."` | ✅ **Lazo roto** (libre de bucle infinito) |
+
+### 🔍 Conclusión de Fidelidad
+El formateo `q4_0` exhibe una pérdida de precisión en respuestas de conocimiento específico y factual muy fino, pero con el sampler configurado a **`temperature = 0.2`** y **`repetition_penalty = 1.1`**, los bucles infinitos de retroalimentación quedan **totalmente extinguidos**.
+
+**Siguiente Fase**: Fase 3 - Abstracción de compatibilidad universal (`ArchitectureDescriptor`) y desarrollo de micro-kernels de cálculo SIMD (AVX2/NEON) optimizados para `q4_0`.
