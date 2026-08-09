@@ -1,15 +1,15 @@
 # 🧬 Hito: Ajuste Fino de Centroides por Bloque mediante Búsqueda Monte Carlo (Fase 5.5)
 
-**ID del Hito:** `milestone-gaje-block-monte-carlo`  
-**Estado:** Planificado / Listo para SDD  
-**Carpeta Destino:** `src/nn/block.rs` y `src/nn/distiller.rs`  
+**ID del Hito:** `milestone-gaje-block-monte-carlo`
+**Estado:** Planificado / Listo para SDD
+**Carpeta Destino:** `src/nn/block.rs` y `src/nn/distiller.rs`
 **Objetivo:** Implementar un optimizador de mutaciones locales de tipo "natural selection" por bloque transformador para evadir la ceguera de los gradientes continuos en la representación de 2 bits.
 
 ---
 
 ## 1. Fundamento Matemático
 
-Dado que los pesos de 2 bits están cuantizados discreta y rígidamente, el Descenso de Gradiente (SGD/Adam) no puede calcular derivadas útiles para realizar cambios sub-unitarios en los centroides sin romper la estabilidad. 
+Dado que los pesos de 2 bits están cuantizados discreta y rígidamente, el Descenso de Gradiente (SGD/Adam) no puede calcular derivadas útiles para realizar cambios sub-unitarios en los centroides sin romper la estabilidad.
 
 Reemplazamos esto por una **Búsqueda Probabilística de Monte Carlo (Breeding)** local para ajustar el factor de escala $\gamma$ (amplitud) y el desplazamiento $\beta$ (sesgo) de los centroides de cada capa de forma independiente.
 

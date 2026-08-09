@@ -105,7 +105,7 @@ impl FlatHeaderV2 {
         if self.arch_family == 0 {
             return None;
         }
-        
+
         let family = match self.arch_family {
             1 => crate::io::arch::ModelFamily::Llama,
             2 => crate::io::arch::ModelFamily::SmolLM,
@@ -115,14 +115,43 @@ impl FlatHeaderV2 {
             _ => crate::io::arch::ModelFamily::Unknown,
         };
 
-        let head_dim = if self.arch_n_head > 0 { self.arch_n_embd as usize / self.arch_n_head as usize } else { 0 };
+        let head_dim = if self.arch_n_head > 0 {
+            self.arch_n_embd as usize / self.arch_n_head as usize
+        } else {
+            0
+        };
 
         let (rope_base, rope_style, ffn_act, chat_template) = match family {
-            crate::io::arch::ModelFamily::Llama => (10000.0f32, "split".to_string(), "swiglu".to_string(), "llama".to_string()),
-            crate::io::arch::ModelFamily::SmolLM => (100000.0f32, "split".to_string(), "swiglu".to_string(), "chatml".to_string()),
-            crate::io::arch::ModelFamily::Qwen2 | crate::io::arch::ModelFamily::Qwen2_5 => (1000000.0f32, "split".to_string(), "swiglu".to_string(), "chatml".to_string()),
-            crate::io::arch::ModelFamily::Gemma => (10000.0f32, "split".to_string(), "geglu".to_string(), "gemma".to_string()),
-            _ => (10000.0f32, "split".to_string(), "silu".to_string(), "standard".to_string()),
+            crate::io::arch::ModelFamily::Llama => (
+                10000.0f32,
+                "split".to_string(),
+                "swiglu".to_string(),
+                "llama".to_string(),
+            ),
+            crate::io::arch::ModelFamily::SmolLM => (
+                100000.0f32,
+                "split".to_string(),
+                "swiglu".to_string(),
+                "chatml".to_string(),
+            ),
+            crate::io::arch::ModelFamily::Qwen2 | crate::io::arch::ModelFamily::Qwen2_5 => (
+                1000000.0f32,
+                "split".to_string(),
+                "swiglu".to_string(),
+                "chatml".to_string(),
+            ),
+            crate::io::arch::ModelFamily::Gemma => (
+                10000.0f32,
+                "split".to_string(),
+                "geglu".to_string(),
+                "gemma".to_string(),
+            ),
+            _ => (
+                10000.0f32,
+                "split".to_string(),
+                "silu".to_string(),
+                "standard".to_string(),
+            ),
         };
 
         Some(crate::io::arch::ArchitectureDescriptor {

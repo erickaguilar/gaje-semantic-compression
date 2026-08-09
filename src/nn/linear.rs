@@ -595,9 +595,11 @@ impl GenomicLinear {
                     if row_off + n_blocks * self.stride <= db.len() {
                         for b in 0..n_blocks {
                             let c_off = (i * n_blocks + b) * 4;
-                            let has_block_centroids = self.centroids.len() > 4 && c_off + 4 <= self.centroids.len();
+                            let has_block_centroids =
+                                self.centroids.len() > 4 && c_off + 4 <= self.centroids.len();
 
-                            let block_db = &db[row_off + b * self.stride..row_off + (b + 1) * self.stride];
+                            let block_db =
+                                &db[row_off + b * self.stride..row_off + (b + 1) * self.stride];
                             for k in 0..self.block_size {
                                 let j = b * self.block_size + k;
                                 if j >= self.in_features {
@@ -608,7 +610,9 @@ impl GenomicLinear {
                                 let byte_idx = k / 4;
                                 let sub_idx = k % 4;
                                 if byte_idx < block_db.len() {
-                                    let bit_val = ((block_db[byte_idx] >> ((3 - sub_idx) * 2)) & 0b11) as usize;
+                                    let bit_val = ((block_db[byte_idx] >> ((3 - sub_idx) * 2))
+                                        & 0b11)
+                                        as usize;
                                     let c_idx = if has_block_centroids {
                                         c_off + bit_val
                                     } else {
@@ -625,7 +629,8 @@ impl GenomicLinear {
 
                 for c_idx in 0..self.centroids.len() {
                     if centroid_counts[c_idx] > 0.0 {
-                        self.centroids[c_idx] -= lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                        self.centroids[c_idx] -=
+                            lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
                     }
                 }
             }
@@ -642,7 +647,8 @@ impl GenomicLinear {
                     if row_off + n_blocks * self.stride <= db.len() {
                         for b in 0..n_blocks {
                             let c_off = (i * n_blocks + b) * 16;
-                            let has_block_centroids = self.centroids.len() > 16 && c_off + 16 <= self.centroids.len();
+                            let has_block_centroids =
+                                self.centroids.len() > 16 && c_off + 16 <= self.centroids.len();
 
                             for k in 0..self.block_size {
                                 let j = b * self.block_size + k;
@@ -674,7 +680,8 @@ impl GenomicLinear {
                 }
                 for c_idx in 0..self.centroids.len() {
                     if centroid_counts[c_idx] > 0.0 {
-                        self.centroids[c_idx] -= lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                        self.centroids[c_idx] -=
+                            lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
                     }
                 }
             }

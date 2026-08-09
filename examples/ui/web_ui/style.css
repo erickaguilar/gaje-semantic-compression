@@ -631,7 +631,7 @@ footer {
     button#send-btn {
         padding: 0.75rem 1.2rem;
     }
-    
+
     button#send-btn span {
         display: none; /* Icon only on mobile */
     }
@@ -655,4 +655,3 @@ footer {
     transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 0 10px var(--accent-glow);
 }
-

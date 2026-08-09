@@ -85,7 +85,7 @@ Se implementó el primer optimizador adaptativo local en caliente en GAJE para c
 Una conclusión crucial del benchmark empírico es la **separación entre fidelidad del motor y capacidad intrínseca del modelo**:
 
 * **Precisión del Motor**: Los logits generados a **23 tok/s** por Qwen2-0.5B no muestran corrupción ni bucles infinitos, validando que el de-cuantizador SIMD y el sampler nativo de Rust funcionan a la perfección.
-* **Fallas Cognitivas**: El modelo de 0.5B falla catastróficamente al resolver ecuaciones de dos variables e introduce bugs de lógica de programación (como usar un `set` no ordenado y `pop()` para encontrar el primer carácter único). 
+* **Fallas Cognitivas**: El modelo de 0.5B falla catastróficamente al resolver ecuaciones de dos variables e introduce bugs de lógica de programación (como usar un `set` no ordenado y `pop()` para encontrar el primer carácter único).
 * **Límite Físico**: Estas fallas no son un defecto del motor ni de la cuantización `Q4_0`, sino del límite físico de razonamiento de un modelo de 500M parámetros.
 * **Recomendación**: Para tareas lógicas complejas, el modelo de **1.5B o superior es el umbral de entrada operativo**.
 

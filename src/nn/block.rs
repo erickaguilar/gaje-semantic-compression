@@ -362,7 +362,9 @@ impl RustGenomicBlock {
         lr: f32,
     ) -> Result<(), String> {
         let modulation = None;
-        let gate = self.gate_gen.forward_core(x_norm.clone(), modulation, true)?;
+        let gate = self
+            .gate_gen
+            .forward_core(x_norm.clone(), modulation, true)?;
         let up = self.up_gen.forward_core(x_norm.clone(), modulation, true)?;
 
         let mut d_gate = vec![0.0f32; gate.len()];
@@ -380,7 +382,8 @@ impl RustGenomicBlock {
             d_up[i] = diff * silu_val;
         }
 
-        self.gate_gen.refine_with_grads_core(x_norm.clone(), d_gate, lr)?;
+        self.gate_gen
+            .refine_with_grads_core(x_norm.clone(), d_gate, lr)?;
         self.up_gen.refine_with_grads_core(x_norm, d_up, lr)?;
         Ok(())
     }
@@ -471,12 +474,7 @@ impl RustGenomicBlock {
         self.clear_cache_core();
         Ok(())
     }
-    pub fn refine_ffn(
-        &mut self,
-        x_norm: Vec<f32>,
-        target: Vec<f32>,
-        lr: f32,
-    ) -> PyResult<()> {
+    pub fn refine_ffn(&mut self, x_norm: Vec<f32>, target: Vec<f32>, lr: f32) -> PyResult<()> {
         self.refine_ffn_core(x_norm, target, lr)
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }

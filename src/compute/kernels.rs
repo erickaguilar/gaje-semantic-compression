@@ -969,7 +969,7 @@ pub unsafe fn genomic_dot_product_q4_0_neon(
 // =============================================================================
 
 /// Dequantiza y multiplica un bloque de 32 pesos Q4_0 usando AVX2 (x86_64)
-/// 
+///
 /// # Safety
 /// Requiere que `weights` tenga al menos 16 bytes, y `input` al menos 32 floats.
 #[cfg(target_arch = "x86_64")]
@@ -982,52 +982,55 @@ pub unsafe fn gemv_q4_0_block_avx2(
 ) -> f32 {
     // Cargar 16 bytes (32 pesos de 4 bits)
     let packed = _mm_loadu_si128(weights_ptr as *const __m128i);
-    
+
     // Desempaquetar 4 bits -> 8 bits
     let mask = _mm_set1_epi8(0x0F);
     let low = _mm_and_si128(packed, mask);
     let high = _mm_and_si128(_mm_srli_epi16(packed, 4), mask);
-    
+
     // Interleavar para obtener 16 bytes de pesos de 8 bits
     let interleaved = _mm_unpacklo_epi8(low, high);
-    
+
     // Convertir a i16 y luego a i32 (dos registros de 8 elementos cada uno)
     let i16_low = _mm_cvtepi8_epi16(interleaved);
     let i16_high = _mm_cvtepi8_epi16(_mm_unpackhi_epi8(interleaved, interleaved));
-    
+
     // Convertir a f32
     let f32_low = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(i16_low));
     let f32_high = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(i16_high));
-    
+
     // Cargar input (32 floats = dos registros de 8 floats)
     let in_low = _mm256_loadu_ps(input_ptr);
     let in_high = _mm256_loadu_ps(input_ptr.add(8));
-    
+
     // Aplicar dequantización: (q4 - 8) * scale + min
     let eight = _mm256_set1_ps(8.0);
     let scale_v = _mm256_set1_ps(scale);
     let min_v = _mm256_set1_ps(min);
-    
+
     let dq_low = _mm256_add_ps(_mm256_mul_ps(_mm256_sub_ps(f32_low, eight), scale_v), min_v);
-    let dq_high = _mm256_add_ps(_mm256_mul_ps(_mm256_sub_ps(f32_high, eight), scale_v), min_v);
-    
+    let dq_high = _mm256_add_ps(
+        _mm256_mul_ps(_mm256_sub_ps(f32_high, eight), scale_v),
+        min_v,
+    );
+
     // Multiplicar y acumular (FMA)
     let mul_low = _mm256_mul_ps(dq_low, in_low);
     let mul_high = _mm256_mul_ps(dq_high, in_high);
-    
+
     // Sumar los dos halves
     let sum = _mm256_add_ps(mul_low, mul_high);
-    
+
     // Horizontal sum de 8 floats a 1 float
     let high128 = _mm256_extractf128_ps(sum, 1);
     let low128 = _mm256_castps256_ps128(sum);
     let sum128 = _mm_add_ps(high128, low128);
-    
+
     let shuf = _mm_movehdup_ps(sum128);
     let sums = _mm_add_ps(sum128, shuf);
     let shuf2 = _mm_movehl_ps(sums, sums);
     let final_sum = _mm_add_ss(sums, shuf2);
-    
+
     _mm_cvtss_f32(final_sum)
 }
 
@@ -1042,15 +1045,15 @@ pub unsafe fn gemv_q4_0_block_neon(
 ) -> f32 {
     // Cargar 16 bytes
     let packed = vld1q_u8(weights_ptr);
-    
+
     // Desempaquetar 4 bits -> 8 bits
     let mask = vdupq_n_u8(0x0F);
     let low = vandq_u8(packed, mask);
     let high = vandq_u8(vshrq_n_u8(packed, 4), mask);
-    
+
     // Interleavar (zip)
     let interleaved = vzip1q_u8(low, high);
-    
+
     // Convertir a f32 (NEON requiere pasar por i16 -> i32 -> f32)
     // Nota: Esta es una simplificación; en producción se usaría vcvtq_f32_s32(vcvtlq_s16(...))
     // Por ahora, fallback escalar seguro para aarch64 si la intrínseca es compleja
@@ -1069,7 +1072,7 @@ pub unsafe fn gemv_q4_0_block_neon(
 }
 
 /// Producto Matriz-Vector (GEMV) optimizado para Q4_0
-/// 
+///
 /// # Arguments
 /// * `weights` - Pesos empaquetados (2 pesos por byte)
 /// * `scales` - Escalas por bloque (f16)
@@ -1086,30 +1089,30 @@ pub fn gemv_q4_0(
     in_features: usize,
 ) {
     let blocks_per_row = in_features / 32;
-    
+
     // Paralelizar por fila de salida usando Rayon
     output.par_iter_mut().enumerate().for_each(|(i, out_ptr)| {
         let mut row_sum = 0.0f32;
         let row_offset = i * in_features / 2;
-        
+
         for block_idx in 0..blocks_per_row {
             let w_ptr = unsafe { weights.as_ptr().add(row_offset + block_idx * 16) };
             let in_ptr = unsafe { input.as_ptr().add(block_idx * 32) };
-            
+
             // Convertir f16 (u16) a f32
             let scale = half::f16::from_bits(scales[i * blocks_per_row + block_idx]).to_f32();
             let min = half::f16::from_bits(mins[i * blocks_per_row + block_idx]).to_f32();
-            
+
             #[cfg(target_arch = "x86_64")]
             unsafe {
                 row_sum += gemv_q4_0_block_avx2(w_ptr, scale, min, in_ptr);
             }
-            
+
             #[cfg(target_arch = "aarch64")]
             unsafe {
                 row_sum += gemv_q4_0_block_neon(w_ptr, scale, min, in_ptr);
             }
-            
+
             #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
             {
                 // Fallback escalar

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 sys.path.append(os.path.abspath("python"))
-from gaje.nn.stabilized import GenomicLLM
+from gaje.nn.stabilized import GenomicLLM  # noqa: E402
 
 
 def calculate_ppl_from_logits(logits, target_id):

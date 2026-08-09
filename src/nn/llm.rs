@@ -479,7 +479,11 @@ impl GenomicLLM {
 
     pub fn undo_homeostasis_mutation_core(&mut self, deltas: Vec<f32>) -> Result<(), String> {
         if deltas.len() != self.blocks.len() {
-            return Err(format!("Deltas length {} does not match blocks length {}", deltas.len(), self.blocks.len()));
+            return Err(format!(
+                "Deltas length {} does not match blocks length {}",
+                deltas.len(),
+                self.blocks.len()
+            ));
         }
         for (block, delta) in self.blocks.iter_mut().zip(deltas) {
             block.h_scale -= delta;

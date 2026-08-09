@@ -27,7 +27,7 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
 
     // 6. Probar el cambio de tema (Theme Toggle)
     const htmlElement = page.locator('html');
-    
+
     // Debería ser oscuro por defecto
     await expect(htmlElement).toHaveAttribute('data-theme', 'dark');
 
@@ -68,7 +68,7 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
     if (optionsCount > 1) {
       // Obtener el valor de la segunda opción
       const secondOptionValue = await modelSelect.locator('option').nth(1).getAttribute('value');
-      
+
       // Seleccionar la segunda opción
       await modelSelect.selectOption(secondOptionValue);
 
@@ -77,7 +77,7 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
 
       // Esperar a que termine de cargar y vuelva a habilitarse
       await expect(modelSelect).toBeEnabled({ timeout: 15000 });
-      
+
       // Verificar que se haya impreso el mensaje de éxito en la consola de chat
       const lastSystemMessage = page.locator('.message.system').last();
       await expect(lastSystemMessage).toContainText('cargado y listo en memoria');

@@ -339,12 +339,12 @@ def export_qwen2_5_1_5b_flat():
         weights_len,
         group_size,
         quant_format,
-        4,          # arch_family = Qwen2_5
+        4,  # arch_family = Qwen2_5
         n_embd,
         n_head,
         n_head_kv,
         n_blocks,
-        0,          # arch_qk_permute = false
+        0,  # arch_qk_permute = false
     )
 
     with open(out_path, "wb") as f:

@@ -25,10 +25,10 @@ pub struct ArchitectureDescriptor {
     pub n_blocks: usize,
     pub head_dim: usize,
     pub rope_base: f32,
-    pub rope_style: String,      // "split" or "interleaved"
-    pub ffn_act: String,         // "swiglu", "silu", etc.
-    pub qk_permute: bool,        // whether Q/K weights need to be unpermutated
-    pub chat_template: String,   // chatML, llama, etc.
+    pub rope_style: String,    // "split" or "interleaved"
+    pub ffn_act: String,       // "swiglu", "silu", etc.
+    pub qk_permute: bool,      // whether Q/K weights need to be unpermutated
+    pub chat_template: String, // chatML, llama, etc.
 }
 
 #[cfg_attr(feature = "python", pymethods)]
@@ -49,7 +49,11 @@ impl ArchitectureDescriptor {
         qk_permute: bool,
         chat_template: String,
     ) -> Self {
-        let actual_head_dim = if head_dim == 0 && n_head > 0 { n_embd / n_head } else { head_dim };
+        let actual_head_dim = if head_dim == 0 && n_head > 0 {
+            n_embd / n_head
+        } else {
+            head_dim
+        };
         Self {
             family,
             n_embd,
@@ -87,21 +91,64 @@ impl ArchitectureDescriptor {
         n_blocks: usize,
     ) -> Self {
         let name_lower = name.to_lowercase();
-        let (family, rope_base, qk_permute, chat_template, rope_style) = if name_lower.contains("qwen2.5") {
-            (ModelFamily::Qwen2_5, 1000000.0, false, "chatml".to_string(), "split".to_string())
-        } else if name_lower.contains("qwen2") {
-            (ModelFamily::Qwen2, 1000000.0, false, "chatml".to_string(), "split".to_string())
-        } else if name_lower.contains("smollm2") {
-            (ModelFamily::SmolLM, 100000.0, true, "chatml".to_string(), "split".to_string())
-        } else if name_lower.contains("smollm") {
-            (ModelFamily::SmolLM, 100000.0, true, "chatml".to_string(), "split".to_string())
-        } else if name_lower.contains("gemma") {
-            (ModelFamily::Gemma, 10000.0, false, "gemma".to_string(), "split".to_string())
-        } else if name_lower.contains("llama") {
-            (ModelFamily::Llama, 10000.0, true, "llama".to_string(), "split".to_string())
-        } else {
-            (ModelFamily::Unknown, 10000.0, false, "standard".to_string(), "split".to_string())
-        };
+        let (family, rope_base, qk_permute, chat_template, rope_style) =
+            if name_lower.contains("qwen2.5") {
+                (
+                    ModelFamily::Qwen2_5,
+                    1000000.0,
+                    false,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                )
+            } else if name_lower.contains("qwen2") {
+                (
+                    ModelFamily::Qwen2,
+                    1000000.0,
+                    false,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                )
+            } else if name_lower.contains("smollm2") {
+                (
+                    ModelFamily::SmolLM,
+                    100000.0,
+                    true,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                )
+            } else if name_lower.contains("smollm") {
+                (
+                    ModelFamily::SmolLM,
+                    100000.0,
+                    true,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                )
+            } else if name_lower.contains("gemma") {
+                (
+                    ModelFamily::Gemma,
+                    10000.0,
+                    false,
+                    "gemma".to_string(),
+                    "split".to_string(),
+                )
+            } else if name_lower.contains("llama") {
+                (
+                    ModelFamily::Llama,
+                    10000.0,
+                    true,
+                    "llama".to_string(),
+                    "split".to_string(),
+                )
+            } else {
+                (
+                    ModelFamily::Unknown,
+                    10000.0,
+                    false,
+                    "standard".to_string(),
+                    "split".to_string(),
+                )
+            };
 
         let head_dim = if n_head > 0 { n_embd / n_head } else { 0 };
 

@@ -16,7 +16,9 @@ from gaje.nn.stabilized import GenomicLayer, dequantize_q8_0  # noqa: E402
 
 
 def export_gaje_flat():
-    parser = argparse.ArgumentParser(description="Exportador Flat Zero-Copy v0.9.8 (Dynamic GGUF to .gaje.flat)")
+    parser = argparse.ArgumentParser(
+        description="Exportador Flat Zero-Copy v0.9.8 (Dynamic GGUF to .gaje.flat)"
+    )
     parser.add_argument("--input", type=str, help="Ruta al archivo origen GGUF")
     parser.add_argument("--output", type=str, help="Ruta al archivo destino .gaje.flat")
     parser.add_argument("--tokenizer", type=str, help="Hugging Face tokenizer ID")
@@ -25,11 +27,15 @@ def export_gaje_flat():
     gguf_path = args.input
     if not gguf_path:
         # Fallback por defecto a Qwen2-0.5B si no se especifica
-        gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf")
+        gguf_path = os.path.join(
+            PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
+        )
 
     out_path = args.output
     if not out_path:
-        out_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_q4_0.gaje.flat")
+        out_path = os.path.join(
+            PROJECT_ROOT, "models", "production", "qwen2_0_5b_q4_0.gaje.flat"
+        )
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
@@ -78,11 +84,13 @@ def export_gaje_flat():
             rope_base = float(val)
 
     head_dim = n_embd // n_head
-    print(f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}, rope_base={rope_base}")
+    print(
+        f"[*] Parámetros: n_embd={n_embd}, n_head={n_head}, n_head_kv={n_head_kv}, head_dim={head_dim}, n_blocks={n_blocks}, rope_base={rope_base}"
+    )
 
     # Determinar familia de arquitectura y si requiere unpermute
     model_name_lower = os.path.basename(gguf_path).lower()
-    
+
     # Mapeo de familias: 1=Llama, 2=SmolLM, 3=Qwen2, 4=Qwen2_5, 5=Gemma, 6=Unknown
     if "qwen2.5" in model_name_lower or "qwen2.5" in arch_name.lower():
         arch_family = 4
@@ -119,12 +127,16 @@ def export_gaje_flat():
         5: "google/gemma-2-2b-it",
         6: "Qwen/Qwen2-0.5B-Instruct",
     }
-    tokenizer_id = args.tokenizer or tokenizer_map.get(arch_family, "Qwen/Qwen2-0.5B-Instruct")
+    tokenizer_id = args.tokenizer or tokenizer_map.get(
+        arch_family, "Qwen/Qwen2-0.5B-Instruct"
+    )
     try:
         print(f"[*] Cargando tokenizer desde Hugging Face: {tokenizer_id}...")
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
     except Exception as e:
-        print(f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}. Usando Qwen2-0.5B-Instruct de respaldo.")
+        print(
+            f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}. Usando Qwen2-0.5B-Instruct de respaldo."
+        )
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
 
     tokenizer_str = (
@@ -135,7 +147,9 @@ def export_gaje_flat():
 
     # Determinar vocab_size real desde el tensor token_embd.weight
     embd_tensor = tensors_by_name["token_embd.weight"]
-    vocab_size = int(embd_tensor.shape[1] if len(embd_tensor.shape) == 2 else embd_tensor.shape[0])
+    vocab_size = int(
+        embd_tensor.shape[1] if len(embd_tensor.shape) == 2 else embd_tensor.shape[0]
+    )
     if vocab_size < int(embd_tensor.shape[0]) and len(embd_tensor.shape) == 2:
         vocab_size = int(embd_tensor.shape[0])
 
@@ -342,10 +356,16 @@ def export_gaje_flat():
 
         # 1. Fused QKV
         w_q = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=qk_permute
+            tensors_by_name[f"blk.{i}.attn_q.weight"],
+            n_head,
+            head_dim,
+            is_q_k=qk_permute,
         )
         w_k = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=qk_permute
+            tensors_by_name[f"blk.{i}.attn_k.weight"],
+            n_head_kv,
+            head_dim,
+            is_q_k=qk_permute,
         )
         w_v = get_tensor_f32_matrix(
             tensors_by_name[f"blk.{i}.attn_v.weight"], is_q_k=False

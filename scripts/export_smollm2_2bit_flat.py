@@ -354,14 +354,14 @@ def export_smollm2_2bit_flat():
         dir_len,
         weights_offset,
         weights_len,
-        16,         # group_size = 16 (legacy)
-        0,          # quant_format = 0 (LegacyCentroids)
-        2,          # arch_family = SmolLM
+        16,  # group_size = 16 (legacy)
+        0,  # quant_format = 0 (LegacyCentroids)
+        2,  # arch_family = SmolLM
         n_embd,
         n_head,
         n_head_kv,
         n_blocks,
-        1,          # arch_qk_permute = true
+        1,  # arch_qk_permute = true
     )
 
     with open(out_path, "wb") as f:
