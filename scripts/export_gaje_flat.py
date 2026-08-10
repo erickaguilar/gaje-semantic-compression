@@ -22,7 +22,11 @@ def export_gaje_flat():
     parser.add_argument("--input", type=str, help="Ruta al archivo origen GGUF")
     parser.add_argument("--output", type=str, help="Ruta al archivo destino .gaje.flat")
     parser.add_argument("--tokenizer", type=str, help="Hugging Face tokenizer ID")
-    parser.add_argument("--quant-embed", action="store_true", help="Cuantizar embeddings y lm_head a Q8_0 en lugar de FP32")
+    parser.add_argument(
+        "--quant-embed",
+        action="store_true",
+        help="Cuantizar embeddings y lm_head a Q8_0 en lugar de FP32",
+    )
     args = parser.parse_args()
 
     embed_bit_depth = 8 if args.quant_embed else 32
@@ -296,7 +300,9 @@ def export_gaje_flat():
         return w_matrix
 
     print("[*] Empaquetando token_embd y lm_head...")
-    process_layer_data("token_embd", tensors_by_name["token_embd.weight"], bit_depth=embed_bit_depth)
+    process_layer_data(
+        "token_embd", tensors_by_name["token_embd.weight"], bit_depth=embed_bit_depth
+    )
 
     output_norm_tensor = tensors_by_name["output_norm.weight"]
     out_norm_bytes = (

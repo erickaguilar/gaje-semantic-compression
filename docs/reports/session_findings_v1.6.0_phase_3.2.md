@@ -1,7 +1,7 @@
 # 🧬 GAJE Helix: Reporte de Hallazgos y Validación - Fase 3.2: Cuantización Semántica Q8_0
-**Fecha:** 2026-08-09 14:20  
-**Versión:** v1.6.0-alpha (Silver Adult)  
-**Autor:** Antigravity AI & Erick Aguilar  
+**Fecha:** 2026-08-09 14:20
+**Versión:** v1.6.0-alpha (Silver Adult)
+**Autor:** Antigravity AI & Erick Aguilar
 
 ---
 
@@ -50,7 +50,7 @@ Toda la suite de validación fue ejecutada, logrando **100% de éxito** en todas
 
 ## 📈 Conclusiones y Próximos Pasos (Fase 3.3)
 
-Con la cuantización Q8_0 completamente certificada, hemos resuelto el límite físico del bus DDR4 para modelos de tamaño medio, logrando velocidades que permiten inferencia interactiva conversacional en tiempo real en CPU móvil convencional. 
+Con la cuantización Q8_0 completamente certificada, hemos resuelto el límite físico del bus DDR4 para modelos de tamaño medio, logrando velocidades que permiten inferencia interactiva conversacional en tiempo real en CPU móvil convencional.
 
 **Próximo Hito Propuesto:**
 - **Opción B / Salto a Qwen2.5-3B**: Escalar este pipeline mixto (Q4_0 en capas ocultas + Q8_0 en embeddings) para generar el archivo de 3B, validando su capacidad de razonamiento lógico sin comprometer la latencia.

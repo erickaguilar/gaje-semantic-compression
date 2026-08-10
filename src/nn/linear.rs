@@ -152,8 +152,7 @@ impl GenomicLinear {
             }
             8 => {
                 let ptr = database.as_ptr() as *const crate::io::header::Q8_0Block;
-                let count =
-                    database.len() / std::mem::size_of::<crate::io::header::Q8_0Block>();
+                let count = database.len() / std::mem::size_of::<crate::io::header::Q8_0Block>();
                 let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
                 WeightDatabase::GenomicQ8_0(Arc::new(blocks))
             }
