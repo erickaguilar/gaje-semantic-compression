@@ -198,6 +198,25 @@ impl Q4_0Block {
     }
 }
 
+/// Bloque de cuantización group-wise q8_0 con scale
+/// 32 pesos -> 34 bytes (escala f16, y 32 bytes de pesos de 8-bits con signo)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct Q8_0Block {
+    pub scale: half::f16,
+    pub qs: [i8; 32],
+}
+
+impl Q8_0Block {
+    /// Dequantiza un peso individual del bloque
+    #[inline(always)]
+    pub fn dequantize_weight(&self, idx: usize) -> f32 {
+        let scale = self.scale.to_f32();
+        let q8_value = self.qs[idx] as f32;
+        q8_value * scale
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +332,53 @@ mod tests {
                 }
             }
             assert!(!all_zero, "Dequantized weights should not be all zeros");
+        }
+    }
+
+    #[test]
+    fn test_q8_0_block_quantize_dequantize() {
+        let mut f32_weights = [0.0f32; 32];
+        for i in 0..32 {
+            f32_weights[i] = (i as f32) * 0.1 - 1.6;
+        }
+
+        let mut max_abs = 0.0f32;
+        for &v in &f32_weights {
+            let abs_v = v.abs();
+            if abs_v > max_abs {
+                max_abs = abs_v;
+            }
+        }
+
+        let scale = max_abs / 127.0;
+        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
+
+        let mut qs = [0i8; 32];
+        for k in 0..32 {
+            qs[k] = if scale > 1e-7 {
+                (f32_weights[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
+            } else {
+                0
+            };
+        }
+
+        let block = Q8_0Block {
+            scale: half::f16::from_f32(scale),
+            qs,
+        };
+
+        // Dequantize and check error bounds
+        for i in 0..32 {
+            let original = f32_weights[i];
+            let dequantized = block.dequantize_weight(i);
+            let err = (original - dequantized).abs();
+            assert!(
+                err <= scale / 2.0 + 1e-5,
+                "Original {} vs dequantized {} error {} above step/2 limit",
+                original,
+                dequantized,
+                err
+            );
         }
     }
 }

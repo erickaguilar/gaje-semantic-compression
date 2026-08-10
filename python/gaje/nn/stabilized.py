@@ -264,6 +264,11 @@ class GenomicLayer:
                         w_chunk.tobytes()
                     )
                     dna_db_list.append(ret)
+                elif self.quant_format == 2:
+                    ret = dna_semantic_compression.quantize_q8_0_native(
+                        w_chunk.tobytes()
+                    )
+                    dna_db_list.append(ret)
                 else:
                     ret = dna_semantic_compression.genomize_f32_native(
                         w_chunk.tobytes(),
@@ -290,6 +295,12 @@ class GenomicLayer:
             # Procedimiento estándar para capas pequeñas
             if self.quant_format == 1:
                 self.dna_database = dna_semantic_compression.quantize_q4_0_native(
+                    weights_f32.tobytes()
+                )
+                self.dna_centroids = []
+                self.anchors_f16_bytes = b""
+            elif self.quant_format == 2:
+                self.dna_database = dna_semantic_compression.quantize_q8_0_native(
                     weights_f32.tobytes()
                 )
                 self.dna_centroids = []

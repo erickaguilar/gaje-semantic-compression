@@ -9,6 +9,7 @@ def silu(x):
 
 def test_iqat_swiglu_convergence():
     print("🔬 Validando Convergencia de IQAT (SwiGLU-Aware Refinement)...")
+    np.random.seed(42)
     dim = 64
     out_dim = 128
 
@@ -57,7 +58,7 @@ def test_iqat_swiglu_convergence():
     print(f"[*] MSE SwiGLU Inicial: {initial_error:.8f}")
 
     # 6. Refinamiento IQAT
-    lr = 0.005
+    lr = 0.001
     iterations = 50
     for i in range(iterations):
         block.refine_ffn(x.tolist(), swiglu_target.tolist(), lr)

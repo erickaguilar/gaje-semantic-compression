@@ -87,6 +87,10 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
+        crate::compute::math::quantize_q8_0_native,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
         crate::compute::math::genomize_f16_native,
         m
     )?)?;

@@ -22,7 +22,10 @@ def export_gaje_flat():
     parser.add_argument("--input", type=str, help="Ruta al archivo origen GGUF")
     parser.add_argument("--output", type=str, help="Ruta al archivo destino .gaje.flat")
     parser.add_argument("--tokenizer", type=str, help="Hugging Face tokenizer ID")
+    parser.add_argument("--quant-embed", action="store_true", help="Cuantizar embeddings y lm_head a Q8_0 en lugar de FP32")
     args = parser.parse_args()
+
+    embed_bit_depth = 8 if args.quant_embed else 32
 
     gguf_path = args.input
     if not gguf_path:
@@ -250,13 +253,20 @@ def export_gaje_flat():
         else:
             b_data = None
 
+        if bit_depth == 4:
+            q_format = 1
+        elif bit_depth == 8:
+            q_format = 2
+        else:
+            q_format = 0
+
         layer = GenomicLayer(
             name,
             tensor_obj,
             bias_f32_or_tensor=b_data,
             bit_depth=bit_depth,
             config=cfg,
-            quant_format=quant_format if bit_depth == 4 else 0,
+            quant_format=q_format,
         )
         process_and_add_layer(name, layer)
         del layer
@@ -286,7 +296,7 @@ def export_gaje_flat():
         return w_matrix
 
     print("[*] Empaquetando token_embd y lm_head...")
-    process_layer_data("token_embd", tensors_by_name["token_embd.weight"], bit_depth=32)
+    process_layer_data("token_embd", tensors_by_name["token_embd.weight"], bit_depth=embed_bit_depth)
 
     output_norm_tensor = tensors_by_name["output_norm.weight"]
     out_norm_bytes = (
@@ -317,7 +327,7 @@ def export_gaje_flat():
     lm_head_tensor = tensors_by_name.get(
         "lm_head.weight", tensors_by_name["token_embd.weight"]
     )
-    process_layer_data("lm_head", lm_head_tensor, bit_depth=32)
+    process_layer_data("lm_head", lm_head_tensor, bit_depth=embed_bit_depth)
 
     for i in range(n_blocks):
         p = f"blk.{i}."

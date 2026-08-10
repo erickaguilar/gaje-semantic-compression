@@ -594,6 +594,72 @@ pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     }
 }
 
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn quantize_q8_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObject> {
+    let f32_data: &[f32] =
+        unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
+
+    let n_elements = f32_data.len();
+    if n_elements % 32 != 0 {
+        return Err(PyTypeError::new_err(
+            "Weights length must be divisible by 32",
+        ));
+    }
+
+    let n_blocks = n_elements / 32;
+    let mut out_blocks = Vec::with_capacity(n_blocks);
+
+    for i in 0..n_blocks {
+        let start = i * 32;
+        let block_f32 = &f32_data[start..start + 32];
+
+        let mut max_abs = 0.0f32;
+        for &v in block_f32 {
+            let abs_v = v.abs();
+            if abs_v > max_abs {
+                max_abs = abs_v;
+            }
+        }
+
+        let scale = max_abs / 127.0;
+        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
+
+        let mut qs = [0i8; 32];
+        for k in 0..32 {
+            let q = if scale > 1e-7 {
+                (block_f32[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
+            } else {
+                0
+            };
+            qs[k] = q;
+        }
+
+        out_blocks.push(crate::io::header::Q8_0Block {
+            scale: half::f16::from_f32(scale),
+            qs,
+        });
+    }
+
+    // Convert out_blocks slice to raw bytes
+    let raw_bytes = unsafe {
+        std::slice::from_raw_parts(
+            out_blocks.as_ptr() as *const u8,
+            out_blocks.len() * std::mem::size_of::<crate::io::header::Q8_0Block>(),
+        )
+    };
+
+    #[cfg(feature = "python")]
+    {
+        use pyo3::types::PyBytes;
+        let bytes_py = PyBytes::new(_py, raw_bytes).into();
+        Ok(bytes_py)
+    }
+    #[cfg(not(feature = "python"))]
+    {
+        Err(PyTypeError::new_err("Python not enabled"))
+    }
+}
+
 pub fn genomize_4bit_core(
     f32_data: &[f32],
     block_size: usize,

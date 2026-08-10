@@ -10,6 +10,7 @@ pub enum WeightDatabase {
     Genomic2Bit(Arc<Vec<u8>>),
     Genomic4Bit(Arc<Vec<u8>>),
     GenomicQ4_0(Arc<Vec<crate::io::header::Q4_0Block>>),
+    GenomicQ8_0(Arc<Vec<crate::io::header::Q8_0Block>>),
     GenomicF32(Arc<Vec<f32>>),
 }
 
@@ -26,6 +27,7 @@ impl GenomicOperable for WeightDatabase {
             WeightDatabase::Genomic2Bit(_) => 2,
             WeightDatabase::Genomic4Bit(_) => 4,
             WeightDatabase::GenomicQ4_0(_) => 4,
+            WeightDatabase::GenomicQ8_0(_) => 8,
             WeightDatabase::GenomicF32(_) => 32,
         }
     }
@@ -49,6 +51,15 @@ impl GenomicOperable for WeightDatabase {
                     } else {
                         byte >> 4
                     }
+                } else {
+                    0
+                }
+            }
+            WeightDatabase::GenomicQ8_0(db) => {
+                let block_idx = byte_idx / 32;
+                let qs_idx = byte_idx % 32;
+                if let Some(block) = db.get(block_idx) {
+                    block.qs[qs_idx] as u8
                 } else {
                     0
                 }
@@ -80,6 +91,7 @@ impl GenomicOperable for WeightDatabase {
             WeightDatabase::Genomic2Bit(db) => db.len(),
             WeightDatabase::Genomic4Bit(db) => db.len(),
             WeightDatabase::GenomicQ4_0(db) => db.len() * 16,
+            WeightDatabase::GenomicQ8_0(db) => db.len() * 32,
             WeightDatabase::GenomicF32(db) => db.len() * 4,
         }
     }
@@ -138,6 +150,13 @@ impl GenomicLinear {
                     WeightDatabase::Genomic4Bit(Arc::new(database))
                 }
             }
+            8 => {
+                let ptr = database.as_ptr() as *const crate::io::header::Q8_0Block;
+                let count =
+                    database.len() / std::mem::size_of::<crate::io::header::Q8_0Block>();
+                let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
+                WeightDatabase::GenomicQ8_0(Arc::new(blocks))
+            }
             32 => {
                 let f32_data: Vec<f32> = unsafe {
                     std::slice::from_raw_parts(database.as_ptr() as *const f32, database.len() / 4)
@@ -149,6 +168,7 @@ impl GenomicLinear {
         };
         let stride = match bit_depth {
             4 => block_size / 2,
+            8 => block_size,
             32 => block_size,
             _ => block_size / 4,
         };
@@ -259,6 +279,7 @@ impl GenomicLinear {
             WeightDatabase::Genomic2Bit(db) => Arc::make_mut(db),
             WeightDatabase::Genomic4Bit(db) => Arc::make_mut(db),
             WeightDatabase::GenomicQ4_0(_) => panic!("Q4_0 is read-only"),
+            WeightDatabase::GenomicQ8_0(_) => panic!("Q8_0 is read-only"),
             _ => panic!("N/A"),
         }
     }
@@ -272,6 +293,12 @@ impl GenomicLinear {
                     db.len() * std::mem::size_of::<crate::io::header::Q4_0Block>(),
                 )
             },
+            WeightDatabase::GenomicQ8_0(db) => unsafe {
+                std::slice::from_raw_parts(
+                    db.as_ptr() as *const u8,
+                    db.len() * std::mem::size_of::<crate::io::header::Q8_0Block>(),
+                )
+            },
             WeightDatabase::GenomicF32(db) => unsafe {
                 std::slice::from_raw_parts(db.as_ptr() as *const u8, db.len() * 4)
             },
@@ -282,6 +309,7 @@ impl GenomicLinear {
             WeightDatabase::Genomic2Bit(_) => 2,
             WeightDatabase::Genomic4Bit(_) => 4,
             WeightDatabase::GenomicQ4_0(_) => 4,
+            WeightDatabase::GenomicQ8_0(_) => 8,
             WeightDatabase::GenomicF32(_) => 32,
         }
     }
@@ -389,6 +417,15 @@ impl GenomicLinear {
                 if !db_slice.is_empty() {
                     sum = unsafe {
                         crate::compute::kernels::genomic_dot_product_q4_0(db_slice, input, n_blocks)
+                    };
+                }
+            }
+            WeightDatabase::GenomicQ8_0(db) => {
+                let row_off = i * n_blocks;
+                let db_slice = db.get(row_off..row_off + n_blocks).unwrap_or(&[]);
+                if !db_slice.is_empty() {
+                    sum = unsafe {
+                        crate::compute::kernels::genomic_dot_product_q8_0(db_slice, input, n_blocks)
                     };
                 }
             }
@@ -551,6 +588,17 @@ impl GenomicLinear {
                 }
             }
             WeightDatabase::GenomicQ4_0(db) => {
+                let row_off = safe_idx * n_blocks;
+                if row_off + n_blocks <= db.len() {
+                    for b in 0..n_blocks {
+                        let block = &db[row_off + b];
+                        for k in 0..32 {
+                            res[b * self.block_size + k] = block.dequantize_weight(k);
+                        }
+                    }
+                }
+            }
+            WeightDatabase::GenomicQ8_0(db) => {
                 let row_off = safe_idx * n_blocks;
                 if row_off + n_blocks <= db.len() {
                     for b in 0..n_blocks {

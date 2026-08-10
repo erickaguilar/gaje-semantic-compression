@@ -878,6 +878,118 @@ pub unsafe fn genomic_dot_product_q4_0_avx2(
     }
 }
 
+/// Implementación optimizada de producto punto para formato Q8_0.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_q8_0(
+    blocks: &[crate::io::header::Q8_0Block],
+    input: &[f32],
+    n_blocks: usize,
+) -> f32 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return genomic_dot_product_q8_0_avx2(blocks, input, n_blocks);
+        }
+    }
+
+    // Fallback escalar
+    let mut total_sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block = &blocks[j];
+        let scale = block.scale.to_f32();
+        let input_offset = j * 32;
+
+        let mut sum_q_in = 0.0f32;
+        for k in 0..32 {
+            let q = block.qs[k] as f32;
+            let x = *input.get_unchecked(input_offset + k);
+            sum_q_in += q * x;
+        }
+
+        total_sum += sum_q_in * scale;
+    }
+
+    if total_sum.abs() < 1e-6 {
+        0.0
+    } else {
+        total_sum
+    }
+}
+
+/// # Safety
+/// Kernel de-cuantización y producto punto AVX2 + FMA para bloques Q8_0
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+pub unsafe fn genomic_dot_product_q8_0_avx2(
+    blocks: &[crate::io::header::Q8_0Block],
+    input: &[f32],
+    n_blocks: usize,
+) -> f32 {
+    let mut acc = _mm256_setzero_ps();
+
+    for j in 0..n_blocks {
+        let block = blocks.get_unchecked(j);
+        let scale = block.scale.to_f32();
+        let v_scale = _mm256_set1_ps(scale);
+        let input_offset = j * 32;
+
+        // Cargar 32 bytes de pesos i8 (256 bits)
+        let v_qs = _mm256_loadu_si256(block.qs.as_ptr() as *const __m256i);
+
+        // Extraer los bloques de 128 bits inferior y superior
+        let lo_128 = _mm256_castsi256_si128(v_qs);
+        let hi_128 = _mm256_extracti128_si256(v_qs, 1);
+
+        // Convertir los 16 elementos inferiores (i8) a dos registros de 8 elementos i32
+        let lo_lo_16 = _mm_cvtepi8_epi16(lo_128);
+        let lo_hi_16 = _mm_cvtepi8_epi16(_mm_srli_si128(lo_128, 8));
+
+        let q_0 = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(lo_lo_16));
+        let q_1 = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(lo_hi_16));
+
+        // Convertir los 16 elementos superiores (i8) a dos registros de 8 elementos i32
+        let hi_lo_16 = _mm_cvtepi8_epi16(hi_128);
+        let hi_hi_16 = _mm_cvtepi8_epi16(_mm_srli_si128(hi_128, 8));
+
+        let q_2 = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(hi_lo_16));
+        let q_3 = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(hi_hi_16));
+
+        // Cargar inputs (4 registros de 8 floats)
+        let x_0 = _mm256_loadu_ps(input.as_ptr().add(input_offset));
+        let x_1 = _mm256_loadu_ps(input.as_ptr().add(input_offset + 8));
+        let x_2 = _mm256_loadu_ps(input.as_ptr().add(input_offset + 16));
+        let x_3 = _mm256_loadu_ps(input.as_ptr().add(input_offset + 24));
+
+        // Dequantizar y FMA directamente al acumulador: dequant = q * scale
+        let dq_0 = _mm256_mul_ps(q_0, v_scale);
+        let dq_1 = _mm256_mul_ps(q_1, v_scale);
+        let dq_2 = _mm256_mul_ps(q_2, v_scale);
+        let dq_3 = _mm256_mul_ps(q_3, v_scale);
+
+        acc = _mm256_fmadd_ps(dq_0, x_0, acc);
+        acc = _mm256_fmadd_ps(dq_1, x_1, acc);
+        acc = _mm256_fmadd_ps(dq_2, x_2, acc);
+        acc = _mm256_fmadd_ps(dq_3, x_3, acc);
+    }
+
+    // Suma horizontal de acc
+    let vlow = _mm256_castps256_ps128(acc);
+    let vhigh = _mm256_extractf128_ps(acc, 1);
+    let v128 = _mm_add_ps(vlow, vhigh);
+    let hi = _mm_movehl_ps(v128, v128);
+    let sum = _mm_add_ps(v128, hi);
+    let shuf = _mm_shuffle_ps(sum, sum, 1);
+    let final_sum = _mm_add_ss(sum, shuf);
+    let total = _mm_cvtss_f32(final_sum);
+
+    if total.abs() < 1e-6 {
+        0.0
+    } else {
+        total
+    }
+}
+
 /// # Safety
 /// Kernel de-cuantización y producto punto ARM NEON para bloques Q4_0
 #[cfg(target_arch = "aarch64")]
