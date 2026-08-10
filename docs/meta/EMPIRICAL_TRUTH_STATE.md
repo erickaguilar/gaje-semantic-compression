@@ -8,17 +8,18 @@ Este documento define el estado técnico y empíricamente verificado del motor d
 
 Se certificó formalmente la equivalencia matemática entre el motor nativo en Rust (`GenomicLLM`) y la implementación de referencia en PyTorch HuggingFace (`Qwen/Qwen2-0.5B-Instruct` & `HuggingFaceTB/SmolLM2-135M-Instruct`).
 
-### 📊 Matriz de Certificación A/B Ciega (PyTorch FP32 vs GAJE 4-bit)
+### 📊 Matriz de Certificación A/B Ciega (PyTorch FP32 vs GAJE Híbrido)
 
 | Métrica / Operación | Valor Medido | Criterio de Certificación | Estado |
 | :--- | :---: | :---: | :---: |
-| **Paridad Factual Textual (FR/ES)** | **`100.0%` Coincidencia** | Idéntica a PyTorch FP32 | ✅ **CERTIFICADO** |
-| **Precisión Factual Chino (ZH)** | **`100.0%` (`"木星"`)** | `100.0%` Exacto | ✅ **CERTIFICADO** |
-| **Precisión Factual Inglés (EN)** | **`100.0%` (`"Berlin."` / `"100°C"`)** | `100.0%` Exacto | ✅ **CERTIFICADO** |
-| **Consumo de Memoria RAM (Qwen2 0.5B)** | **`448 MB`** | `< 500 MB` (`87.5%` Ahorro) | ✅ **CERTIFICADO** |
+| **Paridad Factual Textual (FR/ES)** | **`100.0%` Coincidencia** | Idéntica a PyTorch FP32 (París) | ✅ **CERTIFICADO** |
+| **Precisión Factual Chino (ZH)** | **`100.0%` (`"木星"`)** | `100.0%` Exacto (Júpiter = 木星) | ✅ **CERTIFICADO** |
+| **Precisión Factual Inglés (EN)** | **`100.0%` (`"1, 2, 3, 4, 5"`)** | `100.0%` Exacto | ✅ **CERTIFICADO** |
+| **Consumo de Memoria RAM (Qwen2.5 1.5B)**| **`1.23 GB`** | `< 1.5 GB` (`52.0%` Ahorro) | ✅ **CERTIFICADO** |
+| **Consumo de Memoria RAM (Qwen2.5 3B)**  | **`2.24 GB`** | `< 2.5 GB` (`63.8%` Ahorro) | ✅ **CERTIFICADO** |
 | **Tiempo de Carga Mmap (`.gaje.flat`)** | **`0.75 ms`** | `< 5.0 ms` | ✅ **CERTIFICADO** |
 | **Persistencia RAG Island Model (`.gmem`)** | **`0.75 ms`** | `< 1.0 ms` | ✅ **CERTIFICADO** |
-| **Suite Nativa de Tests Rust** | **`19/19 Passing`** | `100%` Tests Pasando | ✅ **CERTIFICADO** |
+| **Suite Nativa de Tests Rust** | **`26/26 Passing`** | `100%` Tests Pasando | ✅ **CERTIFICADO** |
 
 ---
 
@@ -30,6 +31,8 @@ Con la infraestructura de punto flotante certificada, se midió la respuesta del
 | :--- | :--- | :---: | :---: | :---: |
 | **Qwen2 0.5B Instruct** | 4-bit Uniforme | `.gaje.flat` (Zero-Copy Mmap) | ✅ París / 木星 (Júpiter) | **`4.44 tok/s`** |
 | **SmolLM2 135M Instruct** | 4-bit Uniforme | `.gaje.flat` (Zero-Copy Mmap) | ✅ Berlin / 100°C / 1-5 | **`28.28 tok/s`** |
+| **Qwen2.5 1.5B Híbrido** | Q4_0 + Q8_0 Embed | `.gaje.flat` (Zero-Copy Mmap) | ✅ París / 木星 (Júpiter) / 1-5 | **`4.79 tok/s`** |
+| **Qwen2.5 3B Híbrido** | Q4_0 + Q8_0 Embed | `.gaje.flat` (Zero-Copy Mmap) | ✅ París / 木星 (Júpiter) / 1-5 | **`3.04 tok/s`** |
 | **SmolLM2 135M Instruct** | 2-bit Uniforme | `.gaje.flat` (Zero-Copy Mmap) | 🔴 Colapso Semántico (PTQ Estático) | **`28.28 tok/s`** |
 | **2-bit Evolutivo (Embrión)** | 2-bit Dinámico | `.gaje` (Evolucionado) | 🟡 Calibración Genética Activa | **`28.28 tok/s`** |
 

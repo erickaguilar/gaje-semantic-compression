@@ -6,6 +6,16 @@ pub type PyResult<T> = Result<T, String>;
 pub struct Python<'a>(std::marker::PhantomData<&'a ()>);
 
 #[cfg(not(feature = "python"))]
+impl<'a> Python<'a> {
+    pub fn allow_threads<T, F>(&self, f: F) -> T
+    where
+        F: FnOnce() -> T,
+    {
+        f()
+    }
+}
+
+#[cfg(not(feature = "python"))]
 pub struct Bound<'a, T>(&'a T);
 
 #[cfg(not(feature = "python"))]

@@ -515,6 +515,8 @@ pub fn genomize_f32_native(
     }
 }
 
+
+
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObject> {
     let f32_data: &[f32] =
@@ -528,51 +530,55 @@ pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     }
 
     let n_blocks = n_elements / 32;
-    let mut out_blocks = Vec::with_capacity(n_blocks);
 
-    for i in 0..n_blocks {
-        let start = i * 32;
-        let block_f32 = &f32_data[start..start + 32];
+    let out_blocks: Vec<crate::io::header::Q4_0Block> = _py.allow_threads(|| {
+        (0..n_blocks)
+            .into_par_iter()
+            .map(|i| {
+                let start = i * 32;
+                let block_f32 = &f32_data[start..start + 32];
 
-        let mut min_val = f32::MAX;
-        let mut max_val = f32::MIN;
-        for &v in block_f32 {
-            if v < min_val {
-                min_val = v;
-            }
-            if v > max_val {
-                max_val = v;
-            }
-        }
+                let mut min_val = f32::MAX;
+                let mut max_val = f32::MIN;
+                for &v in block_f32 {
+                    if v < min_val {
+                        min_val = v;
+                    }
+                    if v > max_val {
+                        max_val = v;
+                    }
+                }
 
-        let scale = (max_val - min_val) / 15.0;
-        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
+                let scale = (max_val - min_val) / 15.0;
+                let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
 
-        let mut qs = [0u8; 16];
-        for k in 0..16 {
-            let q0 = if scale > 1e-7 {
-                (((block_f32[k * 2] - min_val) * inv_scale)
-                    .round()
-                    .clamp(0.0, 15.0)) as u8
-            } else {
-                0
-            };
-            let q1 = if scale > 1e-7 {
-                (((block_f32[k * 2 + 1] - min_val) * inv_scale)
-                    .round()
-                    .clamp(0.0, 15.0)) as u8
-            } else {
-                0
-            };
-            qs[k] = q0 | (q1 << 4);
-        }
+                let mut qs = [0u8; 16];
+                for k in 0..16 {
+                    let q0 = if scale > 1e-7 {
+                        (((block_f32[k * 2] - min_val) * inv_scale)
+                            .round()
+                            .clamp(0.0, 15.0)) as u8
+                    } else {
+                        0
+                    };
+                    let q1 = if scale > 1e-7 {
+                        (((block_f32[k * 2 + 1] - min_val) * inv_scale)
+                            .round()
+                            .clamp(0.0, 15.0)) as u8
+                    } else {
+                        0
+                    };
+                    qs[k] = q0 | (q1 << 4);
+                }
 
-        out_blocks.push(crate::io::header::Q4_0Block {
-            scale: half::f16::from_f32(scale),
-            min: half::f16::from_f32(min_val),
-            qs,
-        });
-    }
+                crate::io::header::Q4_0Block {
+                    scale: half::f16::from_f32(scale),
+                    min: half::f16::from_f32(min_val),
+                    qs,
+                }
+            })
+            .collect()
+    });
 
     // Convert out_blocks slice to raw bytes
     let raw_bytes = unsafe {
@@ -607,38 +613,42 @@ pub fn quantize_q8_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     }
 
     let n_blocks = n_elements / 32;
-    let mut out_blocks = Vec::with_capacity(n_blocks);
 
-    for i in 0..n_blocks {
-        let start = i * 32;
-        let block_f32 = &f32_data[start..start + 32];
+    let out_blocks: Vec<crate::io::header::Q8_0Block> = _py.allow_threads(|| {
+        (0..n_blocks)
+            .into_par_iter()
+            .map(|i| {
+                let start = i * 32;
+                let block_f32 = &f32_data[start..start + 32];
 
-        let mut max_abs = 0.0f32;
-        for &v in block_f32 {
-            let abs_v = v.abs();
-            if abs_v > max_abs {
-                max_abs = abs_v;
-            }
-        }
+                let mut max_abs = 0.0f32;
+                for &v in block_f32 {
+                    let abs_v = v.abs();
+                    if abs_v > max_abs {
+                        max_abs = abs_v;
+                    }
+                }
 
-        let scale = max_abs / 127.0;
-        let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
+                let scale = max_abs / 127.0;
+                let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
 
-        let mut qs = [0i8; 32];
-        for k in 0..32 {
-            let q = if scale > 1e-7 {
-                (block_f32[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
-            } else {
-                0
-            };
-            qs[k] = q;
-        }
+                let mut qs = [0i8; 32];
+                for k in 0..32 {
+                    let q = if scale > 1e-7 {
+                        (block_f32[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
+                    } else {
+                        0
+                    };
+                    qs[k] = q;
+                }
 
-        out_blocks.push(crate::io::header::Q8_0Block {
-            scale: half::f16::from_f32(scale),
-            qs,
-        });
-    }
+                crate::io::header::Q8_0Block {
+                    scale: half::f16::from_f32(scale),
+                    qs,
+                }
+            })
+            .collect()
+    });
 
     // Convert out_blocks slice to raw bytes
     let raw_bytes = unsafe {

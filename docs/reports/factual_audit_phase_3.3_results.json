@@ -1,0 +1,83 @@
+{
+    "Qwen2.5-1.5B (Q4_0 weights + FP32 embeddings)": {
+        "model_name": "Qwen2.5-1.5B (Q4_0 weights + FP32 embeddings)",
+        "load_time_sec": 11.690580129623413,
+        "results": [
+            {
+                "prompt": "¿Cuál es la capital de Francia?",
+                "response": "La capital de Francia es París.",
+                "gen_time_sec": 2.66853928565979,
+                "tokens_generated": 10,
+                "tokens_per_sec": 3.7473684774805642
+            },
+            {
+                "prompt": "太阳系中最大的行星是哪一颗？",
+                "response": "太阳系中最大的行星是木星。",
+                "gen_time_sec": 2.6094136238098145,
+                "tokens_generated": 10,
+                "tokens_per_sec": 3.83227860418684
+            },
+            {
+                "prompt": "Count from 1 to 5",
+                "response": "1, 2, 3, 4, 5",
+                "gen_time_sec": 2.69292950630188,
+                "tokens_generated": 14,
+                "tokens_per_sec": 5.198799288001335
+            }
+        ]
+    },
+    "Qwen2.5-1.5B Híbrido (Q4_0 weights + Q8_0 embeddings)": {
+        "model_name": "Qwen2.5-1.5B Híbrido (Q4_0 weights + Q8_0 embeddings)",
+        "load_time_sec": 5.815762281417847,
+        "results": [
+            {
+                "prompt": "¿Cuál es la capital de Francia?",
+                "response": "La capital de Francia es París.",
+                "gen_time_sec": 2.086052656173706,
+                "tokens_generated": 10,
+                "tokens_per_sec": 4.793742847480307
+            },
+            {
+                "prompt": "太阳系中最大的行星是哪一颗？",
+                "response": "太阳系中最大的行星是木星。",
+                "gen_time_sec": 2.1432206630706787,
+                "tokens_generated": 10,
+                "tokens_per_sec": 4.665875134701527
+            },
+            {
+                "prompt": "Count from 1 to 5",
+                "response": "1, 2, 3, 4, 5",
+                "gen_time_sec": 1.9379310607910156,
+                "tokens_generated": 14,
+                "tokens_per_sec": 7.224199190184581
+            }
+        ]
+    },
+    "Qwen2.5-3B Híbrido (Q4_0 weights + Q8_0 embeddings)": {
+        "model_name": "Qwen2.5-3B Híbrido (Q4_0 weights + Q8_0 embeddings)",
+        "load_time_sec": 10.320257902145386,
+        "results": [
+            {
+                "prompt": "¿Cuál es la capital de Francia?",
+                "response": "La capital de Francia es París.",
+                "gen_time_sec": 3.503387451171875,
+                "tokens_generated": 10,
+                "tokens_per_sec": 2.8543802646364513
+            },
+            {
+                "prompt": "太阳系中最大的行星是哪一颗？",
+                "response": "太阳系中最大的行星是木星。",
+                "gen_time_sec": 3.285689115524292,
+                "tokens_generated": 10,
+                "tokens_per_sec": 3.043501575590884
+            },
+            {
+                "prompt": "Count from 1 to 5",
+                "response": "1, 2, 3, 4, 5",
+                "gen_time_sec": 3.535515069961548,
+                "tokens_generated": 14,
+                "tokens_per_sec": 3.9598190710447922
+            }
+        ]
+    }
+}
