@@ -43,7 +43,31 @@ El tiempo de arranque en frío se redujo a la mitad en la versión híbrida de 1
 El modelo híbrido de 1.5B muestra incrementos sustanciales de throughput (entre +22% y +39% de tokens por segundo) en comparación con el de embeddings FP32. Esto se debe a que la menor cantidad de bytes cargados en la L3/L2 cache del procesador reduce los cuellos de botella de memoria (Memory-bound bottleneck) típicos de la inferencia auto-regresiva en CPU.
 
 ### 4. Escalabilidad en el Modelo de 3B
-El empaquetado del modelo **Qwen2.5 3B** en formato híbrido Q4_0 + Q8_0 arrojó una excelente velocidad de ejecución de **~3.0-4.0 tok/s** directamente sobre un solo núcleo de CPU convencional sin GPU, ocupando solo **2.24 GB de RAM** en runtime. Esto representa una alternativa viable de alta coherencia para despliegues Edge locales.
+El empaquetado del modelo **Qwen2.5 3B** en formato híbrido Q4_0 + Q8_0 arrojó una velocidad de ejecución de **~3.0-4.0 tok/s** (durante carga limpia en RAM) y de **~0.08 tok/s** (bajo estrés extremo de RAM/SWAP thrashing en sistemas de 12GB con multitarea activa), ocupando solo **2.24 GB de RAM** en runtime. Esto representa una alternativa viable de alta coherencia para despliegues Edge locales.
+
+---
+
+## 🧠 4. Evaluación de Razonamiento Complejo (Problema de Álgebra)
+
+Para evaluar si el modelo de 3B justifica su menor velocidad absoluta mediante una mayor capacidad de razonamiento lógico, se corrió la prueba de álgebra lineal multi-paso:
+> *Prompt:* "Un padre tiene el triple de la edad de su hijo. Dentro de 12 años, tendrá el doble. ¿Qué edad tienen ambos actualmente? Explica el procedimiento paso a paso."
+
+### Comparación de Salidas A/B:
+* **Qwen2.5-1.5B Híbrido**: Exhibe colapso lógico durante el razonamiento intermedio:
+  > *"Por lo tanto, si tu hijo tiene 11 años ahora, entonces su padre tiene 11 años..."* (Falso, solución incorrecta)
+* **Qwen2.5-3B Híbrido**: Plantea las ecuaciones matemáticas de forma impecable usando LaTeX:
+  > 1. Relación actual: \( P = 3H \)
+  > 2. Relación futura (dentro de 12 años): \( P + 12 = 2(H + 12) \)
+  > (Procedimiento correcto que deriva matemáticamente en \( H = 12 \) y \( P = 36 \))
+
+### Conclusión de Razonamiento:
+El incremento de parámetros a **3B** proporciona el salto cualitativo necesario para habilitar **razonamiento simbólico y estructuración algebraica correcta**, superando los límites cognitivos del modelo de 1.5B.
+
+---
+
+> [!NOTE]
+> **Alcance del Veredicto Factual (Hito 3.3)**
+> La certificación de **100% de paridad semántica** se restringe al conjunto de pruebas factuales multilingües básicas evaluadas en el script de control (Francia, Júpiter, Conteos), lo cual valida que la cuantización $Q8\_0$ en embeddings no induce distorsiones ni alucinaciones en el vocabulario. No debe interpretarse como paridad de razonamiento general en tareas abstractas complejas frente a modelos FP16 de mayor escala.
 
 ---
 *Certificado el 9 de agosto de 2026 bajo el estándar Silver Adult del protocolo GAJE-Flow.*
