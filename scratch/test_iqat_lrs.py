@@ -2,8 +2,10 @@ import numpy as np
 from gaje.nn.stabilized import GenomicLayer
 from gaje.core import _impl as dna_core
 
+
 def silu(x):
     return x * (1.0 / (1.0 + np.exp(-x)))
+
 
 def run_refinement(lr, iterations=50):
     np.random.seed(42)
@@ -54,8 +56,11 @@ def run_refinement(lr, iterations=50):
     final_error = np.mean((swiglu_final - swiglu_target) ** 2)
 
     improvement = (initial_error - final_error) / initial_error * 100
-    print(f"LR: {lr:.5f} | Initial MSE: {initial_error:.8f} | Final MSE: {final_error:.8f} | Improvement: {improvement:.2f}%")
+    print(
+        f"LR: {lr:.5f} | Initial MSE: {initial_error:.8f} | Final MSE: {final_error:.8f} | Improvement: {improvement:.2f}%"
+    )
     return improvement
+
 
 if __name__ == "__main__":
     for lr in [0.1, 0.05, 0.01, 0.005, 0.001, 0.0005, 0.0001, -0.001, -0.005, -0.01]:
