@@ -134,7 +134,7 @@ def export_gaje_flat():
         5: "google/gemma-2-2b-it",
         6: "Qwen/Qwen2-0.5B-Instruct",
     }
-    
+
     # Custom mapping logic based on model filename for Qwen2.5 3B
     if arch_family == 4 and "3b" in model_name_lower:
         tokenizer_id = args.tokenizer or "Qwen/Qwen2.5-3B-Instruct"

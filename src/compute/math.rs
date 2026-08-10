@@ -515,8 +515,6 @@ pub fn genomize_f32_native(
     }
 }
 
-
-
 #[cfg_attr(feature = "python", pyfunction)]
 pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObject> {
     let f32_data: &[f32] =
