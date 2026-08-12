@@ -70,7 +70,11 @@ def main():
     print("🧬 GAJE Certification Suite: Nivel 3 - Ingesta No-Destructiva")
 
     # Configuración
-    model_path = "models/silver_adult.gaje" if os.path.exists("models/silver_adult.gaje") else "models/production/silver_adult_anchored.gaje"
+    model_path = (
+        "models/silver_adult.gaje"
+        if os.path.exists("models/silver_adult.gaje")
+        else "models/production/silver_adult_anchored.gaje"
+    )
     control_data_path = "data/datasets/coherence_es.txt"
     needle_data = "El código de acceso secreto para el nivel 3 es 'SILVER_SOUL_2026'."
     needle_file = "temp_needle.txt"
