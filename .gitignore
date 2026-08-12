@@ -16,6 +16,13 @@ ENV/
 *.pyd
 *.dylib
 *.dll
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.mypy_cache/
+
+# Archivos de respaldo (local)
+/scratch/
 
 # Maturin
 /target/wheels
