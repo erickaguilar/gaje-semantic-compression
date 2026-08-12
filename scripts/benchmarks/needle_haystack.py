@@ -144,5 +144,5 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    context_lengths = [int(l) for l in args.lengths.split(",")]
+    context_lengths = [int(length) for length in args.lengths.split(",")]
     run_phase_3_1(args.gaje, context_lengths=context_lengths)

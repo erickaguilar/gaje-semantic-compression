@@ -1,7 +1,7 @@
 # 🧬 MANIFIESTO GAJE: El Futuro de la Inteligencia Genómica
 
 ## I. La Visión
-El Protocolo GAJE (Genomic Artificial Junction Engine) nace de una premisa radical: **La inteligencia no es una función del cómputo infinito, sino de la eficiencia de la memoria.** 
+El Protocolo GAJE (Genomic Artificial Junction Engine) nace de una premisa radical: **La inteligencia no es una función del cómputo infinito, sino de la eficiencia de la memoria.**
 
 Creemos que la información semántica puede y debe ser codificada en estructuras digitales inspiradas en la biología (ADN sintético de 2 bits), permitiendo que el conocimiento humano resida en la palma de la mano, sin depender de nubes masivas o hardware de consumo prohibitivo.
 

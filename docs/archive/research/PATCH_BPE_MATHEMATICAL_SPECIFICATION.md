@@ -1,14 +1,14 @@
 # 🧬 Especificación Matemática y Arquitectura de Patch-BPE Jerárquico para GAJE-Flow
 
-**Fecha:** 30 de mayo de 2026  
-**Estatus:** Propuesta de Investigación / Diseño de Arquitectura (v2.0-alpha)  
-**Clasificación:** Confidencial - Protocolo GAJE-Flow  
+**Fecha:** 30 de mayo de 2026
+**Estatus:** Propuesta de Investigación / Diseño de Arquitectura (v2.0-alpha)
+**Clasificación:** Confidencial - Protocolo GAJE-Flow
 
 ---
 
 ## 1. Introducción y Motivación
 
-En modelos de lenguaje de escala ultraligera (10MB a 50MB) optimizados para dispositivos de borde (móviles/IoT), los tokenizadores tradicionales basados en subpalabras (como BPE de HuggingFace) presentan un cuello de botella de almacenamiento inaceptable. 
+En modelos de lenguaje de escala ultraligera (10MB a 50MB) optimizados para dispositivos de borde (móviles/IoT), los tokenizadores tradicionales basados en subpalabras (como BPE de HuggingFace) presentan un cuello de botella de almacenamiento inaceptable.
 
 Para un vocabulario típico de $V = 32,768$ tokens y una dimensión de embedding de $d = 512$, las matrices de mapeo de entrada y salida (`lm_head`) consumen:
 
@@ -30,19 +30,19 @@ La separación de responsabilidades entre el procesamiento de bytes locales (alt
 graph TD
     IN[Texto en UTF-8] --> |Stream de Bytes| BYTES[Byte Stream: B_1, B_2, ..., B_N]
     BYTES --> |Segmentación Fija de tamaño P| PACKETS[Parches de Bytes: P_k]
-    
+
     subgraph Codificador de Parches (Local - FP16/INT8)
         PACKETS --> |Concatenación / One-Hot| OH[Representación Matricial: B_k]
         OH --> |Proyección Lineal Encoder| ENC[MLP / Proyección lineal]
     end
-    
+
     ENC --> |Secuencia de Vectores Continuos: e_k| CORE[GAJE Toroidal Transformer: 2-bit]
-    
+
     subgraph Decodificador de Parches (Local - Autoregresivo)
         CORE --> |Vector Predicho: h_next| DEC[Proyección lineal Decoder]
         DEC --> |Predicción de Distribución Multivariada| OUT_BYTES[Bytes Reconstruidos]
     end
-    
+
     OUT_BYTES --> |Stream de salida| TEXT_OUT[Texto en UTF-8]
 ```
 
@@ -51,7 +51,7 @@ graph TD
 ## 3. Formulación Matemática de Patch-BPE
 
 ### A. Proyección de Parches de Entrada (Patch Encoder)
-Sea un stream de bytes de entrada representado como enteros de 8 bits sin signo: $b_n \in \{0, 1, ..., 255\}$. Agrupamos los bytes en bloques no superpuestos de tamaño de parche fijo $P$ (por ejemplo, $P = 4$ bytes). 
+Sea un stream de bytes de entrada representado como enteros de 8 bits sin signo: $b_n \in \{0, 1, ..., 255\}$. Agrupamos los bytes en bloques no superpuestos de tamaño de parche fijo $P$ (por ejemplo, $P = 4$ bytes).
 
 Para el parche $k$-ésimo, definimos el bloque de bytes como:
 

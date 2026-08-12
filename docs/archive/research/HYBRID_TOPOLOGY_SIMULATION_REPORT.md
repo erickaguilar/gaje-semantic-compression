@@ -1,6 +1,6 @@
 # 📊 Reporte de Simulación: Topologías Híbridas de Cuantización (Fase 5.0)
 
-**Fecha:** 31 de mayo de 2026  
+**Fecha:** 31 de mayo de 2026
 **Dataset de Simulación:** Pesos simulados de capa densa ($N=100000$ parámetros, $\mu=0.002, \sigma=0.015$).
 
 ## 1. Tabla Comparativa de Rendimiento

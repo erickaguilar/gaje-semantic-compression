@@ -1,7 +1,6 @@
 import os
 import sys
 import torch
-import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -25,9 +24,9 @@ test_questions = [
     "What is the largest planet in our solar system?",
 ]
 
-print(f"\n======================================================")
-print(f"🔬 COMPARATIVA AUTORREGRESIVA (PyTorch FP32 vs GAJE 4-bit)")
-print(f"======================================================")
+print("\n======================================================")
+print("🔬 COMPARATIVA AUTORREGRESIVA (PyTorch FP32 vs GAJE 4-bit)")
+print("======================================================")
 
 CHATML_TEMPLATE = "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\\n' + message['content'] + '<|im_end|>' + '\\n'}}{% endfor %}{% if add_generation_prompt %}{{'<|im_start|>assistant\\n'}}{% endif %}"
 tokenizer.chat_template = CHATML_TEMPLATE
@@ -38,7 +37,7 @@ for q in test_questions:
         tokenize=False,
         add_generation_prompt=True,
     )
-    
+
     # 1. PyTorch FP32 Greedy Generation
     input_ids_hf = tokenizer.encode(formatted_prompt, return_tensors="pt")
     with torch.no_grad():
@@ -46,14 +45,16 @@ for q in test_questions:
             input_ids_hf,
             max_new_tokens=25,
             do_sample=False,
-            eos_token_id=tokenizer.encode("<|im_end|>", add_special_tokens=False)[0]
-        )[0][input_ids_hf.shape[1]:]
+            eos_token_id=tokenizer.encode("<|im_end|>", add_special_tokens=False)[0],
+        )[0][input_ids_hf.shape[1] :]
     hf_gen_text = tokenizer.decode(hf_gen_ids, skip_special_tokens=False)
 
     # 2. GAJE 4-bit Greedy Generation
     gaje_tokens = []
     gaje_llm.tokenizer.chat_template = CHATML_TEMPLATE
-    for tok_text in gaje_llm.generate(formatted_prompt, max_new_tokens=25, temperature=0.0):
+    for tok_text in gaje_llm.generate(
+        formatted_prompt, max_new_tokens=25, temperature=0.0
+    ):
         if "<|im_end|>" in tok_text:
             break
         gaje_tokens.append(tok_text)

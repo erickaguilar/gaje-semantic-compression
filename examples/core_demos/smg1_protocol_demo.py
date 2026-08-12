@@ -28,14 +28,14 @@ def run_smg1_demo(model_path, prompt, max_tokens=20, mode="event"):
 
     layers = []
     for i, layer_cfg in enumerate(config["layers"]):
-        l = engine.GajeNeuromorphicLayer(
+        layer = engine.GajeNeuromorphicLayer(
             layer_cfg["out"], layer_cfg["in"], thresholds[i], 0.8
         )
         packed = reader.read_tensor(f"layer.{i}.packed_weights")
-        l.load_packed_weights(packed)
+        layer.load_packed_weights(packed)
         if mode == "event":
-            l.k_wta = 1
-        layers.append(l)
+            layer.k_wta = 1
+        layers.append(layer)
 
     # 2. Tokenizador
     teacher_path = "models/gguf/smollm2-135m-f16.gguf"
@@ -69,8 +69,8 @@ def run_smg1_demo(model_path, prompt, max_tokens=20, mode="event"):
                 next_id = (input_id + 1) % config["vocab_size"]
             print(tokenizer.decode([next_id]), end="", flush=True)
             current_tokens.append(next_id)
-            for l in layers:
-                l.apply_homeostasis(0.0)
+            for layer in layers:
+                layer.apply_homeostasis(0.0)
     else:
         for _ in range(max_tokens):
             input_id = current_tokens[-1]
@@ -95,8 +95,8 @@ def run_smg1_demo(model_path, prompt, max_tokens=20, mode="event"):
                 next_id = (input_id + 1) % config["vocab_size"]
             print(tokenizer.decode([next_id]), end="", flush=True)
             current_tokens.append(next_id)
-            for l in layers:
-                l.apply_homeostasis(0.0)
+            for layer in layers:
+                layer.apply_homeostasis(0.0)
 
     print("\n\n✅ Protocolo SMG-1 Finalizado.")
 

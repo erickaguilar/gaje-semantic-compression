@@ -1,8 +1,8 @@
 # 🧬 Hito: Inicialización Algebraica mediante Campo Ciclotómico $\mathbb{Q}(\zeta_{16})$ (Fase 5.0)
 
-**ID del Hito:** `milestone-gaje-algebraic-init`  
-**Estado:** Planificado / Listo para SDD  
-**Carpeta Destino:** `src/io/loader.rs` y `src/compute/math.rs`  
+**ID del Hito:** `milestone-gaje-algebraic-init`
+**Estado:** Planificado / Listo para SDD
+**Carpeta Destino:** `src/io/loader.rs` y `src/compute/math.rs`
 **Objetivo:** Eliminar la cuantización K-Means y los centroides uniformes empíricos en el nacimiento del modelo, reemplazándolos con una rejilla algebraica de fase con simetría de punto-reflexión.
 
 ---

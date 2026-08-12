@@ -58,7 +58,9 @@ def run_showdown(gaje_path, topo_rust_path, topo_es_path):
     for label, path in datasets.items():
         print(f"\n--- Evaluando Dominio: {label} ---")
         with open(path, "r", encoding="utf-8") as f:
-            lines = [l.strip() for l in f.readlines() if len(l.strip()) > 20][:10]
+            lines = [line.strip() for line in f.readlines() if len(line.strip()) > 20][
+                :10
+            ]
 
         # A. Medir Línea Base
         print("[~] Calculando PPL Línea Base (Solo ADN)...")

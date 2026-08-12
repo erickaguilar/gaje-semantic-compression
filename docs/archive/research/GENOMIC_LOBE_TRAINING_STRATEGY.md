@@ -1,8 +1,8 @@
 # 🧠 Estrategia de Entrenamiento por Lóbulos Genómicos (8MB Lobe / 50MB Titan)
 
-**Fecha:** 29 de mayo de 2026  
-**Estatus:** Especificación Técnica de Especialización Tisular  
-**Contexto:** Protocolo GAJE-Flow v1.0.0 - Serie Titan  
+**Fecha:** 29 de mayo de 2026
+**Estatus:** Especificación Técnica de Especialización Tisular
+**Contexto:** Protocolo GAJE-Flow v1.0.0 - Serie Titan
 
 ## 1. Concepto: Especialización Tisular (Lobe Plasticity)
 

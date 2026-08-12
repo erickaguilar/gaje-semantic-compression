@@ -27,11 +27,11 @@ def evaluate_fitness(
     # (Ya que no hay setter para threshold en el binding actual)
     test_layers = []
     for i, layer in enumerate(layers):
-        l = engine.GajeNeuromorphicLayer(
+        neu_layer = engine.GajeNeuromorphicLayer(
             layer.num_neurons, layer.weights_per_neuron, thresholds[i], 0.8
         )
-        l.load_packed_weights(layer.packed_weights)
-        test_layers.append(l)
+        neu_layer.load_packed_weights(layer.packed_weights)
+        test_layers.append(neu_layer)
 
     for text in dataset[:sample_size]:
         tokens = tokenizer.encode(text, add_special_tokens=False)
@@ -71,8 +71,8 @@ def evaluate_fitness(
                 hits += 1
             tokens_processed += 1
 
-            for l in test_layers:
-                l.apply_homeostasis(0.0)
+            for layer in test_layers:
+                layer.apply_homeostasis(0.0)
 
     # El score prioriza flujo y luego precisión
     normalized_flow = flow_score / (max(1, tokens_processed) * 6)
@@ -114,10 +114,12 @@ def main():
     # Cargar capas originales
     base_layers = []
     for i, layer_cfg in enumerate(config["layers"]):
-        l = engine.GajeNeuromorphicLayer(layer_cfg["out"], layer_cfg["in"], 0.4, 0.8)
+        neu_layer = engine.GajeNeuromorphicLayer(
+            layer_cfg["out"], layer_cfg["in"], 0.4, 0.8
+        )
         packed = reader.read_tensor(f"layer.{i}.packed_weights")
-        l.load_packed_weights(packed)
-        base_layers.append(l)
+        neu_layer.load_packed_weights(packed)
+        base_layers.append(neu_layer)
 
     # 2. Bucle Monte Carlo
     best_centroides = list(centroides_base)

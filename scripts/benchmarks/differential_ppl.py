@@ -67,7 +67,7 @@ def run_phase_2_1(gaje_path, es_data_path, en_data_path, num_samples=50):
     def get_ppl_for_file(path, label):
         print(f"[~] Calculando PPL para {label}...")
         with open(path, "r", encoding="utf-8") as f:
-            lines = [l.strip() for l in f.readlines() if len(l.strip()) > 10]
+            lines = [line.strip() for line in f.readlines() if len(line.strip()) > 10]
 
         # Mezclar y tomar muestras
         import random

@@ -19,7 +19,7 @@ def log_ram(step=""):
                 if "VmRSS" in line:
                     mem = line.split(":")[1].strip()
                     print(f"📈 [RAM] {step}: {mem}")
-    except:
+    except Exception:
         pass
 
 

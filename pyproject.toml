@@ -40,6 +40,21 @@ module-name = "gaje.core._impl"
 python-source = "python"
 features = ["python"]
 
+# Ruff linting (el hook pre-commit usa ruff v0.1.x; sintaxis [tool.ruff]).
+[tool.ruff]
+line-length = 88
+
+# Los scripts, tooling, demos y tests son programas standalone que manipulan
+# sys.path antes de importar modulos locales, por lo que E402 ("import fuera de
+# top-level") es intencional ahi. El paquete real (python/gaje) se mantiene
+# estricto con la regla.
+[tool.ruff.per-file-ignores]
+"scripts/**" = ["E402"]
+"tests/**" = ["E402"]
+"examples/**" = ["E402"]
+"benchmarks/**" = ["E402"]
+"legacy/**" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 

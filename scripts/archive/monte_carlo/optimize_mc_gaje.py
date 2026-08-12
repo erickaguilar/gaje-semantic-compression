@@ -29,7 +29,7 @@ def optimize_layer_mc(llm, layer, layer_name, iterations=2000, noise_scale=0.1):
     # Extraemos una fila simulada para evaluar el MSE (idealmente usaríamos get_row de varias filas)
     try:
         sample_weights = layer.get_row(0)
-    except:
+    except Exception:
         sample_weights = np.random.normal(0, 0.02, layer.in_features).astype(np.float32)
 
     std = np.std(sample_weights)

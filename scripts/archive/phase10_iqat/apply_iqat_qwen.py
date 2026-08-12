@@ -90,11 +90,11 @@ if __name__ == "__main__":
         "/data/data/com.termux/files/home/models/gguf/qwen2-0_5b-q8_0.gguf",
     ]
 
-    MODEL_PATH = next((m for m in MODELS if os.path.exists(m)), None)
+    MODEL_PATH = next((m for m in models if os.path.exists(m)), None)
 
     if not MODEL_PATH:
         print("❌ Error: No se encontró ningún modelo GGUF compatible.")
-        print(f"Buscado en: {MODELS}")
+        print(f"Buscado en: {models}")
     else:
         PROMPTS = [
             "¿Cuál es la capital de México?",

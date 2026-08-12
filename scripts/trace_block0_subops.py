@@ -36,14 +36,14 @@ def trace_block0_subops():
 
     with torch.no_grad():
         emb_all = hf_model.model.embed_tokens(input_tensor)
-        x_input_hf = emb_all[0, -1, :].numpy()  # Embedding input for token 314
+        _x_input_hf = emb_all[0, -1, :].numpy()  # Embedding input for token 314
 
         # 1. Attn Norm HF
         x_attn_norm_hf = blk0_hf.input_layernorm(emb_all)[0, -1, :].numpy()
 
         # 2. Q, K, V HF
         # Attention forward inside HF
-        head_dim = hf_model.config.hidden_size // hf_model.config.num_attention_heads
+        _head_dim = hf_model.config.hidden_size // hf_model.config.num_attention_heads
         q_hf = blk0_hf.self_attn.q_proj(blk0_hf.input_layernorm(emb_all))[
             0, -1, :
         ].numpy()
@@ -77,7 +77,7 @@ def trace_block0_subops():
         up_t = blk0_hf.mlp.up_proj(x_ffn_norm_hf_t)
         gate_hf = gate_t[0, -1, :].numpy()
         up_hf = up_t[0, -1, :].numpy()
-        ffn_out_hf = blk0_hf.mlp.down_proj(blk0_hf.mlp.act_fn(gate_t) * up_t)[
+        _ffn_out_hf = blk0_hf.mlp.down_proj(blk0_hf.mlp.act_fn(gate_t) * up_t)[
             0, -1, :
         ].numpy()
 

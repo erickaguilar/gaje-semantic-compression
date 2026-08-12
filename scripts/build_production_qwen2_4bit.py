@@ -8,7 +8,9 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import ARCHITECTURES
 
-gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf")
+gguf_path = os.path.join(
+    PROJECT_ROOT, "data", "models", "qwen2-0_5b-instruct-fp16.gguf"
+)
 out_path = os.path.join(PROJECT_ROOT, "models", "production", "qwen2_0_5b_4bit.gaje")
 
 os.makedirs(os.path.dirname(out_path), exist_ok=True)
@@ -25,6 +27,7 @@ llm.save(out_path)
 
 # Copiar también a la raíz de models/
 import shutil
+
 shutil.copy(out_path, os.path.join(PROJECT_ROOT, "models", "qwen2_0_5b_4bit.gaje"))
 
 print(f"✅ Modelo de producción Qwen2-0.5B 4-bit guardado exitosamente en: {out_path}")

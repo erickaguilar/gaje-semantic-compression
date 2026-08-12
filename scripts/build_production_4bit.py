@@ -8,7 +8,9 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import ARCHITECTURES
 
-gguf_path = os.path.join(PROJECT_ROOT, "data", "models", "smollm2-135m-instruct-fp16.gguf")
+gguf_path = os.path.join(
+    PROJECT_ROOT, "data", "models", "smollm2-135m-instruct-fp16.gguf"
+)
 out_path = os.path.join(PROJECT_ROOT, "models", "production", "smollm2_4bit.gaje")
 
 os.makedirs(os.path.dirname(out_path), exist_ok=True)

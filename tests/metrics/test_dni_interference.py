@@ -91,7 +91,7 @@ def main():
     # 2. Medir PPL Pre-Ingesta
     print("[~] Midiendo PPL Pre-Ingesta (Control)...")
     with open(control_data_path, "r", encoding="utf-8") as f:
-        lines = [l.strip() for l in f.readlines() if len(l.strip()) > 20][:3]
+        lines = [line.strip() for line in f.readlines() if len(line.strip()) > 20][:3]
 
     ppls_pre = []
     for line in tqdm(lines, desc="PPL Pre"):

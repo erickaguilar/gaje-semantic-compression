@@ -22,6 +22,18 @@ from transformers import AutoTokenizer, AutoModel
 sys.path.append("benchmarks")
 from gaje.utils.codebook import train_genomic_codebook  # noqa: E402
 
+
+def mean_pooling(model_output, attention_mask):
+    """Mean pooling estándar de SBERT sobre el output del encoder."""
+    token_embeddings = model_output.last_hidden_state
+    input_mask_expanded = (
+        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    )
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+        input_mask_expanded.sum(1), min=1e-9
+    )
+
+
 try:
     from gaje.core import _impl as dna_semantic_compression  # noqa: E402
 except ImportError:

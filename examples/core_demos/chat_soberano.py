@@ -69,7 +69,7 @@ def main():
             print(
                 f"    [+] {len(session_memory)} interacciones recuperadas de la sesión previa."
             )
-        except:
+        except Exception:
             pass
 
     # Modo No-Interactivo

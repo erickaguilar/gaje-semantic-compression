@@ -34,7 +34,7 @@ def trace_layer_diff():
 
     # 2. Rastreo en el motor Rust paso a paso
     # Para el último token del prompt (index -1, es decir pos 4)
-    tok_id = input_ids[0]
+    _tok_id = input_ids[0]
     gaje_llm.rust_llm.clear_cache_py()
 
     # Pre-fill secuencial para llenar KV cache hasta pos = len(input_ids)-1

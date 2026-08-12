@@ -89,7 +89,9 @@ def run_mlp_demo():
     print(f"✅ Resultado (Primeras 5 clases): {output[:5]}")
 
     # Calcular ahorro de RAM
-    total_weights = sum([l.in_features * l.out_features for l in mlp.layers])
+    total_weights = sum(
+        [layer.in_features * layer.out_features for layer in mlp.layers]
+    )
     ram_f32 = (total_weights * 4) / (1024 * 1024)
     ram_gen = (total_weights * 0.25) / (1024 * 1024)  # 2 bits = 0.25 bytes
 
