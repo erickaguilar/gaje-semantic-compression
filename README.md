@@ -11,7 +11,7 @@
 
 ## 🔬 Estado Empírico y Certificación del Motor (v1.6.0-alpha)
 
-Siguiendo el **Mandato de Verdad Empírica** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/docs/meta/EMPIRICAL_TRUTH_STATE.md)), el motor GAJE Helix cuenta con la siguiente certificación oficial:
+Siguiendo el **Mandato de Verdad Empírica** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](docs/meta/EMPIRICAL_TRUTH_STATE.md)), el motor GAJE Helix cuenta con la siguiente certificación oficial:
 
 ### 🏆 1. Experimento de Control A/B (GAJE Q4_0 vs. HuggingFace PyTorch FP32)
 
@@ -67,13 +67,22 @@ $$\mathcal{L} = T - V$$
 ```text
 gaje-semantic-compression/
 ├── src/                    # Núcleo Nativo en Rust (Kernels SIMD AVX2/FMA, LLM Engine, KV-Cache, Mmap Loader)
+│   └── bin/gaje-cli.rs     # CLI principal del motor nativo
 ├── python/gaje/            # Puente PyO3 y Wrappers de Inferencia Nativas
-├── examples/ui/web_ui/     # Interfaz Visual Web UI (http://localhost:8080) y Servidor server.py
-├── tests/                  # Suite de Pruebas (Unitarias, Integración, Paridad FP32 - 21/21 Verde)
+├── examples/               # Demos de núcleo, Web UI, notebooks y utilidades Rust
+│   └── ui/web_ui/          # Interfaz Visual Web UI (http://localhost:8080) y Servidor server.py
+├── tests/                  # Suite de Pruebas (unit, integration, metrics, training, ui_e2e)
 ├── scripts/                # Herramientas de Mantenimiento y Exportadores Flat (.gaje.flat)
 ├── models/production/      # Modelos Cuantizados de Producción (Qwen2 0.5B, SmolLM2 135M)
-└── docs/                   # Documentación Científica, Planes y Reportes de Certificación (Reporte v1.6.0)
+└── docs/                   # Documentación Científica, Planes y Reportes de Certificación
+    ├── reports/            # Resultados empíricos verificados (reportes de paridad y benchmarks)
+    ├── guides/             # Manuales operativos (GAJE CLI, flujos de trabajo)
+    ├── plans/              # Roadmaps y planes estratégicos
+    ├── meta/               # Gobernanza y estado de verdad empírica
+    └── archive/            # Investigación exploratoria y versiones heredadas
 ```
+
+> **Nota de consolidación:** el contenido experimental (bins Rust exploratorios, notas de investigación y demos de etapas previas) se conserva íntegro en `legacy/` y `docs/archive/`. El árbol principal solo mantiene los componentes operativos y verificados.
 
 ---
 
@@ -96,8 +105,8 @@ Abre en tu navegador `http://localhost:8080` y selecciona dinámicamente tu mode
 
 ### 3. Ejecutar Suite de Validación Nativa
 ```bash
-# Ejecutar suite de pruebas de Python (21/21 Tests pasando exitosamente)
-pytest tests/
+# Ejecutar la suite de pruebas de Python (unitaria, integración y métricas)
+pytest tests/unit tests/integration tests/metrics
 ```
 
 ---

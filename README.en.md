@@ -67,13 +67,22 @@ $$\mathcal{L} = T - V$$
 ```text
 gaje-semantic-compression/
 ├── src/                    # Rust Native Core (AVX2/FMA SIMD Kernels, LLM Engine, KV-Cache, Mmap Loader)
+│   └── bin/gaje-cli.rs     # Primary native engine CLI
 ├── python/gaje/            # PyO3 Bridge and Native Python Infrasctructure Wrappers
-├── examples/ui/web_ui/     # Web UI Frontend (http://localhost:8080) and server.py server
-├── tests/                  # Verification Suite (Unit, Integration, Paridad FP32 - 21/21 Green)
+├── examples/               # Core demos, Web UI, notebooks and Rust utilities
+│   └── ui/web_ui/          # Web UI Frontend (http://localhost:8080) and server.py server
+├── tests/                  # Verification Suite (unit, integration, metrics, training, ui_e2e)
 ├── scripts/                # Utility scripts and Flat Exporters (.gaje.flat)
 ├── models/production/      # Quantized Production Models (Qwen2 0.5B, SmolLM2 135M)
 └── docs/                   # Scientific papers, blueprints, and reports (v1.6.0 report)
+    ├── reports/            # Verified empirical results (parity reports and benchmarks)
+    ├── guides/             # Operational manuals (GAJE CLI, workflows)
+    ├── plans/              # Roadmaps and strategic plans
+    ├── meta/               # Governance and empirical truth state
+    └── archive/            # Exploratory research and legacy versions
 ```
+
+> **Consolidation note:** experimental content (exploratory Rust binaries, research notes and prior-stage demos) is fully preserved under `legacy/` and `docs/archive/`. The main tree only keeps operational, verified components.
 
 ---
 
