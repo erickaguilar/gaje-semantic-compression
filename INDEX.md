@@ -15,6 +15,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[RESPONSIBLE_POLICY_AND_GOVERNANCE.md](docs/meta/RESPONSIBLE_POLICY_AND_GOVERNANCE.md)**: Posicionamiento de IA Constitucional Local.
 *   **[FINDINGS_AND_DIAGNOSTICS_2026.md](docs/meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de éxitos y fracasos del motor.
 *   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Ciclo de vida del organismo y gates de certificación.
+*   **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](docs/meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 📊 Resultados Verificados (`docs/reports/`)
 *   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
