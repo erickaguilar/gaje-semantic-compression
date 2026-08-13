@@ -18,11 +18,91 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 sys.path.insert(0, SERVER_DIR)
 
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
+from gaje.utils.version import get_project_version  # noqa: E402
 from model_manager import get_model, list_available_models  # noqa: E402
 from prompt_templates import format_prompt, get_stop_tokens  # noqa: E402
 
 PORT = 8080
 MODELS_ROOT = os.path.join(PROJECT_ROOT, "models")
+
+# Configuración central del Island Model (.gmem). Fuente única de verdad
+# para la UI; no se duplica en el HTML.
+ISLAND_CONFIG = {
+    "memory_type": ".gmem (Zero-Copy)",
+    "retrieval_latency_ms": 0.75,
+    "context_budget": 512,
+    "pills": ["⚡ Episódica", "📚 Documental", "💬 Conversación"],
+}
+
+
+def _model_quality(name: str) -> float:
+    """Estima los parámetros del modelo (en miles de millones) para ordenar por calidad."""
+    n = name.lower()
+    if "3b" in n:
+        return 3.0
+    if "1_5b" in n:
+        return 1.5
+    if "0_5b" in n:
+        return 0.5
+    if "smollm" in n or "135" in n:
+        return 0.135
+    return 0.0
+
+
+def _detect_simd() -> str:
+    """Detecta los flags SIMD reales de la CPU desde /proc/cpuinfo (Linux)."""
+    flags = []
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("flags"):
+                    flags = line.split(":", 1)[1].split()
+                    break
+    except OSError:
+        return platform.machine().lower() in ("aarch64", "arm64") and "NEON" or "SIMD"
+    mapping = [
+        ("avx512f", "AVX-512"),
+        ("avx2", "AVX2"),
+        ("fma", "FMA"),
+        ("avx", "AVX"),
+        ("sse4_2", "SSE4.2"),
+        ("asimd", "NEON"),
+        ("sve", "SVE"),
+    ]
+    present = [label for flag, label in mapping if flag in flags]
+    return "/".join(present) if present else "SIMD genérico"
+
+
+def _cpu_model() -> str:
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine()
+
+
+def get_runtime_info() -> dict:
+    """Información real del entorno de ejecución (arquitectura, CPU, SIMD)."""
+    arch = platform.machine()
+    cpu = _cpu_model()
+    simd = _detect_simd()
+    cores = os.cpu_count() or 1
+    py = sys.version.split()[0]
+    return {
+        "engine_version": get_project_version(),
+        "python_version": py,
+        "architecture": arch,
+        "cpu": cpu,
+        "cores": cores,
+        "simd": simd,
+        "os": f"{platform.system()} {platform.release()}",
+        "software": f"Rust 2021 ({simd}) + PyO3 / Python {py}",
+        "hardware": f"{cpu} - {arch} ({cores} cores)",
+        "island": ISLAND_CONFIG,
+    }
 
 
 class GajeHandler(http.server.SimpleHTTPRequestHandler):
@@ -32,7 +112,10 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/models":
             models = list_available_models(MODELS_ROOT)
+            models.sort(key=lambda m: _model_quality(m.get("name", "")), reverse=True)
             self._send_json({"models": models})
+        elif self.path == "/api/info":
+            self._send_json(get_runtime_info())
         else:
             super().do_GET()
 
@@ -66,6 +149,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             data = self._read_json_body()
             message = data.get("message", "")
             model_name = data.get("model", "")
+            _runtime = get_runtime_info()
 
             print(f"[*] Procesando mensaje con modelo: {model_name}")
             llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
@@ -140,8 +224,8 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
                     "bit_depth": bit_depth,
                     "ratio": round(ratio, 1),
                     "saved": round(saved, 2),
-                    "sf_info": f"Rust 2021 (NEON/SIMD) + PyO3 / Python {sys.version.split()[0]}",
-                    "hd_info": f"{platform.processor() or 'CPU Native'} - Native CPU",
+                    "sf_info": _runtime["software"],
+                    "hd_info": _runtime["hardware"],
                 },
                 "dna": dna_sample,
             }
@@ -167,7 +251,8 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), GajeHandler) as httpd:
+    with socketserver.ThreadingTCPServer(("", PORT), GajeHandler) as httpd:
+        httpd.daemon_threads = True
         print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
         print("Presiona Ctrl+C para detener.")
         try:

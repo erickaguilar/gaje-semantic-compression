@@ -38,6 +38,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Detectar entorno real de ejecución (arquitectura, CPU, SIMD, Island)
+    async function loadEnvInfo() {
+        try {
+            const response = await fetch('/api/info');
+            const info = await response.json();
+            if (!info || info.error) return;
+            document.getElementById('sf-val').innerText = info.software || '---';
+            document.getElementById('hd-val').innerText = info.hardware || '---';
+            if (info.architecture) document.getElementById('arch-val').innerText = info.architecture;
+            if (info.simd) document.getElementById('simd-val').innerText = info.simd;
+            if (info.cores) document.getElementById('cores-val').innerText = info.cores;
+            const status = document.querySelector('.status-text');
+            if (status && info.simd) status.innerText = info.simd + ' Optimized';
+
+            // Island Model (.gmem) — valores desde el servidor, no hardcodeados
+            if (info.island) {
+                const pillsEl = document.getElementById('island-pills');
+                if (pillsEl) {
+                    pillsEl.innerHTML = (info.island.pills || [])
+                        .map(p => `<span class="island-pill">${p}</span>`)
+                        .join('');
+                }
+                if (info.island.memory_type) document.getElementById('island-mem-val').innerText = info.island.memory_type;
+                if (info.island.retrieval_latency_ms != null) document.getElementById('island-lat-val').innerText = `${info.island.retrieval_latency_ms} ms`;
+                if (info.island.context_budget != null) document.getElementById('island-budget-val').innerText = `${info.island.context_budget} tokens`;
+            }
+        } catch (err) {
+            console.log('No se pudo detectar el entorno de ejecución.');
+        }
+    }
+
     function updateModelDate() {
         const selected = modelSelect.value;
         const model = modelsData.find(m => m.name === selected);
@@ -77,6 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
             userInput.disabled = false;
             sendBtn.disabled = false;
             userInput.focus();
+            // Actualizar el entorno real de ejecución al terminar de cargar el modelo
+            loadEnvInfo();
         }
     }
 
@@ -84,6 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         preloadModel(modelSelect.value);
     });
     loadModels();
+    loadEnvInfo();
 
     function addMessage(text, type, meta = null) {
         const msgDiv = document.createElement('div');

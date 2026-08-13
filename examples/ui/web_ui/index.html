@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="GAJE Helix - Plataforma nativa de compresión semántica de ADN y chat genómico impulsado por kernels de alto rendimiento en Rust.">
-    <title>GAJE Helix | Semantic Genomic Compression Platform</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="description" content="GAJE Helix - Motor de inferencia nativo en Rust con compresión Q4_0 + FP32 (formato .gaje.flat v2 zero-copy mmap), Island Model .gmem y kernels SIMD de alto rendimiento.">
+    <title>GAJE Helix | Genomic Semantic Compression Platform</title>
+    <link rel="stylesheet" href="style.css?v=1.6.1">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <script>
         (function() {
@@ -22,13 +22,13 @@
                 <span class="dna-icon animate-pulse">🧬</span>
                 <div class="brand-text">
                     <h1>GAJE Helix</h1>
-                    <span class="version-tag">v1.0.0-alpha</span>
+                    <span class="version-tag">v1.6.0-alpha</span>
                 </div>
             </div>
             <div class="header-controls">
                 <div class="status-bar">
                     <span class="status-dot"></span>
-                    <span class="status-text">NEON Optimized</span>
+                    <span class="status-text">SIMD Optimized</span>
                 </div>
                 <button id="theme-toggle" class="theme-btn" aria-label="Cambiar Tema">🌙</button>
             </div>
@@ -40,22 +40,20 @@
                     <h3>Selección de Modelo</h3>
                     <select id="model-select" class="model-dropdown">
                         <!-- Carga dinámica desde la API -->
-                        <option value="qwen2_0_5b_4bit.gaje.flat" selected>Cargando lista de modelos...</option>
+                        <option value="qwen2_5_3b_q4_0_q8_0_embd.gaje.flat" selected>Cargando lista de modelos...</option>
                     </select>
-                    <div id="model-date" class="model-meta">Nacido el: 2026-08-08 18:48</div>
+                    <div id="model-date" class="model-meta">Nacido el: 2026-08-09 22:57</div>
                 </section>
 
                 <section class="stats-card island-card">
                     <h3>🏝️ Island Model (.gmem)</h3>
                     <div id="island-content">
-                        <div class="island-badge-row">
-                            <span class="island-pill pill-episodic">⚡ Episódica</span>
-                            <span class="island-pill pill-documental">📚 Documental</span>
-                            <span class="island-pill pill-conversational">💬 Conversación</span>
+                        <div class="island-badge-row" id="island-pills">
+                            <span class="island-pill">Cargando...</span>
                         </div>
-                        <div class="metric-row"><span>Persistencia:</span> <span class="metric-val">.gmem (Zero-Copy)</span></div>
-                        <div class="metric-row"><span>Latencia Retrieval:</span> <span id="island-lat-val" class="metric-val">0.75 ms</span></div>
-                        <div class="metric-row"><span>Presupuesto Contexto:</span> <span id="island-budget-val" class="metric-val">512 tokens</span></div>
+                        <div class="metric-row"><span>Persistencia:</span> <span id="island-mem-val" class="metric-val">---</span></div>
+                        <div class="metric-row"><span>Latencia Retrieval:</span> <span id="island-lat-val" class="metric-val">---</span></div>
+                        <div class="metric-row"><span>Presupuesto Contexto:</span> <span id="island-budget-val" class="metric-val">---</span></div>
                     </div>
                 </section>
 
@@ -69,14 +67,18 @@
                 <section class="stats-card">
                     <h3>Entorno de Ejecución</h3>
                     <div id="env-content">
-                        <div class="metric-row"><span>Software:</span> <span id="sf-val" class="metric-val">Rust 2021 + PyO3</span></div>
-                        <div class="metric-row"><span>Hardware:</span> <span id="hd-val" class="metric-val">CPU Native</span></div>
+                        <div class="metric-row"><span>Software:</span> <span id="sf-val" class="metric-val">Detectando...</span></div>
+                        <div class="metric-row"><span>Hardware:</span> <span id="hd-val" class="metric-val">Detectando...</span></div>
+                        <div class="metric-row"><span>Arquitectura:</span> <span id="arch-val" class="metric-val">---</span></div>
+                        <div class="metric-row"><span>SIMD:</span> <span id="simd-val" class="metric-val">---</span></div>
+                        <div class="metric-row"><span>Cores:</span> <span id="cores-val" class="metric-val">---</span></div>
                         <div class="metric-row"><span>Latencia Inferencia:</span> <span id="latency-val" class="metric-val">---</span></div>
                     </div>
                 </section>
 
                 <section class="dna-viewer">
-                    <h3>Secuencia ADN (2-bit)</h3>
+                    <h3>Secuencia Genómica (Q4_0)</h3>
+                    <p class="dna-note">Cuerpo 4-bit (Q4_0) + embeddings FP32. La cuantización 2-bit es experimental (neuromórfica).</p>
                     <div id="dna-strand" class="strand-display">
                         --------------------------------
                     </div>
@@ -106,6 +108,6 @@
             <p>Erick Aguilar & Gemini — DNA Semantic Compression Engine © 2026</p>
         </footer>
     </div>
-    <script src="script.js"></script>
+    <script src="script.js?v=1.6.1"></script>
 </body>
 </html>
