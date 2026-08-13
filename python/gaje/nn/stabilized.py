@@ -1269,18 +1269,30 @@ class GenomicLLM:
                     n_blocks = meta.get("n_blocks", 24)
 
                     tokenizer = None
-                    try:
-                        from transformers import AutoTokenizer
-
-                        tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
-                    except Exception as ex_t:
-                        print(f"⚠️ Warning tokenizers: {ex_t}")
+                    embedded_tok = meta.get("tokenizer")
+                    if embedded_tok:
                         try:
                             from tokenizers import Tokenizer
 
-                            tokenizer = Tokenizer.from_pretrained(tokenizer_id)
-                        except Exception:
-                            pass
+                            if isinstance(embedded_tok, str):
+                                tokenizer = Tokenizer.from_str(embedded_tok)
+                            else:
+                                tokenizer = Tokenizer.from_str(json.dumps(embedded_tok))
+                        except Exception as ex_tok:
+                            print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
+                    if tokenizer is None:
+                        try:
+                            from transformers import AutoTokenizer
+
+                            tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
+                        except Exception as ex_t:
+                            print(f"⚠️ Warning tokenizers: {ex_t}")
+                            try:
+                                from tokenizers import Tokenizer
+
+                                tokenizer = Tokenizer.from_pretrained(tokenizer_id)
+                            except Exception:
+                                pass
 
                     obj = cls.__new__(cls)
                     obj.rust_llm = rust_llm

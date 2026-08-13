@@ -36,6 +36,7 @@ chat
 inspect
 *.gaje.tmp
 *.log
+*.pdb
 
 # Eggs
 /eggs
