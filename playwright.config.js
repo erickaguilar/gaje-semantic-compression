@@ -2,6 +2,7 @@ const { defineConfig, devices } = require('@playwright/test');
 
 module.exports = defineConfig({
   testDir: './tests/ui_e2e',
+  testIgnore: 'streaming.test.js',
   timeout: 30 * 1000,
   expect: {
     timeout: 5000
