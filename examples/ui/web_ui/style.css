@@ -567,6 +567,23 @@ footer {
     transform: rotate(15deg);
 }
 
+.nav-docs {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color);
+    text-decoration: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.03);
+    transition: all 0.2s ease;
+}
+
+.nav-docs:hover {
+    border-color: var(--accent-color);
+    background: rgba(99, 102, 241, 0.1);
+}
+
 /* Responsive Media Queries */
 @media (max-width: 768px) {
     body {

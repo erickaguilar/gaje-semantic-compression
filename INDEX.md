@@ -11,7 +11,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 ### ⚖️ Gobernanza y Verdad Empírica (`docs/meta/`)
 *   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Estado real que contrasta código vs. resultados empíricos.
 *   **[VALIDATION_PROTOCOLS.md](docs/meta/VALIDATION_PROTOCOLS.md)**: Protocolos de validación y gates de certificación.
-*   **[CONSTITUTION_OF_BIRTH.md](docs/meta/CONSTITUTION_OF_BIRTH.md)**: Principios éticos y técnicos del protocolo.
+*   **[CONSTITUTION_OF_BIRTH.md](docs/meta/vision/CONSTITUTION_OF_BIRTH.md)**: Principios éticos y técnicos del protocolo.
 *   **[RESPONSIBLE_POLICY_AND_GOVERNANCE.md](docs/meta/RESPONSIBLE_POLICY_AND_GOVERNANCE.md)**: Posicionamiento de IA Constitucional Local.
 *   **[FINDINGS_AND_DIAGNOSTICS_2026.md](docs/meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de éxitos y fracasos del motor.
 *   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Ciclo de vida del organismo y gates de certificación.
@@ -37,7 +37,6 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
 *   **[NEXT_STEPS_2026.md](docs/plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos.
 *   **[NATIVE_SEMANTIC_RAG_PLAN.md](docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
-*   **[PLAN_2BIT_ANCHORED_QUANTIZATION.md](docs/plans/PLAN_2BIT_ANCHORED_QUANTIZATION.md)**: Cuantización anclada 2-bit.
 *   **[OPERATION_REBIRTH.md](docs/plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
 *   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
 
@@ -93,7 +92,7 @@ Estructura compatible con `pytest` para asegurar la integridad del motor.
 *   **`legacy/archive/rust_bins/`**: Bins Rust exploratorios (trainers, breeders, MCTS) conservados como referencia.
 *   **`legacy/archive/scripts/`** y **`legacy/archive/scratch/`**: Scripts de prueba transitorios.
 *   **`docs/archive/research/`**: Notas de investigación exploratoria.
-*   **`docs/archive/legacy_versions/`** y **`docs/archive/plans/`**: Documentación de etapas previas.
+*   **`docs/archive/legacy_versions/`**, **`docs/archive/plans/`** y **`docs/archive/reports/`**: Documentación de etapas previas (incluye `PLAN_2BIT_ANCHORED_QUANTIZATION.md`, frente 2-bit congelado).
 
 ---
 *Documento consolidado bajo el protocolo GAJE-Flow (Agosto 2026).*
