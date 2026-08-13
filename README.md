@@ -96,9 +96,9 @@ gaje-semantic-compression/
 
 ### 1. Instalación y Compilación Nativa (PyO3)
 ```bash
-# Compilar motor nativo Rust con maturin (usa --release para build optimizado)
+# Compilar motor nativo Rust optimizado (OBLIGATORIO --release: debug es ~100x más lento)
 uv venv && source .venv/bin/activate
-maturin develop --features python
+maturin develop --release --features python
 ```
 
 ### 2. Ejecutar la Web UI Interactiva
