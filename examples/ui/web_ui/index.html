@@ -91,6 +91,10 @@
             </aside>
 
             <section id="chat-view" class="chat-container">
+                <div class="chat-toolbar">
+                    <span class="chat-toolbar-label">Conversación</span>
+                    <button id="clear-history-btn" class="clear-history-btn" title="Borrar historial local">🗑 Borrar historial</button>
+                </div>
                 <div id="chat-window" class="chat-window">
                     <div class="message system">
                         <div class="msg-content">
@@ -101,6 +105,7 @@
 
                 <div class="input-area">
                     <input type="text" id="user-input" placeholder="Escribe un mensaje genómico..." autocomplete="off">
+                    <button id="stop-btn" class="stop-btn" title="Detener generación" hidden>⏹</button>
                     <button id="send-btn">
                         <span>ENVIAR</span>
                         <svg class="send-icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>

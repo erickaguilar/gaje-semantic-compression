@@ -143,6 +143,15 @@ document.addEventListener('DOMContentLoaded', () => {
     loadModels();
     loadEnvInfo();
 
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', () => {
+            clearHistory();
+            const messages = chatWindow.querySelectorAll('.message');
+            messages.forEach(m => { if (!m.classList.contains('system')) m.remove(); });
+        });
+    }
+
     function escapeHtml(value) {
         return String(value).replace(/[&<>"']/g, c => ({
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -219,6 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         addMessage(text, 'user');
+        pushHistory({ role: 'user', content: text });
         userInput.value = '';
         userInput.disabled = true;
         sendBtn.disabled = true;
@@ -228,39 +238,214 @@ document.addEventListener('DOMContentLoaded', () => {
             window.ArchView.setFlow('inference');
         }
 
+        const ok = await streamChat(text, modelValue);
+        if (!ok) {
+            await fallbackChat(text, modelValue);
+        }
+
+        userInput.disabled = false;
+        sendBtn.disabled = false;
+        userInput.focus();
+    }
+
+    // Fallback no-streaming con métricas (si el stream falla)
+    async function fallbackChat(text, modelName) {
         try {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: text,
-                    model: modelSelect.value
-                })
+                body: JSON.stringify({ message: text, model: modelName })
             });
-
             const data = await response.json();
-
             if (data.error) {
                 addMessage(`Error: ${data.error}`, 'bot');
             } else {
                 addMessage(data.response, 'bot', data.metrics);
+                pushHistory({ role: 'assistant', content: data.response });
                 updateMetrics(data.metrics);
                 updateDNA(data.dna);
             }
         } catch (err) {
             addMessage('Error de conexión con el núcleo GAJE.', 'bot');
             console.error(err);
-        } finally {
-            userInput.disabled = false;
-            sendBtn.disabled = false;
-            userInput.focus();
         }
+    }
+
+    // ===== Streaming SSE (Fase 2.2) =====
+    let abortController = null;
+
+    function streamChat(message, modelName) {
+        const botMsg = createBotMessage();
+        botMsg.classList.add('streaming');
+        const statusEl = document.createElement('span');
+        statusEl.className = 'stream-status';
+        statusEl.textContent = 'Generando';
+        const statusAnchor = document.createElement('div');
+        statusAnchor.className = 'stream-status-row';
+        statusAnchor.appendChild(statusEl);
+        botMsg.appendChild(statusAnchor);
+
+        const contentEl = document.createElement('p');
+        contentEl.className = 'stream-text';
+        botMsg.appendChild(contentEl);
+        chatWindow.appendChild(botMsg);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        abortController = new AbortController();
+        const stopBtn = document.getElementById('stop-btn');
+        stopBtn.hidden = false;
+
+        let fullText = '';
+        let started = Date.now();
+        let done = false;
+
+        const finish = (aborted) => {
+            if (done) return;
+            done = true;
+            abortController = null;
+            stopBtn.hidden = true;
+            botMsg.classList.remove('streaming');
+            const elapsed = Date.now() - started;
+            if (aborted && fullText) {
+                addMetaTo(botMsg, elapsed, '⏹️ detenido');
+            } else if (!aborted) {
+                addMetaTo(botMsg, elapsed);
+            }
+            if (fullText) pushHistory({ role: 'assistant', content: fullText });
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        };
+
+        const onStop = () => {
+            if (abortController) abortController.abort();
+        };
+        stopBtn.onclick = onStop;
+
+        return fetch('/api/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message, model: modelName }),
+            signal: abortController.signal
+        }).then(async (response) => {
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                botMsg.remove();
+                addMessage(`Error: ${data.error || 'Fallo en el stream'}`, 'bot');
+                finish(true);
+                return false;
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            while (true) {
+                const { value, done: rdDone } = await reader.read();
+                if (rdDone) break;
+                buffer += decoder.decode(value, { stream: true });
+                // parse SSE lines: data: ...
+                let idx;
+                while ((idx = buffer.indexOf('\n')) !== -1) {
+                    const line = buffer.slice(0, idx).trim();
+                    buffer = buffer.slice(idx + 1);
+                    if (line.startsWith('data: ')) {
+                        const payload = line.slice(6);
+                        if (payload === '[DONE]') {
+                            reader.releaseLock();
+                            finish(false);
+                            return true;
+                        }
+                        try {
+                            const token = JSON.parse(payload);
+                            if (token && typeof token === 'object' && token.error) {
+                                throw new Error(token.error);
+                            }
+                            fullText += token;
+                            contentEl.textContent = fullText;
+                            chatWindow.scrollTop = chatWindow.scrollHeight;
+                        } catch (e) {
+                            // payload no JSON o error
+                            if (e.message) {
+                                botMsg.remove();
+                                addMessage(`Error: ${e.message}`, 'bot');
+                                finish(true);
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+            finish(false);
+            return true;
+        }).catch((err) => {
+            if (err && err.name === 'AbortError') {
+                finish(true);
+                return true;
+            }
+            botMsg.remove();
+            addMessage('Error de conexión con el núcleo GAJE (streaming).', 'bot');
+            finish(true);
+            return false;
+        });
+    }
+
+    function createBotMessage() {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message bot';
+        return msgDiv;
+    }
+
+    function addMetaTo(msgEl, elapsed, prefix = '') {
+        const meta = document.createElement('div');
+        meta.className = 'message-meta';
+        meta.innerHTML = `<span class="meta-badge">⏱️ ${elapsed} ms ${prefix ? '(' + escapeHtml(prefix) + ')' : ''}</span>`;
+        msgEl.appendChild(meta);
+    }
+
+    // ===== Historial local (Fase 2.3) =====
+    const HISTORY_KEY = 'gaje_chat_history';
+
+    function loadHistory() {
+        try {
+            const raw = localStorage.getItem(HISTORY_KEY);
+            if (!raw) return [];
+            const arr = JSON.parse(raw);
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function pushHistory(entry) {
+        const arr = loadHistory();
+        arr.push(entry);
+        if (arr.length > 100) arr.splice(0, arr.length - 100);
+        try {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+        } catch (e) { /* almacenamiento lleno */ }
+    }
+
+    function clearHistory() {
+        try {
+            localStorage.removeItem(HISTORY_KEY);
+        } catch (e) { /* ignore */ }
+    }
+
+    function renderHistory() {
+        const arr = loadHistory();
+        if (arr.length === 0) return;
+        arr.forEach(entry => {
+            if (entry.role === 'user') addMessage(entry.content, 'user');
+            else if (entry.role === 'assistant') addMessage(entry.content, 'bot');
+            else if (entry.role === 'system') addMessage(entry.content, 'system');
+        });
+        chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
     sendBtn.addEventListener('click', sendMessage);
     userInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
+    renderHistory();
 
     // Gestión de Tema Claro/Oscuro
     const themeToggle = document.getElementById('theme-toggle');

@@ -938,6 +938,15 @@ footer {
         border-top: 1px solid var(--border-color);
         max-height: 40vh;
     }
+
+    .chat-toolbar {
+        padding: 0.4rem 1rem;
+    }
+
+    .stop-btn {
+        width: 42px;
+        height: 42px;
+    }
 }
 
 /* GAJE Details Progress Bar */
@@ -957,4 +966,107 @@ footer {
     border-radius: 10px;
     transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     box-shadow: 0 0 10px var(--accent-glow);
+}
+
+/* ===== Chat toolbar + historial (Fase 2.3) ===== */
+.chat-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 2rem;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(6, 8, 20, 0.1);
+}
+
+.chat-toolbar-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+}
+
+.clear-history-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    padding: 0.3rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.clear-history-btn:hover {
+    border-color: var(--dna-a);
+    color: var(--dna-a);
+    background: rgba(244, 63, 94, 0.08);
+}
+
+/* ===== Streaming (Fase 2.2) ===== */
+.stop-btn {
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    color: var(--dna-a);
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.stop-btn:hover {
+    background: rgba(244, 63, 94, 0.25);
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.3);
+}
+
+.stop-btn[hidden] {
+    display: none;
+}
+
+.message.streaming {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.stream-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stream-status {
+    font-size: 0.68rem;
+    color: var(--accent-color);
+    font-family: 'Fira Code', monospace;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.stream-status::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-color);
+    animation: streamBlink 1s infinite ease-in-out;
+}
+
+@keyframes streamBlink {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+.stream-text {
+    word-break: break-word;
+    white-space: pre-wrap;
+    font-size: 0.92rem;
+    line-height: 1.5;
 }
