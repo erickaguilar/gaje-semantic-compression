@@ -18,6 +18,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](docs/meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 📊 Resultados Verificados (`docs/reports/`)
+*   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: **BENCHMARK OFICIAL** v1.6.0-alpha — compresión, memoria, velocidad y PPL por modelo (reproducible).
 *   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
 *   **[session_findings_v1.6.0_phase_3.1.md](docs/reports/session_findings_v1.6.0_phase_3.1.md)**: Hallazgos de la fase 3.1 (formato `.flat`).
 *   **[session_findings_v1.6.0_phase_3.2.md](docs/reports/session_findings_v1.6.0_phase_3.2.md)**: Hallazgos de la fase 3.2.
