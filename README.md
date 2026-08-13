@@ -5,7 +5,9 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/reports/session_findings_v1.6.0_phase_3.1.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** es un protocolo de inferencia nativa en Rust y compresión de ultra-alta densidad para Modelos de Lenguaje Masivos (LLMs). El protocolo empaqueta los tensores neuronales en un alfabeto genómico digital de **4-bits por peso (16 centroides optimizados)** y **2-bits por peso (4 estados: `00=A`, `01=C`, `11=G`, `10=T`)**, integrando memoria persistente zero-copy (**Island Model `.gmem`**), cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y carga instantánea por mapeo de memoria en disco (**`.gaje.flat` v2**).
+**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano **`.gaje.flat` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además memoria persistente **Island Model `.gmem`** y cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**).
+
+> **2-bits (experimental):** la cuantización de **2-bits por peso (4 estados `00=A`, `01=C`, `11=G`, `10=T`)** se desarrolla en el módulo neuromórfico (`src/nn/spiking`) y quedó documentada como frente de investigación (inviable en hardware comercial por costo de cómputo). **La ruta de producción certificada es Q4_0 + FP32.**
 
 ---
 
@@ -60,6 +62,8 @@ La generación autoregresiva se modela como un sistema dinámico regido por el p
 
 $$\mathcal{L} = T - V$$
 
+> El muestreo **Lagrangiano / Toroidal** (módulo `src/compute/lagrangian.rs`) es una heurística de generación del motor. Conviene distinguir la nomenclatura física de los resultados medibles: la fidelidad y el rendimiento se certifican en [`docs/reports/`](docs/reports/), no por el nombre del algoritmo.
+
 ---
 
 ## 📂 Organización del Repositorio (`v1.6.0-alpha`)
@@ -73,6 +77,8 @@ gaje-semantic-compression/
 │   └── ui/web_ui/          # Interfaz Visual Web UI (http://localhost:8080) y Servidor server.py
 ├── tests/                  # Suite de Pruebas (unit, integration, metrics, training, ui_e2e)
 ├── scripts/                # Herramientas de Mantenimiento y Exportadores Flat (.gaje.flat)
+├── benchmarks/             # Benchmarks de rendimiento (perplexity, decode, flat, RAG)
+│   └── performance/        # bench_decode.py, gaje_flat_benchmark.py (métricas por fase)
 ├── models/production/      # Modelos Cuantizados de Producción (Qwen2 0.5B, SmolLM2 135M)
 └── docs/                   # Documentación Científica, Planes y Reportes de Certificación
     ├── reports/            # Resultados empíricos verificados (reportes de paridad y benchmarks)
@@ -90,11 +96,9 @@ gaje-semantic-compression/
 
 ### 1. Instalación y Compilación Nativa (PyO3)
 ```bash
-# Crear entorno virtual optimizado
+# Compilar motor nativo Rust con maturin (usa --release para build optimizado)
 uv venv && source .venv/bin/activate
-
-# Compilar motor nativo Rust con maturin optimizado para CPU host
-maturin develop --release --features python
+maturin develop --features python
 ```
 
 ### 2. Ejecutar la Web UI Interactiva

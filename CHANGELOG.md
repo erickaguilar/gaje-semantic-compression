@@ -1,3 +1,25 @@
+## [1.6.0-alpha] - 2026-08-12
+### Changed
+- **Consolidación del repositorio**: reducción del historial de git de 527 MB a ~4 MB mediante `git-filter-repo` (se purgaron blobs inalcanzables y artefactos grandes ya ignorados). Se eliminó el clon anidado roto `docs/repo/` (gitlink `160000` sin `.gitmodules`).
+- **Reorganización estructural**:
+  - Bins Rust exploratorios (trainers, breeders, MCTS) movidos a `legacy/archive/rust_bins/`; `src/bin/` conserva solo `gaje-cli`.
+  - Notas de investigación especulativa archivadas en `docs/archive/research/`. El árbol principal conserva documentación operativa/empírica (`reports/`, `guides/`, `plans/`, `meta/`).
+  - `engine_log.txt` y scripts de `scratch/` eliminados/movidos a `legacy/archive/`.
+  - `gaje_flow_colab.ipynb` → `examples/notebooks/`; `small_corpus.txt` → `tests/fixtures/`.
+  - Endurecimiento de `.gitignore` (caches pytest/ruff/mypy, `scratch/`, `*.pdb`).
+- **Deuda de lint resuelta**: se configuró `ruff` para lint estricto del paquete `python/gaje` e ignorar `E402` (idioma `sys.path`) en scripts/tests/demos/benchmarks/legacy. Se corrigieron en código: bare `except` (E722), nombres ambiguos `l` (E741), variables sin uso (F841), import de `_impl` (F401, `# noqa`) y los bugs `F821` (`mean_pooling` no definido; referencia `MODELS`→`models`). Todos los hooks pre-push (`ruff`, `ruff-format`, `cargo fmt`, `cargo clippy`, `maturin develop` + pytest) pasan en verde.
+
+### Added
+- **Contenido útil de `develop-local` extraído y normalizado a LF** (descartando el ruido CRLF de su commit de snapshot):
+  - `benchmarks/performance/bench_decode.py` (benchmark de decode y tendencia KV-cache).
+  - `benchmarks/performance/gaje_flat_benchmark.py` (benchmark del formato flat).
+  - `benchmarks/FINDINGS_WSL2_BENCHMARK_2026.md` (hallazgos de benchmarks WSL2).
+  - Tokenizer flat **embebido** cargado antes del download HF en `python/gaje/nn/stabilized.py`.
+
+### Fixed
+- Alineación de la versión del proyecto a **`v1.6.0-alpha`** en README, CHANGELOG, `Cargo.toml` y `pyproject.toml` (previamente inconsistente: 1.6.0 / 1.3.1 / 1.0.0).
+- El README ahora distingue explícitamente la **ruta de producción Q4_0 + FP32** de la cuantización **2-bits experimental** (neuromórfica, inviable en hardware comercial).
+
 ## [1.3.1-alpha] - 2026-08-08
 ### Added
 - **Certificación de Qwen2.5-1.5B 4-bit Flat**: Creación del script `scripts/export_qwen2_5_1_5b_flat.py` para exportar el modelo GQA de 1.5B parámetros de Hugging Face. El modelo resultante (`qwen2_5_1_5b_4bit.gaje.flat`) tiene una precisión factual del 100% en español (*"La capital de Francia es París."*) con un rendimiento de **`1.73 tok/s`** y tiempo de carga instantáneo.

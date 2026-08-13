@@ -75,15 +75,21 @@ Estructura compatible con `pytest` para asegurar la integridad del motor.
 *   **`scripts/data_processing/`**: Generación de datasets sintéticos y balanceo semántico.
 *   **`scripts/benchmarks/`**: Suite de evaluación de rendimiento y recuperación (Needle Test).
 
+## 📊 5. Benchmarks de Rendimiento (`benchmarks/`)
+*   **`benchmarks/performance/bench_decode.py`**: Benchmark de decode por fase y tendencia KV-cache.
+*   **`benchmarks/performance/gaje_flat_benchmark.py`**: Benchmark del formato `.flat`.
+*   **`benchmarks/FINDINGS_WSL2_BENCHMARK_2026.md`**: Hallazgos de benchmarks WSL2.
+*   **`benchmarks/research/`** y **`benchmarks/logs/`**: experimentos exploratorios y resultados serializados.
+
 ---
 
-## 🧬 5. Código Nativo (`src/` y `python/`)
+## 🧬 6. Código Nativo (`src/` y `python/`)
 *   **`src/`**: Núcleo en Rust (kernels SIMD, LLM Engine, KV-Cache, Mmap Loader, Island Model). Solo se compila el CLI principal (`gaje-cli`) por defecto.
 *   **`python/gaje/`**: Puente PyO3 y wrappers de inferencia nativos.
 
 ---
 
-## 📦 6. Contenido Archivado (`legacy/` y `docs/archive/`)
+## 📦 7. Contenido Archivado (`legacy/` y `docs/archive/`)
 *   **`legacy/archive/rust_bins/`**: Bins Rust exploratorios (trainers, breeders, MCTS) conservados como referencia.
 *   **`legacy/archive/scripts/`** y **`legacy/archive/scratch/`**: Scripts de prueba transitorios.
 *   **`docs/archive/research/`**: Notas de investigación exploratoria.
