@@ -6,15 +6,31 @@ and model unloading to optimize RAM consumption.
 
 from datetime import datetime
 import gc
+import logging
 import os
 import threading
+
+logger = logging.getLogger("gaje-web-ui.model-manager")
 
 loaded_models = {}
 model_lock = threading.Lock()
 
 
 def find_model_path(models_root: str, model_name: str) -> str:
-    """Recursively search for a model file (.gaje or .flat) inside models_root."""
+    """Recursively search for a model file (.gaje or .flat) inside models_root.
+
+    Seguridad (Fase 2.5): valida que `model_name` sea un simple nombre de archivo,
+    no una ruta, para evitar path traversal.
+    """
+    if not model_name:
+        return None
+
+    # Bloquear path traversal: solo se acepta el nombre base (sin separadores)
+    base = os.path.basename(model_name)
+    if base != model_name or ".." in model_name or "/" in model_name or "\\" in model_name:
+        logger.warning("Nombre de modelo inválido (posible path traversal): %r", model_name)
+        return None
+
     if not os.path.exists(models_root):
         return None
 
@@ -32,16 +48,14 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
 
         model_path = find_model_path(models_root, model_name)
         if not model_path:
-            print(
-                f"❌ No se encontró el archivo de modelo '{model_name}' en {models_root}"
-            )
+            logger.error("No se encontró el archivo de modelo '%s' en %s", model_name, models_root)
             return None
 
-        print(f"🧬 Cargando modelo real: {model_path}")
+        logger.info("Cargando modelo real: %s", model_path)
         try:
             # Strictly keep only ONE active model in RAM at any time
             if loaded_models:
-                print("🧹 Liberando modelo previo de la memoria RAM...")
+                logger.info("Liberando modelo previo de la memoria RAM...")
                 loaded_models.clear()
                 gc.collect()
 
@@ -50,10 +64,7 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
             loaded_models[model_name] = llm
             return llm
         except Exception as e:
-            import traceback
-
-            print(f"❌ Error cargando modelo {model_name}: {e}")
-            traceback.print_exc()
+            logger.error("Error cargando modelo %s: %s", model_name, e, exc_info=True)
             return None
 
 

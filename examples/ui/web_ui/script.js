@@ -8,6 +8,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const modelDate = document.getElementById('model-date');
     let modelsData = [];
 
+    // ===== Navegación por vistas (Fase 1) =====
+    const chatView = document.getElementById('chat-view');
+    const archView = document.getElementById('arch-view');
+    const tabChat = document.getElementById('tab-chat');
+    const tabArch = document.getElementById('tab-arch');
+
+    function switchView(name) {
+        const showChat = name === 'chat';
+        chatView.hidden = !showChat;
+        archView.hidden = showChat;
+        tabChat.classList.toggle('active', showChat);
+        tabArch.classList.toggle('active', !showChat);
+        tabChat.setAttribute('aria-selected', showChat);
+        tabArch.setAttribute('aria-selected', !showChat);
+        if (!showChat && window.ArchView) {
+            window.ArchView.mount(archView);
+        }
+    }
+
+    if (tabChat && tabArch) {
+        tabChat.addEventListener('click', () => switchView('chat'));
+        tabArch.addEventListener('click', () => switchView('arch'));
+    }
+
     // Cargar modelos disponibles
     async function loadModels() {
         try {
@@ -119,20 +143,26 @@ document.addEventListener('DOMContentLoaded', () => {
     loadModels();
     loadEnvInfo();
 
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
     function addMessage(text, type, meta = null) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${type}`;
 
-        let html = `<p>${text}</p>`;
+        let html = `<p>${escapeHtml(text)}</p>`;
         if (type === 'bot' && meta) {
             let islandBadge = '';
             if (meta.island) {
-                islandBadge = `<span class="meta-badge meta-island">🏝️ Island .gmem: ${meta.island.retrieval_ms} ms | +${meta.island.budget_tokens} tok (CosSim ${meta.island.cossim})</span>`;
+                islandBadge = `<span class="meta-badge meta-island">🏝️ Island .gmem: ${escapeHtml(meta.island.retrieval_ms)} ms | +${escapeHtml(meta.island.budget_tokens)} tok (CosSim ${escapeHtml(meta.island.cossim)})</span>`;
             }
             html += `
                 <div class="message-meta">
-                    <span class="meta-badge">⏱️ ${meta.latency_ms} ms (${meta.tokens_sec || 0} tok/s)</span>
-                    <span class="meta-badge">🔢 ${meta.tokens_count || 0} tokens</span>
+                    <span class="meta-badge">⏱️ ${escapeHtml(meta.latency_ms)} ms (${escapeHtml(meta.tokens_sec || 0)} tok/s)</span>
+                    <span class="meta-badge">🔢 ${escapeHtml(meta.tokens_count || 0)} tokens</span>
                     ${islandBadge}
                 </div>
             `;
@@ -192,6 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.value = '';
         userInput.disabled = true;
         sendBtn.disabled = true;
+
+        // Vínculo contextual (Fase 1): resaltar el flujo de inferencia en el diagrama
+        if (window.ArchView && window.ArchView.isLoaded()) {
+            window.ArchView.setFlow('inference');
+        }
 
         try {
             const response = await fetch('/api/chat', {

@@ -6,6 +6,7 @@ and Island Model context orchestration.
 
 import http.server
 import json
+import logging
 import os
 import platform
 import socketserver
@@ -22,8 +23,22 @@ from gaje.utils.version import get_project_version  # noqa: E402
 from model_manager import get_model, list_available_models  # noqa: E402
 from prompt_templates import format_prompt, get_stop_tokens  # noqa: E402
 
-PORT = 8080
-MODELS_ROOT = os.path.join(PROJECT_ROOT, "models")
+# ============ Configuración por variables de entorno (Fase 2.1) ============
+PORT = int(os.environ.get("GAJE_PORT", "8080"))
+MODELS_ROOT = os.environ.get(
+    "GAJE_MODELS_ROOT", os.path.join(PROJECT_ROOT, "models")
+)
+MAX_TOKENS = int(os.environ.get("GAJE_MAX_TOKENS", "512"))
+TEMPERATURE = float(os.environ.get("GAJE_TEMPERATURE", "0.2"))
+TOP_P = float(os.environ.get("GAJE_TOP_P", "0.9"))
+REP_PENALTY = float(os.environ.get("GAJE_REP_PENALTY", "1.1"))
+LOG_LEVEL = os.environ.get("GAJE_LOG_LEVEL", "INFO")
+
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("gaje-web-ui")
 
 # Configuración central del Island Model (.gmem). Fuente única de verdad
 # para la UI; no se duplica en el HTML.
@@ -122,6 +137,8 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/load_model":
             self._handle_load_model()
+        elif self.path == "/api/chat/stream":
+            self._handle_chat_stream()
         elif self.path == "/api/chat":
             self._handle_chat()
         else:
@@ -131,7 +148,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
         try:
             data = self._read_json_body()
             model_name = data.get("model", "")
-            print(f"🧬 Pre-cargando modelo: {model_name}...")
+            logger.info("Pre-cargando modelo: %s...", model_name)
 
             llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
             if not llm:
@@ -142,6 +159,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
 
             self._send_json({"status": "ok", "model": model_name})
         except Exception as e:
+            logger.exception("Error cargando modelo %s", data.get("model", "?"))
             self._send_json({"error": str(e)}, status=500)
 
     def _handle_chat(self):
@@ -151,7 +169,7 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             model_name = data.get("model", "")
             _runtime = get_runtime_info()
 
-            print(f"[*] Procesando mensaje con modelo: {model_name}")
+            logger.info("Procesando mensaje con modelo: %s", model_name)
             llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
             if not llm:
                 self._send_json(
@@ -165,18 +183,18 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             if hasattr(tokens, "ids"):
                 tokens = tokens.ids
 
-            # 2. Inferencia Nativa
+            # 2. Inferencia Nativa (o streaming si se solicita)
             start_time = time.time()
             eos_ids = get_stop_tokens(model_name, llm.tokenizer)
 
             try:
-                # Use stable, low-entropy sampling (temperature=0.2, rep_penalty=1.1) to avoid loops
-                # and factual hallucinations in highly compressed models.
+                # Use stable, low-entropy sampling to avoid loops and
+                # factual hallucinations in highly compressed models.
                 gen_ids = llm.rust_llm.generate_native_py(
-                    tokens, 512, 0.2, 1.1, eos_ids
+                    tokens, MAX_TOKENS, TEMPERATURE, REP_PENALTY, eos_ids
                 )
             except Exception as e:
-                print(f"⚠️ Warning en generate_native_py: {e}")
+                logger.warning("Warning en generate_native_py: %s", e)
                 gen_ids = [2]
 
             elapsed_ms = (time.time() - start_time) * 1000.0
@@ -232,15 +250,72 @@ class GajeHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(response_data)
 
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
+            logger.exception("Error en _handle_chat")
             self._send_json({"error": str(e)}, status=500)
 
+    def _handle_chat_stream(self):
+        """Streaming real de tokens por SSE (Fase 2.2). Reutiliza llm.generate()."""
+        try:
+            data = self._read_json_body()
+            message = data.get("message", "")
+            model_name = data.get("model", "")
+
+            logger.info("Streaming con modelo: %s", model_name)
+            llm = get_model(MODELS_ROOT, model_name, GenomicLLM)
+            if not llm:
+                self._send_json(
+                    {"error": f"Modelo {model_name} no disponible."}, status=500
+                )
+                return
+
+            formatted_message = format_prompt(model_name, message)
+            gen = llm.generate(
+                formatted_message,
+                max_new_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                repetition_penalty=REP_PENALTY,
+            )
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+
+            for token in gen:
+                if not isinstance(token, str):
+                    token = str(token)
+                token = token.replace("\n", "\u000A")
+                self.wfile.write(f"data: {json.dumps(token)}\n\n".encode("utf-8"))
+                self.wfile.flush()
+
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+        except Exception as e:
+            logger.exception("Error en _handle_chat_stream")
+            try:
+                self.wfile.write(
+                    f"data: {json.dumps({'error': str(e)})}\n\n".encode("utf-8")
+                )
+                self.wfile.flush()
+            except Exception:
+                pass
+
     def _read_json_body(self) -> dict:
-        content_length = int(self.headers.get("Content-Length", 0))
+        content_length_str = self.headers.get("Content-Length", "0")
+        try:
+            content_length = int(content_length_str)
+        except (TypeError, ValueError):
+            content_length = 0
+        if content_length <= 0 or content_length > 10 * 1024 * 1024:
+            logger.warning("Content-Length inválido: %r", content_length_str)
+            return {}
         post_data = self.rfile.read(content_length)
-        return json.loads(post_data)
+        try:
+            return json.loads(post_data)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            logger.warning("Body JSON inválido")
+            return {}
 
     def _send_json(self, data: dict, status: int = 200):
         self.send_response(status)
@@ -253,9 +328,9 @@ if __name__ == "__main__":
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.ThreadingTCPServer(("", PORT), GajeHandler) as httpd:
         httpd.daemon_threads = True
-        print(f"🚀 Servidor GAJE Visual Real activo en http://localhost:{PORT}")
-        print("Presiona Ctrl+C para detener.")
+        logger.info("Servidor GAJE Visual Real activo en http://localhost:%s", PORT)
+        logger.info("Presiona Ctrl+C para detener.")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            print("\n🛑 Servidor detenido.")
+            logger.info("Servidor detenido.")

@@ -1,0 +1,213 @@
+{
+  "$schema": "https://raw.githubusercontent.com/erickaguilar/gaje-semantic-compression/test/experimental/examples/ui/web_ui/architecture_graph.json",
+  "meta": {
+    "name": "GAJE Semantic Compression - Architecture Graph",
+    "version": "1.6.0-alpha",
+    "description": "Motor de inferencia nativo Rust (PyO3) con capa Python wrapper, formato .gaje.flat zero-copy mmap, Island Model .gmem y kernels SIMD. Granos: nodes, edges y flows con la ruta completa por flujo.",
+    "layers": [
+      { "id": "ui", "label": "UI / Server (Python)" },
+      { "id": "python", "label": "Capa Python (gaje package)" },
+      { "id": "bridge", "label": "Puente PyO3" },
+      { "id": "rust_core", "label": "Núcleo Rust (módulos)" },
+      { "id": "kernels", "label": "Kernels / Matemática SIMD" },
+      { "id": "io", "label": "I/O y Formatos" },
+      { "id": "data", "label": "Datos / Persistencia" }
+    ]
+  },
+  "nodes": [
+    { "id": "ui_web", "layer": "ui", "label": "Web UI", "fullname": "examples/ui/web_ui/index.html + script.js + style.css", "kind": "frontend", "description": "SPA de chat genómico. Renderiza métricas de compresión, secuencia DNA coloreada (A/C/G/T), Island Model .gmem y entorno de ejecución. Persiste tema en localStorage." },
+    { "id": "server", "layer": "ui", "label": "server.py", "fullname": "examples/ui/web_ui/server.py", "kind": "server", "description": "Servidor HTTP stdlib (SimpleHTTPRequestHandler). Endpoints: GET /api/models, GET /api/info, POST /api/load_model, POST /api/chat + estáticos. Config Island Model central (ISLAND_CONFIG)." },
+    { "id": "model_manager", "layer": "ui", "label": "model_manager.py", "fullname": "examples/ui/web_ui/model_manager.py", "kind": "server", "description": "Gestión de modelos: búsqueda recursiva, caché thread-safe, un solo modelo activo en RAM (libera previo con gc.collect()), carga lazy y set_k_wta_ratio(0.0)." },
+    { "id": "prompt_tpl", "layer": "ui", "label": "prompt_templates.py", "fullname": "examples/ui/web_ui/prompt_templates.py", "kind": "server", "description": "Formateo de prompts por arquitectura (ChatML para smollm/qwen, Gemma para gemma) y devolución de stop tokens [2, 151643, 151645]." },
+
+    { "id": "py_cli", "layer": "python", "label": "gaje CLI", "fullname": "python/gaje/utils/cli.py", "kind": "cli", "description": "CLI argparse registrado como script 'gaje'. Comandos: info (estado) y search (búsqueda ADC en archivo .gaje vía dna_similarity_search_adc)." },
+    { "id": "py_archive", "layer": "python", "label": "GAJEArchive", "fullname": "python/gaje/core/archive.py", "kind": "python", "description": "Formato de archivo .gaje v3 para vectores/embeddings, 100% Python puro (struct+JSON). Entradas (label, dna, epi_dna) + codebook. No usa Rust." },
+    { "id": "py_llm", "layer": "python", "label": "GenomicLLM", "fullname": "python/gaje/nn/stabilized.py", "kind": "python", "description": "Clase principal wrapper. Construye/carga modelos (GGUF, .gaje, .flat), genera texto (path nativo rápido o spiking/toroidal), guarda/carga .gaje, expone rust_llm." },
+    { "id": "py_layer", "layer": "python", "label": "GenomicLayer/Block", "fullname": "python/gaje/nn/stabilized.py", "kind": "python", "description": "Capas lineales y bloques de atención genómicos que convierten pesos F32/F16/Q8 a DNA + centroides + anclas y crean GenomicLinear / RustGenomicBlock nativos." },
+    { "id": "py_session", "layer": "python", "label": "SessionMemory", "fullname": "python/gaje/core/session.py", "kind": "python", "description": "Wrapper sobre SessionBuffer nativo: memoria de sesión toroidal circular. push/retrieve/save/load." },
+    { "id": "py_dni", "layer": "python", "label": "DNIEngine (py)", "fullname": "python/gaje/core/dni.py", "kind": "python", "description": "Wrapper sobre DNIEngine nativo para Direct Neural Ingestion (ingest_text con pop_size y generaciones)." },
+    { "id": "py_rag", "layer": "python", "label": "NativeSemanticRAG (py)", "fullname": "python/gaje/rag.py", "kind": "python", "description": "Wrapper sobre NativeSemanticRAG nativo: add_document/search/format_context para RAG en memoria compartida." },
+    { "id": "py_trainer", "layer": "python", "label": "GenomicTrainer", "fullname": "python/gaje/nn/trainer.py", "kind": "python", "description": "Entrenamiento con Semantic Resonance Loss (hybrid NumPy/PyTorch) + refinamiento nativo. Curriculum 3 fases: Base, IQAT, Evolución." },
+    { "id": "py_balancer", "layer": "python", "label": "SignalToNoiseBalancer", "fullname": "python/gaje/processing/balancer.py", "kind": "python", "description": "Homeostasis / ancla de precisión: ajusta drift, genera precision_mask y poda dimensiones usando funciones nativas Rust." },
+    { "id": "py_pipeline", "layer": "python", "label": "DatasetProcessor", "fullname": "python/gaje/processing/pipeline.py", "kind": "python", "description": "Carga datasets .txt/.jsonl y reexporta GenomicLayer/Block/LLM por compatibilidad con benchmarks." },
+    { "id": "py_utils", "layer": "python", "label": "gaje.utils", "fullname": "python/gaje/utils/ (quantization, codebook, metrics, version)", "kind": "python", "description": "Utilidades: dequantize_q8_0/unpermute, fast_kmeans_1d/train_genomic_codebook, métricas de paridad, get_project_version." },
+
+    { "id": "pyo3", "layer": "bridge", "label": "gaje.core._impl", "fullname": "python/gaje/core/_impl.pyd / .abi3.so (maturin PyO3)", "kind": "bridge", "description": "Módulo de extensión PyO3 compilado con maturin. Registra ~28 clases y ~30 funciones nativas. Punto de entrada: src/lib.rs (#[pymodule] _impl)." },
+
+    { "id": "rs_llm", "layer": "rust_core", "label": "RustGenomicLLM", "fullname": "src/nn/llm.rs", "kind": "rust", "description": "Núcleo de inferencia: forward_core (embeddings → bloques → output_norm → lm_head → K-WTA), generate_native_core (greedy/multinomial, rep-penalty, anti-bucle), entrenamiento y mutación." },
+    { "id": "rs_block", "layer": "rust_core", "label": "RustGenomicBlock", "fullname": "src/nn/block.rs", "kind": "rust", "description": "Bloque Transformer nativo: atención + FFN con doble norma y modulation del CentroidGraph." },
+    { "id": "rs_attn", "layer": "rust_core", "label": "GenomicAttention", "fullname": "src/nn/attention.rs", "kind": "rust", "description": "Atención GQA + RoPE + KV-Cache nativa sobre pesos genómicos 4-bit." },
+    { "id": "rs_linear", "layer": "rust_core", "label": "GenomicLinear", "fullname": "src/nn/linear.rs", "kind": "rust", "description": "Capa lineal nativa con decuantización 4/2-bit y Stability Anchors FP16 (anchor cloning)." },
+    { "id": "rs_db", "layer": "rust_core", "label": "GajeDatabase", "fullname": "src/core/db.rs (GajeDatabaseWriter/Reader/BatchWriter)", "kind": "rust", "description": "Persistencia redb con compresión LZ4: tensores .dna/.centroids/.anchors/.bias + metadatos config/tokenizer. compact() al guardar." },
+    { "id": "rs_index", "layer": "rust_core", "label": "GajeIndex", "fullname": "src/core/index.rs (HNSW)", "kind": "rust", "description": "Índice genómico HNSW para búsqueda sub-lineal de similitud sobre DNA comprimido (build/search)." },
+    { "id": "rs_sbuf", "layer": "rust_core", "label": "SessionBuffer", "fullname": "src/core/session_memory.rs", "kind": "rust", "description": "Buffer circular de memoria de sesión toroidal nativo: push/retrieve_relevant/dump_to_disk/load_from_disk." },
+    { "id": "rs_dni", "layer": "rust_core", "label": "DNIEngine (rs)", "fullname": "src/core/dni.rs", "kind": "rust", "description": "Motor de Direct Neural Ingestion nativo: ingest_text con consejo de council de maestros." },
+    { "id": "rs_rag", "layer": "rust_core", "label": "NativeSemanticRAG (rs)", "fullname": "src/compute/rag.rs", "kind": "rust", "description": "RAG nativo en Rust sobre índice de similitud en memoria compartida (add/search/format_context)." },
+    { "id": "rs_trainer", "layer": "rust_core", "label": "NativeGenomicTrainer", "fullname": "src/nn/trainer.rs", "kind": "rust", "description": "Entrenador nativo de organismo genómico." },
+    { "id": "rs_distill", "layer": "rust_core", "label": "NativeGenomicDistiller", "fullname": "src/nn/distiller.rs (Teacher/CouncilOfTeachers)", "kind": "rust", "description": "Destilación nativa con Teacher y CouncilOfTeachers para transferencia de conocimiento." },
+    { "id": "rs_iqat", "layer": "rust_core", "label": "NativeIQATEngine", "fullname": "src/nn/iqat.rs", "kind": "rust", "description": "Motor de Quantization-Aware Training iterativo (IQAT) para calibrar el modelo." },
+    { "id": "rs_sched", "layer": "rust_core", "label": "NeuromorphicScheduler", "fullname": "src/compute/scheduler.rs", "kind": "rust", "description": "Planificador neuromórfico de spikes (Timing Wheel O(1), inyección e integración de picos)." },
+    { "id": "rs_spike", "layer": "rust_core", "label": "GajeNeuromorphicLayer", "fullname": "src/nn/spiking/layer.rs", "kind": "rust", "description": "Capa neuromórfica 2-bit (memoria SoA para SIMD, umbrales, reset homeostático, k_wta)." },
+    { "id": "rs_sampler", "layer": "rust_core", "label": "Samplers", "fullname": "src/compute/sampler.rs (ToroidalSampler, SintergicSampler)", "kind": "rust", "description": "Muestreo toroidal y sintergico de logits para generación estable de baja entropía." },
+
+    { "id": "ks_kernels", "layer": "kernels", "label": "Kernels SIMD", "fullname": "src/compute/kernels.rs (AVX2/NEON)", "kind": "kernel", "description": "Kernels de dot-product SIMD (AVX2/FMA/NEON) para matmul GEMV 4-bit sobre DNA. Static dispatch con trait GenomicKernel." },
+    { "id": "ks_math", "layer": "kernels", "label": "compute/math.rs", "fullname": "src/compute/math.rs", "kind": "kernel", "description": "Matemática de compresión: quantize/dequantize (2-bit/4-bit/Q8_0/FP16/FP32), dna_similarity_search_adc (ANN ADC), entropías, rep-penalty, rms_norm." },
+
+    { "id": "io_loader", "layer": "io", "label": "NativeLoader", "fullname": "src/io/loader.rs (GGUFLoader, load_genomic_auto, save_genomic_model)", "kind": "io", "description": "Carga/serialización: importa GGUF (bit-depth mixto attn 4-bit / resto 2-bit), auto-detecta .flat (mmap) vs .gaje (redb), init_born_genomic_model." },
+    { "id": "io_flat", "layer": "io", "label": "GajeFlatFileReader", "fullname": "src/io/loader.rs (FlatHeaderV2 .gaje.flat)", "kind": "io", "description": "Lector de formato plano v2 zero-copy mmap alineado a 64 bytes. Metadata JSON + directorio + offsets. Hybrid: embeddings FP32 + cuerpo Q4_0." },
+    { "id": "io_gguf", "layer": "io", "label": "GGUF I/O", "fullname": "src/io/gguf.rs", "kind": "io", "description": "Lector de formato fuente GGUF (Qwen2, SmolLM2) para importación y transmutación a genoma GAJE." },
+    { "id": "io_gmem", "layer": "io", "label": "GmemMemoryIndex", "fullname": "src/io/gmem.rs + src/compute/island.rs (.gmem Island Model)", "kind": "io", "description": "Persistencia Island Model .gmem: índices binarios planos alineados a 64B, magic GMEM. RAG en 0.75ms, cold start 0.12ms." },
+    { "id": "io_arch", "layer": "io", "label": "ArchitectureDescriptor", "fullname": "src/io/arch.rs", "kind": "io", "description": "Descriptor de arquitectura embebido en cabecera binaria (n_embd, n_head, n_head_kv, n_blocks, eps, rope_base, qk_permute). ModelFamily." },
+
+    { "id": "src_gguf", "layer": "data", "label": "GGUF fuente", "fullname": "data/models/*.gguf + tokenizer.json", "kind": "data", "description": "Modelos fuente Qwen2.5-1.5B / Qwen2-0.5B / SmolLM2-135M en GGUF (FP16) y tokenizers locales." },
+    { "id": "file_flat", "layer": "data", "label": "Modelos .gaje.flat", "fullname": "models/production/*.gaje.flat", "kind": "data", "description": "Modelos de producción cuantizados en formato plano zero-copy (ej. qwen2_5_1_5b_q4_0.gaje.flat, 2.7GB)." },
+    { "id": "file_gaje", "layer": "data", "label": "Modelos .gaje", "fullname": "models/checkpoints, models/production/*.gaje (redb)", "kind": "data", "description": "Modelos evolucionados/entrenados en base de datos genómica redb con compresión LZ4." },
+    { "id": "file_gmem", "layer": "data", "label": "Índices .gmem", "fullname": "models/*.gmem (Island Model)", "kind": "data", "description": "Índices de memoria de contexto Island Model persistentes en disco (magic GMEM)." }
+  ],
+  "edges": [
+    { "from": "ui_web", "to": "server", "flow": "web_ui" },
+    { "from": "server", "to": "model_manager", "flow": "web_ui" },
+    { "from": "server", "to": "prompt_tpl", "flow": "web_ui" },
+    { "from": "model_manager", "to": "py_llm", "flow": "inference" },
+    { "from": "prompt_tpl", "to": "py_llm", "flow": "inference" },
+    { "from": "py_cli", "to": "py_archive", "flow": "search" },
+    { "from": "py_cli", "to": "pyo3", "flow": "search" },
+    { "from": "py_archive", "to": "file_gaje", "flow": "search" },
+    { "from": "py_llm", "to": "pyo3", "flow": "all" },
+    { "from": "py_layer", "to": "pyo3", "flow": "build" },
+    { "from": "py_session", "to": "pyo3", "flow": "session" },
+    { "from": "py_dni", "to": "pyo3", "flow": "dni" },
+    { "from": "py_rag", "to": "pyo3", "flow": "rag" },
+    { "from": "py_trainer", "to": "py_llm", "flow": "train" },
+    { "from": "py_trainer", "to": "pyo3", "flow": "train" },
+    { "from": "py_balancer", "to": "pyo3", "flow": "balance" },
+    { "from": "py_pipeline", "to": "py_llm", "flow": "train" },
+    { "from": "py_utils", "to": "pyo3", "flow": "quant" },
+
+    { "from": "pyo3", "to": "rs_llm", "flow": "all" },
+    { "from": "pyo3", "to": "rs_block", "flow": "all" },
+    { "from": "pyo3", "to": "rs_attn", "flow": "all" },
+    { "from": "pyo3", "to": "rs_linear", "flow": "all" },
+    { "from": "pyo3", "to": "rs_db", "flow": "persist" },
+    { "from": "pyo3", "to": "rs_index", "flow": "search" },
+    { "from": "pyo3", "to": "rs_sbuf", "flow": "session" },
+    { "from": "pyo3", "to": "rs_dni", "flow": "dni" },
+    { "from": "pyo3", "to": "rs_rag", "flow": "rag" },
+    { "from": "pyo3", "to": "rs_trainer", "flow": "train" },
+    { "from": "pyo3", "to": "rs_distill", "flow": "distill" },
+    { "from": "pyo3", "to": "rs_iqat", "flow": "train" },
+    { "from": "pyo3", "to": "rs_sched", "flow": "spiking" },
+    { "from": "pyo3", "to": "rs_spike", "flow": "spiking" },
+    { "from": "pyo3", "to": "rs_sampler", "flow": "inference" },
+    { "from": "pyo3", "to": "ks_kernels", "flow": "all" },
+    { "from": "pyo3", "to": "ks_math", "flow": "search" },
+    { "from": "pyo3", "to": "io_loader", "flow": "load" },
+
+    { "from": "rs_llm", "to": "rs_block", "flow": "inference" },
+    { "from": "rs_llm", "to": "rs_linear", "flow": "inference" },
+    { "from": "rs_llm", "to": "rs_sampler", "flow": "inference" },
+    { "from": "rs_block", "to": "rs_attn", "flow": "inference" },
+    { "from": "rs_block", "to": "rs_linear", "flow": "inference" },
+    { "from": "rs_attn", "to": "ks_kernels", "flow": "inference" },
+    { "from": "rs_linear", "to": "ks_kernels", "flow": "inference" },
+    { "from": "rs_linear", "to": "ks_math", "flow": "quant" },
+    { "from": "rs_db", "to": "file_gaje", "flow": "persist" },
+    { "from": "rs_db", "to": "io_flat", "flow": "load" },
+    { "from": "rs_index", "to": "ks_math", "flow": "search" },
+    { "from": "rs_rag", "to": "rs_index", "flow": "rag" },
+    { "from": "rs_sbuf", "to": "io_gmem", "flow": "session" },
+    { "from": "rs_sched", "to": "rs_spike", "flow": "spiking" },
+    { "from": "rs_trainer", "to": "rs_llm", "flow": "train" },
+    { "from": "rs_distill", "to": "rs_trainer", "flow": "distill" },
+    { "from": "rs_iqat", "to": "rs_trainer", "flow": "train" },
+
+    { "from": "io_loader", "to": "io_gguf", "flow": "build" },
+    { "from": "io_loader", "to": "io_flat", "flow": "load" },
+    { "from": "io_loader", "to": "io_arch", "flow": "load" },
+    { "from": "io_gguf", "to": "src_gguf", "flow": "build" },
+    { "from": "io_flat", "to": "file_flat", "flow": "load" },
+    { "from": "io_gmem", "to": "file_gmem", "flow": "session" }
+  ],
+  "flows": [
+    {
+      "id": "inference",
+      "name": "Inferencia Web (Chat)",
+      "icon": "💬",
+      "color": "#8b5cf6",
+      "steps": ["ui_web", "server", "model_manager", "prompt_tpl", "py_llm", "pyo3", "rs_llm", "rs_block", "rs_attn", "ks_kernels", "rs_sampler"],
+      "description": "El usuario envía un mensaje; el server formatea el prompt y genera tokens nativamente en Rust (generate_native_py → forward_core → bloques → atención SIMD → sampler)."
+    },
+    {
+      "id": "load",
+      "name": "Carga de modelo (.gaje.flat mmap)",
+      "icon": "📂",
+      "color": "#10b981",
+      "steps": ["server", "model_manager", "py_llm", "pyo3", "io_loader", "io_flat", "file_flat"],
+      "description": "load_genomic_auto detecta magic 'GAJE' → GajeFlatFileReader mapea el .flat v2 zero-copy mmap (embeddings FP32 + cuerpo Q4_0)."
+    },
+    {
+      "id": "build",
+      "name": "Construcción desde GGUF",
+      "icon": "🏗️",
+      "color": "#f59e0b",
+      "steps": ["src_gguf", "io_gguf", "io_loader", "pyo3", "py_layer", "py_llm", "rs_db"],
+      "description": "Importa GGUF fuente, detecta arquitectura, transmuta pesos a DNA/centroides/anclas y persiste el organismo .gaje."
+    },
+    {
+      "id": "train",
+      "name": "Entrenamiento / Evolución",
+      "icon": "🧬",
+      "color": "#ef4444",
+      "steps": ["py_pipeline", "py_trainer", "py_llm", "pyo3", "rs_iqat", "rs_trainer", "rs_llm", "rs_block", "rs_linear"],
+      "description": "DatasetProcessor alimenta GenomicTrainer (curriculum 3 fases: Base/IQAT/Evolución) con refinamiento nativo y homeóstasis."
+    },
+    {
+      "id": "distill",
+      "name": "Destilación",
+      "icon": "🎓",
+      "color": "#ec4899",
+      "steps": ["pyo3", "rs_distill", "rs_trainer", "rs_llm"],
+      "description": "NativeGenomicDistiller con Teacher y CouncilOfTeachers transfiere conocimiento a un organismo estudiante."
+    },
+    {
+      "id": "search",
+      "name": "Búsqueda ADC (.gaje)",
+      "icon": "🔎",
+      "color": "#06b6d4",
+      "steps": ["py_cli", "py_archive", "file_gaje", "pyo3", "ks_math", "rs_index"],
+      "description": "gaje search carga GAJEArchive y ejecuta dna_similarity_search_adc (ANN en espacio comprimido 2-bit) sobre el índice."
+    },
+    {
+      "id": "rag",
+      "name": "RAG / Island Model (.gmem)",
+      "icon": "🏝️",
+      "color": "#84cc16",
+      "steps": ["py_rag", "pyo3", "rs_rag", "rs_index", "ks_math", "io_gmem", "file_gmem"],
+      "description": "NativeSemanticRAG indexa y consulta memoria compartida; el Island Model persiste el contexto en .gmem (latencia 0.75ms)."
+    },
+    {
+      "id": "session",
+      "name": "Memoria de Sesión",
+      "icon": "🧠",
+      "color": "#a855f7",
+      "steps": ["py_session", "pyo3", "rs_sbuf", "io_gmem", "file_gmem"],
+      "description": "SessionMemory envuelve SessionBuffer toroidal: push/retrieve_relevant y persistencia en disco .gmem."
+    },
+    {
+      "id": "spiking",
+      "name": "Neuromórfico 2-bit (experimental)",
+      "icon": "⚡",
+      "color": "#f43f5e",
+      "steps": ["pyo3", "rs_sched", "rs_spike", "ks_kernels"],
+      "description": "NeuromorphicScheduler inyecta e integra spikes sobre capas neuromórficas 2-bit con kernels SIMD (vía experimental de investigación)."
+    },
+    {
+      "id": "dni",
+      "name": "Direct Neural Ingestion",
+      "icon": "🛰️",
+      "color": "#f97316",
+      "steps": ["py_dni", "pyo3", "rs_dni"],
+      "description": "DNIEngine ingiere texto (ingest_text) con consejo de council de maestros para aprender sin backprop."
+    }
+  ]
+}

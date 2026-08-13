@@ -30,6 +30,10 @@
                     <span class="status-dot"></span>
                     <span class="status-text">SIMD Optimized</span>
                 </div>
+                <nav class="view-tabs" role="tablist" aria-label="Vistas principales">
+                    <button id="tab-chat" class="view-tab active" role="tab" aria-selected="true" aria-controls="chat-view">💬 Chat</button>
+                    <button id="tab-arch" class="view-tab" role="tab" aria-selected="false" aria-controls="arch-view">🗺️ Arquitectura</button>
+                </nav>
                 <a class="nav-docs" href="docs.html" title="Documentación GAJE">📄 Docs</a>
                 <button id="theme-toggle" class="theme-btn" aria-label="Cambiar Tema">🌙</button>
             </div>
@@ -86,7 +90,7 @@
                 </section>
             </aside>
 
-            <section class="chat-container">
+            <section id="chat-view" class="chat-container">
                 <div id="chat-window" class="chat-window">
                     <div class="message system">
                         <div class="msg-content">
@@ -103,6 +107,10 @@
                     </button>
                 </div>
             </section>
+
+            <section id="arch-view" class="arch-container" hidden>
+                <div class="arch-placeholder">Cargando diagrama de arquitectura...</div>
+            </section>
         </main>
 
         <footer>
@@ -110,5 +118,6 @@
         </footer>
     </div>
     <script src="script.js?v=1.6.1"></script>
+    <script src="architecture_view.js?v=1.6.1"></script>
 </body>
 </html>
