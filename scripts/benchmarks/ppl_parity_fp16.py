@@ -42,9 +42,16 @@ def ppl_hf(model, tokenizer, tokens, device):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--gaje", default=os.path.join(ROOT, "models/production/qwen2_0_5b_q4_0_q8_0_embd.gaje.flat"))
+    ap.add_argument(
+        "--gaje",
+        default=os.path.join(
+            ROOT, "models/production/qwen2_0_5b_q4_0_q8_0_embd.gaje.flat"
+        ),
+    )
     ap.add_argument("--hf_id", default="Qwen/Qwen2-0.5B-Instruct")
-    ap.add_argument("--files", nargs="+", default=["dataset_es_ext.txt", "coherence_es.txt"])
+    ap.add_argument(
+        "--files", nargs="+", default=["dataset_es_ext.txt", "coherence_es.txt"]
+    )
     ap.add_argument("--samples", type=int, default=120)
     ap.add_argument("--max_len", type=int, default=128)
     args = ap.parse_args()
@@ -68,13 +75,22 @@ def main():
 
     print(f"[~] Cargando HF FP16: {args.hf_id}...")
     from transformers import AutoModelForCausalLM, AutoTokenizer
+
     hf_tok = AutoTokenizer.from_pretrained(args.hf_id)
-    hf = AutoModelForCausalLM.from_pretrained(args.hf_id, torch_dtype=torch.float16).to(device).eval()
+    hf = (
+        AutoModelForCausalLM.from_pretrained(args.hf_id, torch_dtype=torch.float16)
+        .to(device)
+        .eval()
+    )
 
     # vocab alignment
-    gaje_vocab = set(gaje_tok.get_vocab().keys()) if hasattr(gaje_tok, "get_vocab") else set()
+    gaje_vocab = (
+        set(gaje_tok.get_vocab().keys()) if hasattr(gaje_tok, "get_vocab") else set()
+    )
     hf_vocab = set(hf_tok.get_vocab().keys())
-    print(f"[*] GAJE vocab: {len(gaje_vocab)} | HF vocab: {len(hf_vocab)} | intersección: {len(gaje_vocab & hf_vocab)}")
+    print(
+        f"[*] GAJE vocab: {len(gaje_vocab)} | HF vocab: {len(hf_vocab)} | intersección: {len(gaje_vocab & hf_vocab)}"
+    )
 
     random.seed(42)
     lines = []
@@ -107,12 +123,16 @@ def main():
         return
     gaje_ppls, hf_ppls = np.array(gaje_ppls), np.array(hf_ppls)
     print("\n=== RESUMEN PPL (menor = mejor) ===")
-    print(f"GAJE Q4_0+FP32 : {gaje_ppls.mean():.4f}  (media de {len(gaje_ppls)} muestras)")
+    print(
+        f"GAJE Q4_0+FP32 : {gaje_ppls.mean():.4f}  (media de {len(gaje_ppls)} muestras)"
+    )
     print(f"HF FP16        : {hf_ppls.mean():.4f}")
     print(f"Ratio GAJE/FP16: {gaje_ppls.mean()/hf_ppls.mean():.4f}")
     print(f"Correlación    : {np.corrcoef(gaje_ppls, hf_ppls)[0,1]:.4f}")
     if gaje_ppls.mean() / hf_ppls.mean() < 1.05:
-        print("\n✨ SORPRESA CONFIRMADA: PPL dentro de 5% de FP16 a pesar de cuerpo 4-bit")
+        print(
+            "\n✨ SORPRESA CONFIRMADA: PPL dentro de 5% de FP16 a pesar de cuerpo 4-bit"
+        )
 
 
 if __name__ == "__main__":
