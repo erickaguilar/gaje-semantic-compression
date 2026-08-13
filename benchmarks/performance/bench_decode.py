@@ -16,7 +16,8 @@ Uso:
       --model models/production/qwen2_0_5b_4bit.gaje[.flat] \
       --tokenizer temp_tokenizer/tokenizer.json \
       --prompt "El planeta mas grande del Sistema Solar es" \
-      --tokens 96
+      --tokens 96 \
+      [--greedy] [--seed 42]
 
 Requisitos:
   - Motor compilado (maturin develop --release --features python)
@@ -85,13 +86,6 @@ def process_rss_mb():
     return None
 
 
-def measure(prefix, n_items, seconds):
-    rate = (n_items / seconds) if seconds > 0 else 0.0
-    per = (seconds * 1000.0 / n_items) if n_items > 0 else 0.0
-    print(f"  [{prefix:<28}] {n_items:>4} it | {seconds:>9.3f} s | {per:>8.1f} ms/it | {rate:>7.2f} it/s")
-    return rate
-
-
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -105,6 +99,12 @@ def main():
         "--greedy",
         action="store_true",
         help="Usa greedy (argmax) en vez del sampler predeterminado.",
+    )
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Semilla para el muestreo estocástico (reproducibilidad).",
     )
     args = ap.parse_args()
 
@@ -136,6 +136,7 @@ def main():
 
     tok = Tokenizer.from_file(args.tokenizer)
     ids = tok.encode(args.prompt, add_special_tokens=False).ids
+    np.random.seed(args.seed)
     print(f"model  : {os.path.basename(args.model)}")
     print(f"prompt : {args.prompt!r}  ({len(ids)} tokens)")
     print(f"decode : {args.tokens} tokens, modo={'greedy' if args.greedy else 'sampler'}")
@@ -154,9 +155,10 @@ def main():
     # C. Prefill token a token
     llm.clear_cache_py()
     prefill_times = []
+    logits = None
     for tid in ids:
         t0 = time.perf_counter()
-        llm.forward(tid, False)
+        logits = llm.forward(tid, False)
         prefill_times.append((time.perf_counter() - t0) * 1000.0)
     p_arr = np.array(prefill_times)
     print("\n-- PREFILL (prompt) --")
@@ -165,18 +167,17 @@ def main():
           f"max {p_arr.max():.2f} ms")
     print(f"  TTFT  (prefill hasta 1er token): {p_arr.sum():.1f} ms")
 
-    # D + E. Decode autoregresivo token a token (sin clear_cache: KV acumula)
-    logits = llm.forward(ids[-1], False)
+    # D + E. Decode autoregresivo token a token (sin clear_cache: KV acumula).
+    # Logits de salida del ultimo token de prefill ya están en `logits`.
     decode_times = []
     tokens_out = []
     for _ in range(args.tokens):
         if args.greedy:
             nid = int(np.argmax(logits))
         else:
-            probs = np.array(logits, dtype=np.float64)
-            m = probs - probs.max()
-            exp = np.exp(m)
-            probs = exp / exp.sum()
+            probs = np.asarray(logits, dtype=np.float64)
+            probs = np.exp(probs - probs.max())
+            probs /= probs.sum()
             nid = int(np.random.choice(len(probs), p=probs))
         t0 = time.perf_counter()
         logits = llm.forward(nid, False)
