@@ -132,5 +132,13 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::compute::math::calculate_distribution_entropy_native,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::dna_similarity_search_adc,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::math::dna_similarity_search,
+        m
+    )?)?;
     Ok(())
 }

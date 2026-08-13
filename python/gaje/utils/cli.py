@@ -34,8 +34,12 @@ def main():
         q_vec = np.random.normal(0, 0.5, args.dims).tolist()
         db_dna = [e[1] for e in archive.entries]
 
+        centroids = archive.codebook["centroids"]
+        if centroids and isinstance(centroids[0], list):
+            centroids = [c for row in centroids for c in row]
+
         results = engine.dna_similarity_search_adc(
-            q_vec, db_dna, archive.codebook["centroids"]
+            q_vec, db_dna, centroids
         )
 
         for i in range(min(3, len(results))):
