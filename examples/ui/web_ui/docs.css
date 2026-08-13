@@ -128,6 +128,12 @@ body {
   margin: 0 auto 32px;
   font-size: 1.05rem;
 }
+.sim-note {
+  color: var(--muted);
+  max-width: 720px;
+  margin: 8px auto 0;
+  font-size: 0.95rem;
+}
 .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 48px; }
 .btn {
   display: inline-flex;
@@ -347,6 +353,7 @@ body {
 .badge-passed { background: rgba(52,211,153,0.12); color: var(--green); border: 1px solid var(--green); }
 .badge-testing { background: rgba(251,191,36,0.12); color: var(--amber); border: 1px solid var(--amber); }
 .badge-crisis { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid var(--red); }
+.badge-research { background: rgba(167,139,250,0.12); color: #a78bfa; border: 1px solid #a78bfa; }
 
 /* BITACORA */
 .bitacora-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; }

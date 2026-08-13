@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GAJE — Genomic Adaptive Journal Engine</title>
-  <meta name="description" content="Motor de inferencia LLM nativo en Rust, comprimido a 2–4 bits, diseñado para correr sin nube ni GPU sobre hardware ARM.">
+  <meta name="description" content="Motor de inferencia LLM nativo en Rust, cuantización híbrida Q4_0 + FP32, diseñado para correr sin nube ni GPU en CPU x86_64.">
   <meta property="og:title" content="GAJE — Genomic Adaptive Journal Engine">
-  <meta property="og:description" content="Motor de inferencia LLM nativo en Rust, cuantizado a 2 bits con topología toroidal y soberanía de hardware.">
+  <meta property="og:description" content="Motor de inferencia LLM nativo en Rust, formato .gaje.flat v2 (Q4_0 + FP32), con soberanía de hardware.">
   <meta property="og:type" content="website">
 
   <!-- Fonts -->
@@ -50,11 +50,11 @@
   <section class="hero relative">
     <div class="wrap">
       <div class="eyebrow">
-        GAJE — GENOMIC ADAPTIVE JOURNAL ENGINE · ALPHA / INVESTIGACIÓN ACTIVA
+        GAJE — GENOMIC ADAPTIVE JOURNAL ENGINE · v1.6.0-ALPHA · PRODUCCIÓN
       </div>
       <h1>Un motor de inferencia que vive dentro del hardware, no en la nube.</h1>
       <p class="lede">
-        GAJE comprime modelos de lenguaje a 2–4 bits y los ejecuta nativamente en Rust sobre ARM — sin Python, sin GPU, sin conexión. Este proyecto documenta el proceso real: lo que ya funciona, y lo que todavía no.
+        GAJE ejecuta modelos de lenguaje nativamente en Rust sobre CPU x86_64 con cuantización híbrida Q4_0 + FP32 y formato .gaje.flat v2 de acceso zero-copy (mmap). Sin Python en la ruta de inferencia, sin GPU, sin conexión. Este proyecto documenta el proceso real: lo que ya funciona y lo que todavía es investigación.
       </p>
 
       <div class="hero-cta">
@@ -100,17 +100,17 @@
         <div class="pillar">
           <span class="tag">01 — INFRAESTRUCTURA</span>
           <h3>Motor nativo en Rust</h3>
-          <p>Zero-GIL, SIMD NEON JIT, carga por mmap. Corre directamente en Termux/Android sin runtime de Python de por medio.</p>
+          <p>Build release, zero-GIL, kernels SIMD AVX2/FMA con paralelización Rayon, carga zero-copy por mmap. Sin runtime de Python en la ruta de inferencia.</p>
         </div>
         <div class="pillar">
           <span class="tag">02 — COMPRESIÓN</span>
-          <h3>Cuantización genómica</h3>
-          <p>Pesos reducidos a 2–4 bits mediante centroides en un alfabeto de 4 estados (A, C, G, T), con anclas de alta precisión preservadas.</p>
+          <h3>Cuantización híbrida Q4_0 + FP32</h3>
+          <p>Cuerpo del transformer en 4-bits por peso (Q4_0) y embeddings críticos (token_embd, lm_head) preservados en FP32 para mantener la paridad semántica multilingüe.</p>
         </div>
         <div class="pillar">
           <span class="tag">03 — FORMALIZACIÓN</span>
           <h3>Rigor, no solo intuición</h3>
-          <p>Cada decisión de compresión está respaldada por un marco de gradiente natural proximal con métrica de Fisher heterogénea.</p>
+          <p>Cabeceras autodescriptivas dinámicas (ArchitectureDescriptor), paridad FP32 verificada y una suite de tests de integración que valida la equivalencia matemática.</p>
         </div>
       </div>
     </div>
@@ -120,9 +120,10 @@
   <section id="simulador" class="relative">
     <div class="wrap reveal">
       <div class="s-head">
-        <span class="s-tag">[SIMULADOR]</span>
-        <h2>Cuantización Genómica Interactiva (2-bit Alphabet)</h2>
+        <span class="s-tag">[SIMULADOR · INVESTIGACIÓN]</span>
+        <h2>Alfabeto Genómico 2-bit — experimental, no es la ruta de producción</h2>
       </div>
+      <p class="sim-note">Este simulador ilustra el frente de investigación 2-bit (4 estados ACGT), congelado por inviabilidad en hardware comercial. La ruta de producción certificada es Q4_0 + FP32, que es la que ejecuta los modelos de la Web UI.</p>
 
       <div class="sim-container">
         <div class="sim-grid">
@@ -175,40 +176,40 @@
     <div class="wrap reveal">
       <div class="s-head">
         <span class="s-tag">[ARQUITECTURA]</span>
-        <h2>De la variedad discreta al organismo .gaje</h2>
+        <h2>De los pesos GGUF al organismo .gaje.flat</h2>
       </div>
 
       <div class="flow">
         <div class="flow-node">
-          <div class="flabel">ESPACIO DE FASES</div>
-          <h3>Variedad toroidal T^n</h3>
-          <p>Los pesos se modelan como fases θ ∈ [0, 2π) en lugar de valores lineales — la base conceptual que justifica por qué la cuantización extrema no colapsa la señal.</p>
+          <div class="flabel">FORMATO</div>
+          <h3>.gaje.flat v2 autodescriptivo</h3>
+          <p>La cabecera ArchitectureDescriptor describe la topología (RoPE, SwiGLU, GQA/MQA) sin banderas manuales ni condicionales duros por nombre de capa.</p>
         </div>
         <div class="flow-node">
-          <div class="flabel">MÉTRICA</div>
-          <h3>Fisher diagonal heterogénea</h3>
-          <p>Un precondicionador M(θ) que endurece las anclas (Γ = 8.0) y deja plasticidad al resto del genoma — la misma idea detrás de Elastic Weight Consolidation, aplicada a compresión.</p>
+          <div class="flabel">CUERPO</div>
+          <h3>Transformer en Q4_0 (4 bits)</h3>
+          <p>Bloques de atención y FFN comprimidos a 4-bits por peso en bloques simétricos, maximizando la compresión y la carga cero-copia.</p>
         </div>
         <div class="flow-node">
-          <div class="flabel">ARQUITECTURA</div>
-          <h3>Mixed-Bit (Atención 4-bit / FFN 2-bit)</h3>
-          <p>Atención a 4 bits (16 centroides) donde la resolución semántica importa más; FFN a 2 bits donde la redundancia lo permite.</p>
+          <div class="flabel">EMBEDDINGS</div>
+          <h3>token_embd y lm_head en FP32</h3>
+          <p>Las capas críticas del vocabulario se preservan en FP32 para evitar el colapso semántico multilingüe (CJK y europeo) bajo cuantización.</p>
         </div>
         <div class="flow-node">
           <div class="flabel">OPERADOR</div>
-          <h3>Proyección proximal compuesta</h3>
-          <p>Φ proyecta sobre la ε-net de centroides; Ω aplica K-WTA como hard thresholding — dos operadores, un solo paso de actualización.</p>
+          <h3>Decodificación SIMD + Rayon</h3>
+          <p>Kernels AVX2/FMA descomprimen y evalúan los bloques Q4_0 sobre registros vectoriales en paralelo sobre los núcleos físicos.</p>
         </div>
         <div class="flow-node">
           <div class="flabel">SALIDA</div>
-          <h3>Organismo .gaje</h3>
-          <p>Un archivo autocontenido que el motor de Rust despierta, reconstruye y ejecuta sin dependencias externas.</p>
+          <h3>mmap zero-copy + Island</h3>
+          <p>Un archivo autocontenido mapeado en memoria sin copia, complementado por memoria persistente .gmem (Island Model) para contexto.</p>
         </div>
       </div>
 
       <div class="eq">
-        θ<sub>t+1</sub> = Prox<sub>Φ,Ω</sub> ( θ<sub>t</sub> − η · M(θ)<sup>-1</sup> · ∇<sub>θ</sub>L(θ) )
-        <span>La regla de actualización unificada — gradiente natural proximal sobre una métrica heterogénea</span>
+        Q4_0 (cuerpo) + FP32 (token_embd · lm_head) = paridad semántica mantenida con footprint reducido
+        <span>La tesis de compresión híbrida: cuantiza donde la redundancia lo permite, preserva donde la fidelidad importa.</span>
       </div>
     </div>
   </section>
@@ -225,8 +226,8 @@
         <div class="emp-row">
           <div class="emp-level">NIVEL 5</div>
           <div class="emp-info">
-            <h4>Soberanía de Infraestructura (Rust / PyO3)</h4>
-            <p>100% C-ABI Rust nativo, Zero-GIL, tolerancia a fallos por Result&lt;T,E&gt;, cero dependencia de Python en inferencia.</p>
+            <h4>Infraestructura Nativa (Rust / release)</h4>
+            <p>Build release con zero-GIL, tolerancia a fallos por Result&lt;T,E&gt;, cero dependencia de Python en la ruta de inferencia.</p>
           </div>
           <div class="emp-badge badge-passed">PASADO 🟢</div>
         </div>
@@ -234,8 +235,8 @@
         <div class="emp-row">
           <div class="emp-level">NIVEL 4</div>
           <div class="emp-info">
-            <h4>Eficiencia de Memoria y Latencia SIMD</h4>
-            <p>Footprint continuo O(1) de 32MB vía mmap, descompresión vectorizada SIMD NEON JIT en registros CPU.</p>
+            <h4>Decodificación SIMD + Rayon</h4>
+            <p>Kernels AVX2/FMA/AVX/SSE4.2 con paralelización Rayon: ~8.3 tok/s en Qwen2.5-1.5B en CPU x86_64 (release).</p>
           </div>
           <div class="emp-badge badge-passed">PASADO 🟢</div>
         </div>
@@ -243,8 +244,8 @@
         <div class="emp-row">
           <div class="emp-level">NIVEL 3</div>
           <div class="emp-info">
-            <h4>Ingesta Neuronal Directa (DNI)</h4>
-            <p>Proyección en tiempo real de centroides genómicos sobre manifolds de atención con preservación de 1% de anclas.</p>
+            <h4>Modelos de Producción Certificados</h4>
+            <p>Qwen2.5-0.5B/1.5B/3B en formato Q4_0 + FP32, cargables en caliente sin reinicio y preseleccionados por calidad en la Web UI.</p>
           </div>
           <div class="emp-badge badge-passed">PASADO 🟢</div>
         </div>
@@ -252,19 +253,19 @@
         <div class="emp-row">
           <div class="emp-level">NIVEL 2</div>
           <div class="emp-info">
-            <h4>Certificación Semántica (Meta PPL &lt; 15.0)</h4>
-            <p>Recuperación de perplejidad tras corrección de la asimetría de Grouped-Query Attention (GQA) y bit-depth loader.</p>
+            <h4>Paridad Semántica FP32</h4>
+            <p>Embeddings (token_embd, lm_head) preservados en FP32; similitud de pesos reconstruidos &gt; 0.99 y paridad verificada frente a FP16.</p>
           </div>
-          <div class="emp-badge badge-testing">EN PRUEBAS 🟡</div>
+          <div class="emp-badge badge-passed">PASADO 🟢</div>
         </div>
 
         <div class="emp-row">
           <div class="emp-level">NIVEL 1</div>
           <div class="emp-info">
-            <h4>Retención de Contexto Largo (Needle-in-a-Haystack)</h4>
-            <p>Pruebas de búsqueda y retención Needle en ventanas de 4k-8k tokens sin degradación por cuantización.</p>
+            <h4>Frente Experimental (2-bit · ARM)</h4>
+            <p>Cuantización 2-bit (src/nn/spiking) y portabilidad ARM/NEON: inviable comercial por costo de cómputo; documentados como investigación congelada.</p>
           </div>
-          <div class="emp-badge badge-crisis">FASE RESCATE 🔴</div>
+          <div class="emp-badge badge-research">INVESTIGACIÓN 🟣</div>
         </div>
       </div>
     </div>
@@ -328,7 +329,7 @@
           <div class="log-meta"><span class="ver">sin release</span>Jun–Jul 2026</div>
           <div class="log-body">
             <span class="log-tag debug">DEBUG</span>
-            <p>Pivot a PTQ Mixed-Bit sobre SmolLM2. Se detecta corrupción severa: similitud de coseno de 0.04 entre pesos originales y reconstruidos.</p>
+            <p>Pivot a PTQ sobre SmolLM2. Se detecta corrupción severa: similitud de coseno de 0.04 entre pesos originales y reconstruidos.</p>
             <p class="sub">Causa raíz: el cargador nativo adivinaba el bit-depth por el nombre de la capa en lugar de medir el buffer real.</p>
           </div>
         </div>
@@ -341,11 +342,27 @@
           </div>
         </div>
 
+        <div class="log-entry" data-category="infra">
+          <div class="log-meta"><span class="ver">v1.6.0-alpha</span>Ago 2026</div>
+          <div class="log-body">
+            <span class="log-tag infra">INFRA</span>
+            <p>Se certifica Q4_0 + FP32 como ruta de producción: cuerpo del transformer en 4-bits y embeddings (token_embd, lm_head) en FP32. La cuantización 2-bit queda congelada como investigación.</p>
+          </div>
+        </div>
+
+        <div class="log-entry" data-category="debug">
+          <div class="log-meta"><span class="ver">sin release</span>Ago 2026</div>
+          <div class="log-body">
+            <span class="log-tag debug">DEBUG</span>
+            <p>Rendimiento 100x más lento del esperado por un build debug de la extensión. Se fija el pipeline en modo release (~8.3 tok/s en 1.5B) y se alinea el hook de pre-commit con <span class="mono">--release</span>.</p>
+          </div>
+        </div>
+
         <div class="log-entry" data-category="abierto">
-          <div class="log-meta"><span class="ver">actual</span>Jul 2026</div>
+          <div class="log-meta"><span class="ver">actual</span>Ago 2026</div>
           <div class="log-body">
             <span class="log-tag abierto">ABIERTO</span>
-            <p>Baseline F32 en validación. La infraestructura ya es confiable; la coherencia lingüística del modelo todavía no. La PPL sigue muy por encima del objetivo.</p>
+            <p>Tres modelos de producción interactiva (0.5B, 1.5B, 3B) con cambio en caliente, detección real del runtime y preselección por calidad en la Web UI. Pendiente: benchmarks oficiales por modelo y servidor nativo en Rust.</p>
           </div>
         </div>
       </div>
@@ -362,13 +379,13 @@
 
       <div class="spec-grid">
         <div class="spec">
-          <div class="spec-row"><div class="k">RUNTIME</div><div class="v">Rust nativo · Zero-GIL</div></div>
-          <div class="spec-row"><div class="k">SIMD</div><div class="v">NEON (ARM) · AVX2/FMA (x86)</div></div>
-          <div class="spec-row"><div class="k">CUANTIZACIÓN</div><div class="v">Mixed-Bit — 2-bit FFN / 4-bit Atención</div></div>
-          <div class="spec-row"><div class="k">MÉTRICA</div><div class="v">Fisher diagonal heterogénea (estilo EWC)</div></div>
-          <div class="spec-row"><div class="k">MEMORIA</div><div class="v">Carga zero-copy (mmap) · KV-Cache 16×</div></div>
-          <div class="spec-row"><div class="k">PLATAFORMAS</div><div class="v">Android / Termux · Linux · C-FFI (iOS, C++)</div></div>
-          <div class="spec-row"><div class="k">INTERFAZ</div><div class="v">gaje-cli · bindings PyO3 para experimentación</div></div>
+          <div class="spec-row"><div class="k">RUNTIME</div><div class="v">Rust nativo (release) · Zero-GIL</div></div>
+          <div class="spec-row"><div class="k">SIMD</div><div class="v">AVX2/FMA/AVX/SSE4.2 (x86_64) + Rayon</div></div>
+          <div class="spec-row"><div class="k">CUANTIZACIÓN</div><div class="v">Q4_0 (cuerpo 4-bit) + FP32 (embeddings)</div></div>
+          <div class="spec-row"><div class="k">FORMATO</div><div class="v">.gaje.flat v2 · ArchitectureDescriptor</div></div>
+          <div class="spec-row"><div class="k">MEMORIA</div><div class="v">Carga zero-copy (mmap) · Island .gmem</div></div>
+          <div class="spec-row"><div class="k">PLATAFORMAS</div><div class="v">Linux (Fedora/Ubuntu/Arch) · macOS</div></div>
+          <div class="spec-row"><div class="k">INTERFAZ</div><div class="v">Web UI + server.py · gaje-cli · bindings PyO3</div></div>
         </div>
 
         <div class="code-box">
@@ -401,14 +418,14 @@ cargo build --release && pytest tests/</pre>
       </div>
 
       <ul class="checklist">
-        <li class="done"><div class="box"></div><span>Infraestructura Rust estable y sin fugas de memoria</span></li>
+        <li class="done"><div class="box"></div><span>Motor Rust release sin fugas de memoria y ruta de producción Q4_0 + FP32</span></li>
         <li class="done"><div class="box"></div><span>Loader con detección robusta de bit-depth por tamaño real de buffer</span></li>
-        <li class="done"><div class="box"></div><span>KV-Cache sincronizada con el orden de bits del motor</span></li>
-        <li class="done"><div class="box"></div><span>Corrección de la asimetría Grouped-Query Attention (GQA)</span></li>
-        <li class="now"><div class="box"></div><span>Validar coherencia semántica del baseline F32 (Rescate PPL)</span></li>
-        <li><div class="box"></div><span>Recalibración de centroides Mixed-Bit sobre corpus estratificado</span></li>
-        <li><div class="box"></div><span>Certificación Nivel 1 — recuperación Needle-in-a-Haystack</span></li>
-        <li><div class="box"></div><span>Island Model (Evolución por nichos distribuidos)</span></li>
+        <li class="done"><div class="box"></div><span>KV-Cache sincronizada y corrección de la asimetría Grouped-Query Attention (GQA)</span></li>
+        <li class="done"><div class="box"></div><span>Modelos de producción interactiva: 0.5B, 1.5B y 3B con cambio en caliente</span></li>
+        <li class="now"><div class="box"></div><span>Benchmarks oficiales reproducibles por modelo (calidad / memoria / velocidad)</span></li>
+        <li><div class="box"></div><span>Servidor nativo gaje-server en Rust (HTTP + streaming, sin PyO3)</span></li>
+        <li><div class="box"></div><span>Ampliación del ecosistema: DeepSeek-R1-Distill y otros formatos</span></li>
+        <li><div class="box"></div><span>Portabilidad ARM/NEON y 2-bit como frentes de investigación</span></li>
       </ul>
     </div>
   </section>
@@ -416,7 +433,7 @@ cargo build --release && pytest tests/</pre>
   <!-- FOOTER -->
   <footer>
     <div class="wrap">
-      <div class="fnote">GAJE · Proyecto de investigación individual · Construido en Termux · Licencia AGPL-3.0</div>
+      <div class="fnote">GAJE · Proyecto de investigación individual · Licencia Apache 2.0</div>
       <a class="mono" href="https://github.com/erickaguilar/gaje-semantic-compression" target="_blank" rel="noopener">
         github.com/erickaguilar/gaje-semantic-compression →
       </a>
