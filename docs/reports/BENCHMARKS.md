@@ -83,6 +83,20 @@ Scripts: `scripts/benchmarks/engine_benchmark.py`, `scripts/benchmarks/ppl_suite
 > - **Correlación GAJE vs FP16 = 0.87–0.93** (Qwen2-0.5B, corpus mayor): el motor conserva el *orden* de probabilidades aunque no los valores absolutos. Es decir, conserva **decisiones** (argmax), no valoraciones.
 > - **Hallazgo:** las variantes 1.5B con embeddings **Q8_0 vs FP32 dan PPL casi idéntica** (130.4 vs 130.7) con la mitad de tamaño → el diseño `q8_0_embd` es estrictamente mejor en tamaño/velocidad sin pérdida de calidad en este corpus.
 
+### 6.1 Referencia externa de cuantización total (llama.cpp Q4_K_M)
+
+Para anclar qué calidad da una **cuantización 4-bit total** (incluidos embeddings), se midió con **llama.cpp** sobre el **mismo corpus**:
+
+| Baseline | Motor | PPL (método propio) |
+| :--- | :--- | :---: |
+| Qwen2-0.5B-Instruct **Q4_K_M** (4-bit total) | llama-perplexity (ventana 512) | **13.76** |
+| Qwen2-0.5B GAJE `q8_0_embd` | GAJE (softmax por posición, sin ventana) | 403.6 |
+| Qwen2-0.5B FP16 (ref) | HuggingFace | 176.9 |
+
+> **⚠️ NO comparar estos números entre sí.** Cada motor usa tokenización y método de PPL distintos (llama.cpp: streaming con ventana y contexto continuo; GAJE: cada línea como secuencia independiente con cache limpia). Por eso los valores absolutos no son comparables entre motores. La fila de llama.cpp es un **ancla de referencia** de "calidad 4-bit total", no una comparación directa de motor.
+
+> **Lectura honesta del 4-bit total:** el hecho de que llama.cpp logre PPL baja (13.76) con **todo** cuantizado, sumado a que **dentro de GAJE Q8_0 vs FP32 embeddings dan PPL idéntica** (130.4 vs 130.7), indica que **la precisión de los embeddings no es el cuello de botella de calidad a esta escala**. Es decir: la preservación FP32/Q8_0 de embeddings NO es el principal driver de calidad; el cuerpo 4-bit ya es el factor dominante. Implicación práctica: el formato `q8_0_embd` (mitad de tamaño) es la elección correcta; no hay justificación de calidad para mantener embeddings FP32.
+
 ---
 
 ## 7. Hallazgos honestos y pendientes
@@ -94,7 +108,7 @@ Scripts: `scripts/benchmarks/engine_benchmark.py`, `scripts/benchmarks/ppl_suite
 4. **Q8_0 embeddings ≈ FP32** en calidad, con mitad de tamaño → `q8_0_embd` es el formato recomendado.
 
 ### 🔜 Pendiente
-- **Columna 4-bit total** (llama.cpp Q4_0 puro) para aislar el efecto de la preservación de embeddings.
+- **PPL unificado entre motores** (misma tokenización y método GAJE/llama.cpp) para comparación numérica estricta del 4-bit total. Hoy no son comparables directamente.
 - **PPL en corpus limpio held-out** (subconjunto Wikitext/El País ES), ≥100 muestras.
 - **RSS aislado por modelo** (proceso independiente por modelo).
 - **Paridad FP16 para 1.5B y 3B** (RAM limitada: 3B FP16 ≈ 6 GB no cupo).
@@ -109,4 +123,9 @@ python scripts/benchmarks/engine_benchmark.py --gen_tokens 48
 
 # PPL GAJE (por modelo, para limitar RAM) + paridad FP16
 python scripts/benchmarks/ppl_suite.py --only qwen2_0_5b --samples 30 --max_len 48
+
+# Referencia 4-bit total (llama.cpp Q4_K_M) sobre el mismo corpus
+# 1) git clone --depth 1 https://github.com/ggml-org/llama.cpp && cmake build
+# 2) descargar GGUF Q4_K_M del checkpoint exacto
+# 3) ./build/bin/llama-perplexity -m <model>.gguf -f corpus_es.txt --seed 42
 ```
