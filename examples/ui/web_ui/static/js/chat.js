@@ -470,4 +470,3 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderHistory();
 });
-

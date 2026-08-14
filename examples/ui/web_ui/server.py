@@ -25,9 +25,7 @@ from prompt_templates import format_prompt, get_stop_tokens  # noqa: E402
 
 # ============ Configuración por variables de entorno (Fase 2.1) ============
 PORT = int(os.environ.get("GAJE_PORT", "8080"))
-MODELS_ROOT = os.environ.get(
-    "GAJE_MODELS_ROOT", os.path.join(PROJECT_ROOT, "models")
-)
+MODELS_ROOT = os.environ.get("GAJE_MODELS_ROOT", os.path.join(PROJECT_ROOT, "models"))
 MAX_TOKENS = int(os.environ.get("GAJE_MAX_TOKENS", "512"))
 TEMPERATURE = float(os.environ.get("GAJE_TEMPERATURE", "0.2"))
 TOP_P = float(os.environ.get("GAJE_TOP_P", "0.9"))

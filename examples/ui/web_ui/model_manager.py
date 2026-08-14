@@ -33,8 +33,15 @@ def find_model_path(models_root: str, model_name: str) -> str:
 
     # Bloquear path traversal: solo se acepta el nombre base (sin separadores)
     base = os.path.basename(model_name)
-    if base != model_name or ".." in model_name or "/" in model_name or "\\" in model_name:
-        logger.warning("Nombre de modelo inválido (posible path traversal): %r", model_name)
+    if (
+        base != model_name
+        or ".." in model_name
+        or "/" in model_name
+        or "\\" in model_name
+    ):
+        logger.warning(
+            "Nombre de modelo inválido (posible path traversal): %r", model_name
+        )
         return None
 
     if not os.path.exists(models_root):
@@ -64,7 +71,11 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
 
         model_path = find_model_path(models_root, model_name)
         if not model_path:
-            logger.error("No se encontró el archivo de modelo '%s' en %s", model_name, models_root)
+            logger.error(
+                "No se encontró el archivo de modelo '%s' en %s",
+                model_name,
+                models_root,
+            )
             return None
 
         logger.info("Cargando modelo real: %s", model_path)
@@ -103,12 +114,14 @@ def list_available_models(models_root: str) -> list:
                     mtime = os.path.getmtime(fpath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
                     size_bytes = os.path.getsize(fpath)
-                    models.append({
-                        "name": f,
-                        "date": date_str,
-                        "size_bytes": size_bytes,
-                        "ram_mb": loaded_ram_mb.get(f, 0.0),
-                    })
+                    models.append(
+                        {
+                            "name": f,
+                            "date": date_str,
+                            "size_bytes": size_bytes,
+                            "ram_mb": loaded_ram_mb.get(f, 0.0),
+                        }
+                    )
                     seen_models.add(f)
 
     return models

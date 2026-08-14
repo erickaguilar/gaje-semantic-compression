@@ -38,9 +38,7 @@ def main():
         if centroids and isinstance(centroids[0], list):
             centroids = [c for row in centroids for c in row]
 
-        results = engine.dna_similarity_search_adc(
-            q_vec, db_dna, centroids
-        )
+        results = engine.dna_similarity_search_adc(q_vec, db_dna, centroids)
 
         for i in range(min(3, len(results))):
             idx, dist = results[i]
