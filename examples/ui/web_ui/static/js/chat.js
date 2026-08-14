@@ -11,30 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const modelLoadBar = document.getElementById('model-load-bar');
     let modelsData = [];
 
-    // ===== Navegación por vistas (Fase 1) =====
-    const chatView = document.getElementById('chat-view');
-    const archView = document.getElementById('arch-view');
-    const tabChat = document.getElementById('tab-chat');
-    const tabArch = document.getElementById('tab-arch');
-
-    function switchView(name) {
-        const showChat = name === 'chat';
-        chatView.hidden = !showChat;
-        archView.hidden = showChat;
-        tabChat.classList.toggle('active', showChat);
-        tabArch.classList.toggle('active', !showChat);
-        tabChat.setAttribute('aria-selected', showChat);
-        tabArch.setAttribute('aria-selected', !showChat);
-        if (!showChat && window.ArchView) {
-            window.ArchView.mount(archView);
-        }
-    }
-
-    if (tabChat && tabArch) {
-        tabChat.addEventListener('click', () => switchView('chat'));
-        tabArch.addEventListener('click', () => switchView('arch'));
-    }
-
     // Cargar modelos disponibles
     async function loadModels() {
         try {
@@ -137,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modelLoadBar.hidden = true;
             modelLoadBar.setAttribute('aria-valuetext', 'inactivo');
         }
-        if (chatView) chatView.setAttribute('aria-busy', active ? 'true' : 'false');
+        if (chatWindow) chatWindow.setAttribute('aria-busy', active ? 'true' : 'false');
     }
 
     async function preloadModel(modelName) {
@@ -339,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         abortController = new AbortController();
         const stopBtn = document.getElementById('stop-btn');
         stopBtn.hidden = false;
-        if (chatView) chatView.setAttribute('aria-busy', 'true');
+        if (chatWindow) chatWindow.setAttribute('aria-busy', 'true');
 
         let fullText = '';
         let started = Date.now();
@@ -350,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             done = true;
             abortController = null;
             stopBtn.hidden = true;
-            if (chatView) chatView.setAttribute('aria-busy', 'false');
+            if (chatWindow) chatWindow.setAttribute('aria-busy', 'false');
             botMsg.classList.remove('streaming');
             const elapsed = Date.now() - started;
             if (aborted && fullText) {
@@ -493,29 +469,5 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') sendMessage();
     });
     renderHistory();
-
-    // Gestión de Tema Claro/Oscuro
-    const themeToggle = document.getElementById('theme-toggle');
-
-    function updateThemeUI(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        if (theme === 'light') {
-            themeToggle.innerText = '☀️';
-            themeToggle.setAttribute('aria-label', 'Activar Tema Oscuro');
-        } else {
-            themeToggle.innerText = '🌙';
-            themeToggle.setAttribute('aria-label', 'Activar Tema Claro');
-        }
-    }
-
-    // Inicializar UI al cargar
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    updateThemeUI(currentTheme);
-
-    themeToggle.addEventListener('click', () => {
-        const theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-        localStorage.setItem('theme', theme);
-        updateThemeUI(theme);
-    });
 });
 

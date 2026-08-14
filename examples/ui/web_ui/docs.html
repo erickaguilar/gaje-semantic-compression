@@ -2,6 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" href="static/icons/gaje-icon-32.png" type="image/png">
+  <link rel="icon" href="static/icons/gaje-icon.svg" type="image/svg+xml">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GAJE — Genomic Adaptive Journal Engine</title>
   <meta name="description" content="Motor de inferencia LLM nativo en Rust, cuantización híbrida Q4_0 + FP32, diseñado para correr sin nube ni GPU en CPU x86_64.">
@@ -12,38 +14,35 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
 
   <!-- Styles -->
-  <link rel="stylesheet" href="docs.css">
+  <link rel="stylesheet" href="static/css/base.css">
+  <link rel="stylesheet" href="static/css/docs.css">
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark'); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
 </head>
 <body>
 
   <!-- Background Ambient Grid -->
   <div class="bg-grid"></div>
 
-  <!-- TOPBAR NAVIGATION -->
-  <header class="topbar">
-    <div class="wrap">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        GAJE<span>_</span>
-      </div>
-      <nav>
-        <a href="#que-es">Qué es</a>
-        <a href="#simulador">Simulador</a>
-        <a href="#arquitectura">Arquitectura</a>
-        <a href="#diagnostico">Diagnóstico</a>
-        <a href="#bitacora">Bitácora</a>
-        <a href="#stack">Stack</a>
-        <a href="#roadmap">Roadmap</a>
-        <a class="nav-chat" href="index.html">🧬 Chat</a>
-      </nav>
-      <a class="github-badge" href="https://github.com/erickaguilar/gaje-semantic-compression" target="_blank" rel="noopener">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-        GitHub
-      </a>
-    </div>
+  <!-- Y2K TOPBAR NAVIGATION -->
+  <header class="y2k-header">
+    <div id="gaje-header" data-page="docs"></div>
+    <nav class="y2k-subnav" aria-label="Secciones de esta página">
+      <a href="#que-es">Qué es</a>
+      <a href="#simulador">Simulador</a>
+      <a href="#arquitectura">Arquitectura</a>
+      <a href="#diagnostico">Diagnóstico</a>
+      <a href="#bitacora">Bitácora</a>
+      <a href="#stack">Stack</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
   </header>
 
   <!-- HERO SECTION -->
@@ -441,6 +440,7 @@ cargo build --release && pytest tests/</pre>
   </footer>
 
   <!-- Scripts -->
-  <script src="docs.js"></script>
+  <script src="static/js/ui.js"></script>
+  <script src="static/js/docs.js"></script>
 </body>
 </html>

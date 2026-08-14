@@ -1,25 +1,7 @@
-// GAJE docs landing — interactividad (reveal, terminal, copy, bitácora)
+// GAJE docs landing — interactividad específica (terminal, bitácora, simulador)
+// Reveal on scroll y botones copiar viven en ui.js (shared).
 (function () {
   "use strict";
-
-  // Animaciones reveal al hacer scroll
-  var revealEls = document.querySelectorAll(".reveal");
-  if ("IntersectionObserver" in window) {
-    var io = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (e) {
-          if (e.isIntersecting) {
-            e.target.classList.add("visible");
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.12 }
-    );
-    revealEls.forEach(function (el) { io.observe(el); });
-  } else {
-    revealEls.forEach(function (el) { el.classList.add("visible"); });
-  }
 
   // --- Terminal simulador ---
   var termBody = document.getElementById("term");
@@ -75,36 +57,6 @@
   });
 
   if (termBody && TERM_OUTPUT.load) termBody.textContent = TERM_OUTPUT.load;
-
-  // --- Botones copiar (terminal y code-box) ---
-  function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      return navigator.clipboard.writeText(text);
-    }
-    var ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    return Promise.resolve();
-  }
-
-  document.querySelectorAll(".copy-btn").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var targetId = btn.getAttribute("data-target");
-      var src =
-        targetId === "term"
-          ? termBody
-          : document.getElementById(targetId);
-      if (!src) return;
-      var old = btn.textContent;
-      copyText(src.textContent).then(function () {
-        btn.textContent = "✓ Copiado";
-        setTimeout(function () { btn.textContent = old; }, 1600);
-      });
-    });
-  });
 
   // --- Bitácora: filtros y búsqueda ---
   var entries = document.querySelectorAll(".log-entry");

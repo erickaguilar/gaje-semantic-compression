@@ -149,6 +149,13 @@
         renderFlowList();
     }
 
+    function flowIcon(id) {
+        if (id && /^i-/.test(id)) {
+            return `<svg class="arch-f-icon y2k-icon" aria-hidden="true"><use href="static/icons/y2k/sprite.svg#${id}"/></svg>`;
+        }
+        return `<span class="arch-f-icon">${id || ''}</span>`;
+    }
+
     function renderFlowList() {
         const list = document.querySelector('#arch-flow-list');
         if (!list) return;
@@ -161,7 +168,7 @@
             const chips = f.steps.map(s => `<span class="arch-f-step">${s}</span>`).join('');
             item.innerHTML = `
                 <div class="arch-f-head">
-                    <span class="arch-f-icon">${f.icon}</span>
+                    ${flowIcon(f.icon)}
                     <span class="arch-f-name">${f.name}</span>
                     <span class="arch-f-count">${f.steps.length} nodos</span>
                 </div>
@@ -254,4 +261,13 @@
         setFlow: setFlow,
         isLoaded: function () { return !!graph; }
     };
+
+    // Auto-mount: si existe un elemento #arch-view en la página (página
+    // standalone architecture.html), montar el diagrama automáticamente.
+    document.addEventListener('DOMContentLoaded', function () {
+        const root = document.querySelector('#arch-view');
+        if (root && root.getAttribute('data-mount') !== 'manual') {
+            mount(root);
+        }
+    });
 })(window);

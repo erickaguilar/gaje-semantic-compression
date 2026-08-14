@@ -1,579 +1,85 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="GAJE Semantic Compression - Diagrama interactivo de arquitectura: motor nativo Rust (PyO3), capa Python, formatos .gaje.flat/.gmem y kernels SIMD. Selecciona un flujo para resaltar su ruta completa.">
-    <title>GAJE Architecture | Diagrama Interactivo</title>
-    <style>
-        :root {
-            --bg: #0b0f1a;
-            --bg2: #0f1526;
-            --panel: #141b2e;
-            --panel2: #1a2338;
-            --border: #243049;
-            --text: #e6edf7;
-            --muted: #8b9cb8;
-            --accent: #8b5cf6;
-            --accent2: #06b6d4;
-            --good: #10b981;
-            --warn: #f59e0b;
-            --danger: #ef4444;
-            --shadow: 0 8px 28px rgba(0,0,0,.45);
-            --node-w: 150px;
-            --node-h: 46px;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
-        body {
-            background: radial-gradient(1200px 600px at 20% -10%, #1c2440 0%, var(--bg) 55%);
-            color: var(--text);
-            font-family: "Outfit", "Segoe UI", system-ui, sans-serif;
-            overflow: hidden;
-        }
-        .app { display: flex; flex-direction: column; height: 100vh; }
+  <meta charset="UTF-8">
+  <link rel="icon" href="static/icons/gaje-icon-32.png" type="image/png">
+  <link rel="icon" href="static/icons/gaje-icon.svg" type="image/svg+xml">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GAJE — Arquitectura | Diagrama Interactivo</title>
+  <meta name="description" content="Diagrama interactivo de la arquitectura GAJE: motor nativo Rust (PyO3), capa Python, formatos .gaje.flat/.gmem y kernels SIMD. Selecciona un flujo para resaltar su ruta completa.">
+  <meta property="og:title" content="GAJE — Arquitectura">
+  <meta property="og:description" content="Motor de inferencia LLM nativo en Rust, formato .gaje.flat v2 (Q4_0 + FP32), con soberanía de hardware.">
+  <meta property="og:type" content="website">
 
-        /* ── Header ── */
-        header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 12px 22px; border-bottom: 1px solid var(--border);
-            background: rgba(15,21,38,.7); backdrop-filter: blur(6px); flex-wrap: wrap; gap: 10px;
-        }
-        .brand { display: flex; align-items: center; gap: 12px; }
-        .brand .logo { font-size: 26px; }
-        .brand h1 { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
-        .brand .sub { font-size: 11px; color: var(--muted); font-family: "Fira Code", monospace; }
-        .tag { background: var(--accent); color: #fff; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        .h-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--good); }
-        .status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); }
-        .btn {
-            background: var(--panel2); color: var(--text); border: 1px solid var(--border);
-            padding: 7px 14px; border-radius: 9px; cursor: pointer; font-size: 12.5px; font-weight: 500;
-            transition: .18s; font-family: inherit;
-        }
-        .btn:hover { border-color: var(--accent); color: #fff; }
-        .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=VT323&display=swap" rel="stylesheet">
 
-        /* ── Main split ── */
-        main { flex: 1; display: flex; overflow: hidden; }
-        .diagram-pane { flex: 1; position: relative; overflow: hidden; min-width: 0; }
-        #svg {
-            width: 100%; height: 100%; display: block;
-            background:
-                radial-gradient(900px 500px at 50% 0%, rgba(139,92,246,.07) 0%, transparent 60%),
-                repeating-linear-gradient(0deg, transparent 0 63px, rgba(36,48,73,.35) 63px 64px),
-                repeating-linear-gradient(90deg, transparent 0 63px, rgba(36,48,73,.35) 63px 64px);
-        }
-        .layer-label {
-            font-family: "Fira Code", monospace; font-size: 10px; letter-spacing: 1.5px;
-            fill: var(--muted); font-weight: 600;
-        }
-        .layer-band { pointer-events: none; }
-        .edge { stroke: #33415e; stroke-width: 1.6; fill: none; opacity: .55; transition: all .25s; }
-        .edge.flow-on { stroke: var(--flow, #8b5cf6); stroke-width: 3.2; opacity: 1; filter: drop-shadow(0 0 4px var(--flow,#8b5cf6)); }
-        .edge.dim { opacity: .12; }
-        .edge-arrow { transition: all .25s; }
-        .edge-arrow.flow-on { fill: var(--flow, #8b5cf6); opacity: 1; filter: drop-shadow(0 0 4px var(--flow,#8b5cf6)); }
-        .edge-arrow.dim { opacity: .12; }
-        .node {
-            cursor: pointer; transition: opacity .25s;
-        }
-        .node .body { fill: var(--panel2); stroke: var(--border); stroke-width: 1.2; transition: all .2s; }
-        .node .icon { font-size: 16px; text-anchor: middle; }
-        .node .nlabel { font-size: 11.5px; font-weight: 600; fill: var(--text); text-anchor: middle; }
-        .node .nkind { font-size: 8.5px; fill: var(--muted); font-family: "Fira Code", monospace; text-anchor: middle; }
-        .node:hover .body { stroke: var(--accent); stroke-width: 1.8; filter: drop-shadow(0 0 6px rgba(139,92,246,.5)); }
-        .node.flow-on .body {
-            fill: var(--flow, #8b5cf6); stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 9px var(--flow,#8b5cf6));
-        }
-        .node.flow-on .nlabel { fill: #fff; }
-        .node.flow-on .nkind { fill: rgba(255,255,255,.8); }
-        .node.dim { opacity: .16; }
-        .node.sel .body { stroke: #fff; stroke-width: 2.4; }
-
-        /* Tooltip */
-        .tooltip {
-            position: absolute; pointer-events: none; z-index: 50; max-width: 300px;
-            background: rgba(10,14,24,.97); border: 1px solid var(--border); border-radius: 11px;
-            padding: 12px 14px; box-shadow: var(--shadow); opacity: 0; transform: translateY(6px);
-            transition: opacity .18s, transform .18s; font-size: 12px; line-height: 1.5;
-        }
-        .tooltip.show { opacity: 1; transform: translateY(0); }
-        .tooltip .t-title { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 6px; font-size: 13px; }
-        .tooltip .t-path { font-family: "Fira Code", monospace; font-size: 10.5px; color: var(--accent2); margin-bottom: 6px; word-break: break-all; }
-        .tooltip .t-desc { color: #b7c5dd; }
-        .tooltip .t-layer { display: inline-block; margin-top: 8px; background: var(--panel2); border: 1px solid var(--border); padding: 2px 8px; border-radius: 6px; font-size: 10px; color: var(--muted); }
-
-        /* ── Flow panel ── */
-        .flow-pane {
-            width: 340px; min-width: 340px; border-left: 1px solid var(--border);
-            background: rgba(15,21,38,.6); overflow-y: auto; padding: 16px;
-        }
-        .flow-pane h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-        .flow-pane .hint { font-size: 11.5px; color: var(--muted); margin-bottom: 14px; }
-        .flow-item {
-            background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-            padding: 11px 13px; margin-bottom: 10px; cursor: pointer; transition: .18s;
-        }
-        .flow-item:hover { border-color: var(--accent); transform: translateX(-2px); }
-        .flow-item.active { border-color: var(--flow, var(--accent)); background: var(--panel2); box-shadow: inset 3px 0 0 var(--flow,var(--accent)); }
-        .flow-item .f-head { display: flex; align-items: center; gap: 8px; }
-        .flow-item .f-icon { font-size: 16px; }
-        .flow-item .f-name { font-weight: 600; font-size: 13px; }
-        .flow-item .f-count { margin-left: auto; font-size: 10px; color: var(--muted); font-family: "Fira Code", monospace; }
-        .flow-item .f-desc { font-size: 11.5px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
-        .flow-item .f-steps {
-            display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px;
-        }
-        .flow-item .f-step {
-            font-family: "Fira Code", monospace; font-size: 9px; background: var(--panel2);
-            border: 1px solid var(--border); padding: 2px 6px; border-radius: 5px; color: var(--muted);
-        }
-        .flow-item .f-step.on { background: var(--flow,var(--accent)); color: #fff; border-color: transparent; }
-
-        /* Legend */
-        .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-        .legend span { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
-        .legend .sw { width: 10px; height: 10px; border-radius: 3px; }
-
-        /* Zoom controls */
-        .zoom-ctl { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 20; }
-        .zoom-ctl .btn { width: 38px; height: 38px; padding: 0; font-size: 18px; display: flex; align-items: center; justify-content: center; border-radius: 9px; }
-
-        /* Responsive */
-        @media (max-width: 900px) {
-            main { flex-direction: column; }
-            .flow-pane { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--border); max-height: 42vh; }
-            .diagram-pane { min-height: 55vh; }
-        }
-        @media (max-width: 600px) {
-            .brand .sub { display: none; }
-            header { padding: 10px 14px; }
-        }
-        .hint-keys { font-size: 10.5px; color: var(--muted); font-family: "Fira Code", monospace; margin-top: 4px; }
-        kbd { background: var(--panel2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 10px; }
-    </style>
+  <!-- Styles -->
+  <link rel="stylesheet" href="static/css/base.css">
+  <link rel="stylesheet" href="static/css/architecture.css">
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark'); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
 </head>
 <body>
-<div class="app">
-    <header>
-        <div class="brand">
-            <span class="logo">🧬</span>
-            <div>
-                <h1>GAJE Architecture</h1>
-                <div class="sub">Genomic Semantic Compression · Motor Rust + Python</div>
-            </div>
-            <span class="tag">v1.6.0-alpha</span>
-        </div>
-        <div class="h-actions">
-            <span class="status"><span class="dot"></span> <span id="status-text">Diagrama cargado</span></span>
-            <button class="btn" id="btn-clear" title="Limpiar selección de flujo">✕ Limpiar</button>
-            <button class="btn" id="btn-auto" title="Ajustar a la vista">⛶ Ajustar</button>
-        </div>
-    </header>
 
-    <main>
-        <div class="diagram-pane">
-            <svg id="svg" viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid meet"></svg>
-            <div class="tooltip" id="tooltip"></div>
-            <div class="zoom-ctl">
-                <button class="btn" id="z-in" title="Acercar">+</button>
-                <button class="btn" id="z-out" title="Alejar">−</button>
-            </div>
-        </div>
+  <!-- Background Ambient Grid -->
+  <div class="bg-grid"></div>
 
-        <aside class="flow-pane">
-            <h2>Flujos del sistema</h2>
-            <div class="hint">Selecciona un flujo para resaltar su ruta completa en el diagrama.</div>
-            <div class="legend" id="legend"></div>
-            <div id="flow-list"></div>
-            <div class="hint-keys">Tip: usa la rueda para zoom · <kbd>Esc</kbd> limpia la selección.</div>
-        </aside>
-    </main>
-</div>
+  <!-- Y2K TOPBAR NAVIGATION -->
+  <header class="y2k-header">
+    <div id="gaje-header" data-page="architecture"></div>
+    <nav class="y2k-subnav" aria-label="Secciones de esta página">
+      <a href="#diagrama">Diagrama</a>
+      <a href="#leyenda">Flujos</a>
+      <a href="docs.html#arquitectura">Docs</a>
+    </nav>
+  </header>
 
-<script>
-"use strict";
-/* ============================================================
-   GAJE Architecture - datos del grafo (nodes, edges, flows)
-   Sincronizado con architecture_graph.json
-   ============================================================ */
-const LAYERS = [
-    { id:"ui",        label:"UI / Server (Python)" },
-    { id:"python",    label:"Capa Python (gaje package)" },
-    { id:"bridge",    label:"Puente PyO3" },
-    { id:"rust_core", label:"Núcleo Rust (módulos)" },
-    { id:"kernels",   label:"Kernels / Matemática SIMD" },
-    { id:"io",        label:"I/O y Formatos" },
-    { id:"data",      label:"Datos / Persistencia" }
-];
+  <!-- HERO SECTION -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="eyebrow">GAJE — ARQUITECTURA DEL MOTOR · v1.6.0-ALPHA</div>
+      <h1>De los pesos GGUF al organismo .gaje.flat</h1>
+      <p class="lede">
+        Diagrama interactivo de la arquitectura completa: motor nativo Rust (PyO3), capa Python,
+        formatos <span style="font-family:var(--mono);color:var(--accent-2)">.gaje.flat</span> / <span style="font-family:var(--mono);color:var(--accent-2)">.gmem</span> y kernels SIMD.
+        Selecciona un flujo para resaltar su ruta completa.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#diagrama">Ver el diagrama ↓</a>
+        <a class="btn btn-ghost" href="index.html">Probar el chat 🧬</a>
+      </div>
+    </div>
+  </section>
 
-const NODES = [
-    { id:"ui_web", layer:"ui", icon:"🖥️", label:"Web UI", fullname:"examples/ui/web_ui/", kind:"frontend", desc:"SPA de chat genómico. Renderiza métricas de compresión, secuencia DNA coloreada (A/C/G/T), Island Model .gmem y entorno de ejecución." },
-    { id:"server", layer:"ui", icon:"🌐", label:"server.py", fullname:"examples/ui/web_ui/server.py", kind:"HTTP server", desc:"Servidor stdlib (SimpleHTTPRequestHandler). Endpoints: /api/models, /api/info, /api/load_model, /api/chat + estáticos." },
-    { id:"model_manager", layer:"ui", icon:"🗂️", label:"model_manager.py", fullname:"examples/ui/web_ui/model_manager.py", kind:"cache", desc:"Caché thread-safe, un solo modelo activo en RAM, carga lazy y set_k_wta_ratio(0.0)." },
-    { id:"prompt_tpl", layer:"ui", icon:"📝", label:"prompt_templates.py", fullname:"examples/ui/web_ui/prompt_templates.py", kind:"format", desc:"Formato de prompts por arquitectura (ChatML/Gemma) y stop tokens [2, 151643, 151645]." },
-    { id:"py_cli", layer:"python", icon:"⌨️", label:"gaje CLI", fullname:"python/gaje/utils/cli.py", kind:"cli", desc:"CLI argparse (script 'gaje'): info y search (búsqueda ADC en .gaje)." },
-    { id:"py_archive", layer:"python", icon:"📦", label:"GAJEArchive", fullname:"python/gaje/core/archive.py", kind:"format v3", desc:"Formato .gaje v3 para vectores, 100% Python puro. Entradas (label, dna, epi_dna) + codebook." },
-    { id:"py_llm", layer:"python", icon:"🤖", label:"GenomicLLM", fullname:"python/gaje/nn/stabilized.py", kind:"wrapper", desc:"Clase principal: construye/carga modelos, genera texto, guarda/carga .gaje, expone rust_llm." },
-    { id:"py_layer", layer:"python", icon:"🧩", label:"GenomicLayer/Block", fullname:"python/gaje/nn/stabilized.py", kind:"layers", desc:"Capas que convierten pesos a DNA + centroides + anclas y crean GenomicLinear / RustGenomicBlock." },
-    { id:"py_session", layer:"python", icon:"🧠", label:"SessionMemory", fullname:"python/gaje/core/session.py", kind:"wrapper", desc:"Wrapper de SessionBuffer toroidal: push/retrieve/save/load." },
-    { id:"py_dni", layer:"python", icon:"🛰️", label:"DNIEngine (py)", fullname:"python/gaje/core/dni.py", kind:"wrapper", desc:"Wrapper de DNIEngine nativo (Direct Neural Ingestion)." },
-    { id:"py_rag", layer:"python", icon:"🔗", label:"NativeSemanticRAG (py)", fullname:"python/gaje/rag.py", kind:"wrapper", desc:"Wrapper de RAG nativo: add_document/search/format_context." },
-    { id:"py_trainer", layer:"python", icon:"🎓", label:"GenomicTrainer", fullname:"python/gaje/nn/trainer.py", kind:"trainer", desc:"Entrenamiento con Semantic Resonance Loss + refinamiento nativo. Curriculum 3 fases." },
-    { id:"py_balancer", layer:"python", icon:"⚖️", label:"SignalToNoiseBalancer", fullname:"python/gaje/processing/balancer.py", kind:"balance", desc:"Homeostasis/ancla de precisión: drift, precision_mask y poda de dimensiones." },
-    { id:"py_pipeline", layer:"python", icon:"🔁", label:"DatasetProcessor", fullname:"python/gaje/processing/pipeline.py", kind:"data", desc:"Carga datasets .txt/.jsonl; reexporta capas por compatibilidad." },
-    { id:"py_utils", layer:"python", icon:"🧰", label:"gaje.utils", fullname:"python/gaje/utils/", kind:"utils", desc:"dequantize, codebook (kmeans), métricas, versión." },
-    { id:"pyo3", layer:"bridge", icon:"🌉", label:"gaje.core._impl", fullname:"_impl.pyd/.so (maturin)", kind:"PyO3", desc:"Módulo de extensión PyO3: registra ~28 clases y ~30 funciones nativas desde src/lib.rs." },
-    { id:"rs_llm", layer:"rust_core", icon:"⚙️", label:"RustGenomicLLM", fullname:"src/nn/llm.rs", kind:"rust", desc:"Núcleo de inferencia: forward_core (embeddings→bloques→lm_head→K-WTA), generate_native_core, entrenamiento y mutación." },
-    { id:"rs_block", layer:"rust_core", icon:"🧊", label:"RustGenomicBlock", fullname:"src/nn/block.rs", kind:"rust", desc:"Bloque Transformer nativo: atención + FFN con doble norma y modulation del CentroidGraph." },
-    { id:"rs_attn", layer:"rust_core", icon:"👁️", label:"GenomicAttention", fullname:"src/nn/attention.rs", kind:"rust", desc:"Atención GQA + RoPE + KV-Cache nativa sobre pesos 4-bit." },
-    { id:"rs_linear", layer:"rust_core", icon:"📐", label:"GenomicLinear", fullname:"src/nn/linear.rs", kind:"rust", desc:"Capa lineal nativa 4/2-bit con Stability Anchors FP16 (anchor cloning)." },
-    { id:"rs_db", layer:"rust_core", icon:"🗄️", label:"GajeDatabase", fullname:"src/core/db.rs", kind:"rust", desc:"Persistencia redb + LZ4: .dna/.centroids/.anchors/.bias + config/tokenizer. compact()." },
-    { id:"rs_index", layer:"rust_core", icon:"🔎", label:"GajeIndex", fullname:"src/core/index.rs", kind:"rust", desc:"Índice HNSW genómico para búsqueda sub-lineal sobre DNA comprimido." },
-    { id:"rs_sbuf", layer:"rust_core", icon:"💾", label:"SessionBuffer", fullname:"src/core/session_memory.rs", kind:"rust", desc:"Buffer circular toroidal nativo: push/retrieve_relevant/dump/load." },
-    { id:"rs_dni", layer:"rust_core", icon:"🛰️", label:"DNIEngine (rs)", fullname:"src/core/dni.rs", kind:"rust", desc:"Motor de Direct Neural Ingestion nativo (ingest_text + council)." },
-    { id:"rs_rag", layer:"rust_core", icon:"🔗", label:"NativeSemanticRAG (rs)", fullname:"src/compute/rag.rs", kind:"rust", desc:"RAG nativo en Rust sobre índice de similitud en memoria compartida." },
-    { id:"rs_trainer", layer:"rust_core", icon:"🎓", label:"NativeGenomicTrainer", fullname:"src/nn/trainer.rs", kind:"rust", desc:"Entrenador nativo del organismo genómico." },
-    { id:"rs_distill", layer:"rust_core", icon:"🧫", label:"NativeGenomicDistiller", fullname:"src/nn/distiller.rs", kind:"rust", desc:"Destilación nativa con Teacher y CouncilOfTeachers." },
-    { id:"rs_iqat", layer:"rust_core", icon:"🧪", label:"NativeIQATEngine", fullname:"src/nn/iqat.rs", kind:"rust", desc:"Quantization-Aware Training iterativo (IQAT) para calibrar el modelo." },
-    { id:"rs_sched", layer:"rust_core", icon:"⏱️", label:"NeuromorphicScheduler", fullname:"src/compute/scheduler.rs", kind:"rust", desc:"Planificador neuromórfico de spikes (Timing Wheel O(1))." },
-    { id:"rs_spike", layer:"rust_core", icon:"⚡", label:"GajeNeuromorphicLayer", fullname:"src/nn/spiking/layer.rs", kind:"rust", desc:"Capa neuromórfica 2-bit (memoria SoA para SIMD, umbrales, k_wta)." },
-    { id:"rs_sampler", layer:"rust_core", icon:"🎲", label:"Samplers", fullname:"src/compute/sampler.rs", kind:"rust", desc:"Muestreo toroidal y sintergico de logits para generación estable." },
-    { id:"ks_kernels", layer:"kernels", icon:"🧮", label:"Kernels SIMD", fullname:"src/compute/kernels.rs", kind:"AVX2/NEON", desc:"Kernels de dot-product SIMD (AVX2/FMA/NEON) para matmul GEMV 4-bit. Static dispatch (GenomicKernel)." },
-    { id:"ks_math", layer:"kernels", icon:"📊", label:"compute/math.rs", fullname:"src/compute/math.rs", kind:"math", desc:"Quantize/dequantize (2/4-bit, Q8_0, FP16/32), dna_similarity_search_adc, entropías, rep-penalty, rms_norm." },
-    { id:"io_loader", layer:"io", icon:"🚚", label:"NativeLoader", fullname:"src/io/loader.rs", kind:"io", desc:"Importa GGUF (bit-depth mixto), auto-detecta .flat vs .gaje, init_born_genomic_model, save." },
-    { id:"io_flat", layer:"io", icon:"💿", label:"GajeFlatFileReader", fullname:"FlatHeaderV2 .gaje.flat", kind:"mmap", desc:"Formato plano v2 zero-copy mmap alineado a 64B. Hybrid: embeddings FP32 + cuerpo Q4_0." },
-    { id:"io_gguf", layer:"io", icon:"📚", label:"GGUF I/O", fullname:"src/io/gguf.rs", kind:"io", desc:"Lector del formato fuente GGUF (Qwen2, SmolLM2)." },
-    { id:"io_gmem", layer:"io", icon:"🏝️", label:"GmemMemoryIndex", fullname:"src/io/gmem.rs + compute/island.rs", kind:"island", desc:"Island Model .gmem: índices planos alineados, magic GMEM. RAG 0.75ms, cold start 0.12ms." },
-    { id:"io_arch", layer:"io", icon:"🏷️", label:"ArchitectureDescriptor", fullname:"src/io/arch.rs", kind:"io", desc:"Descriptor embebido (n_embd, n_head, n_blocks, eps, rope_base, qk_permute). ModelFamily." },
-    { id:"src_gguf", layer:"data", icon:"📂", label:"GGUF fuente", fullname:"data/models/*.gguf", kind:"data", desc:"Modelos fuente Qwen2.5-1.5B / Qwen2-0.5B / SmolLM2-135M en GGUF + tokenizers." },
-    { id:"file_flat", layer:"data", icon:"💾", label:".gaje.flat", fullname:"models/production/*", kind:"data", desc:"Modelos de producción en formato plano zero-copy (ej. qwen2_5_1_5b_q4_0.gaje.flat, 2.7GB)." },
-    { id:"file_gaje", layer:"data", icon:"🗃️", label:".gaje (redb)", fullname:"models/checkpoints/*", kind:"data", desc:"Modelos evolucionados en base redb con compresión LZ4." },
-    { id:"file_gmem", layer:"data", icon:"🏝️", label:".gmem", fullname:"models/*.gmem", kind:"data", desc:"Índices de memoria Island Model persistentes en disco." }
-];
+  <!-- INTERACTIVE ARCHITECTURE DIAGRAM -->
+  <section id="diagrama" class="diagram-shell">
+    <div class="diagram-card">
+      <!-- architecture_view.js monta aquí el SVG + panel de flujos -->
+      <section id="arch-view" class="arch-container">
+        <div class="arch-placeholder">Cargando diagrama de arquitectura...</div>
+      </section>
+    </div>
+  </section>
 
-const EDGES = [
-    ["ui_web","server"],["server","model_manager"],["server","prompt_tpl"],
-    ["model_manager","py_llm"],["prompt_tpl","py_llm"],
-    ["py_cli","py_archive"],["py_cli","pyo3"],["py_archive","file_gaje"],
-    ["py_llm","pyo3"],["py_layer","pyo3"],["py_session","pyo3"],["py_dni","pyo3"],
-    ["py_rag","pyo3"],["py_trainer","py_llm"],["py_trainer","pyo3"],
-    ["py_balancer","pyo3"],["py_pipeline","py_llm"],["py_utils","pyo3"],
-    ["pyo3","rs_llm"],["pyo3","rs_block"],["pyo3","rs_attn"],["pyo3","rs_linear"],
-    ["pyo3","rs_db"],["pyo3","rs_index"],["pyo3","rs_sbuf"],["pyo3","rs_dni"],
-    ["pyo3","rs_rag"],["pyo3","rs_trainer"],["pyo3","rs_distill"],["pyo3","rs_iqat"],
-    ["pyo3","rs_sched"],["pyo3","rs_spike"],["pyo3","rs_sampler"],
-    ["pyo3","ks_kernels"],["pyo3","ks_math"],["pyo3","io_loader"],
-    ["rs_llm","rs_block"],["rs_llm","rs_linear"],["rs_llm","rs_sampler"],
-    ["rs_block","rs_attn"],["rs_block","rs_linear"],
-    ["rs_attn","ks_kernels"],["rs_linear","ks_kernels"],["rs_linear","ks_math"],
-    ["rs_db","file_gaje"],["rs_db","io_flat"],["rs_index","ks_math"],
-    ["rs_rag","rs_index"],["rs_sbuf","io_gmem"],["rs_sched","rs_spike"],
-    ["rs_trainer","rs_llm"],["rs_distill","rs_trainer"],["rs_iqat","rs_trainer"],
-    ["io_loader","io_gguf"],["io_loader","io_flat"],["io_loader","io_arch"],
-    ["io_gguf","src_gguf"],["io_flat","file_flat"],["io_gmem","file_gmem"]
-];
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap">
+      <div class="fnote">GAJE · Proyecto de investigación individual · Licencia Apache 2.0</div>
+      <a class="mono" href="https://github.com/erickaguilar/gaje-semantic-compression" target="_blank" rel="noopener">
+        github.com/erickaguilar/gaje-semantic-compression →
+      </a>
+    </div>
+  </footer>
 
-const FLOWS = [
-    { id:"inference", name:"Inferencia Web (Chat)", icon:"💬", color:"#8b5cf6",
-      desc:"El usuario envía un mensaje; el server formatea el prompt y genera tokens nativamente en Rust (generate_native_py → forward_core → bloques → atención SIMD → sampler).",
-      steps:["ui_web","server","model_manager","prompt_tpl","py_llm","pyo3","rs_llm","rs_block","rs_attn","ks_kernels","rs_sampler"] },
-    { id:"load", name:"Carga .gaje.flat mmap", icon:"📂", color:"#10b981",
-      desc:"load_genomic_auto detecta magic 'GAJE' → GajeFlatFileReader mapea el .flat v2 zero-copy mmap (embeddings FP32 + cuerpo Q4_0).",
-      steps:["server","model_manager","py_llm","pyo3","io_loader","io_flat","file_flat"] },
-    { id:"build", name:"Construcción desde GGUF", icon:"🏗️", color:"#f59e0b",
-      desc:"Importa GGUF fuente, detecta arquitectura, transmuta pesos a DNA/centroides/anclas y persiste el organismo .gaje.",
-      steps:["src_gguf","io_gguf","io_loader","pyo3","py_layer","py_llm","rs_db"] },
-    { id:"train", name:"Entrenamiento / Evolución", icon:"🧬", color:"#ef4444",
-      desc:"DatasetProcessor alimenta GenomicTrainer (curriculum 3 fases: Base/IQAT/Evolución) con refinamiento nativo y homeóstasis.",
-      steps:["py_pipeline","py_trainer","py_llm","pyo3","rs_iqat","rs_trainer","rs_llm","rs_block","rs_linear"] },
-    { id:"distill", name:"Destilación", icon:"🎓", color:"#ec4899",
-      desc:"NativeGenomicDistiller con Teacher y CouncilOfTeachers transfiere conocimiento a un organismo estudiante.",
-      steps:["pyo3","rs_distill","rs_trainer","rs_llm"] },
-    { id:"search", name:"Búsqueda ADC (.gaje)", icon:"🔎", color:"#06b6d4",
-      desc:"gaje search carga GAJEArchive y ejecuta dna_similarity_search_adc (ANN en espacio comprimido 2-bit) sobre el índice.",
-      steps:["py_cli","py_archive","file_gaje","pyo3","ks_math","rs_index"] },
-    { id:"rag", name:"RAG / Island Model (.gmem)", icon:"🏝️", color:"#84cc16",
-      desc:"NativeSemanticRAG indexa y consulta memoria compartida; el Island Model persiste el contexto en .gmem (latencia 0.75ms).",
-      steps:["py_rag","pyo3","rs_rag","rs_index","ks_math","io_gmem","file_gmem"] },
-    { id:"session", name:"Memoria de Sesión", icon:"🧠", color:"#a855f7",
-      desc:"SessionMemory envuelve SessionBuffer toroidal: push/retrieve_relevant y persistencia en disco .gmem.",
-      steps:["py_session","pyo3","rs_sbuf","io_gmem","file_gmem"] },
-    { id:"spiking", name:"Neuromórfico 2-bit", icon:"⚡", color:"#f43f5e",
-      desc:"NeuromorphicScheduler inyecta e integra spikes sobre capas neuromórficas 2-bit con kernels SIMD (vía experimental).",
-      steps:["pyo3","rs_sched","rs_spike","ks_kernels"] },
-    { id:"dni", name:"Direct Neural Ingestion", icon:"🛰️", color:"#f97316",
-      desc:"DNIEngine ingiere texto (ingest_text) con consejo de council de maestros para aprender sin backprop.",
-      steps:["py_dni","pyo3","rs_dni"] }
-];
-
-/* ============================================================
-   LAYOUT
-   ============================================================ */
-const LAYER_Y = { ui:56, python:180, bridge:304, rust_core:418, kernels:548, io:668, data:760 };
-const NODE_W = 132, NODE_H = 46, GAP = 16;
-const pos = {};
-let graphW = 0, graphH = 0;
-
-function layout() {
-    const rows = {}; // layer -> [nodeIds in insertion order]
-    NODES.forEach(n => { (rows[n.layer] = rows[n.layer] || []).push(n.id); });
-    // compute the widest layer
-    let maxW = 0;
-    Object.keys(rows).forEach(layer => {
-        const ids = rows[layer];
-        maxW = Math.max(maxW, ids.length * NODE_W + (ids.length - 1) * GAP);
-    });
-    // shift all layers so they are centered on a common origin at x = maxW/2
-    const centerX = maxW / 2;
-    Object.keys(rows).forEach(layer => {
-        const ids = rows[layer];
-        const total = ids.length * NODE_W + (ids.length - 1) * GAP;
-        let x = centerX - total / 2;
-        ids.forEach(id => {
-            pos[id] = { x: x, y: LAYER_Y[layer] - NODE_H/2 };
-            x += NODE_W + GAP;
-        });
-    });
-    // graph bounds
-    const maxY = Math.max.apply(null, Object.keys(LAYER_Y).map(k=>LAYER_Y[k])) + NODE_H/2 + 40;
-    graphW = maxW + 40;
-    graphH = maxY;
-    // dynamic viewBox centered
-    svg.setAttribute("viewBox", `${-20} ${-20} ${graphW + 40} ${graphH + 40}`);
-}
-
-/* ============================================================
-   RENDER
-   ============================================================ */
-const svg = document.getElementById("svg");
-const NS = "http://www.w3.org/2000/svg";
-let nodeEls = {}, edgeEls = {}, edgeMeta = [];
-let activeFlow = null, activeColor = "#8b5cf6", selectedId = null;
-
-function el(tag, attrs) {
-    const e = document.createElementNS(NS, tag);
-    for (const k in attrs) e.setAttribute(k, attrs[k]);
-    return e;
-}
-
-function renderBands() {
-    // soft layer bands + labels
-    const bands = LAYER_Y, keys = Object.keys(bands);
-    keys.forEach((k,i) => {
-        const y = bands[k];
-        const rect = el("rect", { x:-10, y:y-NODE_H/2-16, width:graphW+20, height:NODE_H+32, rx:14, class:"layer-band", fill:"#ffffff", opacity:0.012 });
-        svg.appendChild(rect);
-        const label = el("text", { x:10, y:y-NODE_H/2-24, class:"layer-label", "text-anchor":"start" });
-        label.textContent = LAYERS.find(L=>L.id===k).label.toUpperCase();
-        svg.appendChild(label);
-    });
-}
-
-function renderEdges() {
-    edgeEls = {};
-    edgeMeta = [];
-    EDGES.forEach(pair => {
-        const [f, t] = pair;
-        const a = pos[f], b = pos[t];
-        // route with slight curve for same-layer
-        const x1 = a.x + NODE_W/2, y1 = a.y + NODE_H/2;
-        const x2 = b.x + NODE_W/2, y2 = b.y + NODE_H/2;
-        const dy = y2 - y1;
-        const mid = y1 + dy/2;
-        const path = el("path", {
-            d: `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`,
-            class:"edge", fill:"none"
-        });
-        svg.appendChild(path);
-        edgeEls[`${f}->${t}`] = path;
-        edgeMeta.push({ f, t, path });
-        // arrowhead pointing along the curve tangent at the target
-        const tan_ang = Math.atan2(y2 - mid, x2 - (x1 + x2) / 2);
-        const ah = el("path", {
-            d: "M0 0 L7 3 L0 6 Z",
-            fill: "#33415e",
-            class: "edge-arrow",
-            transform: `translate(${x2},${y2}) rotate(${(tan_ang * 180) / Math.PI})`
-        });
-        svg.appendChild(ah);
-    });
-}
-
-function renderNodes() {
-    nodeEls = {};
-    NODES.forEach(n => {
-        const p = pos[n.id];
-        const g = el("g", { class:"node", transform:`translate(${p.x},${p.y})` });
-        g.dataset.id = n.id;
-        // body
-        const body = el("rect", { class:"body", width:NODE_W, height:NODE_H, rx:10 });
-        // icon
-        const icon = el("text", { class:"icon", x:20, y:NODE_H/2+6 });
-        icon.textContent = n.icon;
-        // label
-        const label = el("text", { class:"nlabel", x:NODE_W/2+6, y:NODE_H/2-3 });
-        label.textContent = n.label;
-        // kind
-        const kind = el("text", { class:"nkind", x:NODE_W/2+6, y:NODE_H/2+15 });
-        kind.textContent = n.kind;
-        g.appendChild(body); g.appendChild(icon); g.appendChild(label); g.appendChild(kind);
-        g.addEventListener("click", () => showTooltip(n, g));
-        g.addEventListener("mouseenter", () => showTooltip(n, g, true));
-        g.addEventListener("mouseleave", hideTooltip);
-        svg.appendChild(g);
-        nodeEls[n.id] = g;
-    });
-}
-
-/* Tooltip */
-const tooltip = document.getElementById("tooltip");
-function showTooltip(node, g, hover) {
-    if (!hover && activeFlow) {
-        // clicking a node while flow active: show its details
-    }
-    const layerName = LAYERS.find(L=>L.id===node.layer).label;
-    tooltip.innerHTML = `
-        <div class="t-title"><span>${node.icon}</span> ${node.label}</div>
-        <div class="t-path">${node.fullname}</div>
-        <div class="t-desc">${node.desc}</div>
-        <span class="t-layer">${layerName}</span>`;
-    tooltip.classList.add("show");
-    positionTooltip(g);
-}
-function hideTooltip(){ if (!selectedId) tooltip.classList.remove("show"); }
-function positionTooltip(g) {
-    const pane = g.closest(".diagram-pane");
-    const paneRect = pane.getBoundingClientRect();
-    const r = g.getBoundingClientRect();
-    let left = r.left - paneRect.left + r.width + 12;
-    if (left + 300 > paneRect.width) left = r.left - paneRect.left - 312;
-    let top = r.top - paneRect.top;
-    tooltip.style.left = left + "px";
-    tooltip.style.top = top + "px";
-    tooltip.style.maxWidth = "300px";
-}
-
-/* ============================================================
-   FLOW HIGHLIGHT
-   ============================================================ */
-function setFlow(flowId) {
-    activeFlow = flowId;
-    const flow = FLOWS.find(f=>f.id===flowId);
-    activeColor = flow ? flow.color : "#8b5cf6";
-    // update CSS variable for this flow
-    document.documentElement.style.setProperty("--flow", activeColor);
-    // reset
-    Object.values(nodeEls).forEach(g => g.classList.remove("flow-on","dim"));
-    Object.keys(edgeEls).forEach(k => edgeEls[k].classList.remove("flow-on","dim"));
-    document.querySelectorAll(".edge-arrow").forEach(a => a.classList.remove("flow-on","dim"));
-    if (flowId) {
-        const set = new Set(flow.steps);
-        // compute active edges (edges whose both endpoints are consecutive in the flow)
-        const edgeSet = new Set();
-        for (let i=0;i<flow.steps.length-1;i++) edgeSet.add(`${flow.steps[i]}->${flow.steps[i+1]}`);
-        NODES.forEach(n => {
-            if (set.has(n.id)) nodeEls[n.id].classList.add("flow-on");
-            else nodeEls[n.id].classList.add("dim");
-        });
-        Object.keys(edgeEls).forEach(k => {
-            if (edgeSet.has(k)) edgeEls[k].classList.add("flow-on");
-            else edgeEls[k].classList.add("dim");
-        });
-        document.getElementById("status-text").textContent = `Flujo: ${flow.name}`;
-        renderFlowSteps(flow);
-    } else {
-        document.getElementById("status-text").textContent = "Diagrama cargado";
-    }
-    renderFlowList();
-}
-
-function renderFlowSteps(flow) {
-    // highlight the step chips of active flow
-    document.querySelectorAll(".flow-item").forEach(it => {
-        const active = it.dataset.id === flow.id;
-        it.querySelectorAll(".f-step").forEach(chip => {
-            const on = active && flow.steps.includes(chip.dataset.id);
-            chip.classList.toggle("on", on);
-        });
-    });
-}
-
-function renderFlowList() {
-    const list = document.getElementById("flow-list");
-    list.innerHTML = "";
-    FLOWS.forEach(f => {
-        const item = document.createElement("div");
-        item.className = "flow-item" + (f.id===activeFlow?" active":"");
-        item.dataset.id = f.id;
-        item.style.setProperty("--flow", f.color);
-        const chips = f.steps.map(s=>`<span class="f-step" data-id="${s}">${s}</span>`).join("");
-        item.innerHTML = `
-            <div class="f-head">
-                <span class="f-icon">${f.icon}</span>
-                <span class="f-name">${f.name}</span>
-                <span class="f-count">${f.steps.length} nodos</span>
-            </div>
-            <div class="f-desc">${f.desc}</div>
-            <div class="f-steps">${chips}</div>`;
-        item.addEventListener("click", () => setFlow(f.id));
-        list.appendChild(item);
-    });
-}
-
-/* Legend */
-function renderLegend() {
-    const legend = document.getElementById("legend");
-    const colors = {};
-    FLOWS.forEach(f => colors[f.color]=f);
-    let html = "";
-    Object.keys(colors).forEach(c => {
-        html += `<span><span class="sw" style="background:${c}"></span>${colors[c].name.split(" ")[0]}</span>`;
-    });
-    legend.innerHTML = html;
-}
-
-/* ============================================================
-   ZOOM / PAN
-   ============================================================ */
-let scale = 1, tx = 0, ty = 0;
-const diagram = document.querySelector(".diagram-pane");
-function applyTransform() {
-    svg.style.transformOrigin = "0 0";
-    svg.style.transform = `scale(${scale}) translate(${tx}px, ${ty}px)`;
-}
-function zoom(factor) {
-    scale = Math.min(2.2, Math.max(0.5, scale * factor));
-    applyTransform();
-}
-function resetView() {
-    scale = 1; tx = 0; ty = 0; applyTransform();
-}
-diagram.addEventListener("wheel", e => {
-    e.preventDefault();
-    const f = e.deltaY < 0 ? 1.1 : 0.9;
-    zoom(f);
-}, { passive:false });
-
-document.getElementById("z-in").onclick = () => zoom(1.15);
-document.getElementById("z-out").onclick = () => zoom(0.87);
-document.getElementById("btn-auto").onclick = resetView;
-document.getElementById("btn-clear").onclick = () => { setFlow(null); tooltip.classList.remove("show"); };
-document.addEventListener("keydown", e => { if (e.key==="Escape") setFlow(null); });
-
-/* ============================================================
-   BOOT
-   ============================================================ */
-layout();
-renderBands();
-renderEdges();
-renderNodes();
-renderLegend();
-renderFlowList();
-// default highlight: inference flow
-setFlow("inference");
-</script>
+  <!-- Scripts -->
+  <script src="static/js/ui.js"></script>
+  <script src="static/js/architecture_view.js"></script>
 </body>
 </html>
