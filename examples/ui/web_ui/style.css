@@ -282,6 +282,16 @@ main {
     font-family: 'Fira Code', monospace;
 }
 
+.model-meta-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.model-meta-block .model-meta {
+    margin-top: 0.25rem;
+}
+
 .placeholder {
     font-size: 0.8rem;
     color: var(--text-muted);

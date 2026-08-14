@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const dnaStrand = document.getElementById('dna-strand');
     const modelSelect = document.getElementById('model-select');
     const modelDate = document.getElementById('model-date');
+    const modelSize = document.getElementById('model-size');
+    const modelRam = document.getElementById('model-ram');
     const modelLoadBar = document.getElementById('model-load-bar');
     let modelsData = [];
 
@@ -53,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     opt.innerText = label.replace(/_/g, ' ').toUpperCase();
                     modelSelect.appendChild(opt);
                 });
-                updateModelDate();
+                updateModelMeta();
                 if (modelSelect.value) {
                     preloadModel(modelSelect.value);
                 }
@@ -94,11 +96,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateModelDate() {
+    function formatBytes(bytes) {
+        if (!bytes && bytes !== 0) return '—';
+        const gb = bytes / (1024 * 1024 * 1024);
+        if (gb >= 1) return gb.toFixed(2) + ' GB';
+        const mb = bytes / (1024 * 1024);
+        if (mb >= 1) return mb.toFixed(0) + ' MB';
+        return Math.round(bytes) + ' B';
+    }
+
+    function updateModelMeta() {
         const selected = modelSelect.value;
         const model = modelsData.find(m => m.name === selected);
-        if (model) {
-            modelDate.innerText = `Nacido el: ${model.date}`;
+        if (!model) return;
+        if (model.date) modelDate.innerText = `Nacido el: ${model.date}`;
+        if (model.size_bytes != null) modelSize.innerText = `Peso HD: ${formatBytes(model.size_bytes)}`;
+        modelRam.innerText = `RAM: ${(model.ram_mb || 0) > 0 ? model.ram_mb.toFixed(1) + ' MB' : '—'}`;
+    }
+
+    async function refreshModelMeta(modelName) {
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
+            if (data && data.models && data.models.length > 0) {
+                modelsData = data.models;
+                updateModelMeta();
+            }
+        } catch (err) {
+            console.log('No se pudo refrescar los metadatos del modelo.');
         }
     }
 
@@ -122,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         userInput.disabled = true;
         sendBtn.disabled = true;
 
-        updateModelDate();
+        updateModelMeta();
         setModelLoading(true);
         addMessage(`🧬 Cargando organismo genómico [${modelName}] en el servidor... Por favor espera.`, 'system');
 
@@ -136,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.status === 'ok') {
                 addMessage(`✅ Organismo [${modelName}] cargado y listo en memoria.`, 'system');
+                await refreshModelMeta(modelName); // refrescar RAM real tras la carga
             } else {
                 addMessage(`❌ Error cargando el modelo: ${data.error}`, 'bot');
             }
@@ -492,3 +518,4 @@ document.addEventListener('DOMContentLoaded', () => {
         updateThemeUI(theme);
     });
 });
+

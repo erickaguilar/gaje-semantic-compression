@@ -10,9 +10,15 @@ import logging
 import os
 import threading
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 logger = logging.getLogger("gaje-web-ui.model-manager")
 
 loaded_models = {}
+loaded_ram_mb = {}
 model_lock = threading.Lock()
 
 
@@ -40,6 +46,16 @@ def find_model_path(models_root: str, model_name: str) -> str:
     return None
 
 
+def process_rss_mb() -> float:
+    """Resident memory (RSS) del proceso actual, en MB."""
+    if psutil is not None:
+        try:
+            return psutil.Process().memory_info().rss / (1024 * 1024)
+        except Exception:
+            pass
+    return 0.0
+
+
 def get_model(models_root: str, model_name: str, GenomicLLM):
     """Thread-safe retrieval of a loaded GenomicLLM model instance."""
     with model_lock:
@@ -59,9 +75,14 @@ def get_model(models_root: str, model_name: str, GenomicLLM):
                 loaded_models.clear()
                 gc.collect()
 
+            rss_before = process_rss_mb()
             llm = GenomicLLM.load_genomic(os.path.abspath(model_path))
             llm.rust_llm.set_k_wta_ratio(0.0)
+            rss_after = process_rss_mb()
+            ram_mb = max(0.0, rss_after - rss_before)
             loaded_models[model_name] = llm
+            loaded_ram_mb[model_name] = ram_mb
+            logger.info("Modelo %s cargado; RAM residente ~%.1f MB", model_name, ram_mb)
             return llm
         except Exception as e:
             logger.error("Error cargando modelo %s: %s", model_name, e, exc_info=True)
@@ -81,7 +102,13 @@ def list_available_models(models_root: str) -> list:
                     fpath = os.path.join(root, f)
                     mtime = os.path.getmtime(fpath)
                     date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-                    models.append({"name": f, "date": date_str})
+                    size_bytes = os.path.getsize(fpath)
+                    models.append({
+                        "name": f,
+                        "date": date_str,
+                        "size_bytes": size_bytes,
+                        "ram_mb": loaded_ram_mb.get(f, 0.0),
+                    })
                     seen_models.add(f)
 
     return models
