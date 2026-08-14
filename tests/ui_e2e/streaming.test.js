@@ -31,8 +31,10 @@ function createMockServer() {
     }
 
     if (url === '/api/load_model' && req.method === 'POST') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ status: 'ok' }));
+      setTimeout(() => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+      }, 400);
       return;
     }
 
@@ -97,6 +99,27 @@ test('Streaming SSE + historial local', async ({ page }) => {
 
   await page.click('#clear-history-btn');
   await expect(page.locator('.message.user')).toHaveCount(0);
+
+  server.close();
+  expect(errors).toEqual([]);
+});
+
+test('Carga de modelo: barra de progreso y accesibilidad', async ({ page }) => {
+  const { server, port } = await createMockServer();
+  const errors = [];
+  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+
+  await page.goto(`http://localhost:${port}/`, { waitUntil: 'domcontentloaded' });
+
+  await expect(page.locator('#model-load-bar')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('#model-load-bar')).toBeHidden({ timeout: 15000 });
+  await expect(page.locator('#user-input')).toBeEnabled();
+
+  await expect(page.locator('#chat-window')).toHaveAttribute('aria-live', 'polite');
+  await expect(page.locator('#send-btn')).toHaveAttribute('aria-label', 'Enviar mensaje');
+  await expect(page.locator('#user-input')).toHaveAttribute('aria-label', 'Mensaje para el modelo');
+  await expect(page.locator('#stop-btn')).toHaveAttribute('aria-label', 'Detener generación');
+  await expect(page.locator('#chat-view')).toHaveAttribute('aria-busy', 'false');
 
   server.close();
   expect(errors).toEqual([]);

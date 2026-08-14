@@ -15,7 +15,7 @@
     </script>
 </head>
 <body>
-    <div class="glow-bg-radial"></div>
+    <div class="glow-bg-radial" aria-hidden="true"></div>
     <div class="app-container">
         <header>
             <div class="logo">
@@ -43,11 +43,16 @@
             <aside class="sidebar">
                 <section class="stats-card">
                     <h3>Selección de Modelo</h3>
+                    <label for="model-select" class="visually-hidden">Selecciona un modelo genómico</label>
                     <select id="model-select" class="model-dropdown">
                         <!-- Carga dinámica desde la API -->
                         <option value="qwen2_5_3b_q4_0_q8_0_embd.gaje.flat" selected>Cargando lista de modelos...</option>
                     </select>
                     <div id="model-date" class="model-meta">Nacido el: 2026-08-09 22:57</div>
+                    <div id="model-load-bar" class="model-load" role="progressbar" aria-label="Cargando modelo" aria-valuemin="0" aria-valuemax="100" aria-valuetext="inactivo" hidden>
+                        <span class="model-load-label">Cargando organismo…</span>
+                        <span class="model-load-track"><span class="model-load-fill"></span></span>
+                    </div>
                 </section>
 
                 <section class="stats-card island-card">
@@ -90,12 +95,12 @@
                 </section>
             </aside>
 
-            <section id="chat-view" class="chat-container">
+            <section id="chat-view" class="chat-container" aria-busy="false">
                 <div class="chat-toolbar">
-                    <span class="chat-toolbar-label">Conversación</span>
-                    <button id="clear-history-btn" class="clear-history-btn" title="Borrar historial local">🗑 Borrar historial</button>
+                    <span class="chat-toolbar-label" id="chat-label">Conversación</span>
+                    <button id="clear-history-btn" class="clear-history-btn" title="Borrar historial local" aria-label="Borrar historial local de la conversación">🗑 Borrar historial</button>
                 </div>
-                <div id="chat-window" class="chat-window">
+                <div id="chat-window" class="chat-window" role="log" aria-live="polite" aria-relevant="additions" aria-labelledby="chat-label">
                     <div class="message system">
                         <div class="msg-content">
                             <p><strong>[SYSTEM]:</strong> Núcleo GAJE inicializado. Esperando entrada semántica...</p>
@@ -104,11 +109,12 @@
                 </div>
 
                 <div class="input-area">
-                    <input type="text" id="user-input" placeholder="Escribe un mensaje genómico..." autocomplete="off">
-                    <button id="stop-btn" class="stop-btn" title="Detener generación" hidden>⏹</button>
-                    <button id="send-btn">
+                    <label for="user-input" class="visually-hidden">Mensaje para el modelo</label>
+                    <input type="text" id="user-input" placeholder="Escribe un mensaje genómico..." autocomplete="off" aria-label="Mensaje para el modelo">
+                    <button id="stop-btn" class="stop-btn" title="Detener generación" aria-label="Detener generación" hidden>⏹</button>
+                    <button id="send-btn" aria-label="Enviar mensaje">
                         <span>ENVIAR</span>
-                        <svg class="send-icon" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                        <svg class="send-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                     </button>
                 </div>
             </section>

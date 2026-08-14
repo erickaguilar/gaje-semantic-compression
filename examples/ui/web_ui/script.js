@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dnaStrand = document.getElementById('dna-strand');
     const modelSelect = document.getElementById('model-select');
     const modelDate = document.getElementById('model-date');
+    const modelLoadBar = document.getElementById('model-load-bar');
     let modelsData = [];
 
     // ===== Navegación por vistas (Fase 1) =====
@@ -101,6 +102,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function setModelLoading(active) {
+        if (!modelLoadBar) return;
+        if (active) {
+            modelLoadBar.hidden = false;
+            modelLoadBar.setAttribute('aria-valuetext', 'cargando');
+            modelLoadBar.setAttribute('aria-valuenow', '');
+        } else {
+            modelLoadBar.hidden = true;
+            modelLoadBar.setAttribute('aria-valuetext', 'inactivo');
+        }
+        if (chatView) chatView.setAttribute('aria-busy', active ? 'true' : 'false');
+    }
+
     async function preloadModel(modelName) {
         if (!modelName) return;
 
@@ -109,6 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.disabled = true;
 
         updateModelDate();
+        setModelLoading(true);
         addMessage(`🧬 Cargando organismo genómico [${modelName}] en el servidor... Por favor espera.`, 'system');
 
         try {
@@ -128,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
             addMessage(`❌ Error de conexión al cargar [${modelName}].`, 'bot');
             console.error(err);
         } finally {
+            setModelLoading(false);
             modelSelect.disabled = false;
             userInput.disabled = false;
             sendBtn.disabled = false;
@@ -161,6 +177,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function addMessage(text, type, meta = null) {
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${type}`;
+        if (type === 'bot' && /^❌|^Error/.test(text)) {
+            msgDiv.classList.add('error');
+        }
 
         let html = `<p>${escapeHtml(text)}</p>`;
         if (type === 'bot' && meta) {
@@ -294,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         abortController = new AbortController();
         const stopBtn = document.getElementById('stop-btn');
         stopBtn.hidden = false;
+        if (chatView) chatView.setAttribute('aria-busy', 'true');
 
         let fullText = '';
         let started = Date.now();
@@ -304,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
             done = true;
             abortController = null;
             stopBtn.hidden = true;
+            if (chatView) chatView.setAttribute('aria-busy', 'false');
             botMsg.classList.remove('streaming');
             const elapsed = Date.now() - started;
             if (aborted && fullText) {

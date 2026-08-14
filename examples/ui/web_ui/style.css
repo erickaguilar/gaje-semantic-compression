@@ -1070,3 +1070,85 @@ footer {
     font-size: 0.92rem;
     line-height: 1.5;
 }
+
+/* ===== Fase 3: Estados de generación + accesibilidad ===== */
+.message.bot.error {
+    border-color: var(--dna-a);
+    background: rgba(244, 63, 94, 0.08);
+    box-shadow: 0 0 12px rgba(244, 63, 94, 0.2);
+}
+
+.message.bot.error p {
+    color: var(--dna-a);
+    font-weight: 500;
+}
+
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+/* Barra de progreso de carga de modelo (Fase 3.6) */
+.model-load {
+    margin-top: 0.8rem;
+}
+
+.model-load[hidden] {
+    display: none;
+}
+
+.model-load-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 0.35rem;
+    font-family: 'Fira Code', monospace;
+}
+
+.model-load-track {
+    display: block;
+    width: 100%;
+    height: 6px;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.model-load-fill {
+    display: block;
+    height: 100%;
+    width: 40%;
+    background: var(--accent-gradient);
+    border-radius: 10px;
+    animation: modelLoadSlide 1.2s ease-in-out infinite;
+}
+
+@keyframes modelLoadSlide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(250%); }
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .model-load-fill,
+    .stream-status::before,
+    .status-dot,
+    .animate-pulse {
+        animation: none;
+    }
+}

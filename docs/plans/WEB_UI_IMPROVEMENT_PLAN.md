@@ -334,3 +334,20 @@ class GajeHandler(...):
 | `src/nn/llm.rs` | **Fase 5** — exponer `forward_core`/sampling al binario si es necesario |
 | `src/core/tokenizer.rs` | **Fase 5** — asegurar exposición de `GajeTokenizer` a código no-PyO3 |
 | `target/wasm32-...` + `*.wasm` | **Fase 6.3** — build WASM del motor para sandbox en navegador |
+
+---
+
+## 8. Progreso de ejecución
+
+| Fecha | Hito | Estado |
+|-------|------|--------|
+| 2026-08-13 | Fase 2.1–2.5 + 3.1 (robustez backend, XSS, SSE) | ✅ Commit `8bda756` |
+| 2026-08-13 | Fase 1 (diagrama de arquitectura embebible) | ✅ Commit `8bda756` |
+| 2026-08-13 | Fase 2.2–2.3 (streaming SSE, botón Detener, historial localStorage) | ✅ Commit `d29e1c8` |
+| 2026-08-13 | Fase 4 parcial — test E2E de streaming + historial (mock) | ✅ Commit `f3b42e9` |
+| 2026-08-13 | Fase 3.4 (estados de generación), 3.5 (accesibilidad), 3.6 (barra de progreso de carga) | ✅ Pendiente de commit |
+| — | Fase 4 completo (unit tests backend, E2E contra servidor real, CI) | ⏳ Pendiente |
+| — | Fase 5 (migración servidor a Rust single-binary) | ⏳ Pendiente |
+| — | Fase 6 (catálogo/descarga de modelos, uso local, WASM) | ⏳ Pendiente |
+
+**Nota rendimiento (verificado 2026-08-13):** la inferencia nativa genera ~0.1 tok/s en este hardware; el streaming por SSE y `generate_native_py` en bloque son igual de lentos (ambos ~103 s para 10 tokens). El cuello de botella es la velocidad del modelo, no el overhead FFI del streaming. Acelerar requiere optimizar la inferencia (Fase 5 / mejores kernels).
