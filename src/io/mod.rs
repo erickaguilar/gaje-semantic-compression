@@ -1,5 +1,11 @@
 pub mod arch;
+pub mod config;
+pub mod db_loader;
+pub mod ffi;
+pub mod flat_reader;
+pub mod flat_writer;
 pub mod gguf;
+pub mod gguf_loader;
 pub mod gmem;
 pub mod header;
 pub mod loader;
