@@ -26,6 +26,7 @@ GAJE_PATH = "models/production/qwen2_0_5b_q4_0_q8_0_embd.gaje.flat"
 
 def build_corpus(max_tokens, out_text):
     from transformers import AutoTokenizer
+
     tok = AutoTokenizer.from_pretrained(HF_ID)
     raw = open(out_text, encoding="utf-8").read()
     ids = tok.encode(raw, add_special_tokens=False)
@@ -64,7 +65,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max_tokens", type=int, default=512)
     ap.add_argument("--which", choices=["gaje", "hf", "all"], default="all")
-    ap.add_argument("--corpus", default=os.path.join(ROOT, "data/datasets/_tmp_unified_raw.txt"))
+    ap.add_argument(
+        "--corpus", default=os.path.join(ROOT, "data/datasets/_tmp_unified_raw.txt")
+    )
     args = ap.parse_args()
 
     # corpus crudo (mismas líneas ya limpias)
@@ -74,7 +77,10 @@ def main():
             for ln in f:
                 s = ln.strip()
                 if len(s) >= 10 and not s.startswith(("#", "-", "=")):
-                    if "DATASET" not in s.upper() and "COHERENCIA Y LÓGICA" not in s.upper():
+                    if (
+                        "DATASET" not in s.upper()
+                        and "COHERENCIA Y LÓGICA" not in s.upper()
+                    ):
                         lines.append(s)
     with open(args.corpus, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
@@ -87,21 +93,31 @@ def main():
     # GAJE (cargar solo, liberar antes de HF)
     if args.which in ("gaje", "all"):
         llm = GenomicLLM.load_genomic(os.path.join(ROOT, GAJE_PATH))
-        enc = llm.tokenizer.encode(open(unified_path, encoding="utf-8").read(), add_special_tokens=False)
+        enc = llm.tokenizer.encode(
+            open(unified_path, encoding="utf-8").read(), add_special_tokens=False
+        )
         g_ids = enc.ids if hasattr(enc, "ids") else enc
         g_ids = g_ids[: args.max_tokens]
         ppl_g, n_g = ppl_gaje(llm, g_ids)
         print(f"GAJE Q4_0+Q8_0-emb : PPL={ppl_g:.3f}  tokens={n_g}")
         del llm
         import gc
+
         gc.collect()
 
     # HF FP16
     if args.which in ("hf", "all"):
         from transformers import AutoModelForCausalLM, AutoTokenizer
-        hf = AutoModelForCausalLM.from_pretrained(HF_ID, dtype=torch.float16).to(device).eval()
+
+        hf = (
+            AutoModelForCausalLM.from_pretrained(HF_ID, dtype=torch.float16)
+            .to(device)
+            .eval()
+        )
         ht = AutoTokenizer.from_pretrained(HF_ID)
-        h_ids = ht.encode(open(unified_path, encoding="utf-8").read(), add_special_tokens=False)[: args.max_tokens]
+        h_ids = ht.encode(
+            open(unified_path, encoding="utf-8").read(), add_special_tokens=False
+        )[: args.max_tokens]
         ppl_h, n_h = ppl_hf(hf, ht, h_ids, device)
         print(f"HF FP16            : PPL={ppl_h:.3f}  tokens={n_h}")
 
