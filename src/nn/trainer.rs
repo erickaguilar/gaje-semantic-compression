@@ -187,6 +187,37 @@ impl GenomicTrainerCore {
         }
         Ok(())
     }
+
+    /// Entrena SOLO el `lm_head` (que en el formato híbrido GAJE es FP32), usando
+    /// fase 1. Evita tocar el cuerpo cuantizado Q4_0, que es frágil en training.
+    /// Es la vía segura y rápida para pruebas de destilación/SFT.
+    pub fn fit_lm_head(
+        &self,
+        model: &mut GenomicLLM,
+        dataset: &[Vec<usize>],
+    ) -> Result<f32, String> {
+        let mut total = 0.0f32;
+        let mut count = 0usize;
+        for seq in dataset {
+            if seq.len() < 2 {
+                continue;
+            }
+            let input = &seq[0..seq.len() - 1];
+            let target = &seq[1..seq.len()];
+            match self.train_step(model, input, target, 1) {
+                Ok(loss) => {
+                    total += loss;
+                    count += 1;
+                }
+                Err(_) => {}
+            }
+        }
+        if count > 0 {
+            Ok(total / count as f32)
+        } else {
+            Err("No valid samples in dataset".to_string())
+        }
+    }
 }
 
 // --- Python Wrapper ---
@@ -216,6 +247,19 @@ impl NativeGenomicTrainer {
     ) -> PyResult<()> {
         self.inner
             .fit(model, &dataset, epochs)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    /// Entrena solo el `lm_head` (FP32) sobre el dataset. Devuelve el loss medio.
+    #[pyo3(signature = (model, dataset, lr=0.01))]
+    pub fn fit_lm_head(
+        &self,
+        model: &mut crate::nn::llm::GenomicLLM,
+        dataset: Vec<Vec<usize>>,
+        lr: f32,
+    ) -> PyResult<f32> {
+        let core = GenomicTrainerCore::new(lr, self.inner.resonance_weight);
+        core.fit_lm_head(model, &dataset)
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }
