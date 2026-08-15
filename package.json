@@ -10,8 +10,8 @@
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:ui": "playwright test --config=playwright.config.js",
-    "test:ui:stream": "playwright test --config=playwright.stream.config.js"
+    "test:ui": "playwright test --config=tests/ui_e2e/playwright.config.js",
+    "test:ui:stream": "playwright test --config=tests/ui_e2e/playwright.stream.config.js"
   },
   "repository": {
     "type": "git",

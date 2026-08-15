@@ -60,3 +60,9 @@ gaje_v2_premium/
 .antigravitycli/
 node_modules/
 test-results/
+
+# Playwright E2E test artifacts (regenerados en cada ejecución)
+tests/ui_e2e/screenshots/
+
+# Directorio temporal de tokenizers
+/temp_tokenizer/

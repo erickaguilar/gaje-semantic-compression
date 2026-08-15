@@ -21,7 +21,7 @@ A pesar de tener una infraestructura nativa en Rust funcional y una geometría e
 
 ## 3. Homologación y Mandato Empírico
 
-Se ha establecido un **Mandato de Verdad Empírica** en el archivo `GEMINI.md`:
+Se ha establecido un **Mandato de Verdad Empírica** en el archivo [`GEMINI.md`](../../GEMINI.md):
 
 1.  **Cero Aspirational Docs:** Queda prohibido declarar fases como concluidas basándose solo en la compilación del código.
 2.  **Validación por Gate:** Cada etapa debe pasar una validación medida en `benchmarks/logs/`.

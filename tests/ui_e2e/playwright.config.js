@@ -1,7 +1,10 @@
 const { defineConfig, devices } = require('@playwright/test');
+const path = require('path');
+
+const repoRoot = path.join(__dirname, '..', '..');
 
 module.exports = defineConfig({
-  testDir: './tests/ui_e2e',
+  testDir: './',
   testIgnore: 'streaming.test.js',
   timeout: 30 * 1000,
   expect: {
@@ -26,6 +29,7 @@ module.exports = defineConfig({
   webServer: {
     command: '.venv/bin/python3 examples/ui/web_ui/server.py',
     url: 'http://127.0.0.1:8080',
+    cwd: repoRoot,
     reuseExistingServer: !process.env.CI,
     timeout: 10 * 1000,
   },

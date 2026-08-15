@@ -107,7 +107,7 @@ Optimizar el embrión para que su cadena de razonamiento sea estable bajo pertur
 1. Correr **Fase A** (argmax agreement) para fijar el umbral de fiabilidad del maestro.
 2. Montar el pipeline de destilación (soft labels + temperatura) sobre un dominio acotado.
 3. Integrar el hallazgo en `docs/reports/` y en el futuro `BENCHMARKS.md` oficial (con 3ª columna: un 4-bit total tipo llama.cpp, para demostrar que el delta FP32-embeddings es real).
-4. Actualizar `INDEX.md` referenciando este documento.
+4. Actualizar [`INDEX.md`](../INDEX.md) referenciando este documento.
 
 ---
 
