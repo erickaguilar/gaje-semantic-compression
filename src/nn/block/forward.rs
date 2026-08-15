@@ -81,7 +81,8 @@ impl RustGenomicBlock {
             .zip(projected_attn.par_iter())
             .for_each(|(xi, &ai)| *xi += ai);
 
-        let x_ffn_n = unsafe { crate::compute::kernels::rms_norm(&x_post, &self.ffn_norm, self.eps) };
+        let x_ffn_n =
+            unsafe { crate::compute::kernels::rms_norm(&x_post, &self.ffn_norm, self.eps) };
 
         let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
             let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;

@@ -30,7 +30,8 @@ impl DNIEngine {
         hashes
     }
 
-    pub(crate) fn profile_activations(&mut self, tokens: &[u32]) -> Vec<Vec<f32>> {        let n_blocks = self.model.blocks.len();
+    pub(crate) fn profile_activations(&mut self, tokens: &[u32]) -> Vec<Vec<f32>> {
+        let n_blocks = self.model.blocks.len();
         let mut activation_stats = vec![Vec::new(); n_blocks];
         self.model.clear_cache_core();
         for &token in tokens {
@@ -48,7 +49,11 @@ impl DNIEngine {
         activation_stats
     }
 
-    pub(crate) fn calculate_fuzzy_membership(idx: usize, sorted_anchors: &[usize], sigma: f32) -> f32 {
+    pub(crate) fn calculate_fuzzy_membership(
+        idx: usize,
+        sorted_anchors: &[usize],
+        sigma: f32,
+    ) -> f32 {
         if sorted_anchors.is_empty() || sigma <= 1e-6 {
             return 0.0;
         }

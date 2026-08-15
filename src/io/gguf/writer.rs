@@ -10,7 +10,7 @@
 use std::io::Write;
 
 use crate::io::gguf::reader::tensor_size_bytes;
-use crate::io::gguf::types::{GGMLType, GGUFValue, GGUFTensorInfo};
+use crate::io::gguf::types::{GGMLType, GGUFTensorInfo, GGUFValue};
 
 pub struct GGUFWriter {
     metadata: Vec<(String, GGUFValue)>,
@@ -60,7 +60,10 @@ impl GGUFWriter {
         if data.len() != expected {
             return Err(format!(
                 "Tensor '{}' data size {} bytes does not match expected {} for {:?}",
-                info.name, data.len(), expected, tensor_type
+                info.name,
+                data.len(),
+                expected,
+                tensor_type
             ));
         }
         self.tensors.push(info);
@@ -268,7 +271,10 @@ mod tests {
         assert_eq!(reader.get_tensor_data("tensor.q8").unwrap().len(), 68);
         assert_eq!(
             reader.get_tensor_data("tensor.f32").unwrap(),
-            &(0..6).map(|i| (i as f32).to_le_bytes()).flatten().collect::<Vec<u8>>()[..]
+            &(0..6)
+                .map(|i| (i as f32).to_le_bytes())
+                .flatten()
+                .collect::<Vec<u8>>()[..]
         );
         assert_eq!(reader.get_tensor_data("tensor.q8").unwrap(), &[7u8; 68][..]);
     }

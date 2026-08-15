@@ -11,7 +11,8 @@ impl NativeLoader {
 
     pub fn new_with_mode(path: &str, read_only: bool) -> std::io::Result<Self> {
         Ok(NativeLoader {
-            db: crate::core::db::get_or_create_db(path, read_only).map_err(std::io::Error::other)?,
+            db: crate::core::db::get_or_create_db(path, read_only)
+                .map_err(std::io::Error::other)?,
         })
     }
 

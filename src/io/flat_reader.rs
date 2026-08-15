@@ -50,8 +50,9 @@ impl GajeFlatFileReader {
 
         let dir_start = meta_end;
         let dir_end = dir_start + dir_len;
-        let dir_entries: Vec<FlatTensorEntry> = serde_json::from_slice(&mmap[dir_start..dir_end])
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let dir_entries: Vec<FlatTensorEntry> =
+            serde_json::from_slice(&mmap[dir_start..dir_end])
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let mut tensor_map = std::collections::HashMap::with_capacity(num_tensors);
         for entry in dir_entries {

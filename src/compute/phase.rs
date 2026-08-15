@@ -12,10 +12,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::{
-    exceptions::PyValueError,
-    PyObject, PyResult, Python,
-};
+use crate::pyo3_shim::{exceptions::PyValueError, PyObject, PyResult, Python};
 
 // --- Look-Up Tables para Optimización ARM ---
 lazy_static::lazy_static! {

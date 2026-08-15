@@ -37,7 +37,9 @@ impl RustGenomicBlock {
         };
 
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() {
-            unsafe { crate::compute::kernels::rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps) }
+            unsafe {
+                crate::compute::kernels::rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps)
+            }
         } else {
             x.clone()
         };
@@ -52,7 +54,8 @@ impl RustGenomicBlock {
         for i in 0..x.len() {
             x_post_attn[i] += proj_attn[i];
         }
-        let x_ffn_n = unsafe { crate::compute::kernels::rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
+        let x_ffn_n =
+            unsafe { crate::compute::kernels::rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
         let gate = self
             .gate_gen
             .forward_core(x_ffn_n.clone(), modulation, true)?;

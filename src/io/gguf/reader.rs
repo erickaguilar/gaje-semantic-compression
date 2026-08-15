@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Cursor, Read};
 
-use crate::io::gguf::types::{GGMLType, GGUFValue, GGUFTensorInfo};
+use crate::io::gguf::types::{GGMLType, GGUFTensorInfo, GGUFValue};
 
 pub struct GGUFReader {
     pub metadata: HashMap<String, GGUFValue>,

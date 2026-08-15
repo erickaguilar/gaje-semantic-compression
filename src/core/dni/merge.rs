@@ -43,7 +43,11 @@ impl DNIEngine {
         }
     }
 
-    pub(crate) fn migrate_knowledge(&self, logic_model: &mut GenomicLLM, grammar_model: &mut GenomicLLM) {
+    pub(crate) fn migrate_knowledge(
+        &self,
+        logic_model: &mut GenomicLLM,
+        grammar_model: &mut GenomicLLM,
+    ) {
         let mut rng = rand::thread_rng();
         for i in 0..logic_model.blocks.len() {
             let blk_l = &mut logic_model.blocks[i];
