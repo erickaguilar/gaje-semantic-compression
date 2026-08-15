@@ -11,9 +11,12 @@
 //
 // - [`types`](crate::io::gguf::types): tipos básicos (`GGUFValueType`, `GGUFValue`, `GGMLType`, `GGUFTensorInfo`).
 // - [`reader`](crate::io::gguf::reader): `GGUFReader` (apertura y lectura binaria).
+// - [`writer`](crate::io::gguf::writer): `GGUFWriter` (serialización binaria).
 
 pub mod reader;
 pub mod types;
+pub mod writer;
 
 pub use crate::io::gguf::reader::*;
 pub use crate::io::gguf::types::*;
+pub use crate::io::gguf::writer::*;

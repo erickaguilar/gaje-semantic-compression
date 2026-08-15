@@ -11,7 +11,7 @@ use crate::io::gguf::types::{GGMLType, GGUFValue, GGUFTensorInfo};
 pub struct GGUFReader {
     pub metadata: HashMap<String, GGUFValue>,
     pub tensors: HashMap<String, GGUFTensorInfo>,
-    mmap: Mmap,
+    buffer: Vec<u8>,
     data_offset: u64,
 }
 
@@ -19,7 +19,16 @@ impl GGUFReader {
     pub fn open(path: &str) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
-        let mut reader = Cursor::new(&mmap);
+        Self::parse(&mmap)
+    }
+
+    /// Abre un GGUF desde un buffer en memoria (útil para pruebas y roundtrips).
+    pub fn open_from_bytes(bytes: &[u8]) -> std::io::Result<Self> {
+        Self::parse(bytes)
+    }
+
+    fn parse(bytes: &[u8]) -> std::io::Result<Self> {
+        let mut reader = Cursor::new(bytes);
 
         // 1. Magic
         let mut magic = [0u8; 4];
@@ -102,7 +111,7 @@ impl GGUFReader {
         Ok(GGUFReader {
             metadata,
             tensors,
-            mmap,
+            buffer: bytes.to_vec(),
             data_offset,
         })
     }
@@ -115,31 +124,22 @@ impl GGUFReader {
             )
         })?;
 
-        let size = self.get_tensor_size_bytes(info);
+        let size = tensor_size_bytes(info);
         let start = (self.data_offset + info.offset) as usize;
         let end = start + size;
 
-        if end > self.mmap.len() {
+        if end > self.buffer.len() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Tensor offset out of bounds",
             ));
         }
 
-        Ok(&self.mmap[start..end])
+        Ok(&self.buffer[start..end])
     }
 
     fn get_tensor_size_bytes(&self, info: &GGUFTensorInfo) -> usize {
-        let n_elements: u64 = info.shape.iter().product();
-        match info.tensor_type {
-            GGMLType::F32 => (n_elements * 4) as usize,
-            GGMLType::F16 => (n_elements * 2) as usize,
-            GGMLType::Q8_0 => {
-                // Q8_0: blocks of 32 elements. Each block: 1 f16 delta + 32 i8 weights = 34 bytes.
-                ((n_elements + 31) / 32 * 34) as usize
-            }
-            _ => 0, // Should be handled during loading
-        }
+        tensor_size_bytes(info)
     }
 
     // Helper functions for reading binary types
@@ -231,5 +231,20 @@ impl GGUFReader {
                 format!("Unsupported metadata value type: {}", val_type),
             )),
         }
+    }
+}
+
+/// Tamaño en bytes del bloque de datos de un tensor, según su tipo. Compartido
+/// entre el reader y el writer (`pub(crate)`) para calcular offsets.
+pub(crate) fn tensor_size_bytes(info: &GGUFTensorInfo) -> usize {
+    let n_elements: u64 = info.shape.iter().product();
+    match info.tensor_type {
+        GGMLType::F32 => (n_elements * 4) as usize,
+        GGMLType::F16 => (n_elements * 2) as usize,
+        GGMLType::Q8_0 => {
+            // Q8_0: blocks of 32 elements. Each block: 1 f16 delta + 32 i8 weights = 34 bytes.
+            ((n_elements + 31) / 32 * 34) as usize
+        }
+        _ => 0, // Should be handled during loading
     }
 }

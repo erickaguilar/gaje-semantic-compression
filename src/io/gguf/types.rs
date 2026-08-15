@@ -36,6 +36,28 @@ pub enum GGUFValue {
     Float64(f64),
 }
 
+impl GGUFValue {
+    /// Tipo GGUF (id numérico) correspondiente a esta variante. Inverso de la
+    /// lectura de `val_type` en el reader.
+    pub fn value_type(&self) -> u32 {
+        match self {
+            GGUFValue::Uint8(_) => GGUFValueType::Uint8 as u32,
+            GGUFValue::Int8(_) => GGUFValueType::Int8 as u32,
+            GGUFValue::Uint16(_) => GGUFValueType::Uint16 as u32,
+            GGUFValue::Int16(_) => GGUFValueType::Int16 as u32,
+            GGUFValue::Uint32(_) => GGUFValueType::Uint32 as u32,
+            GGUFValue::Int32(_) => GGUFValueType::Int32 as u32,
+            GGUFValue::Float32(_) => GGUFValueType::Float32 as u32,
+            GGUFValue::Bool(_) => GGUFValueType::Bool as u32,
+            GGUFValue::String(_) => GGUFValueType::String as u32,
+            GGUFValue::Array(_) => GGUFValueType::Array as u32,
+            GGUFValue::Uint64(_) => GGUFValueType::Uint64 as u32,
+            GGUFValue::Int64(_) => GGUFValueType::Int64 as u32,
+            GGUFValue::Float64(_) => GGUFValueType::Float64 as u32,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum GGMLType {
