@@ -265,6 +265,30 @@ Corpus real de destilación (`data/distill/train_smollm2_1t.jsonl`, 1520 tokens,
 - **Conclusión**: el entrenamiento del cuerpo (Vía B) **no memoriza** — la pérdida held-out **baja**, validando generalización real. La escalera (menos bloques + `lr` mayor) generalizó más que full-body a `lr` muy bajo; full-body confirma estabilidad sin explotar.
 - Tests `#[ignore]` (lentos, ~220s y ~166s): `test_body_training_heldout_generalization` (escalera) y `test_body_training_fullbody_heldout` (full-body).
 
+**Barrido de escalera y lr (held-out, train_len=180, baseline 2.5590):**
+
+| n_blk | lr | held-out | Δ |
+| :--- | :--- | :--- | :--- |
+| 4 | 1e-5 | 2.5335 | −0.026 |
+| **8** | **1e-5** | **2.5299** | **−0.029** (mejor del barrido de bloques) |
+| 12 | 5e-6 | 2.5405 | −0.019 |
+| 16 | 2e-6 | 2.5504 | −0.009 |
+
+Barrido de **lr a n_blk=8** (frontera de estabilidad):
+
+| lr | held-out | Δ | Veredicto |
+| :--- | :--- | :--- | :--- |
+| 2e-6 | 2.5508 | −0.008 | ESTABLE |
+| 5e-6 | 2.5411 | −0.018 | MEJORA |
+| 1e-5 | 2.5299 | −0.029 | MEJORA |
+| 2e-5 | 2.5577 | −0.001 | ESTABLE (no monótono, ruido) |
+| 5e-5 | 2.5033 | −0.056 | MEJORA |
+| 1e-4 | 2.4522 | −0.107 | MEJORA |
+| **2e-4** | **2.4270** | **−0.132** | **MEJORA (mejor)** |
+| 5e-4 | 2.7484 | +0.189 | DEGRADA |
+
+**Lectura**: el punto dulce es **8 bloques, lr≈2e-4, gclip=1.0 → held-out 2.427** (vs 2.559 baseline). El modelo tolera lr hasta ~2e-4 sin explotar (forward siempre finito); en 5e-4 la CE held-out sube (sobreajuste/explosión de gradiente). Sin NaN en todo el rango. Tests `#[ignore]`: `test_body_ladder_sweep`, `test_body_lr_sweep_blk8`, `test_body_lr_high_boundary`.
+
 ### 🧭 Camino incremental recomendado (escalera de validación)
 No escalar a los 30 bloques. Validar dónde se rompe:
 `lm_head` (✅) → `+Block 23` (✅ estable) → `+Blocks 22-23` → `+Blocks 20-23` → ... hasta `0-23`. En cada paso: 1 token, `lr ≤ 1e-5`, y **assert `all_finite(logits)`** tras el update. Alternativas de menor riesgo: scales/min-only (congelar centroides), last-N bloques, o LoRA/adaptadores FP32 al lado del cuerpo cuantizado.
