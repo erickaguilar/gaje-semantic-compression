@@ -253,6 +253,18 @@ Suite: 38 passed / 0 failed / 0 ignored.
 - **Full-body con doble-forward**: **descartado**. No parchear con `if is_nan { 0.0 }` ni clamp — ocultaría la causa.
 - **`ForwardCache` (caché de activaciones)**: **VALIDADO** — full-body con backprop estándar, sin re-forward; el gradiente llega al bloque 0 y el forward posterior es finito (sin NaN). Es el camino correcto para el cuerpo completo.
 
+### 🟢 Entrenamiento del cuerpo con validación held-out (2026-08-16): generaliza
+Corpus real de destilación (`data/distill/train_smollm2_1t.jsonl`, 1520 tokens, tokenizados en el tokenizer del estudiante 49152 = vocab del modelo). Split 80/20; **CE held-out antes/después**:
+
+| Configuración | train loss | held-out CE antes | held-out CE después | Veredicto |
+| :--- | :--- | :--- | :--- | :--- |
+| **Escalera** (últimos 4 bloques, `lr=1e-5`, `gclip=1.0`) | 1.5675 | 2.5590 | **2.4824** | ✅ MEJORA |
+| **Full-body** (30 bloques, `lr=1e-6`, `gclip=1.0`) | 2.7419 | 2.5590 | **2.5525** | ✅ MEJORA (sutil) |
+
+- Ambos: forward posterior **finito (sin NaN)**, centroides del bloque 0 y último **mutan**.
+- **Conclusión**: el entrenamiento del cuerpo (Vía B) **no memoriza** — la pérdida held-out **baja**, validando generalización real. La escalera (menos bloques + `lr` mayor) generalizó más que full-body a `lr` muy bajo; full-body confirma estabilidad sin explotar.
+- Tests `#[ignore]` (lentos, ~220s y ~166s): `test_body_training_heldout_generalization` (escalera) y `test_body_training_fullbody_heldout` (full-body).
+
 ### 🧭 Camino incremental recomendado (escalera de validación)
 No escalar a los 30 bloques. Validar dónde se rompe:
 `lm_head` (✅) → `+Block 23` (✅ estable) → `+Blocks 22-23` → `+Blocks 20-23` → ... hasta `0-23`. En cada paso: 1 token, `lr ≤ 1e-5`, y **assert `all_finite(logits)`** tras el update. Alternativas de menor riesgo: scales/min-only (congelar centroides), last-N bloques, o LoRA/adaptadores FP32 al lado del cuerpo cuantizado.

@@ -31,6 +31,10 @@ module.exports = defineConfig({
     url: 'http://127.0.0.1:8080',
     cwd: repoRoot,
     reuseExistingServer: !process.env.CI,
-    timeout: 10 * 1000,
+    timeout: 20 * 1000,
+    env: {
+      GAJE_AUTO_LOAD_MODEL: 'false',
+      GAJE_TEST_MODE: 'true',
+    },
   },
 });

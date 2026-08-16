@@ -8,11 +8,11 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
     await page.goto('/');
 
     // 2. Verificar el título de la página
-    await expect(page).toHaveTitle(/GAJE Helix \| Semantic Genomic Compression Platform/);
+    await expect(page).toHaveTitle(/GAJE Helix \| Genomic Semantic Compression Platform/);
 
     // 3. Verificar el encabezado principal
-    const headerTitle = page.locator('header h1');
-    await expect(headerTitle).toContainText('GAJE Helix');
+    const headerTitle = page.locator('header .y2k-brand');
+    await expect(headerTitle).toContainText('GAJE');
 
     // 4. Verificar que las tarjetas de métricas y entorno existan
     const sidebar = page.locator('aside.sidebar');

@@ -286,3 +286,310 @@ fn test_refine_indexing_matches_forward() {
     assert!(expected.abs() > 1e-3, "centroide 0 sin pesos asignados? señal demasiado débil");
     assert!(rel < 1e-2, "refine no acumula con el mapeo del forward (rel_err={rel:.6})");
 }
+
+// ---- Entrenamiento del cuerpo con validación held-out (Vía B) ----
+// Carga el estudiante smollm2 + su tokenizer, tokeniza el corpus de destilación,
+// entrena el cuerpo (escalera) sobre un split y mide la CE held-out antes/después.
+fn ce_loss(model: &mut crate::nn::llm::GenomicLLM, tokens: &[usize]) -> f32 {
+    if tokens.len() < 2 {
+        return 0.0;
+    }
+    model.clear_cache_core();
+    let mut total = 0.0f32;
+    for i in 0..tokens.len() - 1 {
+        let logits = model.forward_core(tokens[i], false).expect("forward eval");
+        let t = tokens[i + 1];
+        let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+        let mut sum_e = 0.0f32;
+        for &l in &logits {
+            sum_e += (l - max_l).exp();
+        }
+        let p = ((logits[t] - max_l).exp() / sum_e).max(1e-12);
+        total -= p.ln();
+    }
+    total / (tokens.len() - 1) as f32
+}
+
+#[test]
+#[ignore = "lento (~220s): entrena el cuerpo y valida CE held-out; correr explícitamente con -- --ignored"]
+fn test_body_training_heldout_generalization() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip: modelo no presente");
+        return;
+    }
+    let mut model = load_genomic_auto(model_path).expect("cargar modelo");
+    let n = model.blocks.len();
+    let vocab = model.embeddings.out_features;
+
+    // Tokenizar el corpus (prompt+answer) en el tokenizer del estudiante.
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path)
+        .expect("cargar tokenizer");
+    let raw = std::fs::read_to_string(corpus_path).expect("leer corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+            let prompt = v["prompt"].as_str().unwrap_or("");
+            let answer = v["answer"].as_str().unwrap_or("");
+            let ids = tokenizer
+                .encode(&format!("{prompt}{answer}"), false)
+                .expect("encode");
+            for id in ids {
+                stream.push((id as usize).min(vocab - 1));
+            }
+        }
+    }
+    assert!(stream.len() >= 40, "corpus demasiado corto: {}", stream.len());
+    eprintln!(
+        "vocab={vocab} tok_vocab={} stream_len={} n_blocks={n}",
+        tokenizer.vocab_size(),
+        stream.len()
+    );
+
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    let train: Vec<usize> = stream[..stream.len() - held_len].to_vec();
+
+    let loss_before = ce_loss(&mut model, &heldout);
+    assert!(loss_before.is_finite(), "loss held-out inicial debe ser finita");
+    eprintln!("heldout CE ANTES = {loss_before:.4}");
+
+    // Entrenar el cuerpo (escalera: últimos bloques), lr pequeño, grad-clip activo.
+    let before_last = model.blocks[n - 1].gate_gen.centroids.clone();
+    model.clear_cache_core();
+    let tloss = model
+        .train_sequence_cached_core(train.clone(), 1e-5, 4, 1.0)
+        .expect("entrenamiento del cuerpo");
+    assert!(tloss.is_finite(), "train loss debe ser finita, got {tloss}");
+    eprintln!("train loss (últimos 4 bloques) = {tloss:.4}");
+
+    // Estabilidad del forward tras entrenar.
+    model.clear_cache_core();
+    let (logits, _) = model
+        .forward_with_hidden_core(heldout[0], true)
+        .expect("forward tras entrenar");
+    assert!(logits.iter().all(|v| v.is_finite()), "forward debe ser finito tras entrenar");
+
+    let loss_after = ce_loss(&mut model, &heldout);
+    assert!(loss_after.is_finite(), "loss held-out final debe ser finita");
+    eprintln!("heldout CE DESPUÉS = {loss_after:.4}");
+
+    let body_mutated = model.blocks[n - 1].gate_gen.centroids != before_last;
+    assert!(body_mutated, "el cuerpo debe mutar sus centroides");
+
+    let verdict = if loss_after < loss_before { "MEJORA" } else { "ESTABLE" };
+    eprintln!("→ generalización: {verdict} ({loss_before:.4} -> {loss_after:.4})");
+    assert!(
+        loss_after <= loss_before * 1.5,
+        "la loss held-out degradó catastróficamente: {loss_before} -> {loss_after}"
+    );
+}
+
+#[test]
+#[ignore = "lento: full-body (30 bloques) con validación held-out; correr explícitamente"]
+fn test_body_training_fullbody_heldout() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip: modelo no presente");
+        return;
+    }
+    let mut model = load_genomic_auto(model_path).expect("cargar modelo");
+    let n = model.blocks.len();
+    let vocab = model.embeddings.out_features;
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
+    let raw = std::fs::read_to_string(corpus_path).expect("leer corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+            let prompt = v["prompt"].as_str().unwrap_or("");
+            let answer = v["answer"].as_str().unwrap_or("");
+            let ids = tokenizer.encode(&format!("{prompt}{answer}"), false).expect("encode");
+            for id in ids {
+                stream.push((id as usize).min(vocab - 1));
+            }
+        }
+    }
+    assert!(stream.len() >= 40);
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    // Subset pequeño de entrenamiento para que el backward full-body sea factible.
+    let train_max = stream.len() - held_len;
+    let train: Vec<usize> = stream[..train_max.min(240)].to_vec();
+    eprintln!("full-body: train_len={} held_len={} n_blocks={n}", train.len(), heldout.len());
+
+    let loss_before = ce_loss(&mut model, &heldout);
+    assert!(loss_before.is_finite());
+    eprintln!("heldout CE ANTES (full-body) = {loss_before:.4}");
+
+    let before0 = model.blocks[0].gate_gen.centroids.clone();
+    let beforelast = model.blocks[n - 1].gate_gen.centroids.clone();
+    model.clear_cache_core();
+    let tloss = model
+        .train_sequence_cached_core(train.clone(), 1e-6, n, 1.0)
+        .expect("full-body training");
+    assert!(tloss.is_finite(), "train loss finita, got {tloss}");
+    eprintln!("full-body train loss = {tloss:.4}");
+
+    model.clear_cache_core();
+    let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
+    assert!(logits.iter().all(|v| v.is_finite()), "forward full-body debe ser finito");
+
+    let loss_after = ce_loss(&mut model, &heldout);
+    assert!(loss_after.is_finite());
+    eprintln!("heldout CE DESPUÉS (full-body) = {loss_after:.4}");
+
+    let changed0 = model.blocks[0].gate_gen.centroids != before0;
+    let changedlast = model.blocks[n - 1].gate_gen.centroids != beforelast;
+    assert!(changed0 && changedlast, "full-body debe mutar bloque 0 y último (block0={changed0} last={changedlast})");
+
+    let verdict = if loss_after < loss_before { "MEJORA" } else { "ESTABLE" };
+    eprintln!("→ full-body generalización: {verdict} ({loss_before:.4} -> {loss_after:.4})");
+    assert!(
+        loss_after <= loss_before * 1.5,
+        "full-body degradó catastróficamente: {loss_before} -> {loss_after}"
+    );
+}
+
+#[test]
+#[ignore = "lento: barrido de escalera (n_train_blocks) sobre held-out; correr explícitamente"]
+fn test_body_ladder_sweep() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip");
+        return;
+    }
+    let n = load_genomic_auto(model_path).unwrap().blocks.len();
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
+    let raw = std::fs::read_to_string(corpus_path).expect("corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    {
+        let probe = load_genomic_auto(model_path).unwrap();
+        let vocab = probe.embeddings.out_features;
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                let p = v["prompt"].as_str().unwrap_or("");
+                let a = v["answer"].as_str().unwrap_or("");
+                let ids = tokenizer.encode(&format!("{p}{a}"), false).expect("encode");
+                for id in ids {
+                    stream.push((id as usize).min(vocab - 1));
+                }
+            }
+        }
+    }
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    let train_max = stream.len() - held_len;
+    let train: Vec<usize> = stream[..train_max.min(180)].to_vec();
+
+    // baseline held-out (modelo fresco, sin entrenar)
+    let mut base = load_genomic_auto(model_path).unwrap();
+    let base_loss = ce_loss(&mut base, &heldout);
+    drop(base);
+
+    eprintln!("=== Barrido escalera (train_len={}) ===  baseline heldout={base_loss:.4}", train.len());
+    let cfgs: Vec<(usize, f32)> = vec![(4, 1e-5), (8, 1e-5), (12, 5e-6), (16, 2e-6)];
+    let mut best: Option<(usize, f32, f32)> = None;
+    for (nb, lr) in cfgs {
+        let mut model = load_genomic_auto(model_path).unwrap();
+        let tloss = model
+            .train_sequence_cached_core(train.clone(), lr, nb, 1.0)
+            .expect("train");
+        model.clear_cache_core();
+        let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
+        let finite = logits.iter().all(|v| v.is_finite());
+        let after = ce_loss(&mut model, &heldout);
+        let delta = after - base_loss;
+        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        eprintln!("  n_blk={nb:>2} lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
+        if finite && (best.is_none() || after < best.unwrap().2) {
+            best = Some((nb, lr, after));
+        }
+    }
+    let (nb, lr, after) = best.expect("ninguna config finita");
+    eprintln!("→ mejor escalera: n_blk={nb} lr={lr:.0e} heldout={after:.4} (baseline {base_loss:.4})");
+    assert!(
+        after < base_loss,
+        "la mejor config de escalera no mejoró held-out (baseline {base_loss:.4} -> {after:.4})"
+    );
+}
+
+#[test]
+#[ignore = "lento: barrido de lr fijando 8 bloques sobre held-out"]
+fn test_body_lr_sweep_blk8() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip");
+        return;
+    }
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
+    let raw = std::fs::read_to_string(corpus_path).expect("corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    {
+        let probe = load_genomic_auto(model_path).unwrap();
+        let vocab = probe.embeddings.out_features;
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                let p = v["prompt"].as_str().unwrap_or("");
+                let a = v["answer"].as_str().unwrap_or("");
+                let ids = tokenizer.encode(&format!("{p}{a}"), false).expect("encode");
+                for id in ids {
+                    stream.push((id as usize).min(vocab - 1));
+                }
+            }
+        }
+    }
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    let train: Vec<usize> = stream[..stream.len() - held_len - held_len].to_vec();
+
+    let mut base = load_genomic_auto(model_path).unwrap();
+    let base_loss = ce_loss(&mut base, &heldout);
+    drop(base);
+
+    let nb = 8usize;
+    eprintln!("=== Barrido lr (n_blk={nb}, train_len={}) === baseline={base_loss:.4}", train.len());
+    let mut best: Option<(f32, f32)> = None;
+    for lr in [2e-6f32, 5e-6, 1e-5, 2e-5, 5e-5] {
+        let mut model = load_genomic_auto(model_path).unwrap();
+        let tloss = model
+            .train_sequence_cached_core(train.clone(), lr, nb, 1.0)
+            .expect("train");
+        model.clear_cache_core();
+        let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
+        let finite = logits.iter().all(|v| v.is_finite());
+        let after = ce_loss(&mut model, &heldout);
+        let delta = after - base_loss;
+        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        eprintln!("  lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
+        if finite && (best.is_none() || after < best.unwrap().1) {
+            best = Some((lr, after));
+        }
+    }
+    let (lr, after) = best.expect("ninguna finita");
+    eprintln!("→ mejor lr (8 bloques): lr={lr:.0e} heldout={after:.4} (baseline {base_loss:.4})");
+    assert!(after < base_loss, "ninguna config mejoró held-out");
+}
