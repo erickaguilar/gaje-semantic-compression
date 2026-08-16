@@ -1333,7 +1333,10 @@ class GenomicLLM:
                     )
                     return obj
 
-        if not input_path.endswith(".gaje"):
+        # El path puede ser un fichero DB redb (p.ej. un .flat exportado con
+        # save_genomic_model) o un directorio con model.gaje dentro. Si ya es un
+        # fichero, abrirlo directamente; solo anexar 'model.gaje' si es un dir.
+        if os.path.isdir(input_path):
             input_path = os.path.join(input_path, "model.gaje")
 
         db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
