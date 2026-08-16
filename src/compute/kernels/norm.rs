@@ -137,3 +137,29 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
 pub unsafe fn rms_norm_neon(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     rms_norm(x, weight, eps)
 }
+
+/// Backward de RMSNorm (implementación escalar, para entrenamiento del cuerpo).
+/// y_i = w_i * x_i * inv, con inv = 1/sqrt(mean(x^2)+eps).
+/// dx_i = w_i*inv*dy_i - (x_i/(r*n)) * inv^2 * Σ_j(w_j*x_j*dy_j), con r = 1/inv.
+pub fn rms_norm_backward(x: &[f32], dy: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
+    let n = x.len();
+    let mut dx = vec![0.0f32; n];
+    if n == 0 {
+        return dx;
+    }
+    let nf = n as f32;
+    let mut ss = 0.0f32;
+    for &v in x {
+        ss += v * v;
+    }
+    let r = (ss / nf + eps).sqrt();
+    let inv = 1.0 / r;
+    let mut dot = 0.0f32;
+    for j in 0..n {
+        dot += dy[j] * weight[j] * x[j];
+    }
+    for i in 0..n {
+        dx[i] = weight[i] * inv * dy[i] - (x[i] / (r * nf)) * inv * inv * dot;
+    }
+    dx
+}

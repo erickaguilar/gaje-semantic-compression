@@ -177,6 +177,53 @@ impl GenomicLLM {
         }
     }
 
+    /// Entrena el cuerpo (último bloque) con el gradiente CE real, además del lm_head.
+    /// Propaga d_logits de vuelta: lm_head^T -> output_norm backward -> último bloque.
+    pub fn train_sequence_body_core(&mut self, tokens: Vec<usize>, lr: f32) -> Result<f32, String> {
+        if tokens.len() < 2 {
+            return Ok(0.0);
+        }
+        let mut total_loss = 0.0;
+        self.clear_cache_core();
+        let n_blocks = self.blocks.len();
+
+        for i in 0..tokens.len() - 1 {
+            let (logits, h_norm) = self.forward_with_hidden_core(tokens[i], false)?;
+            let target = tokens[i + 1];
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_e = 0.0f32;
+            let mut exps = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                let e = (logits[j] - max_l).exp();
+                exps[j] = e;
+                sum_e += e;
+            }
+            let prob = (exps[target] / sum_e).max(1e-12);
+            total_loss -= prob.ln();
+            let mut d_logits = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                d_logits[j] = exps[j] / sum_e;
+            }
+            d_logits[target] -= 1.0;
+            self.lm_head.refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+
+            // Backprop CE al cuerpo: d_hidden = W_lm_head^T * d_logits -> rms_norm_backward -> último bloque
+            if n_blocks > 0 {
+                let d_h = self.lm_head.backward_core(d_logits)?;
+                let d_x_final =
+                    crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+                // Entrada real del último bloque (re-propaga bloques anteriores, cache ya poblada)
+                let mut x_in = self.embeddings.get_row_core(tokens[i])?;
+                let pos = self.blocks[0].attn.k_cache_len();
+                for blk in &mut self.blocks[..n_blocks - 1] {
+                    x_in = blk.forward_core(x_in, pos)?;
+                }
+                self.blocks[n_blocks - 1].refine_with_grads_core(x_in, d_x_final, pos, lr)?;
+            }
+        }
+        Ok(total_loss / (tokens.len() - 1) as f32)
+    }
+
     pub fn train_on_sequence_core(&mut self, tokens: Vec<usize>, lr: f32) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);

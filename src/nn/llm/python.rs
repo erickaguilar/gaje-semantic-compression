@@ -94,6 +94,10 @@ impl GenomicLLM {
         self.train_on_sequence_core(tokens, lr)
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
+    pub fn train_sequence_body(&mut self, tokens: Vec<usize>, lr: f32) -> PyResult<f32> {
+        self.train_sequence_body_core(tokens, lr)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
     pub fn clear_cache_py(&mut self) -> PyResult<()> {
         self.clear_cache_core();
         Ok(())
