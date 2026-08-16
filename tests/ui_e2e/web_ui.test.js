@@ -53,6 +53,8 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
   });
 
   test('should verify model selection dropdown change triggers loading state', async ({ page }) => {
+    page.on('console', msg => console.log('BROWSER_LOG:', msg.text()));
+    page.on('pageerror', err => console.log('BROWSER_ERROR:', err.message));
     await page.goto('/');
 
     // Asegurarse de que el dropdown esté visible
