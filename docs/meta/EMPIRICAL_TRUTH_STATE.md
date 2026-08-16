@@ -191,4 +191,72 @@ Para preservar la fidelidad semántica del vocabulario masivo y evitar degradaci
 
 ---
 
+## 🧬 9. Fase 4: Entrenamiento del Cuerpo (IQAT) — Diagnóstico del Doble-Forward (v1.7.0-alpha: 2026-08-16)
+
+**Estado:** ENFOQUE DESCARTADO (doble-forward) / BASELINE ESTABLE (último bloque) — Documentación de la verdad empírica para no reintentar el camino muerto.
+
+### Contexto: qué se construyó
+Se implementó el reverse-mode del cuerpo en `src/nn/linear/backward.rs` (`backward_core` transpuesta `d_input = W^T·d_output` para `GenomicF32`/`GenomicQ4_0`/`GenomicQ8_0`/`Genomic4Bit`) y la propagación CE end-to-end en `src/nn/llm/forward.rs` (`train_sequence_body_core` → solo último bloque, `train_sequence_full_body_core` → todos los bloques).
+
+### 🔴 Resultado empírico en modelo real (`smollm2_4bit.gaje.flat`)
+
+| Fenómeno | Valor Medido | Interpretación |
+| :--- | :--- | :--- |
+| **Último bloque recibe gradiente** | `max\|d_x\| = 17.9` (refine del bloque `n-1`) | Backward local funciona |
+| **Bloques tempranos NO reciben gradiente** | Δ centroides `b0=0.000e0`, `mid=0.000e0` | La cadena reversa no propaga (gradiente muere) |
+| **NaN tras 1 token de entrenamiento** | `NaN in up` en el forward siguiente | Inestabilidad numérica inmediata |
+| **NaN multi-token** | Desde el paso 2 (secuencia de 5 tokens) | La inestabilidad se acumula |
+| **Centroides tras update** | Rango suave `±5` (p. ej. up `[-2.58, 2.45]`) | El NaN NO es por magnitud de pesos |
+| **Solo último bloque (`train_sequence_body_core`)** | Estable, sin NaN | Baseline funcional preservado |
+
+### 🧠 Causa raíz (diseño, no bug)
+El prototipo usó **doble-forward** (re-ejecutar el bloque dentro de `refine_with_grads_core` para recuperar activaciones). Esto es estructuralmente inválido para cuerpo completo:
+
+1. **Gradiente muerto**: las activaciones re-computadas (`x'`) no coinciden con las del forward original (`x`) porque los centroides del bloque posterior ya cambiaron; RMSNorm atenúa ~`1/sqrt(var)` por bloque → `d_x → 0` al alejarse de la capa de salida.
+2. **NaNs**: aplicar gradientes que son ruido en capas tempranas desplaza los centroides a una región inestable; atención/softmax y SwiGLU amplifican pequeñas perturbaciones (±5 es enorme para SwiGLU) → `inf/NaN` en un paso.
+
+### ✅ Rediseño validado: caché de activaciones (ForwardCache)
+Se sustituyó el doble-forward por backprop estándar con caché (`src/nn/block/cache.rs`): el forward guarda las activaciones de cada bloque y el backward las consume en orden inverso SIN re-forward, incluyendo el backward correcto de los RMSNorm (que el doble-forward omitía) y de atención (softmax + RoPE inverso).
+
+**Validación en modelo real (`smollm2_4bit.gaje.flat`, cuerpo COMPLETO):**
+| Criterio | Antes (doble-forward) | Después (caché) |
+| :--- | :--- | :--- |
+| Gradiente llega al bloque 0 | ❌ Δ=0 (muere) | ✅ bloque 0 muta |
+| Forward tras entrenar | ❌ `NaN in up` en 1 paso | ✅ finito |
+| Loss | — | finita |
+| Tests (suite Rust) | 33 passing | **35 passing** |
+
+La escalera `+B23 → +B22-23 → +B20-23 → ...` ahora es viable vía `train_sequence_cached_core(tokens, lr, n_train_blocks, gclip)` (grad-clipping global incluido).
+
+### 🟢 Gradient Check Numérico (2026-08-16): RESUELTO
+El gradient check de diferencias finitas reveló y corrigió dos bugs reales y confirmó la correcta escala:
+
+**Bug 1 — Transpose `backward_core` con nibble invertido (`src/nn/linear/backward.rs`)**
+El transpose de `Genomic4Bit` leía el nibble contrario al forward (par→bajo en vez de par→alto). El forward kernel (`genomic_dot_product_4bit`), el `read` canónico y `refine` usan **par→nibble alto, impar→nibble bajo**. Corregido; ahora `backward_core` coincide con el forward en `test_transpose_isolated_nibble` (rel_err ≤ 0.02 por fila).
+
+**Bug 2 — STE `refine_with_grads_core` dividía por `centroid_counts`**
+El gradiente verdadero de un centroide es la **suma** de `g_val·x_val` (al perturbar `c` cambian todos los pesos que lo comparten), no el promedio. Se quitó la división por conteo en la rama `Genomic4Bit` (deja `delta = lr·Σ` con `clamp(-0.05,0.05)`). Verificado en `test_refine_indexing_matches_forward` (rel_err ≤ 0.01 contra la suma manual con el mapeo del forward).
+
+**Diagnóstico del falso "sobre-amplificado ~500x" y del falso "signo opuesto"**
+Eran defectos del harness del gradient check, no del backward:
+- el cache de atención (`k_cache`/`v_cache`) crece en cada `forward_core_cached`/`forward_core`; había que `clear_cache_core()` entre fases (ana y num) para medir en el mismo punto.
+- diferencias finitas sobre un centroide en la loss del modelo completo está dominado por ruido f32 (ΔL ~ 1e-6); hay que medir con loss sintética de gradiente fuerte en f64.
+
+**Verificación definitiva** — `test_gradient_check_block_robust`: verifica TODO el backward del bloque 0 (`backward_core_cached`: rmsnorm attn+ffn, atención+RoPE inverso, SwiGLU, todos los linears) contra diferencias finitas en f64 con loss sintética de gradiente O(1): **worst rel_err ≈ 0.06 en entradas fuertes (< 0.10)**. 
+
+**Conclusión**: el backward del cuerpo (`backward_core_cached` + STE de `refine`) es **correcto** en dirección y magnitud. Sin NaN, el gradiente llega al bloque 0, y el gradient check confirma la dirección/escala. Se puede escalar el entrenamiento del cuerpo con cuidado (1 token, `lr ≤ 1e-5`, assert `all_finite`), validando generalización held-out antes de subir `lr`.
+
+Suite: 38 passed / 0 failed / 0 ignored.
+
+### ✅ Decisión de diseño
+- **`train_sequence_body_core` (último bloque)**: ruta estable actual, se mantiene (v1.1.x).
+- **Full-body con doble-forward**: **descartado**. No parchear con `if is_nan { 0.0 }` ni clamp — ocultaría la causa.
+- **`ForwardCache` (caché de activaciones)**: **VALIDADO** — full-body con backprop estándar, sin re-forward; el gradiente llega al bloque 0 y el forward posterior es finito (sin NaN). Es el camino correcto para el cuerpo completo.
+
+### 🧭 Camino incremental recomendado (escalera de validación)
+No escalar a los 30 bloques. Validar dónde se rompe:
+`lm_head` (✅) → `+Block 23` (✅ estable) → `+Blocks 22-23` → `+Blocks 20-23` → ... hasta `0-23`. En cada paso: 1 token, `lr ≤ 1e-5`, y **assert `all_finite(logits)`** tras el update. Alternativas de menor riesgo: scales/min-only (congelar centroides), last-N bloques, o LoRA/adaptadores FP32 al lado del cuerpo cuantizado.
+
+---
+
 **Siguiente Fase**: Fase 3.2 — Integración y benchmarking de micro-kernels optimizados SIMD (AVX2/FMA) para la decodificación y multiplicación matricial en vuelo de Q4_0.

@@ -15,6 +15,7 @@
 // - [`refine`](crate::nn::block::refine): refine con gradientes (FFN y atención).
 // - [`python`](crate::nn::block::python): bindings `#[pymethods]` (feature `python`).
 
+pub mod cache;
 pub mod forward;
 pub mod init;
 pub mod python;
@@ -97,6 +98,7 @@ pub struct RustGenomicBlock {
     pub fused_gate_up: Option<GenomicLinear>,
 }
 
+pub use crate::nn::block::cache::*;
 pub use crate::nn::block::forward::*;
 pub use crate::nn::block::init::*;
 pub use crate::nn::block::python::*;

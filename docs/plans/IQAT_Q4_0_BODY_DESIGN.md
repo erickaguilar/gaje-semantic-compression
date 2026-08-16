@@ -115,11 +115,23 @@ Requiere añadir backward para: `RMSNorm`, `dot_product` (trivial: `dW = grad⊗
 - Backward end-to-end desde CE.
 - Criterio: IQAT + SFT de cuerpo con gradientes verdaderos; pérdida held-out consistente con la señal.
 
+> **Revisión de diseño (Agosto 2026) — qué falló en el prototipo de Vía B y por qué:**
+> Se prototipó el reverse-mode completo con un **doble-forward** (re-ejecutar el bloque dentro de `refine_with_grads_core` para obtener activaciones y aplicar grads sobre la marcha). Validación en modelo real (`smollm2_4bit.gaje.flat`) mostró dos fallos:
+> 1. **Gradiente no llega a bloques tempranos**: solo el último bloque cambia (Δ centroides b0/mid = 0). El wiring del bucle reverso no propaga `d_x` correctamente a `n-2..0` (el `d_x` devuelto es no nulo, ~17, pero no se aplica en bloques previos).
+> 2. **Inestabilidad severa**: tras UN paso de entrenamiento, el forward siguiente produce `NaN in up` incluso con centroides suaves (rango ±5) y con clamp de delta (±0.05) y de valor (±20). Multi-token NaNs desde el paso 2. El NaN es sutil (atención/softmax o modulación con activaciones ligeramente alteradas), no por magnitud de pesos.
+>
+> **Resultado del rediseño con caché de activaciones (Agosto 2026):**
+> Se implementó `ForwardCache` (`src/nn/block/cache.rs`): el forward guarda las activaciones de cada bloque (`x`, `q_rope`, `softmax_weights`, `attn_out`, `x_post_attn`, `x_ffn_n`, `gate`, `up`, `ffn_out`) y el backward las consume en orden inverso **sin re-forward**. Incluye backward correcto de los RMSNorm (`ffn_norm` y `attn rmsnorm`) que el doble-forward omitía, y backward de atención (softmax + RoPE inverso).
+> **Validado en modelo real:** `train_sequence_cached_core` con cuerpo COMPLETO entrena y el gradiente **sí llega al bloque 0** y al último (ambos mutan), y el forward posterior es **finito (sin NaN)**. Ambos fallos del doble-forward quedan resueltos.
+> **Prueba numérica de gradiente** (complemento recomendado): comparar el backward contra `[L(W+ε)-L(W-ε)]/(2ε)` para confirmar exactitud antes de escalar epochs.
+> **Gradient check RESUELTO (Agosto 2026):** la verificación numérica en f64 con loss sintética de gradiente fuerte confirma `backward_core_cached` (bloque 0 completo: rmsnorm attn+ffn, atención+RoPE inverso, SwiGLU, linears) con **worst rel_err ≈ 0.06 en entradas fuertes**. Se corrigieron dos bugs reales: (1) el transpose `backward_core` de `Genomic4Bit` leía el nibble invertido (par→bajo en vez de par→alto, alineado con el forward kernel y `refine`); (2) el STE `refine_with_grads_core` dividía por `centroid_counts` — el gradiente verdadero es la **suma** de `g·x`, no el promedio. El "falso ~500x" y el "falso signo opuesto" eran del harness (cache de atención que crecía entre fases; ruido f32 en diferencias finitas), no del backward.
+
 **Etapa 3 — (futuro) Re-cuantización de `q` con STE** para ganancia de precisión adicional.
 
 ## ⚠️ 7. Riesgos
 
 - **Estabilidad numérica** de la QAT de escala/min (escalas f16 pequeñas; clipping para evitar overflow/undeflow).
+- **Estabilidad del reverse-mode** (confirmado en prototipo): el doble-forward desestabiliza el modelo en 1 paso. Mitigar con caché de activaciones (sin re-forward), grad-clipping global y lr pequeño en cuerpo.
 - **Memoria**: guardar activaciones para reverse-mode en mmap; mitigar con grad-checkpointing por bloque o backward online por token (ya se hace online en `train_step`).
 - **Regresión de inferencia**: cambios de escala/min deben ser conservadores (lr pequeño en cuerpo, `block_lr_scale` ya existe).
 - **No corromper formato**: los Q4_0 se mutan en memoria vía `Arc::make_mut`; el guardado debe reflejar los nuevos scale/min.

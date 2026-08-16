@@ -31,6 +31,51 @@ impl GenomicLinear {
                     }
                 }
             }
+            WeightDatabase::Genomic4Bit(db) => {
+                // Genomic4Bit: W[i,j] = centroids[(i*n_blocks + b)*16 + nibble],
+                // con b = j/block_size. Layout: row_off = i*n_blocks*stride, stride=block_size/2.
+                let stride = self.stride;
+                if stride == 0 {
+                    return Ok(d_input);
+                }
+                for i in 0..self.out_features {
+                    let g = d_output.get(i).copied().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blocks * stride;
+                    if row_off + n_blocks * stride > db.len() {
+                        continue;
+                    }
+                    for b in 0..n_blocks {
+                        let c_off = (i * n_blocks + b) * 16;
+                        let c_start = if self.centroids.len() >= c_off + 16 {
+                            c_off
+                        } else if self.centroids.len() >= 16 {
+                            0
+                        } else {
+                            continue;
+                        };
+                        for k in 0..self.block_size {
+                            let j = b * self.block_size + k;
+                            if j >= self.in_features {
+                                break;
+                            }
+                            let byte_idx = k / 2;
+                            let sub = k % 2;
+                            let byte = db[row_off + b * stride + byte_idx];
+                            // Elemento par (k%2==0) = nibble alto, impar = nibble bajo
+                            // (alineado con `GenomicOperable::read` y el forward).
+                            let nibble = if sub == 0 {
+                                (byte >> 4) as usize
+                            } else {
+                                (byte & 0x0F) as usize
+                            };
+                            d_input[j] += g * self.centroids[c_start + nibble];
+                        }
+                    }
+                }
+            }
             WeightDatabase::GenomicQ4_0(db) => {
                 for i in 0..self.out_features {
                     let g = d_output.get(i).copied().unwrap_or(0.0);
@@ -202,8 +247,11 @@ impl GenomicLinear {
                 }
                 for c_idx in 0..self.centroids.len() {
                     if centroid_counts[c_idx] > 0.0 {
-                        self.centroids[c_idx] -=
-                            lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                        // Gradiente verdadero del centroide: la SUMA de
+                        // g_val*x_val (los pesos comparten el valor c, así que
+                        // dL/dc = Σ contribuciones). NO dividir por el conteo.
+                        let delta = (lr * centroid_grads[c_idx]).clamp(-0.05, 0.05);
+                        self.centroids[c_idx] = (self.centroids[c_idx] - delta).clamp(-20.0, 20.0);
                     }
                 }
             }

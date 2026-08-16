@@ -224,6 +224,155 @@ impl GenomicLLM {
         Ok(total_loss / (tokens.len() - 1) as f32)
     }
 
+    /// Vía B — reverse-mode completo: propaga el gradiente CE a través de TODOS
+    /// los bloques (de atrás hacia adelante), actualizando el cuerpo entero.
+    pub fn train_sequence_full_body_core(
+        &mut self,
+        tokens: Vec<usize>,
+        lr: f32,
+    ) -> Result<f32, String> {
+        if tokens.len() < 2 {
+            return Ok(0.0);
+        }
+        let mut total_loss = 0.0;
+        self.clear_cache_core();
+        let n = self.blocks.len();
+
+        for i in 0..tokens.len() - 1 {
+            let target = tokens[i + 1];
+            // Limpiamos el cache por token para evitar corrupción entre pasos
+            // reverse (el refine re-ejecuta forwards que alteran el cache KV).
+            self.clear_cache_core();
+            let pos = if self.blocks.is_empty() {
+                0
+            } else {
+                self.blocks[0].attn.k_cache_len()
+            };
+
+            // Forward capturando la entrada de cada bloque.
+            let mut block_inputs: Vec<Vec<f32>> = Vec::with_capacity(n);
+            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            for blk in &mut self.blocks {
+                block_inputs.push(h.clone());
+                h = blk.forward_core(h, pos)?;
+            }
+            let h_norm =
+                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+            let modulation = self
+                .topology
+                .as_ref()
+                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
+            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+
+            // Loss CE + d_logits = probs - one_hot
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_e = 0.0f32;
+            let mut exps = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                let e = (logits[j] - max_l).exp();
+                exps[j] = e;
+                sum_e += e;
+            }
+            let prob = (exps[target] / sum_e).max(1e-12);
+            total_loss -= prob.ln();
+            let mut d_logits = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                d_logits[j] = exps[j] / sum_e;
+            }
+            d_logits[target] -= 1.0;
+            self.lm_head.refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+
+            // Backprop: lm_head -> output_norm -> bloques (orden inverso)
+            let d_h = self.lm_head.backward_core(d_logits)?;
+            let mut d_out =
+                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            for b in (0..n).rev() {
+                d_out = self.blocks[b].refine_with_grads_core(
+                    block_inputs[b].clone(),
+                    d_out,
+                    pos,
+                    lr,
+                )?;
+            }
+        }
+        Ok(total_loss / (tokens.len() - 1) as f32)
+    }
+
+    /// Entrenamiento del cuerpo con **caché de activaciones** (sin doble-forward).
+    /// Guarda las activaciones del forward original de cada bloque y hace el
+    /// backward en orden inverso usando exactamente esas activaciones.
+    ///
+    /// `n_train_blocks`: cuántos bloques desde el final se entrenan (escalera).
+    /// `gclip`: grad-clipping global (>0 activo).
+    pub fn train_sequence_cached_core(
+        &mut self,
+        tokens: Vec<usize>,
+        lr: f32,
+        n_train_blocks: usize,
+        gclip: f32,
+    ) -> Result<f32, String> {
+        if tokens.len() < 2 {
+            return Ok(0.0);
+        }
+        let mut total_loss = 0.0;
+        self.clear_cache_core();
+        let n = self.blocks.len();
+        let start = n.saturating_sub(n_train_blocks);
+
+        for i in 0..tokens.len() - 1 {
+            let target = tokens[i + 1];
+            let pos = if n > 0 {
+                self.blocks[0].attn.k_cache_len()
+            } else {
+                0
+            };
+
+            // Forward con caché por bloque.
+            let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
+            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            for blk in &mut self.blocks {
+                let (out, cache) = blk.forward_core_cached(h, pos)?;
+                caches.push(cache);
+                h = out;
+            }
+            let h_norm =
+                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+            let modulation = self
+                .topology
+                .as_ref()
+                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
+            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+
+            // Loss CE + d_logits.
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_e = 0.0f32;
+            let mut exps = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                let e = (logits[j] - max_l).exp();
+                exps[j] = e;
+                sum_e += e;
+            }
+            let prob = (exps[target] / sum_e).max(1e-12);
+            total_loss -= prob.ln();
+            let mut d_logits = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                d_logits[j] = exps[j] / sum_e;
+            }
+            d_logits[target] -= 1.0;
+            self.lm_head
+                .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+
+            // Backward por caché en orden inverso (entrenan los bloques `start..n`).
+            let d_h = self.lm_head.backward_core(d_logits)?;
+            let mut d_out =
+                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            for b in (start..n).rev() {
+                d_out = self.blocks[b].backward_core_cached(&caches[b], d_out, lr, gclip)?;
+            }
+        }
+        Ok(total_loss / (tokens.len() - 1) as f32)
+    }
+
     pub fn train_on_sequence_core(&mut self, tokens: Vec<usize>, lr: f32) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);
