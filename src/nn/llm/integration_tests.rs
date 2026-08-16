@@ -652,3 +652,77 @@ fn test_body_lr_high_boundary() {
     }
     // No assert: este test solo mapea la frontera de estabilidad (informativo).
 }
+
+#[test]
+#[ignore = "lento: escalar bloques con lr por capas (layer-wise decay)"]
+fn test_body_layerwise_scale() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip");
+        return;
+    }
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
+    let raw = std::fs::read_to_string(corpus_path).expect("corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    {
+        let probe = load_genomic_auto(model_path).unwrap();
+        let vocab = probe.embeddings.out_features;
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                let p = v["prompt"].as_str().unwrap_or("");
+                let a = v["answer"].as_str().unwrap_or("");
+                let ids = tokenizer.encode(&format!("{p}{a}"), false).expect("encode");
+                for id in ids {
+                    stream.push((id as usize).min(vocab - 1));
+                }
+            }
+        }
+    }
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    let train_max = stream.len() - held_len;
+    let train: Vec<usize> = stream[..train_max.min(180)].to_vec();
+
+    let mut base = load_genomic_auto(model_path).unwrap();
+    let base_loss = ce_loss(&mut base, &heldout);
+    drop(base);
+
+    let lr = 2e-4f32;
+    eprintln!("=== Escalar bloques con lr por capas (lr={lr:.0e}) === baseline={base_loss:.4}");
+    // (n_train_blocks, decay, etiqueta)
+    let cfgs: Vec<(usize, f32, &str)> = vec![
+        (8, 1.0, "uniforme"),
+        (8, 0.7, "layerwise .7"),
+        (16, 0.8, "layerwise .8"),
+        (24, 0.85, "layerwise .85"),
+    ];
+    let mut best: Option<(usize, f32, &str, f32)> = None;
+    for (nb, decay, label) in cfgs {
+        let mut model = load_genomic_auto(model_path).unwrap();
+        let tloss = model
+            .train_sequence_cached_layerwise_core(train.clone(), lr, nb, 1.0, decay)
+            .expect("train");
+        model.clear_cache_core();
+        let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
+        let finite = logits.iter().all(|v| v.is_finite());
+        let after = if finite { ce_loss(&mut model, &heldout) } else { f32::INFINITY };
+        let delta = after - base_loss;
+        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        eprintln!("  n_blk={nb:>2} {label:<14} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
+        if finite && (best.is_none() || after < best.unwrap().3) {
+            best = Some((nb, decay, label, after));
+        }
+    }
+    let (nb, decay, label, after) = best.expect("ninguna finita");
+    eprintln!("→ mejor: n_blk={nb} {label} (decay={decay}) heldout={after:.4} (baseline {base_loss:.4})");
+    assert!(
+        after < base_loss,
+        "lr por capas no mejoró held-out (baseline {base_loss:.4} -> {after:.4})"
+    );
+}

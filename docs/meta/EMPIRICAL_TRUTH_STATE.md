@@ -289,6 +289,17 @@ Barrido de **lr a n_blk=8** (frontera de estabilidad):
 
 **Lectura**: el punto dulce es **8 bloques, lr≈2e-4, gclip=1.0 → held-out 2.427** (vs 2.559 baseline). El modelo tolera lr hasta ~2e-4 sin explotar (forward siempre finito); en 5e-4 la CE held-out sube (sobreajuste/explosión de gradiente). Sin NaN en todo el rango. Tests `#[ignore]`: `test_body_ladder_sweep`, `test_body_lr_sweep_blk8`, `test_body_lr_high_boundary`.
 
+**Escalar bloques con lr por capas (layer-wise decay)** — nuevo método `train_sequence_cached_layerwise_core(tokens, lr, n_train_blocks, gclip, lr_decay)`, con `lr_b = lr·decay^(n-1-b)` (mayor en bloques tardíos, menor en tempranos). Resultado (lr=2e-4, baseline 2.559):
+
+| n_blk | decay | held-out | Δ |
+| :--- | :--- | :--- | :--- |
+| 8 | 1.0 (uniforme) | 2.4270 | −0.132 |
+| 8 | 0.7 | 2.4366 | −0.122 |
+| 16 | 0.8 | 2.4325 | −0.127 |
+| 24 | 0.85 | 2.4432 | −0.116 |
+
+**Lectura**: el lr por capas permite **escalar a 16-24 bloques** (más capacidad del cuerpo entrenada) con held-out casi idéntico al punto dulce de 8, y **sin degradar ni NaN**. El punto dulce sigue siendo 8 uniforme, pero con decay se entrena más del cuerpo por el mismo coste en calidad. Test `#[ignore]`: `test_body_layerwise_scale`.
+
 ### 🧭 Camino incremental recomendado (escalera de validación)
 No escalar a los 30 bloques. Validar dónde se rompe:
 `lm_head` (✅) → `+Block 23` (✅ estable) → `+Blocks 22-23` → `+Blocks 20-23` → ... hasta `0-23`. En cada paso: 1 token, `lr ≤ 1e-5`, y **assert `all_finite(logits)`** tras el update. Alternativas de menor riesgo: scales/min-only (congelar centroides), last-N bloques, o LoRA/adaptadores FP32 al lado del cuerpo cuantizado.
