@@ -1,6 +1,8 @@
 // =============================================================================
 // backward — Gradientes, refine con gradientes y mutaciones de GenomicLinear
 // =============================================================================
+use std::sync::Arc;
+
 use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
 
@@ -14,13 +16,20 @@ impl GenomicLinear {
         grads: Vec<f32>,
         lr: f32,
     ) -> Result<(), String> {
-        if self.centroids.is_empty() {
+        let n_blocks = (self.in_features + self.block_size - 1) / self.block_size;
+
+        // Las variantes basadas en centroides (2/4-bit) no pueden refinar sin
+        // centroids. GenomicF32 (lm_head/embeddings densos) no usa centroids y
+        // debe actualizarse siempre; de lo contrario queda como no-op silencioso.
+        let centroid_based = matches!(
+            self.weight_db,
+            WeightDatabase::Genomic2Bit(_) | WeightDatabase::Genomic4Bit(_)
+        );
+        if self.centroids.is_empty() && centroid_based {
             return Ok(());
         }
 
-        let n_blocks = (self.in_features + self.block_size - 1) / self.block_size;
-
-        match &self.weight_db {
+        match &mut self.weight_db {
             WeightDatabase::Genomic2Bit(db) => {
                 let mut centroid_grads = vec![0.0f32; self.centroids.len()];
                 let mut centroid_counts = vec![0.0f32; self.centroids.len()];
@@ -122,6 +131,33 @@ impl GenomicLinear {
                     if centroid_counts[c_idx] > 0.0 {
                         self.centroids[c_idx] -=
                             lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
+                    }
+                }
+            }
+            WeightDatabase::GenomicF32(db) => {
+                // Pesos densos FP32 (lm_head/embeddings en el formato híbrido).
+                // Layout row-major: W[i,j] = db[i*in_features + j], y el gradiente
+                // `grads` es ∂L/∂logits (tamaño = out_features). SGD por token:
+                //   W[i,j] -= lr * grads[i] * input[j]
+                let db_mut = Arc::make_mut(db);
+                let in_f = self.in_features;
+                if in_f == 0 {
+                    return Ok(());
+                }
+                for i in 0..self.out_features {
+                    let g = grads.get(i).cloned().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row = i * in_f;
+                    if row + in_f > db_mut.len() {
+                        continue;
+                    }
+                    for (j, &x) in input.iter().enumerate() {
+                        if j >= in_f {
+                            break;
+                        }
+                        db_mut[row + j] -= lr * g * x;
                     }
                 }
             }

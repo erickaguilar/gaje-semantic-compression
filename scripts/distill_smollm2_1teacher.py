@@ -21,6 +21,7 @@ Uso:
 """
 import argparse
 import json
+import math
 import os
 import sys
 
@@ -63,7 +64,7 @@ def tokenize_ids(tokenizer, text):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--teacher", default="models/production/qwen2_5_0_5b_q4_0_q8_0_embd.gaje.flat")
+    ap.add_argument("--teacher", default="models/production/qwen2_0_5b_q4_0_q8_0_embd.gaje.flat")
     ap.add_argument("--student", default="models/production/smollm2_4bit.gaje.flat")
     ap.add_argument("--prompts", type=int, default=10)
     ap.add_argument("--epochs", type=int, default=2)
@@ -114,7 +115,7 @@ def main():
     trainer = dna_semantic_compression.NativeGenomicTrainer(args.lr, 0.0)
     for epoch in range(args.epochs):
         loss = trainer.fit_lm_head(student.rust_llm, dataset, args.lr)
-        print(f"  Época {epoch + 1}/{args.epochs} | Loss: {loss:.4f} | PPL: {loss ** 0.5:.3f}")
+        print(f"  Época {epoch + 1}/{args.epochs} | Loss: {loss:.4f} | PPL: {math.exp(loss):.3f}")
 
     eval_prompts(student, "DESPUÉS del SFT")
 

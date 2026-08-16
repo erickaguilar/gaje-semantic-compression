@@ -5,6 +5,64 @@ use super::*;
 use crate::nn::linear::database::WeightDatabase;
 
 #[test]
+fn test_lm_head_fp32_update() {
+    // lm_head simulado FP32: out=3, in=4, pesos row-major (3x4)
+    let w: Vec<f32> = (0..12).map(|i| i as f32 * 0.5).collect();
+    let raw: Vec<u8> = w.iter().flat_map(|v| v.to_le_bytes()).collect();
+
+    let mut linear = GenomicLinear::new(
+        raw,
+        Vec::new(), // anchors
+        Vec::new(), // centroids (vacío -> no genómico)
+        3,          // out_features
+        4,          // in_features
+        4,          // block_size
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(), // bias
+        32,         // bit_depth -> GenomicF32
+    );
+    assert!(matches!(linear.weight_db, WeightDatabase::GenomicF32(_)));
+
+    let w_before: Vec<f32> = match &linear.weight_db {
+        WeightDatabase::GenomicF32(db) => db.as_ref().clone(),
+        _ => unreachable!(),
+    };
+
+    let input = vec![1.0f32, 2.0, 3.0, 4.0];
+    let out_before = linear.forward_core(input.clone(), None, false).unwrap();
+
+    // grad_ce para target=0 => probs - one_hot ≈ [-0.75, 0.25, 0.0] (tamaño=out)
+    let grads = vec![-0.75f32, 0.25, 0.0];
+    linear.refine_with_grads_core(input, grads, 1e-2).unwrap();
+
+    let w_after: Vec<f32> = match &linear.weight_db {
+        WeightDatabase::GenomicF32(db) => db.as_ref().clone(),
+        _ => unreachable!(),
+    };
+    let max_delta = w_before
+        .iter()
+        .zip(&w_after)
+        .map(|(a, b)| (a - b).abs())
+        .fold(0.0f32, f32::max);
+    assert!(
+        max_delta > 0.0,
+        "FP32 weights must change after refine (path was a silent no-op)"
+    );
+
+    let out_after = linear.forward_core(vec![1.0f32, 2.0, 3.0, 4.0], None, false).unwrap();
+    assert!(
+        (out_after[0] - out_before[0]).abs() > 0.0,
+        "logit 0 must change after update"
+    );
+}
+
+#[test]
 fn test_q4_0_linear_forward_roundtrip() {
     // Generate a 2x32 weight matrix
     // Row 0: 0.0, 0.1, ..., 3.1
