@@ -564,7 +564,8 @@ fn test_body_lr_sweep_blk8() {
     }
     let held_len = (stream.len() / 5).max(8);
     let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
-    let train: Vec<usize> = stream[..stream.len() - held_len - held_len].to_vec();
+    let train_max = stream.len() - held_len;
+    let train: Vec<usize> = stream[..train_max.min(180)].to_vec();
 
     let mut base = load_genomic_auto(model_path).unwrap();
     let base_loss = ce_loss(&mut base, &heldout);
@@ -592,4 +593,62 @@ fn test_body_lr_sweep_blk8() {
     let (lr, after) = best.expect("ninguna finita");
     eprintln!("→ mejor lr (8 bloques): lr={lr:.0e} heldout={after:.4} (baseline {base_loss:.4})");
     assert!(after < base_loss, "ninguna config mejoró held-out");
+}
+
+#[test]
+#[ignore = "lento: mapear límite de estabilidad (lr alto) a 8 bloques"]
+fn test_body_lr_high_boundary() {
+    let model_path = "models/production/smollm2_4bit.gaje.flat";
+    let tok_path = "models/core/tokenizer.json";
+    let corpus_path = "data/distill/train_smollm2_1t.jsonl";
+    if !std::path::Path::new(model_path).exists() {
+        eprintln!("skip");
+        return;
+    }
+    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
+    let raw = std::fs::read_to_string(corpus_path).expect("corpus");
+    let mut stream: Vec<usize> = Vec::new();
+    {
+        let probe = load_genomic_auto(model_path).unwrap();
+        let vocab = probe.embeddings.out_features;
+        for line in raw.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
+                let p = v["prompt"].as_str().unwrap_or("");
+                let a = v["answer"].as_str().unwrap_or("");
+                let ids = tokenizer.encode(&format!("{p}{a}"), false).expect("encode");
+                for id in ids {
+                    stream.push((id as usize).min(vocab - 1));
+                }
+            }
+        }
+    }
+    let held_len = (stream.len() / 5).max(8);
+    let heldout: Vec<usize> = stream[stream.len() - held_len..].to_vec();
+    let train_max = stream.len() - held_len;
+    let train: Vec<usize> = stream[..train_max.min(180)].to_vec();
+
+    let mut base = load_genomic_auto(model_path).unwrap();
+    let base_loss = ce_loss(&mut base, &heldout);
+    drop(base);
+
+    let nb = 8usize;
+    eprintln!("=== Límite de estabilidad lr (n_blk={nb}) === baseline={base_loss:.4}");
+    for lr in [5e-5f32, 1e-4, 2e-4, 5e-4] {
+        let mut model = load_genomic_auto(model_path).unwrap();
+        let tloss = model
+            .train_sequence_cached_core(train.clone(), lr, nb, 1.0)
+            .expect("train");
+        model.clear_cache_core();
+        let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
+        let finite = logits.iter().all(|v| v.is_finite());
+        let after = if finite { ce_loss(&mut model, &heldout) } else { f32::INFINITY };
+        let delta = after - base_loss;
+        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        eprintln!("  lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
+    }
+    // No assert: este test solo mapea la frontera de estabilidad (informativo).
 }

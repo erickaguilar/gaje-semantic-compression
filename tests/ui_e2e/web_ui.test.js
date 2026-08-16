@@ -78,8 +78,8 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
       // Esperar a que termine de cargar y vuelva a habilitarse
       await expect(modelSelect).toBeEnabled({ timeout: 15000 });
 
-      // Verificar que se haya impreso el mensaje de éxito en la consola de chat
-      const lastSystemMessage = page.locator('.message.system').last();
+      // Verificar que se haya impreso el mensaje de éxito en la consola de alertas del sidebar
+      const lastSystemMessage = page.locator('.system-alert-item').last();
       await expect(lastSystemMessage).toContainText('cargado y listo en memoria');
     }
   });
