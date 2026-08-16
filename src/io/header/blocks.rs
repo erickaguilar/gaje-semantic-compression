@@ -13,16 +13,21 @@ pub struct Q4_0Block {
 }
 
 impl Q4_0Block {
-    /// Dequantiza un peso individual del bloque
+    /// Devuelve el valor cuantizado (nibble) del peso `idx` dentro del bloque
     #[inline(always)]
-    pub fn dequantize_weight(&self, idx: usize) -> f32 {
+    pub fn q_value(&self, idx: usize) -> u8 {
         let byte_idx = idx / 2;
-        let q4_value = if idx % 2 == 0 {
+        if idx % 2 == 0 {
             self.qs[byte_idx] & 0x0F
         } else {
             self.qs[byte_idx] >> 4
-        };
+        }
+    }
 
+    /// Dequantiza un peso individual del bloque
+    #[inline(always)]
+    pub fn dequantize_weight(&self, idx: usize) -> f32 {
+        let q4_value = self.q_value(idx);
         let scale = self.scale.to_f32();
         let min = self.min.to_f32();
 

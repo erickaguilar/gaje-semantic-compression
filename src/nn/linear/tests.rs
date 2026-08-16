@@ -63,6 +63,132 @@ fn test_lm_head_fp32_update() {
 }
 
 #[test]
+fn test_q4_0_scale_min_update() {
+    // Cuerpo Q4_0: out=2, in=32 -> 1 bloque por fila, 2 bloques en total.
+    // W[i,j] = q*scale + min; q fijo. Solo scale/min deben recalibrarse (IQAT).
+    use crate::io::header::Q4_0Block;
+    let mk_block = |q: u8| Q4_0Block {
+        scale: half::f16::from_f32(0.1),
+        min: half::f16::from_f32(-0.5),
+        qs: [q | (q << 4); 16],
+    };
+    let blocks = vec![mk_block(5), mk_block(9)];
+    let raw_bytes: Vec<u8> = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<Q4_0Block>(),
+        )
+        .to_vec()
+    };
+
+    let mut linear = GenomicLinear::new(
+        raw_bytes,
+        Vec::new(),
+        Vec::new(), // centroids vacíos -> GenomicQ4_0
+        2,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        4,
+    );
+    assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ4_0(_)));
+
+    let (s0, m0) = match &linear.weight_db {
+        WeightDatabase::GenomicQ4_0(db) => (db[0].scale.to_f32(), db[0].min.to_f32()),
+        _ => unreachable!(),
+    };
+
+    let input = vec![1.0f32; 32];
+    let out_before = linear.forward_core(input.clone(), None, false).unwrap();
+
+    let grads = vec![1.0f32, -1.0];
+    linear.refine_with_grads_core(input, grads, 1e-2).unwrap();
+
+    let (s1, m1) = match &linear.weight_db {
+        WeightDatabase::GenomicQ4_0(db) => (db[0].scale.to_f32(), db[0].min.to_f32()),
+        _ => unreachable!(),
+    };
+    assert!(
+        (s1 - s0).abs() > 0.0 || (m1 - m0).abs() > 0.0,
+        "Q4_0 scale/min must change after refine (was a no-op)"
+    );
+
+    let out_after = linear.forward_core(vec![1.0f32; 32], None, false).unwrap();
+    assert!(
+        (out_after[0] - out_before[0]).abs() > 0.0,
+        "Q4_0 output must change after scale/min update"
+    );
+}
+
+#[test]
+fn test_q8_0_scale_update() {
+    // Cuerpo Q8_0: out=1, in=32 -> 1 bloque. W = q8*scale; solo scale cambia.
+    use crate::io::header::Q8_0Block;
+    let q8 = Q8_0Block {
+        scale: half::f16::from_f32(0.1),
+        qs: [5i8; 32],
+    };
+    let raw_bytes: Vec<u8> = unsafe {
+        std::slice::from_raw_parts(
+            &q8 as *const Q8_0Block as *const u8,
+            std::mem::size_of::<Q8_0Block>(),
+        )
+        .to_vec()
+    };
+
+    let mut linear = GenomicLinear::new(
+        raw_bytes,
+        Vec::new(),
+        Vec::new(), // centroids vacíos -> GenomicQ8_0
+        1,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        8,
+    );
+    assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ8_0(_)));
+
+    let s0 = match &linear.weight_db {
+        WeightDatabase::GenomicQ8_0(db) => db[0].scale.to_f32(),
+        _ => unreachable!(),
+    };
+
+    let input = vec![1.0f32; 32];
+    let out_before = linear.forward_core(input.clone(), None, false).unwrap();
+
+    linear.refine_with_grads_core(input, vec![1.0f32], 1e-2).unwrap();
+
+    let s1 = match &linear.weight_db {
+        WeightDatabase::GenomicQ8_0(db) => db[0].scale.to_f32(),
+        _ => unreachable!(),
+    };
+    assert!(
+        (s1 - s0).abs() > 0.0,
+        "Q8_0 scale must change after refine (was a no-op)"
+    );
+
+    let out_after = linear.forward_core(vec![1.0f32; 32], None, false).unwrap();
+    assert!(
+        (out_after[0] - out_before[0]).abs() > 0.0,
+        "Q8_0 output must change after scale update"
+    );
+}
+
+#[test]
 fn test_q4_0_linear_forward_roundtrip() {
     // Generate a 2x32 weight matrix
     // Row 0: 0.0, 0.1, ..., 3.1

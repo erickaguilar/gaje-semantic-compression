@@ -161,6 +161,89 @@ impl GenomicLinear {
                     }
                 }
             }
+            WeightDatabase::GenomicQ4_0(db) => {
+                // QAT de escala/min (calibración in-flight): mantiene `q` fijo.
+                // W[i,j] = q[i,b,k]*scale[i,b] + min[i,b], con b = j/block_size.
+                //   grad_scale[i,b] += Σ_k grad_W[i,b·bs+k] * q[i,b,k]
+                //   grad_min[i,b]   += Σ_k grad_W[i,b·bs+k]
+                // `grads` es ∂L/∂logits (tamaño = out_features); grad_W = grads[i]*input[j].
+                let db_mut = Arc::make_mut(db);
+                let bs = self.block_size;
+                if bs == 0 || self.in_features == 0 {
+                    return Ok(());
+                }
+                let n_blk = self.in_features / bs;
+                let max_scale = 10.0f32;
+                for i in 0..self.out_features {
+                    let g = grads.get(i).cloned().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blk;
+                    if row_off + n_blk > db_mut.len() {
+                        continue;
+                    }
+                    for b in 0..n_blk {
+                        let block = db_mut[row_off + b];
+                        let mut g_scale = 0.0f32;
+                        let mut g_min = 0.0f32;
+                        for k in 0..bs {
+                            let j = b * bs + k;
+                            if j >= self.in_features {
+                                break;
+                            }
+                            let x = input.get(j).cloned().unwrap_or(0.0);
+                            let q = block.q_value(k) as f32;
+                            g_scale += g * x * q;
+                            g_min += g * x;
+                        }
+                        let mut nb = block;
+                        nb.scale = half::f16::from_f32(
+                            (block.scale.to_f32() - lr * g_scale).clamp(-max_scale, max_scale),
+                        );
+                        nb.min = half::f16::from_f32(block.min.to_f32() - lr * g_min);
+                        db_mut[row_off + b] = nb;
+                    }
+                }
+            }
+            WeightDatabase::GenomicQ8_0(db) => {
+                // QAT de escala: mantiene `q8` fijo. W = q8*scale.
+                //   grad_scale[i,b] += Σ_k grad_W[i,b·bs+k] * q8[i,b,k]
+                let db_mut = Arc::make_mut(db);
+                let bs = self.block_size;
+                if bs == 0 || self.in_features == 0 {
+                    return Ok(());
+                }
+                let n_blk = self.in_features / bs;
+                let max_scale = 100.0f32;
+                for i in 0..self.out_features {
+                    let g = grads.get(i).cloned().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blk;
+                    if row_off + n_blk > db_mut.len() {
+                        continue;
+                    }
+                    for b in 0..n_blk {
+                        let block = db_mut[row_off + b];
+                        let mut g_scale = 0.0f32;
+                        for k in 0..bs {
+                            let j = b * bs + k;
+                            if j >= self.in_features {
+                                break;
+                            }
+                            let x = input.get(j).cloned().unwrap_or(0.0);
+                            g_scale += g * x * block.qs[k] as f32;
+                        }
+                        let mut nb = block;
+                        nb.scale = half::f16::from_f32(
+                            (block.scale.to_f32() - lr * g_scale).clamp(-max_scale, max_scale),
+                        );
+                        db_mut[row_off + b] = nb;
+                    }
+                }
+            }
             _ => {}
         }
         Ok(())
