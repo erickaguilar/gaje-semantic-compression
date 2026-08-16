@@ -50,8 +50,7 @@ impl IQATEngine {
             let s_act_in = self.capture_activation(student_model, token_id, block_idx)?;
 
             // 3. Ejecutar bloque del estudiante con la entrada real del estudiante
-            let block = &mut student_model.blocks[block_idx];
-            let s_act_out = block.forward_core(s_act_in.clone(), count)?;
+            let s_act_out = student_model.blocks[block_idx].forward_core(s_act_in.clone(), count)?;
 
             // 4. Calcular Deriva (Drift) y Gradiente
             // L = 0.5 * |s_out - t_out|^2 => dL/ds_out = s_out - t_out
@@ -66,19 +65,15 @@ impl IQATEngine {
             total_drift += drift.sqrt();
             count += 1;
 
-            // 5. Refinamiento quirúrgico del bloque (Backprop local)
-            // Refinamos las sub-capas del bloque usando el gradiente de deriva
-            block.gate_gen.refine_with_grads_core(
-                s_act_in.clone(),
-                grads.clone(),
+            // 5. Backprop dentro del bloque (FFN + w_o) con la deriva como señal.
+            // Actualiza w_down, gate_gen, up_gen, w_o (Q4_0/Q8_0 vía escala/min) y
+            // devuelve el gradiente hacia la entrada (se ignora en esta fase local).
+            student_model.blocks[block_idx].refine_with_grads_core(
+                s_act_in,
+                grads,
+                count,
                 self.lr * self.block_lr_scale,
             )?;
-            block.up_gen.refine_with_grads_core(
-                s_act_in.clone(),
-                grads.clone(),
-                self.lr * self.block_lr_scale,
-            )?;
-            // Nota: ffn_down requiere su propia entrada (post-act)
         }
 
         Ok(total_drift / count as f32)

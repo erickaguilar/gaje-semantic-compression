@@ -7,8 +7,81 @@ use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
 
 impl GenomicLinear {
-    pub fn backward_core(&self, _d_output: Vec<f32>) -> Result<Vec<f32>, String> {
-        Ok(vec![0.0; self.in_features])
+    pub fn backward_core(&self, d_output: Vec<f32>) -> Result<Vec<f32>, String> {
+        // Multiplicación transpuesta: d_input[j] = Σ_i W[i,j] * d_output[i].
+        // Devuelve el gradiente respecto a la entrada de la capa (backprop).
+        let mut d_input = vec![0.0f32; self.in_features];
+        if self.out_features == 0 || self.in_features == 0 {
+            return Ok(d_input);
+        }
+        let n_blocks = self.in_features / self.block_size;
+        match &self.weight_db {
+            WeightDatabase::GenomicF32(db) => {
+                for i in 0..self.out_features {
+                    let g = d_output.get(i).copied().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row = i * self.in_features;
+                    if row + self.in_features > db.len() {
+                        continue;
+                    }
+                    for j in 0..self.in_features {
+                        d_input[j] += g * db[row + j];
+                    }
+                }
+            }
+            WeightDatabase::GenomicQ4_0(db) => {
+                for i in 0..self.out_features {
+                    let g = d_output.get(i).copied().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blocks;
+                    if row_off + n_blocks > db.len() {
+                        continue;
+                    }
+                    for b in 0..n_blocks {
+                        let block = db[row_off + b];
+                        let scale = block.scale.to_f32();
+                        let min = block.min.to_f32();
+                        for k in 0..self.block_size {
+                            let j = b * self.block_size + k;
+                            if j >= self.in_features {
+                                break;
+                            }
+                            let q = block.q_value(k) as f32;
+                            d_input[j] += g * (q * scale + min);
+                        }
+                    }
+                }
+            }
+            WeightDatabase::GenomicQ8_0(db) => {
+                for i in 0..self.out_features {
+                    let g = d_output.get(i).copied().unwrap_or(0.0);
+                    if g == 0.0 {
+                        continue;
+                    }
+                    let row_off = i * n_blocks;
+                    if row_off + n_blocks > db.len() {
+                        continue;
+                    }
+                    for b in 0..n_blocks {
+                        let block = db[row_off + b];
+                        let scale = block.scale.to_f32();
+                        for k in 0..self.block_size {
+                            let j = b * self.block_size + k;
+                            if j >= self.in_features {
+                                break;
+                            }
+                            d_input[j] += g * (block.qs[k] as f32) * scale;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(d_input)
     }
     pub fn refine_with_grads_core(
         &mut self,

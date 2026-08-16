@@ -66,23 +66,27 @@ impl RustGenomicBlock {
         let d_ffn_out = self.w_down.backward_core(d_hidden.clone())?;
         let mut d_gate = vec![0.0f32; gate.len()];
         let mut d_up = vec![0.0f32; up.len()];
+        let mut ffn_out = vec![0.0f32; gate.len()];
         for i in 0..gate.len() {
             let g = gate[i];
             let u = up[i];
             let s = 1.0 / (1.0 + (-g).exp());
+            let silu_val = g * s;
             let silu_p = s * (1.0 + g * (1.0 - s));
+            ffn_out[i] = silu_val * u;
             d_gate[i] = d_ffn_out[i] * silu_p * u;
-            d_up[i] = d_ffn_out[i] * (g * s);
+            d_up[i] = d_ffn_out[i] * silu_val;
         }
         self.w_down
-            .refine_with_grads_core(vec![0.0; gate.len()], d_hidden.clone(), lr)?;
+            .refine_with_grads_core(ffn_out, d_hidden.clone(), lr)?;
         self.gate_gen
-            .refine_with_grads_core(x_ffn_n.clone(), d_gate, lr)?;
-        self.up_gen.refine_with_grads_core(x_ffn_n, d_up, lr)?;
-        let d_ffn_in = self.gate_gen.backward_core(vec![0.0; gate.len()])?;
+            .refine_with_grads_core(x_ffn_n.clone(), d_gate.clone(), lr)?;
+        self.up_gen.refine_with_grads_core(x_ffn_n, d_up.clone(), lr)?;
+        let d_ffn_gate = self.gate_gen.backward_core(d_gate)?;
+        let d_ffn_up = self.up_gen.backward_core(d_up)?;
         let mut d_x_post = d_hidden;
         for i in 0..d_x_post.len() {
-            d_x_post[i] += d_ffn_in[i];
+            d_x_post[i] += d_ffn_gate[i] + d_ffn_up[i];
         }
         let d_attn_out = self.w_o.backward_core(d_x_post.clone())?;
         self.w_o

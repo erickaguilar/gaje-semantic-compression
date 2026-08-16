@@ -17,6 +17,8 @@
 pub mod forward;
 pub mod mutation;
 pub mod python;
+#[cfg(test)]
+pub mod integration_tests;
 
 use std::sync::Arc;
 

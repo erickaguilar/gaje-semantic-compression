@@ -8,12 +8,12 @@
 
 ## 🧭 1. Contexto y hallazgos del codebase
 
-- **El cuerpo NO se entrena hoy.** `backward_core` (`src/nn/linear/backward.rs:10`) devuelve `vec![0.0; in_features]`: no hay reverse-mode (backprop) a través del transformer. `train_on_sequence_core` y `train_step` solo refinan `lm_head`.
-- **`IQATEngine` existente (`src/nn/iqat.rs`) es también no-op para Q4_0**: usa *activation drift* por bloque y llama `refine_with_grads_core(gate_gen/up_gen, ...)`, pero esos linears son `GenomicQ4_0` que caen en `_ => {}` de `refine_with_grads_core`. `ffn_down`, `w_o` y atención nunca se tocan.
+- **El cuerpo NO se entrena hoy.** `backward_core` (`src/nn/linear/backward.rs:10`) devolvía `vec![0.0; in_features]`: no había reverse-mode (backprop) a través del transformer. `train_on_sequence_core` y `train_step` solo refinan `lm_head`.
+- **CORRECCIÓN CRÍTICA (verificado en modelo real): el cuerpo del `.flat` se guarda como `Genomic4Bit` (basado en centroides)**, NO como `GenomicQ4_0`. El update de `refine_with_grads_core` para `Genomic4Bit` muta `self.centroids` (no los bytes del database). Esa ruta **ya existía y funcionaba**; el problema era que **nunca se invocaba** en el pipeline (solo se refinaba `lm_head`). `bit_depth()=4` no distingue `Genomic4Bit` de `GenomicQ4_0` (ambos devuelven 4).
+- **`IQATEngine` existente (`src/nn/iqat.rs`) era no-op**: llamaba `refine_with_grads_core(gate_gen/up_gen, ...)` con **wiring roto** (input `s_act_in` en vez de `x_ffn_n`, y `w_down` recibía `vec![0.0; gate.len()]`). `ffn_down`, `w_o` y atención nunca se tocaban.
 - **`GenomicF32` ya entrena** (fix `76a2066`): la cabeza funciona. El bloqueador real es el cuerpo.
 - **Bloques por capa** (`src/nn/block/mod.rs`): `attn.rmsnorm`, `q_gen`, `k_gen`, `v_gen`, `w_o` (atención) + `ffn_norm`, `gate_gen`, `up_gen`, `w_down` (FFN SwiGLU). Opcionales `fused_qkv`, `fused_gate_up`.
-- **Q4_0Block** (`src/io/header/blocks.rs`): 32 pesos → `{scale f16, min f16, qs[16]}`. Dequant: `W = q·scale + min`, con `q ∈ [0,15]`. Layout row-major: `db[i*n_blocks + b]`.
-- **Q8_0Block**: `{scale f16, qs[i8;32]}`. Dequant: `W = q8·scale`.
+- **Q4_0Block** (`src/io/header/blocks.rs`): 32 pesos → `{scale f16, min f16, qs[16]}`. Dequant: `W = q·scale + min`, con `q ∈ [0,15]`. Layout row-major: `db[i*n_blocks + b]`. (Relevante para otros formatos/GGUF, no para el cuerpo `.flat` actual.)
 - **Mutabilidad**: `database_mut()` hace `panic!("Q4_0 is read-only")`. Para entrenar hay que mutar vía `Arc::make_mut` dentro de `refine_with_grads_core` (patrón ya usado para `GenomicF32`).
 
 ## 🎯 2. Objetivo
@@ -99,16 +99,17 @@ Requiere añadir backward para: `RMSNorm`, `dot_product` (trivial: `dW = grad⊗
 
 ## 🚀 6. Rollout por etapas (de-riesgo)
 
-**Etapa 0 — QAT escala/min aislada (sin backward):**
-- Añadir ramas `GenomicQ4_0`/`GenomicQ8_0` en `refine_with_grads_core`.
-- Test unitario: `test_q4_0_scale_min_update` — dado input+grads, verificar `scale`/`min` cambian y el output cambia.
-- Criterio: `max|scale_before - scale_after| > 0`.
-- **Entregable:** mecánica QAT validada, autónoma del backward. *Esto NO requiere backprop y es testeable ya.*
+**Etapa 0 — QAT escala/min aislada (sin backward):** ✅ HECHO (`9383442`)
+- Ramas `GenomicQ4_0`/`GenomicQ8_0` en `refine_with_grads_core` + `Q4_0Block::q_value`.
+- Tests: `test_q4_0_scale_min_update`, `test_q8_0_scale_update` (scale/min cambian, output cambia).
+- Nota: el cuerpo `.flat` usa `Genomic4Bit` (centroides), así que esta etapa aplica a formatos Q4_0/Q8_0 (GGUF), no al cuerpo actual.
 
-**Etapa 1 — Drift local por sub-capa (Vía A):**
-- Corregir `IQATEngine` para pasar grads reales por sub-capa y cubrir todos los linears del bloque.
-- Validar con la prueba held-out: el modelo debe empezar a **generalizar** prompts nuevos (el objetivo que lm_head-only no logró).
-- Criterio: PPL held-out baja y salidas de prompts NO vistos dejan de ser gibberish.
+**Etapa 1 — Backprop dentro del bloque + wiring del IQAT:** ✅ HECHO (en curso de commit)
+- `backward_core` implementada (transpuesta `d_input = W^T·d_output` para F32/Q4_0/Q8_0). Test `test_backward_transpose_q4_0`.
+- Corregido `refine.rs`: `w_down` recibe `ffn_out` real (no ceros); gradientes de gate/up correctos (SwiGLU).
+- `IQATEngine::refine_block_drift` ahora llama al backprop del bloque corregido.
+- **Test de integración en modelo real**: el cuerpo `Genomic4Bit` muta sus centroides tras refine.
+- **Validación end-to-end pendiente**: requiere maestro/estudiante de la **misma familia** (mismo hidden dim y vocab) para el drift IQAT, p. ej. Qwen2.5-1.5B → Qwen2.5-0.6B, o full reverse-mode (Vía B).
 
 **Etapa 2 — Reverse-mode completo (Vía B):**
 - Backward end-to-end desde CE.

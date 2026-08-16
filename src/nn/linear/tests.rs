@@ -189,6 +189,39 @@ fn test_q8_0_scale_update() {
 }
 
 #[test]
+fn test_backward_transpose_q4_0() {
+    // backward_core debe devolver d_input = W^T · d_output.
+    // W[i,j] = q*scale+min con layout row-major: fila i = out, col j = in.
+    use crate::io::header::Q4_0Block;
+    let mk_block = |q: u8| Q4_0Block {
+        scale: half::f16::from_f32(0.5),
+        min: half::f16::from_f32(0.1),
+        qs: [q | (q << 4); 16],
+    };
+    // out=2, in=32 -> fila 0 q=2, fila 1 q=4. W[0,j]=2*0.5+0.1=1.1; W[1,j]=4*0.5+0.1=2.1
+    let blocks = vec![mk_block(2), mk_block(4)];
+    let raw_bytes: Vec<u8> = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<Q4_0Block>(),
+        )
+        .to_vec()
+    };
+    let linear = GenomicLinear::new(
+        raw_bytes, Vec::new(), Vec::new(), 2, 32, 32, Vec::new(), 1e-6,
+        Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), 4,
+    );
+
+    let d_output = vec![2.0f32, 3.0];
+    let d_input = linear.backward_core(d_output).unwrap();
+    // d_input[j] = 2*1.1 + 3*2.1 = 2.2 + 6.3 = 8.5 para todo j
+    assert_eq!(d_input.len(), 32);
+    for v in &d_input {
+        assert!((v - 8.5).abs() < 1e-3, "expected 8.5, got {}", v);
+    }
+}
+
+#[test]
 fn test_q4_0_linear_forward_roundtrip() {
     // Generate a 2x32 weight matrix
     // Row 0: 0.0, 0.1, ..., 3.1
