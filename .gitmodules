@@ -1,0 +1,3 @@
+[submodule "examples/ui/web_ui"]
+	path = examples/ui/web_ui
+	url = https://github.com/erickaguilar/gaje-web-ui.git
