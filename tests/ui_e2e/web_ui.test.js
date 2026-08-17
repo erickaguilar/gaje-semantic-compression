@@ -31,6 +31,11 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
     // Debería ser oscuro por defecto
     await expect(htmlElement).toHaveAttribute('data-theme', 'dark');
 
+    // Abrir el menú desplegable primero para mostrar el botón de tema
+    const menuBtn = page.locator('#y2k-menu-btn');
+    await expect(menuBtn).toBeVisible();
+    await menuBtn.click();
+
     // Hacer clic en el botón de tema
     const themeBtn = page.locator('#theme-toggle');
     await themeBtn.click();
@@ -38,7 +43,10 @@ test.describe('GAJE-Flow Visual Web UI Tests', () => {
     // Debería cambiar a claro
     await expect(htmlElement).toHaveAttribute('data-theme', 'light');
 
-    // Volver a hacer clic
+    // Volver a hacer clic (el menú sigue abierto, o lo abrimos de nuevo si se cerró)
+    if (!await themeBtn.isVisible()) {
+      await menuBtn.click();
+    }
     await themeBtn.click();
     await expect(htmlElement).toHaveAttribute('data-theme', 'dark');
 
