@@ -135,5 +135,32 @@ Hoy `train_sequence_cached_layerwise_core` también llama
 ## 10. Decisión abierta
 - ¿Entrenar el cuerpo completo (30 bloques) con lr muy bajo y decay agresivo, o quedarse en
   los 16-24 bloques validados? La prueba `full-body` (30 bloques, lr=1e-6) ya fue estable
+  (held-out 2.459), pero **más bloques ≠ mejor** (8→2.427, 16→2.432, 24→2.443).
+
+## 11. Resultado experimental (corrida 30k en `dataset_1000`)
+
+**Config**: `export_trained`, 8 bloques, lr=5e-5, decay 0.8, 1 epoch, lm_head congelado,
+30020 tokens. Tiempo real: **20602s ≈ 5.7 h** (no semanas — viable; el crecimiento de
+contexto pesa más que la extrapolación lineal de la sonda de 4k tokens).
+
+**Desenlace — negativo informativo**:
+- train CE = **3.8262** (> baseline held-out 2.559) → el cuerpo **no redujo la pérdida**
+  sobre `dataset_1000`; apenas se adaptó.
+- **Generación degenerada** ("Por,,,,,", "Boriga, Boriga") — **peor** que el modelo de
+  corpus pequeño de destilación (que produce "El mar es el mundo...", coherente).
+
+**Lección (más importante que "más datos = mejor")**:
+> **El corpus dominante no es el tamaño, es la pertinencia.** `dataset_1000` es
+> **out-of-distribution** y ruidoso para SmolLM2 (base de inglés/instrucciones). Entrenar
+> el cuerpo con lr conservador sobre un corpus OOD grande **degrada la generación** sin
+> bajar el CE, en vez de mejorarla.
+
+**Implicación para el plan**: retirar `dataset_1000` como candidato principal. El camino
+ganador es un corpus **in-domain/curated** para SmolLM2 (instrucciones o el corpus de
+destilación ampliado), no un `.txt` arbitrario, y con lr/bloques que permitan al cuerpo
+adaptarse de verdad (subir lr o bloques respecto a 5e-5/8).
+
+**Modelo utilizable**: el mejor sigue siendo `smollm2_4bit_quality.gaje.flat` (corpus de
+destilación 1520 tokens, dominio-matched, lm_head congelado) — coherente aunque repetitivo.
   (held-out 2.5525); el lr por capas podría permitir full-body con mejor lr efectivo. Se
   evaluará si el tiempo de cómputo lo permite.
