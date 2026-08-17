@@ -10,10 +10,10 @@ module.exports = defineConfig({
   expect: {
     timeout: 5000
   },
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:8080',
@@ -30,7 +30,7 @@ module.exports = defineConfig({
     command: '.venv/bin/python3 examples/ui/web_ui/server.py',
     url: 'http://127.0.0.1:8080',
     cwd: repoRoot,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 20 * 1000,
     env: {
       GAJE_AUTO_LOAD_MODEL: 'false',
