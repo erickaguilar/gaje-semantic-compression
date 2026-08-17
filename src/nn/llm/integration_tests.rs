@@ -726,3 +726,31 @@ fn test_body_layerwise_scale() {
         "lr por capas no mejoró held-out (baseline {base_loss:.4} -> {after:.4})"
     );
 }
+
+#[test]
+#[ignore = "lento: round-trip del writer mmap GAJE (carga+guarda+recarga el modelo 0.5B)"]
+fn test_flat_mmap_roundtrip() {
+    let src = "models/production/smollm2_4bit.gaje.flat";
+    let dst = "/tmp/opencode/smollm2_roundtrip.gaje.flat";
+    if !std::path::Path::new(src).exists() {
+        eprintln!("skip");
+        return;
+    }
+    use crate::io::config::ModelConfig;
+    use crate::io::flat_reader::GajeFlatFileReader;
+    use crate::io::flat_writer::save_genomic_flat;
+    let reader = GajeFlatFileReader::open(src).unwrap();
+    let config: ModelConfig = serde_json::from_str(&reader.metadata_json).unwrap();
+    let mut model = crate::io::flat_reader::load_genomic_auto(src).unwrap();
+    save_genomic_flat(dst, &model, &config, None).unwrap();
+    let mut reloaded = crate::io::flat_reader::load_genomic_auto(dst).unwrap();
+    let (logits_a, _) = model.forward_with_hidden_core(4, false).unwrap();
+    let (logits_b, _) = reloaded.forward_with_hidden_core(4, false).unwrap();
+    assert!(logits_b.iter().all(|v| v.is_finite()));
+    let maxdiff = logits_a
+        .iter()
+        .zip(logits_b.iter())
+        .fold(0.0f32, |m, (a, b)| m.max((a - b).abs()));
+    assert!(maxdiff < 1e-3, "round-trip diverge: {maxdiff}");
+    let _ = std::fs::remove_file(dst);
+}

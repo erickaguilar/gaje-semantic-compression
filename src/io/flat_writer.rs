@@ -1,6 +1,198 @@
 use crate::core::tokenizer::GajeTokenizer;
 use crate::io::config::ModelConfig;
+use crate::io::flat_reader::FlatTensorEntry;
+use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
+
+fn align64(v: &mut Vec<u8>) {
+    let pad = (64 - (v.len() % 64)) % 64;
+    v.resize(v.len() + pad, 0);
+}
+
+fn f32_u8(d: &[f32]) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, d.len() * 4) }
+}
+
+fn push_tensor(
+    dir: &mut Vec<FlatTensorEntry>,
+    blob: &mut Vec<u8>,
+    name: String,
+    bit_depth: usize,
+    out: usize,
+    inn: usize,
+    dna: &[u8],
+    centroids: &[f32],
+    anchors: &[u8],
+    bias: &[f32],
+) {
+    let dna_off = blob.len();
+    blob.extend_from_slice(dna);
+    align64(blob);
+    let c_off = blob.len();
+    blob.extend_from_slice(f32_u8(centroids));
+    align64(blob);
+    let anc_off = blob.len();
+    blob.extend_from_slice(anchors);
+    align64(blob);
+    let bias_off = blob.len();
+    blob.extend_from_slice(f32_u8(bias));
+    align64(blob);
+    dir.push(FlatTensorEntry {
+        name,
+        bit_depth,
+        out_features: out,
+        in_features: inn,
+        dna_off,
+        dna_len: dna.len(),
+        c_off,
+        c_len: centroids.len() * 4,
+        anc_off,
+        anc_len: anchors.len(),
+        bias_off,
+        bias_len: bias.len() * 4,
+    });
+}
+
+/// Escribe el modelo en el **formato mmap plano `GAJE`** (magic `GAJE`, zero-copy),
+/// el mismo que produce `scripts/export_gaje_flat.py` y que carga el Web UI con
+/// `load_genomic_auto` sin pasar por redb. Los tensores se escriben con el layout
+/// **separado** (attn_q/k/v, ffn_gate/up), que el reader detecta con
+/// `has_fused_qkv=false`/`has_fused_gate_up=false`.
+pub fn save_genomic_flat(
+    path: &str,
+    model: &GenomicLLM,
+    config: &ModelConfig,
+    tokenizer: Option<&GajeTokenizer>,
+) -> std::io::Result<()> {
+    let mut blob: Vec<u8> = Vec::new();
+    let mut dir: Vec<FlatTensorEntry> = Vec::new();
+
+    let mut write_l = |blob: &mut Vec<u8>,
+                       dir: &mut Vec<FlatTensorEntry>,
+                       p: &str,
+                       l: &GenomicLinear| {
+        push_tensor(
+            dir,
+            blob,
+            p.to_string(),
+            l.bit_depth() as usize,
+            l.out_features,
+            l.in_features,
+            l.database_ref(),
+            &l.centroids,
+            &l.anchors_sparse_buffer(),
+            &l.bias,
+        );
+    };
+
+    write_l(&mut blob, &mut dir, "token_embd", &model.embeddings);
+    for (i, blk) in model.blocks.iter().enumerate() {
+        let p = format!("blk.{i}.");
+        push_tensor(
+            &mut dir,
+            &mut blob,
+            format!("{}attn_norm", p),
+            32,
+            blk.attn.rmsnorm_weight.len(),
+            1,
+            f32_u8(&blk.attn.rmsnorm_weight),
+            &[],
+            &[],
+            &[],
+        );
+        push_tensor(
+            &mut dir,
+            &mut blob,
+            format!("{}ffn_norm", p),
+            32,
+            blk.ffn_norm.len(),
+            1,
+            f32_u8(&blk.ffn_norm),
+            &[],
+            &[],
+            &[],
+        );
+        write_l(&mut blob, &mut dir, &format!("{}attn_q", p), &blk.q_gen);
+        write_l(&mut blob, &mut dir, &format!("{}attn_k", p), &blk.k_gen);
+        write_l(&mut blob, &mut dir, &format!("{}attn_v", p), &blk.v_gen);
+        write_l(&mut blob, &mut dir, &format!("{}attn_output", p), &blk.w_o);
+        write_l(&mut blob, &mut dir, &format!("{}ffn_gate", p), &blk.gate_gen);
+        write_l(&mut blob, &mut dir, &format!("{}ffn_up", p), &blk.up_gen);
+        write_l(&mut blob, &mut dir, &format!("{}ffn_down", p), &blk.w_down);
+    }
+    write_l(&mut blob, &mut dir, "lm_head", &model.lm_head);
+    push_tensor(
+        &mut dir,
+        &mut blob,
+        "output_norm".to_string(),
+        32,
+        model.output_norm.len(),
+        1,
+        f32_u8(&model.output_norm),
+        &[],
+        &[],
+        &[],
+    );
+
+    let mut meta: serde_json::Value = serde_json::to_value(config).map_err(std::io::Error::other)?;
+    if let Some(tok) = tokenizer {
+        if let Some(obj) = meta.as_object_mut() {
+            obj.insert(
+                "tokenizer".to_string(),
+                serde_json::Value::String(
+                    tok.to_string(true)
+                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?,
+                ),
+            );
+        }
+    }
+    let metadata_json = serde_json::to_vec(&meta).map_err(std::io::Error::other)?;
+    let dir_json = serde_json::to_vec(&dir).map_err(std::io::Error::other)?;
+
+    let header_fixed_size = 4096usize;
+    let mut weights_offset = header_fixed_size + metadata_json.len() + dir_json.len();
+    if weights_offset % 4096 != 0 {
+        weights_offset = ((weights_offset / 4096) + 1) * 4096;
+    }
+
+    let header = FlatHeaderV2 {
+        magic: *b"GAJE",
+        version: 0x000908,
+        flags: 0x0003,
+        num_tensors: dir.len() as u32,
+        meta_len: metadata_json.len() as u64,
+        dir_len: dir_json.len() as u64,
+        weights_offset: weights_offset as u64,
+        weights_len: blob.len() as u64,
+        group_size: 32,
+        quant_format: 1,
+        arch_family: 0,
+        arch_n_embd: 0,
+        arch_n_head: 0,
+        arch_n_head_kv: 0,
+        arch_n_blocks: 0,
+        arch_qk_permute: 0,
+        reserved: [0u8; 4016],
+    };
+
+    let mut header_bin = [0u8; 4096];
+    unsafe {
+        std::ptr::write(header_bin.as_mut_ptr() as *mut FlatHeaderV2, header);
+    }
+
+    use std::io::Write;
+    let mut f = std::fs::File::create(path)?;
+    f.write_all(&header_bin)?;
+    f.write_all(&metadata_json)?;
+    f.write_all(&dir_json)?;
+    let current_pos = 4096 + metadata_json.len() + dir_json.len();
+    if weights_offset > current_pos {
+        f.write_all(&vec![0u8; weights_offset - current_pos])?;
+    }
+    f.write_all(&blob)?;
+    f.flush()?;
+    Ok(())
+}
 
 pub fn save_genomic_model(
     path: &str,

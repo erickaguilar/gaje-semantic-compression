@@ -1,4 +1,5 @@
-//! Exporta el modelo estudiante con el cuerpo entrenado (Vía B) a `.gaje.flat`
+//! Exporta el modelo estudiante con el cuerpo entrenado (Vía B) a **`.gaje.flat`
+//! mmap GAJE`** (zero-copy, el mismo formato de producción que carga el Web UI),
 //! para probarlo en el Web UI.
 //!
 //! Uso:
@@ -21,7 +22,7 @@
 use _impl::core::tokenizer::GajeTokenizer;
 use _impl::io::config::ModelConfig;
 use _impl::io::flat_reader::{load_genomic_auto, GajeFlatFileReader};
-use _impl::io::flat_writer::save_genomic_model;
+use _impl::io::flat_writer::save_genomic_flat;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -84,7 +85,7 @@ fn main() {
     model.clear_cache_core();
 
     println!("→ Guardando {output}");
-    save_genomic_model(output, &model, &config, Some(&tokenizer)).expect("guardar flat");
+    save_genomic_flat(output, &model, &config, Some(&tokenizer)).expect("guardar flat mmap");
 
     // Verificación: recargar y comprobar que el forward es finito.
     let mut reloaded = load_genomic_auto(output).expect("recargar export");

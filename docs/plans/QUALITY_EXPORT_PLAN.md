@@ -44,6 +44,10 @@ grande, con **lr bajo** y **lr por capas**, de modo que:
 
 ## 4. Cambios de código necesarios
 
+> Estado: el writer mmap `GAJE` (`save_genomic_flat`) ya está implementado en
+> `src/io/flat_writer.rs` y `export_trained.rs` lo usa como salida final. Round-trip
+> verificado (Δlogits=0.0). Pendiente solo el flag `train_lm_head`.
+
 ### 4.1 Opcional: entrenar solo el cuerpo (sin `lm_head`)
 Hoy `train_sequence_cached_layerwise_core` también llama
 `self.lm_head.refine_with_grads_core(...)`. Para no corromper la proyección de vocabulario:
@@ -104,7 +108,7 @@ Hoy `train_sequence_cached_layerwise_core` también llama
 | Sobreajuste en epochs altas | Vigilar held-out por epoch; quedarse en la mejor |
 | Degradación de vocabulario por lm_head | `train_lm_head=false` |
 | Coste de tiempo (2.5MB ≈ muchas horas en 1 core) | Empezar con un subconjunto (p.ej. 20k tokens) para iterar, luego full |
-| `save_genomic_model` escribe redb (no mmap GAJE) | Aceptado: el Web UI ya carga redb (fix `71c9af3`) |
+| `save_genomic_model` escribe redb (no mmap GAJE) | **Resuelto**: export final usa `save_genomic_flat` (mmap `GAJE`, round-trip exacto, test `#[ignore]`); redb se conserva para checkpoints |
 
 ## 9. Entregables
 

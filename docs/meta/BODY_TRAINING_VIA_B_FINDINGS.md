@@ -209,6 +209,9 @@ si es un **fichero** (DB redb), abrirlo directo. Verificado:
 
 - Export de calidad real (corpus grande + solo cuerpo + lr bajo) para evaluar
   generación.
-- Decidir si `save_genomic_model` debe escribir el formato mmap `GAJE` (zero-copy)
-  en lugar de DB redb, o si mantener redb y normalizar el nombre/lógica del Web UI.
+- **Resuelto**: el export a formato mmap `GAJE` ahora se hace con
+  `save_genomic_flat` (Rust), que escribe magic `GAJE` zero-copy (mismo formato que
+  `scripts/export_gaje_flat.py` y que carga el Web UI por mmap). Round-trip exacto
+  (Δlogits=0.0), test `#[ignore]` `test_flat_mmap_roundtrip`. `save_genomic_model`
+  (redb) se conserva para checkpoints intermedios; el export final usa mmap.
 - Guardar/versionar el modelo entrenado fuera de git (los `.flat` están gitignored).
