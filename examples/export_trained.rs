@@ -4,7 +4,7 @@
 //!
 //! Uso:
 //!   cargo run --release --example export_trained -- <input.flat> <output.flat> <corpus> \
-//!     [n_blk] [lr] [decay] [epochs]
+//!     [n_blk] [lr] [decay] [epochs] [train_lm_head]
 //!
 //! - `<corpus>`: fichero `.jsonl` (pares prompt/answer como en train_smollm2_1t.jsonl)
 //!   o texto plano (se codifica entero).
@@ -12,6 +12,9 @@
 //! - `lr`     (default 2e-4): lr base (bloques tardíos).
 //! - `decay`  (default 0.8): factor de decaimiento por capa (layer-wise).
 //! - `epochs` (default 1): pasadas sobre el corpus.
+//! - `train_lm_head` (default 0): 1 para entrenar también el `lm_head` (NO recomendado:
+//!   corrompe el vocabulario con corpus pequeños), 0 para congelarlo y entrenar solo el
+//!   cuerpo.
 //!
 //! Ejemplo:
 //!   cargo run --release --example export_trained -- \
@@ -37,8 +40,13 @@ fn main() {
     let lr: f32 = args.get(5).and_then(|v| v.parse().ok()).unwrap_or(2e-4);
     let decay: f32 = args.get(6).and_then(|v| v.parse().ok()).unwrap_or(0.8);
     let epochs: usize = args.get(7).and_then(|v| v.parse().ok()).unwrap_or(1);
+    let train_lm_head: bool = args
+        .get(8)
+        .and_then(|v| v.parse::<u8>().ok())
+        .map(|v| v != 0)
+        .unwrap_or(false);
 
-    println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs})");
+    println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head})");
 
     let reader = GajeFlatFileReader::open(input).expect("abrir reader para config");
     let config: ModelConfig = serde_json::from_str(&reader.metadata_json)
@@ -77,7 +85,7 @@ fn main() {
     let mut train_loss = 0.0f32;
     for ep in 0..epochs {
         let l = model
-            .train_sequence_cached_layerwise_core(stream.clone(), lr, n_blk, 1.0, decay)
+            .train_sequence_cached_layerwise_core(stream.clone(), lr, n_blk, 1.0, decay, train_lm_head)
             .expect("entrenar cuerpo");
         train_loss = l;
         println!("  epoch {}/{}: train CE = {l:.4}", ep + 1, epochs);

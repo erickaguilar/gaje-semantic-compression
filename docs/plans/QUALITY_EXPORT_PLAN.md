@@ -46,9 +46,24 @@ grande, con **lr bajo** y **lr por capas**, de modo que:
 
 > Estado: el writer mmap `GAJE` (`save_genomic_flat`) ya está implementado en
 > `src/io/flat_writer.rs` y `export_trained.rs` lo usa como salida final. Round-trip
-> verificado (Δlogits=0.0). Pendiente solo el flag `train_lm_head`.
+> verificado (Δlogits=0.0). El flag `train_lm_head` ya está implementado (default 0).
 
-### 4.1 Opcional: entrenar solo el cuerpo (sin `lm_head`)
+### 4.1 Entrenar solo el cuerpo (sin `lm_head`) — IMPLEMENTADO
+
+`train_sequence_cached_layerwise_core(..., train_lm_head: bool)` salta la llamada a
+`refine_with_grads_core` del `lm_head` (el backward del cuerpo sigue usando `d_logits`).
+CLI: `examples/export_trained.rs` acepta `train_lm_head` (default 0).
+
+**Resultado del primer export de calidad** (`smollm2_4bit_quality.gaje.flat`, 8 bloques,
+lr=5e-5, decay=0.8, 1 epoch, lm_head congelado, 1520 tokens):
+
+| Antes (lm_head entrenado) | Después (lm_head congelado) |
+|:---|:---|
+| "El capital de Francia es un idioma claro..." (sin sentido) | coherente, vocabulario intacto |
+
+**Conclusión**: congelar el `lm_head` **arregla la corrupción de vocabulario** (la causa
+dominante del gibberish). Persisten la repetición en prompts abiertos y los errores
+factuales, que requieren la palanca de **corpus** (corrida de 30k+ tokens, la dominante).
 Hoy `train_sequence_cached_layerwise_core` también llama
 `self.lm_head.refine_with_grads_core(...)`. Para no corromper la proyección de vocabulario:
 - Añadir parámetro `train_lm_head: bool` (default `true` para no romper tests existentes).

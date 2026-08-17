@@ -388,6 +388,7 @@ impl GenomicLLM {
         n_train_blocks: usize,
         gclip: f32,
         lr_decay: f32,
+        train_lm_head: bool,
     ) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);
@@ -435,8 +436,10 @@ impl GenomicLLM {
                 d_logits[j] = exps[j] / sum_e;
             }
             d_logits[target] -= 1.0;
-            self.lm_head
-                .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+            if train_lm_head {
+                self.lm_head
+                    .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+            }
 
             let d_h = self.lm_head.backward_core(d_logits)?;
             let mut d_out =
