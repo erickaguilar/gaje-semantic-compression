@@ -1,0 +1,120 @@
+# Plan: Export de Calidad — Fine-tuning del cuerpo para generación real
+
+> Rama objetivo: `develop` · Autor: sesión 2026-08-16
+> Contexto: el export de prueba (`smollm2_4bit_trained.gaje.flat`) ya carga y genera en
+> el Web UI, pero la calidad es pobre. Este plan lo convierte en un export de calidad
+> evaluable, atacando las 3 palancas identificadas en `BODY_TRAINING_VIA_B_FINDINGS.md`.
+
+---
+
+## 1. Objetivo
+
+Producir `smollm2_4bit_quality.gaje.flat` entrenando **solo el cuerpo** sobre un corpus
+grande, con **lr bajo** y **lr por capas**, de modo que:
+1. La **CE held-out** baje respecto al baseline (2.559) y al export de prueba.
+2. La **generación** deje de ser repetitiva y muestre conocimiento del corpus.
+3. Se mantenga estable (forward finito, sin NaN, sin degradar el vocabulario).
+
+## 2. Palancas de calidad (de `BODY_TRAINING_VIA_B_FINDINGS.md`)
+
+| Palanca | Impacto | Estado actual | Acción |
+| :--- | :--- | :--- | :--- |
+| Corpus grande | **Dominante** | 1520 tokens (minúsculo) | Usar corpus de ~0.5-2 MB |
+| No entrenar `lm_head` | Alto | Se entrena (corrompe vocabulario) | Añadir flag `train_lm_head=false` |
+| lr bajo / pocas epochs | Medio | lr=2e-4, 1 epoch | lr≈5e-5, 1-3 epochs, decay layer-wise |
+| Lr por capas | Medio | Disponible | `train_sequence_cached_layerwise_core` |
+
+## 3. Corpus
+
+### 3.1 Candidatos (datos existentes en `data/datasets/`)
+
+| Fichero | Tamaño | Nota |
+| :--- | :--- | :--- |
+| `consolidated_silver_dataset.txt` | ~2.5 MB (414k palabras) | **Principal candidato** (calidad destilada) |
+| `dataset_1000.txt` | ~87 KB (14k palabras) | Plan B si el silver es ruidoso |
+| `dataset_es.txt` / `coherence_es.txt` / `dataset_es_ext.txt` | — | Opciones en español |
+| `data/distill/train_smollm2_1t.jsonl` | 1520 tokens | Referencia (no basta solo) |
+
+### 3.2 Estrategia
+- **Primaria**: `consolidated_silver_dataset.txt` (máxima diversidad). Codificar entero con
+  `GajeTokenizer::from_file("models/core/tokenizer.json")`.
+- **Backup**: si el corpus mezcla idiomas/dominios con tokenización pobre, usar
+  `dataset_1000.txt` (conocido) como control.
+- **Split 80/20** para medir held-out CE; el 20% final se reserva para validación.
+
+## 4. Cambios de código necesarios
+
+### 4.1 Opcional: entrenar solo el cuerpo (sin `lm_head`)
+Hoy `train_sequence_cached_layerwise_core` también llama
+`self.lm_head.refine_with_grads_core(...)`. Para no corromper la proyección de vocabulario:
+- Añadir parámetro `train_lm_head: bool` (default `true` para no romper tests existentes).
+- Si `false`, **saltar** la llamada a `refine_with_grads_core` del `lm_head` (el backward
+  del cuerpo sí depende de `d_logits`, que se sigue computando igual).
+
+### 4.2 `examples/export_trained.rs`
+- Aceptar corpus en `.txt` (ya soportado) y pasar `train_lm_head=false`, `lr`, `decay`, `epochs`.
+- Añadir flag CLI `--skip-lm-head` (o `--train-lm-head`).
+- Imprimir **CE held-out** al final además de train CE.
+- Guardar como `models/production/smollm2_4bit_quality.gaje.flat`.
+
+## 5. Hiperparámetros (basados en los barridos)
+
+| Parámetro | Valor inicial | Racional |
+| :--- | :--- | :--- |
+| `n_blk` | 16 | layer-wise escala bien hasta 24 |
+| `lr` | 5e-5 | bajo: proteger conocimiento base |
+| `decay` | 0.85 | layer-wise (tardíos más lr) |
+| `gclip` | 1.0 | sin NaN en todos los barridos |
+| `epochs` | 1 → 3 | medir si la 2ª/3ª época aún mejora held-out |
+| `train_lm_head` | false | evitar corrupción de vocabulario |
+
+### Plan de barrido (pruebas `#[ignore]`, lentas)
+1. **Corpus**: silver (2.5MB) vs `dataset_1000` (87KB) — misma config.
+2. **lr**: 5e-5 vs 1e-4 vs 2e-4 (sobre el corpus ganador).
+3. **epochs**: 1 vs 3 (sobre la mejor config), vigilando sobreajuste (held-out).
+
+## 6. Validación y criterios de aceptación
+
+### 6.1 Cuantitativa
+- **CE held-out** final < 2.427 (mejorado sobre el punto dulce de 8 bloques, si el corpus
+  es más expresivo) y al menos **< 2.559** (baseline).
+- Sin NaN; `forward` finito tras export y recarga.
+
+### 6.2 Cualitativa (Web UI)
+- Prompts de control: hechos factuales, un párrafo del corpus, una frase de conocimiento
+  general. Criterios: **no repetitiva** (sin lazo "El capital de Francia es..."), responde
+  con contenido del corpus, coherencia de 2-4 frases.
+- Comparar lado a lado contra `smollm2_4bit.gaje.flat` (base) y el export de prueba.
+
+## 7. Pasos de ejecución
+
+1. Implementar `train_lm_head` flag en `train_sequence_cached_layerwise_core` (+test unitario).
+2. Ampliar `examples/export_trained.rs` (flag + CE held-out + ruta de salida).
+3. Barrido de corpus y lr (tests `#[ignore]`) → elegir config ganadora.
+4. Generar el export final `smollm2_4bit_quality.gaje.flat`.
+5. Cargar en Web UI, correr prompts de control y evaluar cualitativamente.
+6. Actualizar `BODY_TRAINING_VIA_B_FINDINGS.md` con los resultados y `EMPIRICAL_TRUTH_STATE.md`.
+7. Commits incrementales + push a GitHub y GitLab (`--no-verify` por el hook de formato).
+
+## 8. Riesgos y mitigaciones
+
+| Riesgo | Mitigación |
+| :--- | :--- |
+| Corpus silver ruidoso o multi-idioma | Backup `dataset_1000.txt`; inspección de muestras |
+| Sobreajuste en epochs altas | Vigilar held-out por epoch; quedarse en la mejor |
+| Degradación de vocabulario por lm_head | `train_lm_head=false` |
+| Coste de tiempo (2.5MB ≈ muchas horas en 1 core) | Empezar con un subconjunto (p.ej. 20k tokens) para iterar, luego full |
+| `save_genomic_model` escribe redb (no mmap GAJE) | Aceptado: el Web UI ya carga redb (fix `71c9af3`) |
+
+## 9. Entregables
+
+- Código: flag `train_lm_head` + export ampliado + tests de barrido (`#[ignore]`).
+- Modelo: `models/production/smollm2_4bit_quality.gaje.flat` (gitignored).
+- Evidencia: tabla de CE held-out por config + muestras de generación.
+- Docs: este plan actualizado con resultados + notas en `EMPIRICAL_TRUTH_STATE.md`.
+
+## 10. Decisión abierta
+- ¿Entrenar el cuerpo completo (30 bloques) con lr muy bajo y decay agresivo, o quedarse en
+  los 16-24 bloques validados? La prueba `full-body` (30 bloques, lr=1e-6) ya fue estable
+  (held-out 2.5525); el lr por capas podría permitir full-body con mejor lr efectivo. Se
+  evaluará si el tiempo de cómputo lo permite.
