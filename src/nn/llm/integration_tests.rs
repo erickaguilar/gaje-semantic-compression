@@ -706,7 +706,7 @@ fn test_body_layerwise_scale() {
     for (nb, decay, label) in cfgs {
         let mut model = load_genomic_auto(model_path).unwrap();
         let tloss = model
-            .train_sequence_cached_layerwise_core(train.clone(), lr, nb, 1.0, decay, true)
+            .train_sequence_cached_layerwise_core(train.clone(), lr, nb, 1.0, decay, true, None)
             .expect("train");
         model.clear_cache_core();
         let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();

@@ -15,6 +15,8 @@
 //! - `train_lm_head` (default 0): 1 para entrenar también el `lm_head` (NO recomendado:
 //!   corrompe el vocabulario con corpus pequeños), 0 para congelarlo y entrenar solo el
 //!   cuerpo.
+//! - `max_tokens` (default 0 = todo): limita el número de tokens a entrenar.
+//! - `progress_every` (default 200): imprime progreso cada N tokens.
 //!
 //! Ejemplo:
 //!   cargo run --release --example export_trained -- \
@@ -45,6 +47,8 @@ fn main() {
         .and_then(|v| v.parse::<u8>().ok())
         .map(|v| v != 0)
         .unwrap_or(false);
+    let max_tokens: usize = args.get(9).and_then(|v| v.parse().ok()).unwrap_or(0);
+    let progress_every: usize = args.get(10).and_then(|v| v.parse().ok()).unwrap_or(200);
 
     println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head})");
 
@@ -81,11 +85,23 @@ fn main() {
     }
     let n_tok = stream.len();
     println!("→ {n_tok} tokens del corpus, vocab={vocab}");
+    if max_tokens > 0 && stream.len() > max_tokens {
+        stream.truncate(max_tokens);
+        println!("→ limitado a {max_tokens} tokens para medición de rendimiento");
+    }
 
     let mut train_loss = 0.0f32;
     for ep in 0..epochs {
         let l = model
-            .train_sequence_cached_layerwise_core(stream.clone(), lr, n_blk, 1.0, decay, train_lm_head)
+            .train_sequence_cached_layerwise_core(
+                stream.clone(),
+                lr,
+                n_blk,
+                1.0,
+                decay,
+                train_lm_head,
+                Some(progress_every),
+            )
             .expect("entrenar cuerpo");
         train_loss = l;
         println!("  epoch {}/{}: train CE = {l:.4}", ep + 1, epochs);

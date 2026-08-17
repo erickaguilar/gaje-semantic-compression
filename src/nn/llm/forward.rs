@@ -389,6 +389,7 @@ impl GenomicLLM {
         gclip: f32,
         lr_decay: f32,
         train_lm_head: bool,
+        progress_every: Option<usize>,
     ) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);
@@ -397,8 +398,19 @@ impl GenomicLLM {
         self.clear_cache_core();
         let n = self.blocks.len();
         let start = n.saturating_sub(n_train_blocks);
+        let t0 = std::time::Instant::now();
+        let n_tok = tokens.len() - 1;
 
         for i in 0..tokens.len() - 1 {
+            if let Some(every) = progress_every {
+                if i > 0 && i % every == 0 {
+                    eprintln!(
+                        "  progress {i}/{n_tok} tokens, {:.1}s ({:.0} tok/min)",
+                        t0.elapsed().as_secs_f32(),
+                        (i as f32) / (t0.elapsed().as_secs_f32() / 60.0).max(1e-6)
+                    );
+                }
+            }
             let target = tokens[i + 1];
             let pos = if n > 0 {
                 self.blocks[0].attn.k_cache_len()
