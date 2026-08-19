@@ -307,3 +307,81 @@ No escalar a los 30 bloques. Validar dónde se rompe:
 ---
 
 **Siguiente Fase**: Fase 3.2 — Integración y benchmarking de micro-kernels optimizados SIMD (AVX2/FMA) para la decodificación y multiplicación matricial en vuelo de Q4_0.
+
+---
+
+## 🧬 10. Fase 4b: Cierre — Validación del Gradiente, Límite del Fine-tune del Cuerpo y Modelo Recomendado (v1.8.0-alpha: 2026-08-17)
+
+### Contexto de esta sección
+Cierre de la Fase 4 con tres conclusiones explícitas y separadas. Se documentan por separado
+para que nadie las confunda: son un logro, un límite y una recomendación de producto.
+
+### 1) 🟢 Logro de ingeniería: el gradiente del cuerpo Genomic4Bit está validado y es correcto
+- **Gradient check numérico (f64)**: worst rel_err ≈ 0.06 (2026-08-16). Dos bugs corregidos:
+  nibble invertido en `transpose` y STE que dividía por `centroid_counts` (ahora suma, solo
+  rama Genomic4Bit).
+- **Adaptación real demostrada**: el cuerpo reduce CE sobre corpus en 2 de 3 casos
+  (distill 1.54→1.46; dataset_1000 4.88→3.83).
+- **Infraestructura completa end-to-end**: ForwardCache → backward → refine → export GAJE
+  (mmap) → reload → Web UI → `eval_generation.py`. Los 38 tests pasan (ruta rápida 4.2s).
+- Esto es un logro real de motor: el backprop manual de un transformer cuantizado Q4_0
+  (STE + centroides) es matemáticamente utilizable.
+
+### 2) 🔴 Hallazgo negativo importante: el fine-tune del cuerpo con corpus grande DEGRADA la generación
+- **Consistente en todos los experimentos** (independiente de corpus, escala o lr 5e-5–2e-4):
+  entrenar el cuerpo 8–24 bloques sobre corpora grandes o de stream concatenado aumenta la
+  repetición y reduce la diversidad vs. el modelo base.
+- **No es un fallo de ejecución**: el mecanismo funciona (ver punto 1). Es una propiedad del
+  sistema: la cross-entropía sobre stream concatenado/ruidoso premia patrones locales
+  degenerados ("Por,", "Boriga"), y el cuerpo cuantizado pierde la manifold preentrenada
+  al moverse demasiado.
+- **Lección transversal (principio rector para todo el proyecto)**:
+  > **CE es métrica AUXILIAR; la capacidad generativa es la métrica de ÉXITO. Optimizar el
+  > CE medio de un stream ruidoso puede empeorar el producto real.** Aplica retroactivamente
+  > a decisiones previas (ej. ambigüedad CosSim 0.955 vs 0.987) y a cualquier optimización
+  > futura (cuantización, fine-tuning, IQAT).
+- El diagnóstico usó `eval_ce_core` (misma tokenización) + `eval_generation.py` (métricas
+  objetivas, no ejemplos sueltos), que corrigió dos juicios previos basados en cherry-picking.
+
+### 3) 🟡 Modelo de producción recomendado y sus LÍMITES explícitos
+- **Modelo recomendado**: `models/production/smollm2_4bit_quality.gaje.flat` — destilación
+  corta (1520 tokens, corpus de destilación), **lm_head congelado**, cuerpo 8 bloques
+  lr≈2e-4. Mejor diversidad (distinct-1/2) y 0% respuestas degeneradas en el harness
+  (temp 0.4 y greedy), frente al base (12–25% degeneradas).
+- **Dos ejes de calidad distintos** (no confundir): el modelo `quality` gana en
+  **fluidez/no-degeneración**, pero **pierde en generalización factual** (evidenciado antes:
+  no responde bien a preguntas fuera del corpus, p.ej. "capital de México" → "capital de
+  España"). No debe desplegarse esperando conocimiento nuevo.
+- **Regla de producción**: hasta demostrar lo contrario con el mismo `eval_generation.py`,
+  **no tocar el cuerpo en producción** (ni fine-tune grande del cuerpo, ni IQAT agresivo
+  sobre `.txt`).
+
+### Resumen de evidencias del cierre
+
+| Corpus | Base CE | Train CE | Δ | Generación (harness) |
+|:---|:---:|:---:|:---:|:---|
+| distill (1520, lm_head frozen) | 1.54 | 1.46 | −0.08 | **mejor**: d1/d2 máx, 0% deg |
+| corpus_unified (2.9k txt) | 2.99 | 3.11 | +0.12 | degenerada |
+| dataset_1000 (30k txt) | 4.88 | 3.83 | −1.05 | degenerada |
+| clean (22k per-seq) | 2.83 | 2.77 | −0.06 | degenerada |
+
+### Infraestructura entregada en esta fase (commit `8ab0685`)
+- `src/nn/llm/forward.rs` → `eval_ce_core` (CE base forward-only, misma tokenización).
+- `examples/export_trained.rs` → modo `--eval-only` + **entrenamiento per-secuencia**
+  (cache reseteado por pareja; base CE del corpus limpio 4.53→2.83; ~150× más rápido).
+- `scripts/generate_distill_corpus.py` → corpus limpio/delimitado desde maestro 3B.
+- `scripts/eval_generation.py` → **harness de evaluación generativa fija** (la pieza de
+  disciplina que evita el autoengaño del CE y el cherry-picking).
+
+### Dirección futura (no ejecutada, abierta)
+- Entrenamiento que **preserve calidad**: añadir regularización contra el modelo base
+  (KL de logits, EWC) para "aprender sin olvidar"; o solo `lm_head`/adaptadores ligeros con
+  early-stop guiado por `eval_generation.py`.
+- Prioridad de producto: **mejores maestros (1.5B/3B) en inferencia** + corpus de
+  destilación de calidad, antes que más gradientes sobre el Q4 de 135M.
+- No lanzar más corridas largas de fine-tune del cuerpo "por si acaso" sin una hipótesis
+  de regularización concreta.
+
+---
+
+**Siguiente Fase**: Fase 3.2 — Integración y benchmarking de micro-kernels optimizados SIMD (AVX2/FMA) para la decodificación y multiplicación matricial en vuelo de Q4_0.
