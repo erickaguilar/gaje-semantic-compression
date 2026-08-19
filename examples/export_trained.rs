@@ -70,7 +70,12 @@ fn main() {
 
     let vocab = model.embeddings.out_features;
     let raw = std::fs::read_to_string(corpus_path).expect("leer corpus");
-    let mut stream: Vec<usize> = Vec::new();
+
+    // Secuencias POR EJEMPLO (no un stream concatenado): cada pareja prompt+answer es una
+    // secuencia independiente con cache reseteado. Lección del diagnóstico C: un stream
+    // concatenado sin separadores reproduce el problema patológico (base CE ~4.5); cada
+    // ejemplo delimitado mantiene la correlación CE <-> generación.
+    let mut sequences: Vec<Vec<usize>> = Vec::new();
     if corpus_path.ends_with(".jsonl") {
         for line in raw.lines() {
             let line = line.trim();
@@ -81,46 +86,75 @@ fn main() {
                 let p = v["prompt"].as_str().unwrap_or("");
                 let a = v["answer"].as_str().unwrap_or("");
                 let ids = tokenizer.encode(&format!("{p}{a}"), false).expect("encode");
-                for id in ids {
-                    stream.push((id as usize).min(vocab - 1));
+                if ids.len() >= 2 {
+                    sequences.push(ids.iter().map(|id| (*id as usize).min(vocab - 1)).collect());
                 }
             }
         }
     } else {
         let ids = tokenizer.encode(&raw, false).expect("encode txt");
-        for id in ids {
-            stream.push((id as usize).min(vocab - 1));
+        if ids.len() >= 2 {
+            sequences.push(ids.iter().map(|id| (*id as usize).min(vocab - 1)).collect());
         }
     }
-    let n_tok = stream.len();
-    println!("→ {n_tok} tokens del corpus, vocab={vocab}");
-    if max_tokens > 0 && stream.len() > max_tokens {
-        stream.truncate(max_tokens);
+    let n_tok: usize = sequences.iter().map(|s| s.len()).sum();
+    let n_seq = sequences.len();
+    println!("→ {n_seq} secuencias, {n_tok} tokens del corpus, vocab={vocab}");
+    if max_tokens > 0 && n_tok > max_tokens {
+        let mut acc = 0;
+        sequences.retain(|s| {
+            if acc >= max_tokens {
+                return false;
+            }
+            acc += s.len();
+            acc <= max_tokens
+        });
         println!("→ limitado a {max_tokens} tokens para medición de rendimiento");
     }
 
     let mut train_loss = 0.0f32;
     if eval_only {
-        let ce = model
-            .eval_ce_core(&stream)
-            .expect("eval CE base (forward-only)");
+        let mut total = 0.0f32;
+        let mut n = 0usize;
+        for seq in &sequences {
+            let ce = model.eval_ce_core(seq).expect("eval CE base (forward-only)");
+            total += ce * seq.len().saturating_sub(1) as f32;
+            n += seq.len().saturating_sub(1);
+        }
+        let ce = total / n.max(1) as f32;
         println!("BASE CE = {ce:.4}   PPL = {:.2}", ce.exp());
         std::process::exit(0);
     }
+    let mut tokens_done = 0usize;
+    let t0 = std::time::Instant::now();
     for ep in 0..epochs {
-        let l = model
-            .train_sequence_cached_layerwise_core(
-                stream.clone(),
-                lr,
-                n_blk,
-                1.0,
-                decay,
-                train_lm_head,
-                Some(progress_every),
-            )
-            .expect("entrenar cuerpo");
-        train_loss = l;
-        println!("  epoch {}/{}: train CE = {l:.4}", ep + 1, epochs);
+        let mut total = 0.0f32;
+        let mut n = 0usize;
+        for seq in &sequences {
+            let l = model
+                .train_sequence_cached_layerwise_core(
+                    seq.clone(),
+                    lr,
+                    n_blk,
+                    1.0,
+                    decay,
+                    train_lm_head,
+                    None,
+                )
+                .expect("entrenar cuerpo");
+            total += l * seq.len().saturating_sub(1) as f32;
+            n += seq.len().saturating_sub(1);
+            tokens_done += seq.len().saturating_sub(1);
+            if tokens_done % progress_every == 0 {
+                println!(
+                    "  progress {tokens_done}/{n_tok} tokens, {:.1}s ({:.0} tok/min)",
+                    t0.elapsed().as_secs_f32(),
+                    (tokens_done as f32) / (t0.elapsed().as_secs_f32() / 60.0).max(1e-6)
+                );
+            }
+        }
+        train_loss = total / n.max(1) as f32;
+        println!("  epoch {}/{}: train CE = {train_loss:.4}", ep + 1, epochs);
     }
     model.clear_cache_core();
 
@@ -129,8 +163,13 @@ fn main() {
 
     // Verificación: recargar y comprobar que el forward es finito.
     let mut reloaded = load_genomic_auto(output).expect("recargar export");
+    let first_token = sequences
+        .first()
+        .and_then(|s| s.first())
+        .copied()
+        .unwrap_or(0);
     let (logits, _) = reloaded
-        .forward_with_hidden_core(stream[0], true)
+        .forward_with_hidden_core(first_token, true)
         .expect("forward de verificación");
     let finite = logits.iter().all(|v| v.is_finite());
     println!("✔ export OK (forward finito: {finite}, último train CE {train_loss:.4})");

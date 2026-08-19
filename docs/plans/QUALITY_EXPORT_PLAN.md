@@ -204,5 +204,41 @@ Se añadió `eval_ce_core` (forward-only, misma ruta que entrenar) y el modo `--
 - El backprop del cuerpo Genomic4Bit **está funcionando** (gradient check ✓, adaptación
   real 4.88→3.83). La pregunta abierta ya no es "¿puede entrenar?", sino "¿puede modificar
   pesos comprimidos sin destruir capacidades previas?" — con un corpus representativo.
+
+## 13. Harness de evaluación generativa fija (`scripts/eval_generation.py`)
+
+**Motivo**: los juicios previos de calidad usaban ejemplos sueltos (cherry-picking) y
+llevaron a conclusiones contradictorias. El harness aplica los MISMOS 8 prompts, la MISMA
+temperatura y métricas objetivas (distinct-1/2, tasa de repetición de bigramas, % de
+respuestas degeneradas) a todos los modelos. Se corrió con temp=0.4 y greedy (temp=0.0).
+
+**Resultados (temp 0.4 / 0.0):**
+
+| Modelo | d1 | d2 | rep | deg% |
+|:---|:---:|:---:|:---:|:---:|
+| base | 0.46 / 0.37 | 0.56 / 0.46 | **0.19 / 0.42** | 25% / 12% |
+| **quality (distill 1520)** | **0.56 / 0.46** | **0.70 / 0.56** | 0.30 / 0.44 | **0% / 0%** |
+| clean (22k per-seq) | 0.41 / 0.30 | 0.52 / 0.35 | 0.48 / 0.66 | 0% / 25% |
+| quality_big (30k OOD) | 0.31 / 0.34 | 0.40 / 0.39 | 0.60 / 0.61 | 0% / 0% |
+| trained (redb) | 0.38 / 0.34 | 0.45 / 0.42 | 0.55 / 0.58 | 0% / 0% |
+
+**Conclusiones data-backed:**
+- **`quality` (distill 1520 tokens, lm_head congelado) es el mejor modelo entrenado**:
+  máxima diversidad (d1/d2) y 0% degeneradas en ambas temperaturas. Corrige tanto el
+  escepticismo del ejemplo cherry-picked como el "nada supera al base": ambos eran
+  incorrectos; el harness los resuelve.
+- **Base**: el menos repetitivo (rep 0.19 en temp 0.4) pero degenera en 12-25% de prompts.
+- **Todo entrenamiento grande del cuerpo degrada** (rep ≥ 0.58, d1/d2 menores) en ambas
+  temperaturas — consistente con todos los experimentos previos.
+- **El mejor modelo de generación actual = `smollm2_4bit_quality.gaje.flat`.**
+
+**Cambios técnicos asociados**:
+- `examples/export_trained.rs`: el entrenamiento ahora trata cada pareja prompt+answer
+  como **secuencia independiente** (cache reseteado por ejemplo), no un stream concatenado.
+  Esto bajó el base CE del corpus limpio de 4.53 (concatenado) a 2.83 (per-secuencia) y
+  aceleró ~150x (22k tokens en ~2 min en vez de horas).
+- `scripts/generate_distill_corpus.py`: genera corpus limpio/delimitado desde el maestro
+  3B (banco diverso de prompts, respuestas no truncadas ~96 tokens, filtrado de
+  degeneradas). Corpus: `data/distill/train_clean_180.jsonl` (170 pares, 22k tokens).
   (held-out 2.5525); el lr por capas podría permitir full-body con mejor lr efectivo. Se
   evaluará si el tiempo de cómputo lo permite.
