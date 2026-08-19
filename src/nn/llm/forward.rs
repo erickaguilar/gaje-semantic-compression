@@ -465,6 +465,46 @@ impl GenomicLLM {
         Ok(total_loss / (tokens.len() - 1) as f32)
     }
 
+    pub fn eval_ce_core(&mut self, tokens: &[usize]) -> Result<f32, String> {
+        if tokens.len() < 2 {
+            return Ok(0.0);
+        }
+        let mut total_loss = 0.0;
+        self.clear_cache_core();
+        let n = self.blocks.len();
+        let n_tok = tokens.len() - 1;
+        for i in 0..tokens.len() - 1 {
+            let target = tokens[i + 1];
+            let pos = if n > 0 {
+                self.blocks[0].attn.k_cache_len()
+            } else {
+                0
+            };
+            let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
+            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            for blk in &mut self.blocks {
+                let (out, cache) = blk.forward_core_cached(h, pos)?;
+                caches.push(cache);
+                h = out;
+            }
+            let h_norm =
+                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+            let modulation = self
+                .topology
+                .as_ref()
+                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
+            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_e = 0.0f32;
+            for j in 0..logits.len() {
+                sum_e += (logits[j] - max_l).exp();
+            }
+            let prob = ((logits[target] - max_l).exp() / sum_e).max(1e-12);
+            total_loss -= prob.ln();
+        }
+        Ok(total_loss / n_tok as f32)
+    }
+
     pub fn train_on_sequence_core(&mut self, tokens: Vec<usize>, lr: f32) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);

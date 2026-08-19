@@ -49,8 +49,17 @@ fn main() {
         .unwrap_or(false);
     let max_tokens: usize = args.get(9).and_then(|v| v.parse().ok()).unwrap_or(0);
     let progress_every: usize = args.get(10).and_then(|v| v.parse().ok()).unwrap_or(200);
+    let eval_only: bool = args
+        .get(11)
+        .and_then(|v| v.parse::<u8>().ok())
+        .map(|v| v != 0)
+        .unwrap_or(false);
 
-    println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head})");
+    if eval_only {
+        println!("→ Modo EVAL-ONLY: CE del modelo BASE sobre el corpus (sin entrenar)");
+    } else {
+        println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head})");
+    }
 
     let reader = GajeFlatFileReader::open(input).expect("abrir reader para config");
     let config: ModelConfig = serde_json::from_str(&reader.metadata_json)
@@ -91,6 +100,13 @@ fn main() {
     }
 
     let mut train_loss = 0.0f32;
+    if eval_only {
+        let ce = model
+            .eval_ce_core(&stream)
+            .expect("eval CE base (forward-only)");
+        println!("BASE CE = {ce:.4}   PPL = {:.2}", ce.exp());
+        std::process::exit(0);
+    }
     for ep in 0..epochs {
         let l = model
             .train_sequence_cached_layerwise_core(

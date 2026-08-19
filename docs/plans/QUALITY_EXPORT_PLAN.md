@@ -162,5 +162,31 @@ adaptarse de verdad (subir lr o bloques respecto a 5e-5/8).
 
 **Modelo utilizable**: el mejor sigue siendo `smollm2_4bit_quality.gaje.flat` (corpus de
 destilación 1520 tokens, dominio-matched, lm_head congelado) — coherente aunque repetitivo.
+
+## 12. Diagnóstico C: CE base vs entrenado (misma tokenización, `eval_ce_core`)
+
+Se añadió `eval_ce_core` (forward-only, misma ruta que entrenar) y el modo `--eval-only` en
+`export_trained.rs` para medir el CE del modelo **BASE** sin tocar pesos.
+
+| Corpus | BASE CE (PPL) | TRAINED CE | Δ | Generación |
+|:---|:---:|:---:|:---:|:---|
+| `distill` (jsonl 1.5k) | 1.5386 (4.7) | 1.4622 | **−0.08** | coherente ✓ |
+| `corpus_unified` (txt 2.9k) | 2.9919 (19.9) | 3.1146 | **+0.12** | degenerada |
+| `dataset_1000` (txt 30k) | 4.8825 (132.0) | 3.83 | **−1.05** | degenerada |
+
+**Conclusiones**:
+- **Hipótesis de tokenización REFUTADA**: el CE base de `corpus_unified` es 2.99, no ~4.0.
+  No es el formato; es el contenido.
+- **El cuerpo SÍ se adapta**: baja CE en 2 de 3 corpora (dataset_1000 **−1.05**, la mayor).
+  La afirmación previa "apenas se adapta" era incorrecta.
+- **Hallazgo decisivo — el CE NO correlaciona con la calidad de generación**: dataset_1000
+  baja CE −1.05 pero degenera; distill baja −0.08 y es coherente.
+- **Causa raíz**: el objetivo de entrenamiento/eval (media de CE sobre un stream
+  concatenado) está **desalineado** con la meta de generación. `dataset_1000` es patológico
+  (PPL base 132); el cuerpo sobreajusta sus patrones locales ("Por,", "Boriga"), baja el CE
+  medio pero destruye la generación. `distill` funciona porque es limpio y delimitado.
+- **Implicación**: la Opción A (arreglar tokenización de `.txt`) queda descartada. El camino
+  correcto es un **corpus limpio y delimitado** (tipo distill) escalado, no reformatear los
+  `.txt` crudos.
   (held-out 2.5525); el lr por capas podría permitir full-body con mejor lr efectivo. Se
   evaluará si el tiempo de cómputo lo permite.
