@@ -188,5 +188,21 @@ Se añadió `eval_ce_core` (forward-only, misma ruta que entrenar) y el modo `--
 - **Implicación**: la Opción A (arreglar tokenización de `.txt`) queda descartada. El camino
   correcto es un **corpus limpio y delimitado** (tipo distill) escalado, no reformatear los
   `.txt` crudos.
+
+### Conclusión final acordada (métrica de producto)
+- **CE es métrica AUXILIAR; la capacidad generativa es la métrica de ÉXITO.** Si el CE baja
+  y la generación empeora, el experimento es un fracaso de producto (early stop / descartar).
+- **Causa raíz = datos + objetivo**, no tokenización: un stream concatenado/ruidoso premia
+  continuar ruido local ("Por,", "Boriga"); el CE medio en ese stream está desalineado con
+  "responder bien a un prompt". `distill` (pares limpios, delimitados, base CE 1.54)
+  correlaciona CE↓ con texto usable; `dataset_1000` (PPL base 132) correlaciona CE↓ con
+  colapso generativo.
+- **No** "limpiar un poco" los `.txt` crudos ni escalar `dataset_1000` (empeorará la
+  degeneración). **Sí**: escalar el corpus estilo `distill` (prompt→answer delimitado,
+  filtrado, respuestas no truncadas) y evaluar con eval generativa fija (París, edades
+  12/36, traducción, código) además del CE.
+- El backprop del cuerpo Genomic4Bit **está funcionando** (gradient check ✓, adaptación
+  real 4.88→3.83). La pregunta abierta ya no es "¿puede entrenar?", sino "¿puede modificar
+  pesos comprimidos sin destruir capacidades previas?" — con un corpus representativo.
   (held-out 2.5525); el lr por capas podría permitir full-body con mejor lr efectivo. Se
   evaluará si el tiempo de cómputo lo permite.
