@@ -22,7 +22,7 @@ Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el 
 | Entorno de Inferencia | Formato / Precisión | Respuesta Generada Exacta | Throughput E2E Real | Consumo de RAM |
 | :--- | :---: | :--- | :---: | :---: |
 | **HuggingFace PyTorch** | **FP32 Original (Alibaba)** | *"El planeta más grande del Sistema Solar es la Tierra, con una"* | **`1.38 tok/s`** | $1,980\text{ MB}$ |
-| **GAJE Engine Nativo (`.flat`)** | **4-bit Genómico Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (`87.5%` de ahorro)** |
+| **GAJE Engine Nativo (`.flat`)** | **4-bit Genómico Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
 
 ---
 
@@ -31,8 +31,8 @@ Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el 
 | Modelo / Arquitectura | Formato Binario | Respuesta Factual Certificada | Throughput CPU | Tiempo de Carga Cold Start | Consumo de RAM Viva |
 | :--- | :---: | :--- | :---: | :---: | :---: |
 | **Qwen2.5 1.5B Instruct** | **`.gaje.flat` (Híbrido v2)** | Español: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (Virtual)** |
-| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Híbrido v2)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`448 MB` (`87.5%` de ahorro)** |
-| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`140 MB` (`93.0%` de ahorro)** |
+| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Híbrido v2)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (~74% vs FP32)** |
+| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB` (cuerpo Q4_0 + embeddings FP32)** |
 
 > [!IMPORTANT]
 > **Formato .flat v2 Híbrido**: Para preservar la fidelidad semántica y evitar el colapso del vocabulario multilingüe en idiomas CJK y europeos, el formato `.flat` de GAJE almacena las capas críticas de embeddings (`token_embd` y `lm_head`) en **FP32** (4 bytes/peso), mientras que el cuerpo del transformador (los bloques de atención y FFN) se comprime en **Q4_0** (4-bits).
