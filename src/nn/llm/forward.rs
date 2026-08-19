@@ -465,6 +465,157 @@ impl GenomicLLM {
         Ok(total_loss / (tokens.len() - 1) as f32)
     }
 
+    /// Entrenamiento con regularización "aprender sin olvidar": añade un término KL de
+    /// divergencia contra los logits de una referencia congelada del modelo base.
+    ///
+    /// L = CE + β·KL(softmax(base) ‖ softmax(student))
+    ///
+    /// El gradiente combinado sobre los logits del estudiante es
+    ///   d_logits[j] = (p_student[j] − onehot) + β·(p_base[j] − p_student[j])
+    /// que empuja a no alejarse de la distribución generativa del modelo pre-entrenado.
+    pub fn train_sequence_cached_layerwise_kl_core(
+        &mut self,
+        tokens: Vec<usize>,
+        lr: f32,
+        n_train_blocks: usize,
+        gclip: f32,
+        lr_decay: f32,
+        train_lm_head: bool,
+        progress_every: Option<usize>,
+        mut base_ref: Option<&mut GenomicLLM>,
+        kl_beta: f32,
+    ) -> Result<f32, String> {
+        if tokens.len() < 2 {
+            return Ok(0.0);
+        }
+        let mut total_ce = 0.0;
+        let mut total_kl = 0.0;
+        self.clear_cache_core();
+        if let Some(base) = base_ref.as_deref_mut() {
+            base.clear_cache_core();
+        }
+        let n = self.blocks.len();
+        let start = n.saturating_sub(n_train_blocks);
+        let t0 = std::time::Instant::now();
+        let n_tok = tokens.len() - 1;
+
+        for i in 0..tokens.len() - 1 {
+            if let Some(every) = progress_every {
+                if i > 0 && i % every == 0 {
+                    eprintln!(
+                        "  progress {i}/{n_tok} tokens, {:.1}s ({:.0} tok/min)",
+                        t0.elapsed().as_secs_f32(),
+                        (i as f32) / (t0.elapsed().as_secs_f32() / 60.0).max(1e-6)
+                    );
+                }
+            }
+            let target = tokens[i + 1];
+            let pos = if n > 0 {
+                self.blocks[0].attn.k_cache_len()
+            } else {
+                0
+            };
+
+            let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
+            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            for blk in &mut self.blocks {
+                let (out, cache) = blk.forward_core_cached(h, pos)?;
+                caches.push(cache);
+                h = out;
+            }
+            let h_norm =
+                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+            let modulation = self
+                .topology
+                .as_ref()
+                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
+            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+
+            let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            let mut sum_e = 0.0f32;
+            let mut p_student = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                let e = (logits[j] - max_l).exp();
+                p_student[j] = e;
+                sum_e += e;
+            }
+            for p in p_student.iter_mut() {
+                *p /= sum_e;
+            }
+            let prob = (p_student[target]).max(1e-12);
+            total_ce -= prob.ln();
+
+            let mut p_base: Option<Vec<f32>> = None;
+            let mut kl = 0.0f32;
+            if kl_beta > 0.0 {
+                if let Some(base) = base_ref.as_deref_mut() {
+                    let base_pos = if n > 0 {
+                        base.blocks[0].attn.k_cache_len()
+                    } else {
+                        0
+                    };
+                    let mut b_h = base.embeddings.get_row_core(tokens[i])?;
+                    for b_blk in &mut base.blocks {
+                        let (out, _cache) = b_blk.forward_core_cached(b_h, base_pos)?;
+                        b_h = out;
+                    }
+                    let b_norm = unsafe {
+                        crate::compute::kernels::rms_norm(&b_h, &base.output_norm, base.eps)
+                    };
+                    let b_mod = base
+                        .topology
+                        .as_ref()
+                        .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
+                    let b_logits = base.lm_head.forward_core(b_norm, b_mod, false)?;
+                    let b_max = b_logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                    let mut b_sum = 0.0f32;
+                    let mut pb = vec![0.0f32; b_logits.len()];
+                    for j in 0..b_logits.len() {
+                        let e = (b_logits[j] - b_max).exp();
+                        pb[j] = e;
+                        b_sum += e;
+                    }
+                    for p in pb.iter_mut() {
+                        *p /= b_sum;
+                    }
+                    for j in 0..pb.len() {
+                        let ps = p_student[j].max(1e-12);
+                        if pb[j] > 1e-12 {
+                            kl += pb[j] * (pb[j] / ps).ln();
+                        }
+                    }
+                    total_kl += kl;
+                    p_base = Some(pb);
+                }
+            }
+
+            let mut d_logits = vec![0.0f32; logits.len()];
+            for j in 0..logits.len() {
+                // CE: (p_student - onehot); KL(base||student): beta*(p_student - p_base).
+                d_logits[j] = p_student[j];
+                if let Some(pb) = &p_base {
+                    d_logits[j] += kl_beta * (p_student[j] - pb[j]);
+                }
+            }
+            d_logits[target] -= 1.0;
+            if train_lm_head {
+                self.lm_head
+                    .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+            }
+
+            let d_h = self.lm_head.backward_core(d_logits)?;
+            let mut d_out =
+                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            for b in (start..n).rev() {
+                let depth = (n - 1 - b) as f32;
+                let lr_b = lr * lr_decay.powf(depth);
+                d_out = self.blocks[b].backward_core_cached(&caches[b], d_out, lr_b, gclip)?;
+            }
+        }
+        eprintln!("  mean KL = {:.4}", total_kl / n_tok.max(1) as f32);
+        Ok(total_ce / (tokens.len() - 1) as f32)
+    }
+
     pub fn eval_ce_core(&mut self, tokens: &[usize]) -> Result<f32, String> {
         if tokens.len() < 2 {
             return Ok(0.0);

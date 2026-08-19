@@ -382,6 +382,34 @@ para que nadie las confunda: son un logro, un límite y una recomendación de pr
 - No lanzar más corridas largas de fine-tune del cuerpo "por si acaso" sin una hipótesis
   de regularización concreta.
 
+### 11. Fase 4c: Regularización KL ("aprender sin olvidar") — resultado NEGATIVO (2026-08-17)
+
+**Hipótesis**: añadir `L = CE + β·KL(base ‖ student)` evitaría que el fine-tune del cuerpo
+olvide la distribución generativa del modelo pre-entrenado, permitiendo entrenar más sin
+degradar la generación.
+
+**Implementación**: `train_sequence_cached_layerwise_kl_core` en `forward.rs` (referencia
+base congelada, KL sobre todo el vocabulario). **Bug de signo corregido durante la prueba**:
+el gradiente de KL(base‖student) respecto a los logits del estudiante es `p_student − p_base`;
+el signo inicial (`p_base − p_student`) producía ascenso de gradiente y divergencia
+(train CE 9.01, KL ~19 nats).
+
+**Resultados (eval generativa greedy, determinista):**
+
+| Modelo | d1 | d2 | rep | deg% |
+|:---|:---:|:---:|:---:|:---:|
+| base | 0.369 | 0.457 | 0.418 | 12% |
+| **quality (distill puro)** | **0.456** | **0.557** | **0.443** | **0%** |
+| quality + KL (β=1.0) | 0.373 | 0.442 | 0.558 | 12% |
+| quality + KL (β=0.1) | 0.344 | 0.397 | 0.603 | 0% |
+
+**Conclusión**: la regularización KL **no mejora** al distill puro en ningún β probado
+(0.1, 1.0): reduce la diversidad y aumenta la repetición. El distill diminuto ya "no olvida"
+porque mueve poco; añadir la restricción explícita solo debilita el CE y deja el modelo
+pegado a la distribución base (que degenera 12%). La vía "aprender sin olvidar" vía KL de
+logits queda **refutada empíricamente**; el mejor modelo sigue siendo
+`smollm2_4bit_quality.gaje.flat`.
+
 ---
 
 **Siguiente Fase**: Fase 3.2 — Integración y benchmarking de micro-kernels optimizados SIMD (AVX2/FMA) para la decodificación y multiplicación matricial en vuelo de Q4_0.

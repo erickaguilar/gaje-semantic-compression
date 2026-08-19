@@ -54,12 +54,21 @@ fn main() {
         .and_then(|v| v.parse::<u8>().ok())
         .map(|v| v != 0)
         .unwrap_or(false);
+    let kl_beta: f32 = args.get(12).and_then(|v| v.parse().ok()).unwrap_or(0.0);
 
     if eval_only {
         println!("→ Modo EVAL-ONLY: CE del modelo BASE sobre el corpus (sin entrenar)");
     } else {
-        println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head})");
+        println!("→ Entrenando cuerpo ({n_blk} bloques, lr={lr}, decay={decay}, epochs={epochs}, train_lm_head={train_lm_head}, kl_beta={kl_beta})");
     }
+
+    // Referencia congelada del modelo base para regularización KL ("aprender sin olvidar").
+    let mut base_ref = if kl_beta > 0.0 {
+        println!("→ Cargando referencia base congelada para KL (kl_beta={kl_beta})");
+        Some(load_genomic_auto(input).expect("cargar referencia base para KL"))
+    } else {
+        None
+    };
 
     let reader = GajeFlatFileReader::open(input).expect("abrir reader para config");
     let config: ModelConfig = serde_json::from_str(&reader.metadata_json)
@@ -131,17 +140,33 @@ fn main() {
         let mut total = 0.0f32;
         let mut n = 0usize;
         for seq in &sequences {
-            let l = model
-                .train_sequence_cached_layerwise_core(
-                    seq.clone(),
-                    lr,
-                    n_blk,
-                    1.0,
-                    decay,
-                    train_lm_head,
-                    None,
-                )
-                .expect("entrenar cuerpo");
+            let l = if kl_beta > 0.0 {
+                model
+                    .train_sequence_cached_layerwise_kl_core(
+                        seq.clone(),
+                        lr,
+                        n_blk,
+                        1.0,
+                        decay,
+                        train_lm_head,
+                        None,
+                        base_ref.as_mut(),
+                        kl_beta,
+                    )
+                    .expect("entrenar cuerpo con KL")
+            } else {
+                model
+                    .train_sequence_cached_layerwise_core(
+                        seq.clone(),
+                        lr,
+                        n_blk,
+                        1.0,
+                        decay,
+                        train_lm_head,
+                        None,
+                    )
+                    .expect("entrenar cuerpo")
+            };
             total += l * seq.len().saturating_sub(1) as f32;
             n += seq.len().saturating_sub(1);
             tokens_done += seq.len().saturating_sub(1);
