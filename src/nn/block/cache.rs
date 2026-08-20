@@ -14,6 +14,8 @@ use crate::nn::linear::GenomicLinear;
 pub struct BlockCache {
     /// Entrada al bloque (pre-norm).
     pub x: Vec<f32>,
+    /// Salida del rmsnorm de atención (entrada a qkv).
+    pub x_norm: Vec<f32>,
     /// q con RoPE aplicado (para el backward de atención).
     pub q_rope: Vec<f32>,
     /// Pesos softmax por (head, token) del paso actual.
@@ -47,13 +49,17 @@ impl RustGenomicBlock {
         } else {
             x.clone()
         };
-        let (q, k, v) = GenomicLinear::forward_fused_3(
-            &self.q_gen,
-            &self.k_gen,
-            &self.v_gen,
-            &x_norm,
-            modulation,
-        )?;
+        let (q, k, v) = if let Some(ref qkv) = self.fused_qkv {
+            let qkv_out = qkv.forward_core(x_norm.clone(), modulation, true)?;
+            let q_dim = self.attn.n_head * self.attn.head_dim;
+            let kv_dim = self.attn.n_head_kv * self.attn.head_dim;
+            let q = qkv_out[0..q_dim].to_vec();
+            let k = qkv_out[q_dim..q_dim + kv_dim].to_vec();
+            let v = qkv_out[q_dim + kv_dim..q_dim + 2 * kv_dim].to_vec();
+            (q, k, v)
+        } else {
+            GenomicLinear::forward_fused_3(&self.q_gen, &self.k_gen, &self.v_gen, &x_norm, modulation)?
+        };
         let (attn_out, softmax_weights, q_rope) =
             self.attn.forward_attention_cached(q, k, v, pos)?;
         let proj_attn = self.w_o.forward_core(attn_out.clone(), modulation, true)?;
@@ -64,8 +70,15 @@ impl RustGenomicBlock {
         }
         let x_ffn_n =
             unsafe { crate::compute::kernels::rms_norm(&x_post_attn, &self.ffn_norm, self.eps) };
-        let (gate, up) =
-            GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?;
+        let (gate, up) = if let Some(ref gu) = self.fused_gate_up {
+            let gu_out = gu.forward_core(x_ffn_n.clone(), modulation, true)?;
+            let ffn_dim = gu_out.len() / 2;
+            let gate = gu_out[0..ffn_dim].to_vec();
+            let up = gu_out[ffn_dim..2 * ffn_dim].to_vec();
+            (gate, up)
+        } else {
+            GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
+        };
 
         let mut ffn_out = vec![0.0f32; gate.len()];
         crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
@@ -78,6 +91,7 @@ impl RustGenomicBlock {
 
         let cache = BlockCache {
             x,
+            x_norm,
             q_rope,
             softmax_weights,
             attn_out,
@@ -125,18 +139,31 @@ impl RustGenomicBlock {
         clip(&mut d_up);
         self.w_down
             .refine_with_grads_core(c.ffn_out.clone(), d_out.clone(), lr)?;
-        self.gate_gen
-            .refine_with_grads_core(c.x_ffn_n.clone(), d_gate.clone(), lr)?;
-        self.up_gen
-            .refine_with_grads_core(c.x_ffn_n.clone(), d_up.clone(), lr)?;
+        if let Some(gu) = &mut self.fused_gate_up {
+            let mut d_gup = d_gate.clone();
+            d_gup.extend(&d_up);
+            gu.refine_with_grads_core(c.x_ffn_n.clone(), d_gup, lr)?;
+        } else {
+            self.gate_gen
+                .refine_with_grads_core(c.x_ffn_n.clone(), d_gate.clone(), lr)?;
+            self.up_gen
+                .refine_with_grads_core(c.x_ffn_n.clone(), d_up.clone(), lr)?;
+        }
 
         // Gradiente w.r.t. x_ffn_n -> ffn_norm backward -> x_post_attn
-        let d_xffn_g = self.gate_gen.backward_core(d_gate)?;
-        let d_xffn_u = self.up_gen.backward_core(d_up)?;
-        let mut d_x_ffn_n = vec![0.0f32; c.x_ffn_n.len()];
-        for i in 0..d_x_ffn_n.len() {
-            d_x_ffn_n[i] = d_xffn_g[i] + d_xffn_u[i];
-        }
+        let mut d_x_ffn_n = if let Some(gu) = &mut self.fused_gate_up {
+            let mut d_gup = d_gate.clone();
+            d_gup.extend(&d_up);
+            gu.backward_core(d_gup)?
+        } else {
+            let d_xffn_g = self.gate_gen.backward_core(d_gate)?;
+            let d_xffn_u = self.up_gen.backward_core(d_up)?;
+            let mut v = vec![0.0f32; c.x_ffn_n.len()];
+            for i in 0..v.len() {
+                v[i] = d_xffn_g[i] + d_xffn_u[i];
+            }
+            v
+        };
         clip(&mut d_x_ffn_n);
         let d_x_post_attn = crate::compute::kernels::rms_norm_backward(
             &c.x_post_attn,
@@ -158,13 +185,21 @@ impl RustGenomicBlock {
         let (d_q, d_k, d_v) =
             self.attn
                 .backward_attention_core(&d_attn_out, &c.q_rope, &c.softmax_weights)?;
-        let d_xn_q = self.q_gen.backward_core(d_q)?;
-        let d_xn_k = self.k_gen.backward_core(d_k)?;
-        let d_xn_v = self.v_gen.backward_core(d_v)?;
-        let mut d_x_norm = vec![0.0f32; c.x.len()];
-        for i in 0..d_x_norm.len() {
-            d_x_norm[i] = d_xn_q[i] + d_xn_k[i] + d_xn_v[i];
-        }
+        let mut d_x_norm = if let Some(qkv) = &mut self.fused_qkv {
+            let mut d_qkv = d_q.clone();
+            d_qkv.extend(&d_k);
+            d_qkv.extend(&d_v);
+            qkv.backward_core(d_qkv)?
+        } else {
+            let d_xn_q = self.q_gen.backward_core(d_q)?;
+            let d_xn_k = self.k_gen.backward_core(d_k)?;
+            let d_xn_v = self.v_gen.backward_core(d_v)?;
+            let mut v = vec![0.0f32; c.x.len()];
+            for i in 0..v.len() {
+                v[i] = d_xn_q[i] + d_xn_k[i] + d_xn_v[i];
+            }
+            v
+        };
         clip(&mut d_x_norm);
 
         // d_x_norm es el gradiente w.r.t. x_norm (rmsnorm(x)); hay que

@@ -1,130 +1,139 @@
 // =============================================================================
 // backward — Gradientes, refine con gradientes y mutaciones de GenomicLinear
 // =============================================================================
+use rayon::prelude::*;
 use std::sync::Arc;
 
 use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
 
 impl GenomicLinear {
+    /// Multiplicación transpuesta: d_input[j] = Σ_i W[i,j] * d_output[i].
+    /// Devuelve el gradiente respecto a la entrada de la capa (backprop).
+    ///
+    /// Paralelizado por filas (i), pues el lm_head puede tener decenas de miles de
+    /// filas (vocab) y su backward serial era el cuello de botella del entrenamiento.
     pub fn backward_core(&self, d_output: Vec<f32>) -> Result<Vec<f32>, String> {
-        // Multiplicación transpuesta: d_input[j] = Σ_i W[i,j] * d_output[i].
-        // Devuelve el gradiente respecto a la entrada de la capa (backprop).
-        let mut d_input = vec![0.0f32; self.in_features];
         if self.out_features == 0 || self.in_features == 0 {
-            return Ok(d_input);
+            return Ok(vec![0.0f32; self.in_features]);
         }
         let n_blocks = self.in_features / self.block_size;
-        match &self.weight_db {
-            WeightDatabase::GenomicF32(db) => {
-                for i in 0..self.out_features {
-                    let g = d_output.get(i).copied().unwrap_or(0.0);
-                    if g == 0.0 {
-                        continue;
-                    }
-                    let row = i * self.in_features;
-                    if row + self.in_features > db.len() {
-                        continue;
-                    }
-                    for j in 0..self.in_features {
-                        d_input[j] += g * db[row + j];
-                    }
+        let in_f = self.in_features;
+
+        let partial = |range: std::ops::Range<usize>| -> Vec<f32> {
+            let mut acc = vec![0.0f32; in_f];
+            for i in range {
+                let g = d_output.get(i).copied().unwrap_or(0.0);
+                if g == 0.0 {
+                    continue;
                 }
-            }
-            WeightDatabase::Genomic4Bit(db) => {
-                // Genomic4Bit: W[i,j] = centroids[(i*n_blocks + b)*16 + nibble],
-                // con b = j/block_size. Layout: row_off = i*n_blocks*stride, stride=block_size/2.
-                let stride = self.stride;
-                if stride == 0 {
-                    return Ok(d_input);
-                }
-                for i in 0..self.out_features {
-                    let g = d_output.get(i).copied().unwrap_or(0.0);
-                    if g == 0.0 {
-                        continue;
-                    }
-                    let row_off = i * n_blocks * stride;
-                    if row_off + n_blocks * stride > db.len() {
-                        continue;
-                    }
-                    for b in 0..n_blocks {
-                        let c_off = (i * n_blocks + b) * 16;
-                        let c_start = if self.centroids.len() >= c_off + 16 {
-                            c_off
-                        } else if self.centroids.len() >= 16 {
-                            0
-                        } else {
+                match &self.weight_db {
+                    WeightDatabase::GenomicF32(db) => {
+                        let row = i * in_f;
+                        if row + in_f > db.len() {
                             continue;
-                        };
-                        for k in 0..self.block_size {
-                            let j = b * self.block_size + k;
-                            if j >= self.in_features {
-                                break;
-                            }
-                            let byte_idx = k / 2;
-                            let sub = k % 2;
-                            let byte = db[row_off + b * stride + byte_idx];
-                            // Elemento par (k%2==0) = nibble alto, impar = nibble bajo
-                            // (alineado con `GenomicOperable::read` y el forward).
-                            let nibble = if sub == 0 {
-                                (byte >> 4) as usize
+                        }
+                        for j in 0..in_f {
+                            acc[j] += g * db[row + j];
+                        }
+                    }
+                    WeightDatabase::Genomic4Bit(db) => {
+                        // Genomic4Bit: W[i,j] = centroids[(i*n_blocks + b)*16 + nibble],
+                        // con b = j/block_size. Layout: row_off = i*n_blocks*stride,
+                        // stride=block_size/2.
+                        let stride = self.stride;
+                        if stride == 0 {
+                            continue;
+                        }
+                        let row_off = i * n_blocks * stride;
+                        if row_off + n_blocks * stride > db.len() {
+                            continue;
+                        }
+                        for b in 0..n_blocks {
+                            let c_off = (i * n_blocks + b) * 16;
+                            let c_start = if self.centroids.len() >= c_off + 16 {
+                                c_off
+                            } else if self.centroids.len() >= 16 {
+                                0
                             } else {
-                                (byte & 0x0F) as usize
+                                continue;
                             };
-                            d_input[j] += g * self.centroids[c_start + nibble];
-                        }
-                    }
-                }
-            }
-            WeightDatabase::GenomicQ4_0(db) => {
-                for i in 0..self.out_features {
-                    let g = d_output.get(i).copied().unwrap_or(0.0);
-                    if g == 0.0 {
-                        continue;
-                    }
-                    let row_off = i * n_blocks;
-                    if row_off + n_blocks > db.len() {
-                        continue;
-                    }
-                    for b in 0..n_blocks {
-                        let block = db[row_off + b];
-                        let scale = block.scale.to_f32();
-                        let min = block.min.to_f32();
-                        for k in 0..self.block_size {
-                            let j = b * self.block_size + k;
-                            if j >= self.in_features {
-                                break;
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= in_f {
+                                    break;
+                                }
+                                let byte_idx = k / 2;
+                                let sub = k % 2;
+                                let byte = db[row_off + b * stride + byte_idx];
+                                // Elemento par (k%2==0) = nibble alto, impar = nibble bajo
+                                // (alineado con `GenomicOperable::read` y el forward).
+                                let nibble = if sub == 0 {
+                                    (byte >> 4) as usize
+                                } else {
+                                    (byte & 0x0F) as usize
+                                };
+                                acc[j] += g * self.centroids[c_start + nibble];
                             }
-                            let q = block.q_value(k) as f32;
-                            d_input[j] += g * (q * scale + min);
                         }
                     }
-                }
-            }
-            WeightDatabase::GenomicQ8_0(db) => {
-                for i in 0..self.out_features {
-                    let g = d_output.get(i).copied().unwrap_or(0.0);
-                    if g == 0.0 {
-                        continue;
-                    }
-                    let row_off = i * n_blocks;
-                    if row_off + n_blocks > db.len() {
-                        continue;
-                    }
-                    for b in 0..n_blocks {
-                        let block = db[row_off + b];
-                        let scale = block.scale.to_f32();
-                        for k in 0..self.block_size {
-                            let j = b * self.block_size + k;
-                            if j >= self.in_features {
-                                break;
+                    WeightDatabase::GenomicQ4_0(db) => {
+                        let row_off = i * n_blocks;
+                        if row_off + n_blocks > db.len() {
+                            continue;
+                        }
+                        for b in 0..n_blocks {
+                            let block = db[row_off + b];
+                            let scale = block.scale.to_f32();
+                            let min = block.min.to_f32();
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= in_f {
+                                    break;
+                                }
+                                let q = block.q_value(k) as f32;
+                                acc[j] += g * (q * scale + min);
                             }
-                            d_input[j] += g * (block.qs[k] as f32) * scale;
                         }
                     }
+                    WeightDatabase::GenomicQ8_0(db) => {
+                        let row_off = i * n_blocks;
+                        if row_off + n_blocks > db.len() {
+                            continue;
+                        }
+                        for b in 0..n_blocks {
+                            let block = db[row_off + b];
+                            let scale = block.scale.to_f32();
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= in_f {
+                                    break;
+                                }
+                                acc[j] += g * (block.qs[k] as f32) * scale;
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ => {}
+            acc
+        };
+
+        let out = self.out_features;
+        let n_threads = rayon::current_num_threads();
+        let parts: Vec<Vec<f32>> = (0..n_threads)
+            .into_par_iter()
+            .map(|c| {
+                let start = c * out / n_threads;
+                let end = (((c + 1) * out) / n_threads).min(out);
+                partial(start..end)
+            })
+            .collect();
+        let mut d_input = vec![0.0f32; in_f];
+        for part in parts {
+            for j in 0..in_f {
+                d_input[j] += part[j];
+            }
         }
         Ok(d_input)
     }

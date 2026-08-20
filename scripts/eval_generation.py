@@ -17,6 +17,7 @@ Uso:
     python scripts/eval_generation.py [--models a,lista,de,paths] [--temp 0.4] [--max_new 40]
 """
 import argparse
+import json
 import os
 import sys
 
@@ -86,10 +87,10 @@ def tokenize(model, text):
     return list(getattr(ids, "ids", ids))
 
 
-def eval_model(path, temperature, max_new):
+def eval_model(path, temperature, max_new, prompts):
     m = GenomicLLM.load_genomic(path)
     per_prompt = []
-    for p in PROMPTS:
+    for p in prompts:
         out = generate(m, p, temperature, max_new)
         toks = tokenize(m, out)
         d1 = distinct_ngrams(toks, 1)
@@ -121,12 +122,20 @@ def main():
     ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
     ap.add_argument("--temp", type=float, default=0.4)
     ap.add_argument("--max_new", type=int, default=40)
+    ap.add_argument("--prompts-file", default="",
+                    help="JSON con lista de prompts para evaluar (defecto: PROMPTS internos).")
     args = ap.parse_args()
+
+    if args.prompts_file:
+        with open(os.path.join(PROJECT_ROOT, args.prompts_file), encoding="utf-8") as f:
+            prompts = json.load(f)
+    else:
+        prompts = PROMPTS
 
     models = [os.path.join(PROJECT_ROOT, p) for p in args.models.split(",") if p]
     results = []
     for path in models:
-        agg, per = eval_model(path, args.temp, args.max_new)
+        agg, per = eval_model(path, args.temp, args.max_new, prompts)
         results.append(agg)
         print(f"\n=== {path} (temp={args.temp}) ===")
         for x in per:
