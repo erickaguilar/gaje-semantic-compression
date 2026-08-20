@@ -2,6 +2,9 @@
 
 Este documento define el estado técnico y empíricamente verificado del motor de inferencia nativa **GAJE (Genomic Adaptive Joint Embedding)**.
 
+> **Hallazgo central de la Fase 4b**: la CE media NO correlaciona con la calidad de
+> generación. Ver documento dedicado: [`docs/research/CE_VS_GENERATION.md`](../research/CE_VS_GENERATION.md).
+
 ---
 
 ## 🏆 1. Capa de Infraestructura Nativa (Prueba A/B Ciega: CERTIFICADO 🟢)

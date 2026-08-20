@@ -17,6 +17,9 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Ciclo de vida del organismo y gates de certificación.
 *   **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](docs/meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
+### 🔬 Investigación (`docs/research/`)
+*   **[CE_VS_GENERATION.md](docs/research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
+
 ### 📊 Resultados Verificados (`docs/reports/`)
 *   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: **BENCHMARK OFICIAL** v1.6.0-alpha — compresión, memoria, velocidad y PPL por modelo (reproducible).
 *   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
