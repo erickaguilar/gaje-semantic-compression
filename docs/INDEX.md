@@ -47,6 +47,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[OPERATION_REBIRTH.md](docs/plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
 *   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
 *   **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento completo de cuantización espacial por bloque a 2 bits/peso (Q2_0) vs Q4_0 — la vía real a menor RAM tras la refutación de la emulación temporal; 4 fases con umbrales de decisión.
+*   **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](docs/research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)** — el formato funciona y ahorra ~38% de RAM del cuerpo (H1 ✅), pero destruye la generación semántica (H2 ❌): sopa de tokens aleatoria vs respuestas coherentes del Q4_0. Incluye hallazgo metodológico: la métrica de n-gramas es ciega al colapso semántico.
 
 ### 🏛️ Especificaciones Técnicas (`docs/sdd/` y `docs/bdd/`)
 *   **[docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md)**: Arquitectura del núcleo.

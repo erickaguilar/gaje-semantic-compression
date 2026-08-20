@@ -1,8 +1,10 @@
 # Plan de Experimento: Q2_0 — Cuantización Espacial por Bloque (2 bits/peso) vs Q4_0
 
-> Rama: `develop` · Estado: **propuesto** · Fecha: 2026-08-20
+> Rama: `develop` · Estado: **COMPLETADO (resultado negativo)** · Fecha: 2026-08-20
 > Complementa a `docs/plans/QUALITY_EVAL_PROTOCOL.md` y `docs/plans/QUALITY_EXPORT_PLAN.md`.
 > Refuta y reemplaza la vía de `docs/plans/TEMPORAL_4BIT_EMULATION_DESIGN.md`.
+> **Veredicto final**: ver `docs/research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md` — H1 confirmada,
+> H2 rechazada (Q2_0 destruye la generación); Q4_0 se mantiene como representación mínima viable.
 
 ---
 
