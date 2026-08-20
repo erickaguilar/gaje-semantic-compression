@@ -8,6 +8,7 @@ pub enum QuantFormat {
     LegacyCentroids = 0,
     Q4_0 = 1,
     Q8_0 = 2,
+    Q2_0 = 3,
     Unknown,
 }
 

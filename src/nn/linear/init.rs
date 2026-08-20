@@ -4,7 +4,7 @@
 use half::f16;
 use std::sync::Arc;
 
-use crate::io::header::{Q4_0Block, Q8_0Block};
+use crate::io::header::{Q2_0Block, Q4_0Block, Q8_0Block};
 use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
 
@@ -42,6 +42,16 @@ impl GenomicLinear {
                 let count = database.len() / std::mem::size_of::<Q8_0Block>();
                 let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
                 WeightDatabase::GenomicQ8_0(Arc::new(blocks))
+            }
+            2 => {
+                if centroids.is_empty() {
+                    let ptr = database.as_ptr() as *const Q2_0Block;
+                    let count = database.len() / std::mem::size_of::<Q2_0Block>();
+                    let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
+                    WeightDatabase::GenomicQ2_0(Arc::new(blocks))
+                } else {
+                    WeightDatabase::Genomic2Bit(Arc::new(database))
+                }
             }
             32 => {
                 let f32_data: Vec<f32> = unsafe {
@@ -166,6 +176,7 @@ impl GenomicLinear {
             WeightDatabase::Genomic4Bit(db) => Arc::make_mut(db),
             WeightDatabase::GenomicQ4_0(_) => panic!("Q4_0 is read-only"),
             WeightDatabase::GenomicQ8_0(_) => panic!("Q8_0 is read-only"),
+            WeightDatabase::GenomicQ2_0(_) => panic!("Q2_0 is read-only"),
             _ => panic!("N/A"),
         }
     }
@@ -185,6 +196,12 @@ impl GenomicLinear {
                     db.len() * std::mem::size_of::<Q8_0Block>(),
                 )
             },
+            WeightDatabase::GenomicQ2_0(db) => unsafe {
+                std::slice::from_raw_parts(
+                    db.as_ptr() as *const u8,
+                    db.len() * std::mem::size_of::<Q2_0Block>(),
+                )
+            },
             WeightDatabase::GenomicF32(db) => unsafe {
                 std::slice::from_raw_parts(db.as_ptr() as *const u8, db.len() * 4)
             },
@@ -196,6 +213,7 @@ impl GenomicLinear {
             WeightDatabase::Genomic4Bit(_) => 4,
             WeightDatabase::GenomicQ4_0(_) => 4,
             WeightDatabase::GenomicQ8_0(_) => 8,
+            WeightDatabase::GenomicQ2_0(_) => 2,
             WeightDatabase::GenomicF32(_) => 32,
         }
     }

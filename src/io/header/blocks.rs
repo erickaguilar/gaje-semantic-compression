@@ -53,3 +53,34 @@ impl Q8_0Block {
         q8_value * scale
     }
 }
+
+/// Bloque de cuantización group-wise q2_0 con scale + min (2 bits por peso)
+/// 32 pesos -> 12 bytes (escala f16, mínimo f16, y 8 bytes de pesos de 2-bits)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct Q2_0Block {
+    pub scale: half::f16,
+    pub min: half::f16,
+    pub qs: [u8; 8],
+}
+
+impl Q2_0Block {
+    /// Devuelve el valor cuantizado (2 bits, 0..3) del peso `idx` dentro del bloque.
+    /// Cada byte empaqueta 4 códigos (bits 0-1, 2-3, 4-5, 6-7).
+    #[inline(always)]
+    pub fn q_value(&self, idx: usize) -> u8 {
+        let byte_idx = idx / 4;
+        let shift = (idx % 4) * 2;
+        (self.qs[byte_idx] >> shift) & 0b11
+    }
+
+    /// Dequantiza un peso individual del bloque
+    #[inline(always)]
+    pub fn dequantize_weight(&self, idx: usize) -> f32 {
+        let q2_value = self.q_value(idx);
+        let scale = self.scale.to_f32();
+        let min = self.min.to_f32();
+
+        (q2_value as f32) * scale + min
+    }
+}

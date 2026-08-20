@@ -99,6 +99,15 @@ impl GenomicLinear {
                     };
                 }
             }
+            WeightDatabase::GenomicQ2_0(db) => {
+                let row_off = i * n_blocks;
+                let db_slice = db.get(row_off..row_off + n_blocks).unwrap_or(&[]);
+                if !db_slice.is_empty() {
+                    sum = unsafe {
+                        crate::compute::kernels::genomic_dot_product_q2_0(db_slice, input, n_blocks)
+                    };
+                }
+            }
         }
         let a_s = self.anchor_row_ptrs.get(i).copied().unwrap_or(0);
         let a_e = self.anchor_row_ptrs.get(i + 1).copied().unwrap_or(a_s);
@@ -298,6 +307,17 @@ impl GenomicLinear {
                 }
             }
             WeightDatabase::GenomicQ8_0(db) => {
+                let row_off = safe_idx * n_blocks;
+                if row_off + n_blocks <= db.len() {
+                    for b in 0..n_blocks {
+                        let block = &db[row_off + b];
+                        for k in 0..32 {
+                            res[b * self.block_size + k] = block.dequantize_weight(k);
+                        }
+                    }
+                }
+            }
+            WeightDatabase::GenomicQ2_0(db) => {
                 let row_off = safe_idx * n_blocks;
                 if row_off + n_blocks <= db.len() {
                     for b in 0..n_blocks {

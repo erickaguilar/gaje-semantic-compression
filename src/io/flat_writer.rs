@@ -64,6 +64,19 @@ pub fn save_genomic_flat(
     config: &ModelConfig,
     tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
+    save_genomic_flat_q(path, model, config, tokenizer, 1)
+}
+
+/// Variante de `save_genomic_flat` que fija el `quant_format` de la cabecera
+/// (1 = Q4_0, 3 = Q2_0). Los tensores se escriben con el layout separado
+/// (attn_q/k/v, ffn_gate/up) y cada entrada lleva su propio `bit_depth`.
+pub fn save_genomic_flat_q(
+    path: &str,
+    model: &GenomicLLM,
+    config: &ModelConfig,
+    tokenizer: Option<&GajeTokenizer>,
+    quant_format: u32,
+) -> std::io::Result<()> {
     let mut blob: Vec<u8> = Vec::new();
     let mut dir: Vec<FlatTensorEntry> = Vec::new();
 
@@ -173,7 +186,7 @@ pub fn save_genomic_flat(
         weights_offset: weights_offset as u64,
         weights_len: blob.len() as u64,
         group_size: 32,
-        quant_format: 1,
+        quant_format,
         arch_family: 0,
         arch_n_embd: 0,
         arch_n_head: 0,

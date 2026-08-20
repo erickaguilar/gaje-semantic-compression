@@ -65,6 +65,7 @@ impl FlatHeaderV2 {
             0 => QuantFormat::LegacyCentroids,
             1 => QuantFormat::Q4_0,
             2 => QuantFormat::Q8_0,
+            3 => QuantFormat::Q2_0,
             _ => QuantFormat::Unknown,
         }
     }

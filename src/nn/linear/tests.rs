@@ -315,3 +315,100 @@ fn test_q4_0_linear_forward_roundtrip() {
     let expected1: f32 = dequant1.iter().sum();
     assert!((output[1] - expected1).abs() < 1e-4);
 }
+
+#[test]
+fn test_q2_0_linear_forward_roundtrip() {
+    let row0: Vec<f32> = (0..32).map(|i| i as f32 * 0.1).collect();
+    let row1: Vec<f32> = (0..32).map(|i| i as f32 * -0.1).collect();
+
+    let mut blocks = Vec::new();
+
+    // Row 0 quantization (4 niveles, 2 bits)
+    let min0 = 0.0f32;
+    let max0 = 3.1f32;
+    let scale0 = (max0 - min0) / 3.0;
+    let inv_scale0 = 1.0 / scale0;
+    let mut qs0 = [0u8; 8];
+    for k in 0..8 {
+        let mut byte = 0u8;
+        for j in 0..4 {
+            let q = (((row0[k * 4 + j] - min0) * inv_scale0).round().clamp(0.0, 3.0)) as u8;
+            byte |= q << (j * 2);
+        }
+        qs0[k] = byte;
+    }
+    blocks.push(crate::io::header::Q2_0Block {
+        scale: half::f16::from_f32(scale0),
+        min: half::f16::from_f32(min0),
+        qs: qs0,
+    });
+
+    // Row 1 quantization
+    let min1 = -3.1f32;
+    let max1 = 0.0f32;
+    let scale1 = (max1 - min1) / 3.0;
+    let inv_scale1 = 1.0 / scale1;
+    let mut qs1 = [0u8; 8];
+    for k in 0..8 {
+        let mut byte = 0u8;
+        for j in 0..4 {
+            let q = (((row1[k * 4 + j] - min1) * inv_scale1).round().clamp(0.0, 3.0)) as u8;
+            byte |= q << (j * 2);
+        }
+        qs1[k] = byte;
+    }
+    blocks.push(crate::io::header::Q2_0Block {
+        scale: half::f16::from_f32(scale1),
+        min: half::f16::from_f32(min1),
+        qs: qs1,
+    });
+
+    let raw_bytes = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<crate::io::header::Q2_0Block>(),
+        )
+        .to_vec()
+    };
+
+    // bit_depth=2 + centroids vacíos -> variante GenomicQ2_0
+    let linear = GenomicLinear::new(
+        raw_bytes,
+        Vec::new(),
+        Vec::new(),
+        2,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        2,
+    );
+
+    assert!(matches!(linear.weight_db, WeightDatabase::GenomicQ2_0(_)));
+    assert_eq!(linear.bit_depth(), 2);
+
+    let input = vec![1.0f32; 32];
+    let output = linear.forward_core(input, None, false).unwrap();
+    assert_eq!(output.len(), 2);
+
+    let dequant0: Vec<f32> = (0..32).map(|i| blocks[0].dequantize_weight(i)).collect();
+    let expected0: f32 = dequant0.iter().sum();
+    assert!((output[0] - expected0).abs() < 1e-4);
+
+    let dequant1: Vec<f32> = (0..32).map(|i| blocks[1].dequantize_weight(i)).collect();
+    let expected1: f32 = dequant1.iter().sum();
+    assert!((output[1] - expected1).abs() < 1e-4);
+
+    // get_row_core debe dequantizar la fila completa
+    let row0_dec = linear.get_row_core(0).unwrap();
+    assert_eq!(row0_dec.len(), 32);
+    for i in 0..32 {
+        assert!((row0_dec[i] - blocks[0].dequantize_weight(i)).abs() < 1e-6);
+    }
+}

@@ -448,6 +448,139 @@ pub unsafe fn genomic_dot_product_q8_0_avx2(
 }
 
 /// # Safety
+/// Producto punto para formato Q2_0 (Variant B): 2 bits por peso + scale/min por bloque.
+/// Reduce las multiplicaciones factorizando escala y mínimo por bloque.
+#[inline(always)]
+pub unsafe fn genomic_dot_product_q2_0(
+    blocks: &[crate::io::header::Q2_0Block],
+    input: &[f32],
+    n_blocks: usize,
+) -> f32 {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+            return genomic_dot_product_q2_0_avx2(blocks, input, n_blocks);
+        }
+    }
+
+    // Fallback escalar (factorizado por bloque)
+    let mut total_sum = 0.0f32;
+
+    for j in 0..n_blocks {
+        let block = &blocks[j];
+        let scale = block.scale.to_f32();
+        let min = block.min.to_f32();
+
+        let input_offset = j * 32;
+        let mut sum_q_in = 0.0f32;
+        let mut sum_in = 0.0f32;
+
+        let qs = &block.qs;
+
+        for k in 0..8 {
+            let byte = *qs.get_unchecked(k);
+            let q0 = (byte & 0b11) as f32;
+            let q1 = ((byte >> 2) & 0b11) as f32;
+            let q2 = ((byte >> 4) & 0b11) as f32;
+            let q3 = (byte >> 6) as f32;
+
+            let o = input_offset + k * 4;
+            let x0 = *input.get_unchecked(o);
+            let x1 = *input.get_unchecked(o + 1);
+            let x2 = *input.get_unchecked(o + 2);
+            let x3 = *input.get_unchecked(o + 3);
+
+            sum_q_in += q0 * x0 + q1 * x1 + q2 * x2 + q3 * x3;
+            sum_in += x0 + x1 + x2 + x3;
+        }
+
+        total_sum += sum_q_in * scale + sum_in * min;
+    }
+
+    if total_sum.abs() < 1e-6 {
+        0.0
+    } else {
+        total_sum
+    }
+}
+
+/// # Safety
+/// Kernel AVX2 + FMA para bloques Q2_0. Cada byte empaqueta 4 códigos de 2 bits;
+/// por cada desplazamiento (0,2,4,6) se extraen los 8 códigos de un campo y se
+/// aplican sobre los inputs en paso 4 vía gather.
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2,fma")]
+pub unsafe fn genomic_dot_product_q2_0_avx2(
+    blocks: &[crate::io::header::Q2_0Block],
+    input: &[f32],
+    n_blocks: usize,
+) -> f32 {
+    let mut acc = _mm256_setzero_ps();
+    let mask3 = _mm_set1_epi8(0b11);
+    let offsets = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
+
+    for j in 0..n_blocks {
+        let block = blocks.get_unchecked(j);
+        let scale = block.scale.to_f32();
+        let min = block.min.to_f32();
+        let v_scale = _mm256_set1_ps(scale);
+        let v_min = _mm256_set1_ps(min);
+
+        let input_offset = j * 32;
+
+        let v_qs = _mm_loadu_si64(block.qs.as_ptr());
+
+        // Desplazamiento 0: codigos para pesos 0,4,8,...,28
+        let c0 = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(_mm_and_si128(v_qs, mask3)));
+        let w0 = _mm256_fmadd_ps(c0, v_scale, v_min);
+        let x0 = _mm256_i32gather_ps(input.as_ptr().add(input_offset), offsets, 4);
+        acc = _mm256_fmadd_ps(w0, x0, acc);
+
+        // Desplazamiento 2: pesos 1,5,9,...,29
+        let c1 = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(_mm_and_si128(
+            _mm_srli_epi16(v_qs, 2),
+            mask3,
+        )));
+        let w1 = _mm256_fmadd_ps(c1, v_scale, v_min);
+        let x1 = _mm256_i32gather_ps(input.as_ptr().add(input_offset + 1), offsets, 4);
+        acc = _mm256_fmadd_ps(w1, x1, acc);
+
+        // Desplazamiento 4: pesos 2,6,10,...,30
+        let c2 = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(_mm_and_si128(
+            _mm_srli_epi16(v_qs, 4),
+            mask3,
+        )));
+        let w2 = _mm256_fmadd_ps(c2, v_scale, v_min);
+        let x2 = _mm256_i32gather_ps(input.as_ptr().add(input_offset + 2), offsets, 4);
+        acc = _mm256_fmadd_ps(w2, x2, acc);
+
+        // Desplazamiento 6: pesos 3,7,11,...,31
+        let c3 = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(_mm_and_si128(
+            _mm_srli_epi16(v_qs, 6),
+            mask3,
+        )));
+        let w3 = _mm256_fmadd_ps(c3, v_scale, v_min);
+        let x3 = _mm256_i32gather_ps(input.as_ptr().add(input_offset + 3), offsets, 4);
+        acc = _mm256_fmadd_ps(w3, x3, acc);
+    }
+
+    let vlow = _mm256_castps256_ps128(acc);
+    let vhigh = _mm256_extractf128_ps(acc, 1);
+    let v128 = _mm_add_ps(vlow, vhigh);
+    let hi = _mm_movehl_ps(v128, v128);
+    let sum = _mm_add_ps(v128, hi);
+    let shuf = _mm_shuffle_ps(sum, sum, 1);
+    let final_sum = _mm_add_ss(sum, shuf);
+    let total = _mm_cvtss_f32(final_sum);
+
+    if total.abs() < 1e-6 {
+        0.0
+    } else {
+        total
+    }
+}
+
+/// # Safety
 /// Kernel de-cuantización y producto punto ARM NEON para bloques Q4_0
 #[cfg(target_arch = "aarch64")]
 pub unsafe fn genomic_dot_product_q4_0_neon(
