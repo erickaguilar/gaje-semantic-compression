@@ -124,9 +124,22 @@ impl GenomicLinear {
     ) -> Result<Vec<f32>, String> {
         let n_blocks = self.in_features / self.block_size;
         let m_factors = modulation_factors.unwrap_or([1.0f32; 4]);
-        let results: Vec<f32> = (0..self.out_features)
+        // Procesar por bloques contiguos (una tarea rayon por rango), no una tarea
+        // por fila: para lineales grandes (p.ej. lm_head con vocab 151936) la
+        // sobrecarga de una tarea por fila era el cuello de botella del entrenamiento.
+        let out = self.out_features;
+        let n_threads = rayon::current_num_threads();
+        let results: Vec<f32> = (0..n_threads)
             .into_par_iter()
-            .map(|i| self.compute_single_row(i, &input, &m_factors, n_blocks))
+            .flat_map(|c| {
+                let start = c * out / n_threads;
+                let end = (((c + 1) * out) / n_threads).min(out);
+                let mut chunk = Vec::with_capacity(end - start);
+                for i in start..end {
+                    chunk.push(self.compute_single_row(i, &input, &m_factors, n_blocks));
+                }
+                chunk
+            })
             .collect();
         Ok(results)
     }
@@ -145,16 +158,24 @@ impl GenomicLinear {
         let o3 = l3.out_features;
         let total = o1 + o2 + o3;
 
-        let fused_out: Vec<f32> = (0..total)
+        let n_threads = rayon::current_num_threads();
+        let fused_out: Vec<f32> = (0..n_threads)
             .into_par_iter()
-            .map(|idx| {
-                if idx < o1 {
-                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
-                } else if idx < o1 + o2 {
-                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
-                } else {
-                    l3.compute_single_row(idx - o1 - o2, input, &m_factors, n_blocks)
+            .flat_map(|c| {
+                let start = c * total / n_threads;
+                let end = (((c + 1) * total) / n_threads).min(total);
+                let mut chunk = Vec::with_capacity(end - start);
+                for idx in start..end {
+                    let v = if idx < o1 {
+                        l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                    } else if idx < o1 + o2 {
+                        l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                    } else {
+                        l3.compute_single_row(idx - o1 - o2, input, &m_factors, n_blocks)
+                    };
+                    chunk.push(v);
                 }
+                chunk
             })
             .collect();
 
@@ -176,14 +197,22 @@ impl GenomicLinear {
         let o2 = l2.out_features;
         let total = o1 + o2;
 
-        let fused_out: Vec<f32> = (0..total)
+        let n_threads = rayon::current_num_threads();
+        let fused_out: Vec<f32> = (0..n_threads)
             .into_par_iter()
-            .map(|idx| {
-                if idx < o1 {
-                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
-                } else {
-                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+            .flat_map(|c| {
+                let start = c * total / n_threads;
+                let end = (((c + 1) * total) / n_threads).min(total);
+                let mut chunk = Vec::with_capacity(end - start);
+                for idx in start..end {
+                    let v = if idx < o1 {
+                        l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                    } else {
+                        l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                    };
+                    chunk.push(v);
                 }
+                chunk
             })
             .collect();
 

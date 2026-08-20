@@ -112,12 +112,20 @@ pub fn save_genomic_flat(
             &[],
             &[],
         );
-        write_l(&mut blob, &mut dir, &format!("{}attn_q", p), &blk.q_gen);
-        write_l(&mut blob, &mut dir, &format!("{}attn_k", p), &blk.k_gen);
-        write_l(&mut blob, &mut dir, &format!("{}attn_v", p), &blk.v_gen);
+        if let Some(qkv) = &blk.fused_qkv {
+            write_l(&mut blob, &mut dir, &format!("{}attn_qkv", p), qkv);
+        } else {
+            write_l(&mut blob, &mut dir, &format!("{}attn_q", p), &blk.q_gen);
+            write_l(&mut blob, &mut dir, &format!("{}attn_k", p), &blk.k_gen);
+            write_l(&mut blob, &mut dir, &format!("{}attn_v", p), &blk.v_gen);
+        }
         write_l(&mut blob, &mut dir, &format!("{}attn_output", p), &blk.w_o);
-        write_l(&mut blob, &mut dir, &format!("{}ffn_gate", p), &blk.gate_gen);
-        write_l(&mut blob, &mut dir, &format!("{}ffn_up", p), &blk.up_gen);
+        if let Some(gu) = &blk.fused_gate_up {
+            write_l(&mut blob, &mut dir, &format!("{}ffn_gate_up", p), gu);
+        } else {
+            write_l(&mut blob, &mut dir, &format!("{}ffn_gate", p), &blk.gate_gen);
+            write_l(&mut blob, &mut dir, &format!("{}ffn_up", p), &blk.up_gen);
+        }
         write_l(&mut blob, &mut dir, &format!("{}ffn_down", p), &blk.w_down);
     }
     write_l(&mut blob, &mut dir, "lm_head", &model.lm_head);

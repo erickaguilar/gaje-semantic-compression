@@ -297,41 +297,58 @@ impl GenomicLinear {
                 //   grad_scale[i,b] += Σ_k grad_W[i,b·bs+k] * q[i,b,k]
                 //   grad_min[i,b]   += Σ_k grad_W[i,b·bs+k]
                 // `grads` es ∂L/∂logits (tamaño = out_features); grad_W = grads[i]*input[j].
-                let db_mut = Arc::make_mut(db);
                 let bs = self.block_size;
                 if bs == 0 || self.in_features == 0 {
                     return Ok(());
                 }
                 let n_blk = self.in_features / bs;
                 let max_scale = 10.0f32;
-                for i in 0..self.out_features {
-                    let g = grads.get(i).cloned().unwrap_or(0.0);
-                    if g == 0.0 {
+                // Fase 1 (paralela, solo lectura): acumular (g_scale, g_min) por fila/bloque.
+                let row_updates: Vec<Vec<(f32, f32)>> = (0..self.out_features)
+                    .into_par_iter()
+                    .map(|i| {
+                        let g = grads.get(i).copied().unwrap_or(0.0);
+                        if g == 0.0 {
+                            return Vec::new();
+                        }
+                        let row_off = i * n_blk;
+                        if row_off + n_blk > db.len() {
+                            return Vec::new();
+                        }
+                        let mut per_row = Vec::with_capacity(n_blk);
+                        for b in 0..n_blk {
+                            let block = db[row_off + b];
+                            let mut g_scale = 0.0f32;
+                            let mut g_min = 0.0f32;
+                            for k in 0..bs {
+                                let j = b * bs + k;
+                                if j >= self.in_features {
+                                    break;
+                                }
+                                let x = input.get(j).copied().unwrap_or(0.0);
+                                let q = block.q_value(k) as f32;
+                                g_scale += g * x * q;
+                                g_min += g * x;
+                            }
+                            per_row.push((g_scale, g_min));
+                        }
+                        per_row
+                    })
+                    .collect();
+                // Fase 2 (serial, barata): aplicar lr a escala/min.
+                let db_mut = Arc::make_mut(db);
+                for (i, per_row) in row_updates.iter().enumerate() {
+                    if per_row.is_empty() {
                         continue;
                     }
                     let row_off = i * n_blk;
-                    if row_off + n_blk > db_mut.len() {
-                        continue;
-                    }
                     for b in 0..n_blk {
-                        let block = db_mut[row_off + b];
-                        let mut g_scale = 0.0f32;
-                        let mut g_min = 0.0f32;
-                        for k in 0..bs {
-                            let j = b * bs + k;
-                            if j >= self.in_features {
-                                break;
-                            }
-                            let x = input.get(j).cloned().unwrap_or(0.0);
-                            let q = block.q_value(k) as f32;
-                            g_scale += g * x * q;
-                            g_min += g * x;
-                        }
-                        let mut nb = block;
+                        let (g_scale, g_min) = per_row[b];
+                        let mut nb = db_mut[row_off + b];
                         nb.scale = half::f16::from_f32(
-                            (block.scale.to_f32() - lr * g_scale).clamp(-max_scale, max_scale),
+                            (nb.scale.to_f32() - lr * g_scale).clamp(-max_scale, max_scale),
                         );
-                        nb.min = half::f16::from_f32(block.min.to_f32() - lr * g_min);
+                        nb.min = half::f16::from_f32(nb.min.to_f32() - lr * g_min);
                         db_mut[row_off + b] = nb;
                     }
                 }
