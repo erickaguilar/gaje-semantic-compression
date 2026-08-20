@@ -20,6 +20,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 ### 🔬 Investigación (`docs/research/`)
 *   **[CE_VS_GENERATION.md](docs/research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
 *   **[BODY_QAT_06B_PROTOCOL.md](docs/research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
+*   **[temporal_4bit_fase1_test.py](docs/research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
 
 ### 📊 Resultados Verificados (`docs/reports/`)
 *   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: **BENCHMARK OFICIAL** v1.6.0-alpha — compresión, memoria, velocidad y PPL por modelo (reproducible).
