@@ -46,6 +46,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[NATIVE_SEMANTIC_RAG_PLAN.md](docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
 *   **[OPERATION_REBIRTH.md](docs/plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
 *   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
+*   **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento completo de cuantización espacial por bloque a 2 bits/peso (Q2_0) vs Q4_0 — la vía real a menor RAM tras la refutación de la emulación temporal; 4 fases con umbrales de decisión.
 
 ### 🏛️ Especificaciones Técnicas (`docs/sdd/` y `docs/bdd/`)
 *   **[docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md)**: Arquitectura del núcleo.
