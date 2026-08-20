@@ -301,6 +301,88 @@ pub fn quantize_q8_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     }
 }
 
+/// Cuantiza un tensor f32 (raw bytes, len%32==0) a bloques Q2_0 (2 bits/peso +
+/// scale/min por bloque de 32). Devuelve los bytes crudos de los bloques.
+#[cfg_attr(feature = "python", pyfunction)]
+pub fn quantize_q2_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObject> {
+    let f32_data: &[f32] =
+        unsafe { std::slice::from_raw_parts(data_u8.as_ptr() as *const f32, data_u8.len() / 4) };
+
+    let n_elements = f32_data.len();
+    if n_elements % 32 != 0 {
+        return Err(PyTypeError::new_err(
+            "Weights length must be divisible by 32",
+        ));
+    }
+
+    let n_blocks = n_elements / 32;
+
+    let out_blocks: Vec<crate::io::header::Q2_0Block> = _py.allow_threads(|| {
+        (0..n_blocks)
+            .into_par_iter()
+            .map(|i| {
+                let start = i * 32;
+                let block_f32 = &f32_data[start..start + 32];
+
+                let mut min_val = f32::MAX;
+                let mut max_val = f32::MIN;
+                for &v in block_f32 {
+                    if v < min_val {
+                        min_val = v;
+                    }
+                    if v > max_val {
+                        max_val = v;
+                    }
+                }
+
+                let scale = (max_val - min_val) / 3.0; // 4 niveles (2 bits)
+                let inv_scale = if scale > 1e-7 { 1.0 / scale } else { 0.0 };
+
+                let mut qs = [0u8; 8];
+                for k in 0..8 {
+                    let mut byte = 0u8;
+                    for j in 0..4 {
+                        let q = if scale > 1e-7 {
+                            (((block_f32[k * 4 + j] - min_val) * inv_scale)
+                                .round()
+                                .clamp(0.0, 3.0)) as u8
+                        } else {
+                            0
+                        };
+                        byte |= q << (j * 2);
+                    }
+                    qs[k] = byte;
+                }
+
+                crate::io::header::Q2_0Block {
+                    scale: half::f16::from_f32(scale),
+                    min: half::f16::from_f32(min_val),
+                    qs,
+                }
+            })
+            .collect()
+    });
+
+    // Convert out_blocks slice to raw bytes
+    let raw_bytes = unsafe {
+        std::slice::from_raw_parts(
+            out_blocks.as_ptr() as *const u8,
+            out_blocks.len() * std::mem::size_of::<crate::io::header::Q2_0Block>(),
+        )
+    };
+
+    #[cfg(feature = "python")]
+    {
+        use pyo3::types::PyBytes;
+        let bytes_py = PyBytes::new(_py, raw_bytes).into();
+        Ok(bytes_py)
+    }
+    #[cfg(not(feature = "python"))]
+    {
+        Err(PyTypeError::new_err("Python not enabled"))
+    }
+}
+
 #[cfg_attr(feature = "python", pyfunction)]
 #[cfg_attr(feature = "python", pyo3(signature = (data_u8, block_size, anchor_threshold, bit_depth=2, custom_base_c=None)))]
 pub fn genomize_f16_native(
