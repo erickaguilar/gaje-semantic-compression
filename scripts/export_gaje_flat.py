@@ -99,7 +99,7 @@ def export_gaje_flat():
     model_name_lower = os.path.basename(gguf_path).lower()
 
     # Mapeo de familias: 1=Llama, 2=SmolLM, 3=Qwen2, 4=Qwen2_5, 5=Gemma, 6=Unknown
-    if "qwen2.5" in model_name_lower or "qwen2.5" in arch_name.lower():
+    if "deepseek" in model_name_lower or "r1" in model_name_lower or "qwen2.5" in model_name_lower or "qwen2_5" in model_name_lower or "qwen2.5" in arch_name.lower():
         arch_family = 4
         qk_permute = False
     elif "qwen2" in model_name_lower or "qwen2" in arch_name.lower():
@@ -130,7 +130,7 @@ def export_gaje_flat():
         1: "meta-llama/Llama-3.2-1B-Instruct",
         2: "HuggingFaceTB/SmolLM2-135M-Instruct",
         3: "Qwen/Qwen2-0.5B-Instruct",
-        4: "Qwen/Qwen2.5-1.5B-Instruct",
+        4: "Qwen/Qwen2.5-7B-Instruct",
         5: "google/gemma-2-2b-it",
         6: "Qwen/Qwen2-0.5B-Instruct",
     }
