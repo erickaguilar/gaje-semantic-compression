@@ -99,7 +99,7 @@ def export_gaje_flat():
     model_name_lower = os.path.basename(gguf_path).lower()
 
     # Mapeo de familias: 1=Llama, 2=SmolLM, 3=Qwen2, 4=Qwen2_5, 5=Gemma, 6=Unknown
-    if "qwen2.5" in model_name_lower or "qwen2.5" in arch_name.lower():
+    if "deepseek" in model_name_lower or "r1" in model_name_lower or "qwen2.5" in model_name_lower or "qwen2_5" in model_name_lower or "qwen2.5" in arch_name.lower():
         arch_family = 4
         qk_permute = False
     elif "qwen2" in model_name_lower or "qwen2" in arch_name.lower():
@@ -130,7 +130,7 @@ def export_gaje_flat():
         1: "meta-llama/Llama-3.2-1B-Instruct",
         2: "HuggingFaceTB/SmolLM2-135M-Instruct",
         3: "Qwen/Qwen2-0.5B-Instruct",
-        4: "Qwen/Qwen2.5-1.5B-Instruct",
+        4: "Qwen/Qwen2.5-7B-Instruct",
         5: "google/gemma-2-2b-it",
         6: "Qwen/Qwen2-0.5B-Instruct",
     }
@@ -269,6 +269,10 @@ def export_gaje_flat():
         else:
             q_format = 0
 
+        # Si el tensor proviene directamente de GGUF, des-cuantizar a matriz f32
+        if not isinstance(tensor_obj, np.ndarray):
+            tensor_obj = get_tensor_f32_matrix(tensor_obj)
+
         layer = GenomicLayer(
             name,
             tensor_obj,
@@ -282,6 +286,8 @@ def export_gaje_flat():
         gc.collect()
 
     def get_tensor_f32_matrix(tensor_obj, n_h=None, h_d=None, is_q_k=False):
+        if isinstance(tensor_obj, np.ndarray):
+            return tensor_obj
         if tensor_obj.tensor_type == gguf.GGMLQuantizationType.F32:
             raw_data = np.frombuffer(tensor_obj.data, dtype=np.float32)
         elif tensor_obj.tensor_type == gguf.GGMLQuantizationType.F16:
@@ -291,7 +297,27 @@ def export_gaje_flat():
         elif tensor_obj.tensor_type == gguf.GGMLQuantizationType.Q8_0:
             return dequantize_q8_0(tensor_obj, n_h, h_d, is_q_k, rope_style="split")
         else:
-            raise ValueError(f"Unsupported quantization type: {tensor_obj.tensor_type}")
+            import gguf.quants as gq
+
+            dequant = gq.dequantize(tensor_obj.data, tensor_obj.tensor_type).astype(
+                np.float32
+            )
+            if len(dequant.shape) == 2:
+                w_matrix = dequant
+            else:
+                out_f = (
+                    tensor_obj.shape[1]
+                    if len(tensor_obj.shape) == 2
+                    else tensor_obj.shape[0]
+                )
+                in_f = tensor_obj.shape[0] if len(tensor_obj.shape) == 2 else 1
+                w_matrix = dequant.reshape(out_f, in_f)
+
+            if is_q_k and n_h is not None and h_d is not None:
+                from gaje.utils.quantization import unpermute_to_split
+
+                w_matrix = unpermute_to_split(w_matrix, n_h, h_d)
+            return w_matrix
 
         out_f = (
             tensor_obj.shape[1] if len(tensor_obj.shape) == 2 else tensor_obj.shape[0]
