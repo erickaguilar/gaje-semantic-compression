@@ -205,13 +205,18 @@ impl GenomicLLM {
                 d_logits[j] = exps[j] / sum_e;
             }
             d_logits[target] -= 1.0;
-            self.lm_head.refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+            self.lm_head
+                .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
 
             // Backprop CE al cuerpo: d_hidden = W_lm_head^T * d_logits -> rms_norm_backward -> último bloque
             if n_blocks > 0 {
                 let d_h = self.lm_head.backward_core(d_logits)?;
-                let d_x_final =
-                    crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+                let d_x_final = crate::compute::kernels::rms_norm_backward(
+                    &h_norm,
+                    &d_h,
+                    &self.output_norm,
+                    self.eps,
+                );
                 // Entrada real del último bloque (re-propaga bloques anteriores, cache ya poblada)
                 let mut x_in = self.embeddings.get_row_core(tokens[i])?;
                 let pos = self.blocks[0].attn.k_cache_len();
@@ -262,7 +267,9 @@ impl GenomicLLM {
                 .topology
                 .as_ref()
                 .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let logits = self
+                .lm_head
+                .forward_core(h_norm.clone(), modulation, false)?;
 
             // Loss CE + d_logits = probs - one_hot
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -280,12 +287,17 @@ impl GenomicLLM {
                 d_logits[j] = exps[j] / sum_e;
             }
             d_logits[target] -= 1.0;
-            self.lm_head.refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
+            self.lm_head
+                .refine_with_grads_core(h_norm.clone(), d_logits.clone(), lr)?;
 
             // Backprop: lm_head -> output_norm -> bloques (orden inverso)
             let d_h = self.lm_head.backward_core(d_logits)?;
-            let mut d_out =
-                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            let mut d_out = crate::compute::kernels::rms_norm_backward(
+                &h_norm,
+                &d_h,
+                &self.output_norm,
+                self.eps,
+            );
             for b in (0..n).rev() {
                 d_out = self.blocks[b].refine_with_grads_core(
                     block_inputs[b].clone(),
@@ -341,7 +353,9 @@ impl GenomicLLM {
                 .topology
                 .as_ref()
                 .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let logits = self
+                .lm_head
+                .forward_core(h_norm.clone(), modulation, false)?;
 
             // Loss CE + d_logits.
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -364,8 +378,12 @@ impl GenomicLLM {
 
             // Backward por caché en orden inverso (entrenan los bloques `start..n`).
             let d_h = self.lm_head.backward_core(d_logits)?;
-            let mut d_out =
-                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            let mut d_out = crate::compute::kernels::rms_norm_backward(
+                &h_norm,
+                &d_h,
+                &self.output_norm,
+                self.eps,
+            );
             for b in (start..n).rev() {
                 d_out = self.blocks[b].backward_core_cached(&caches[b], d_out, lr, gclip)?;
             }
@@ -431,7 +449,9 @@ impl GenomicLLM {
                 .topology
                 .as_ref()
                 .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let logits = self
+                .lm_head
+                .forward_core(h_norm.clone(), modulation, false)?;
 
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_e = 0.0f32;
@@ -454,8 +474,12 @@ impl GenomicLLM {
             }
 
             let d_h = self.lm_head.backward_core(d_logits)?;
-            let mut d_out =
-                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            let mut d_out = crate::compute::kernels::rms_norm_backward(
+                &h_norm,
+                &d_h,
+                &self.output_norm,
+                self.eps,
+            );
             for b in (start..n).rev() {
                 let depth = (n - 1 - b) as f32;
                 let lr_b = lr * lr_decay.powf(depth);
@@ -529,7 +553,9 @@ impl GenomicLLM {
                 .topology
                 .as_ref()
                 .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let logits = self
+                .lm_head
+                .forward_core(h_norm.clone(), modulation, false)?;
 
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_e = 0.0f32;
@@ -604,8 +630,12 @@ impl GenomicLLM {
             }
 
             let d_h = self.lm_head.backward_core(d_logits)?;
-            let mut d_out =
-                crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
+            let mut d_out = crate::compute::kernels::rms_norm_backward(
+                &h_norm,
+                &d_h,
+                &self.output_norm,
+                self.eps,
+            );
             for b in (start..n).rev() {
                 let depth = (n - 1 - b) as f32;
                 let lr_b = lr * lr_decay.powf(depth);
@@ -644,7 +674,9 @@ impl GenomicLLM {
                 .topology
                 .as_ref()
                 .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self.lm_head.forward_core(h_norm.clone(), modulation, false)?;
+            let logits = self
+                .lm_head
+                .forward_core(h_norm.clone(), modulation, false)?;
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_e = 0.0f32;
             for j in 0..logits.len() {

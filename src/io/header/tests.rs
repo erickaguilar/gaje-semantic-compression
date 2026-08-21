@@ -31,10 +31,10 @@ fn test_header_v2_q4_0() {
     // quant_format = 1 (Q4_0)
     header_bytes[52..56].copy_from_slice(&1u32.to_le_bytes());
 
-let header = FlatHeaderV2::from_bytes(&header_bytes).unwrap();
-        assert_eq!(header.quantization_type(), QuantFormat::Q4_0);
-        assert_eq!(header.effective_group_size(), 32);
-        assert_eq!(header.version, 0x000908);
+    let header = FlatHeaderV2::from_bytes(&header_bytes).unwrap();
+    assert_eq!(header.quantization_type(), QuantFormat::Q4_0);
+    assert_eq!(header.effective_group_size(), 32);
+    assert_eq!(header.version, 0x000908);
 }
 
 #[test]
@@ -160,7 +160,9 @@ fn test_q2_0_block_roundtrip() {
 
     // Verifica que cada q_value devuelve el código de 2 bits correcto
     for i in 0..32 {
-        let expected = (((f32_weights[i] - min_val) * inv_scale).round().clamp(0.0, 3.0)) as u8;
+        let expected = (((f32_weights[i] - min_val) * inv_scale)
+            .round()
+            .clamp(0.0, 3.0)) as u8;
         assert_eq!(block.q_value(i), expected, "q_value idx {} mismatch", i);
     }
 

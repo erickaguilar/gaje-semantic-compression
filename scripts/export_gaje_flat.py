@@ -6,7 +6,10 @@ import struct
 import numpy as np
 import gguf
 import argparse
-from transformers import AutoTokenizer
+try:
+    from transformers import AutoTokenizer
+except ImportError:
+    AutoTokenizer = None
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
@@ -142,20 +145,17 @@ def export_gaje_flat():
         tokenizer_id = args.tokenizer or tokenizer_map.get(
             arch_family, "Qwen/Qwen2-0.5B-Instruct"
         )
-    try:
-        print(f"[*] Cargando tokenizer desde Hugging Face: {tokenizer_id}...")
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
-    except Exception as e:
-        print(
-            f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}. Usando Qwen2-0.5B-Instruct de respaldo."
-        )
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
-
-    tokenizer_str = (
-        tokenizer.backend_tokenizer.to_str()
-        if hasattr(tokenizer, "backend_tokenizer")
-        else ""
-    )
+    tokenizer_str = ""
+    if AutoTokenizer is not None:
+        try:
+            print(f"[*] Cargando tokenizer desde Hugging Face: {tokenizer_id}...")
+            tokenizer = AutoTokenizer.from_pretrained(tokenizer_id)
+            if hasattr(tokenizer, "backend_tokenizer"):
+                tokenizer_str = tokenizer.backend_tokenizer.to_str()
+        except Exception as e:
+            print(
+                f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}."
+            )
 
     # Determinar vocab_size real desde el tensor token_embd.weight
     embd_tensor = tensors_by_name["token_embd.weight"]

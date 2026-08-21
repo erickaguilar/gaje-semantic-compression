@@ -3,8 +3,10 @@ import os
 import numpy as np
 import gaje.core._impl as dna_semantic_compression
 import gguf
-import time
-from transformers import AutoTokenizer
+try:
+    from transformers import AutoTokenizer
+except ImportError:
+    AutoTokenizer = None
 
 from gaje.utils.quantization import dequantize_q8_0
 

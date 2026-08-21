@@ -81,7 +81,8 @@ impl RustGenomicBlock {
             .refine_with_grads_core(ffn_out, d_hidden.clone(), lr)?;
         self.gate_gen
             .refine_with_grads_core(x_ffn_n.clone(), d_gate.clone(), lr)?;
-        self.up_gen.refine_with_grads_core(x_ffn_n, d_up.clone(), lr)?;
+        self.up_gen
+            .refine_with_grads_core(x_ffn_n, d_up.clone(), lr)?;
         let d_ffn_gate = self.gate_gen.backward_core(d_gate)?;
         let d_ffn_up = self.up_gen.backward_core(d_up)?;
         let mut d_x_post = d_hidden;

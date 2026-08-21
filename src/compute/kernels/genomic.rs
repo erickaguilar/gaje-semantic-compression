@@ -745,27 +745,14 @@ pub unsafe fn gemv_q4_0_block_neon(
     min: f32,
     input_ptr: *const f32,
 ) -> f32 {
-    // Cargar 16 bytes
-    let packed = vld1q_u8(weights_ptr);
-
-    // Desempaquetar 4 bits -> 8 bits
-    let mask = vdupq_n_u8(0x0F);
-    let low = vandq_u8(packed, mask);
-    let high = vandq_u8(vshrq_n_u8(packed, 4), mask);
-
-    // Interleavar (zip)
-    let interleaved = vzip1q_u8(low, high);
-
-    // Convertir a f32 (NEON requiere pasar por i16 -> i32 -> f32)
-    // Nota: Esta es una simplificación; en producción se usaría vcvtq_f32_s32(vcvtlq_s16(...))
-    // Por ahora, fallback escalar seguro para aarch64 si la intrínseca es compleja
     let mut sum = 0.0f32;
     for i in 0..32 {
         let byte_idx = i / 2;
+        let byte = *weights_ptr.add(byte_idx);
         let q4 = if i % 2 == 0 {
-            (interleaved[byte_idx] & 0x0F) as f32
+            (byte & 0x0F) as f32
         } else {
-            ((interleaved[byte_idx] >> 4) & 0x0F) as f32
+            ((byte >> 4) & 0x0F) as f32
         };
         let weight = (q4 - 8.0) * scale + min;
         sum += weight * *input_ptr.add(i);

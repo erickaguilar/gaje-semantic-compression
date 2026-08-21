@@ -80,23 +80,21 @@ pub fn save_genomic_flat_q(
     let mut blob: Vec<u8> = Vec::new();
     let mut dir: Vec<FlatTensorEntry> = Vec::new();
 
-    let mut write_l = |blob: &mut Vec<u8>,
-                       dir: &mut Vec<FlatTensorEntry>,
-                       p: &str,
-                       l: &GenomicLinear| {
-        push_tensor(
-            dir,
-            blob,
-            p.to_string(),
-            l.bit_depth() as usize,
-            l.out_features,
-            l.in_features,
-            l.database_ref(),
-            &l.centroids,
-            &l.anchors_sparse_buffer(),
-            &l.bias,
-        );
-    };
+    let mut write_l =
+        |blob: &mut Vec<u8>, dir: &mut Vec<FlatTensorEntry>, p: &str, l: &GenomicLinear| {
+            push_tensor(
+                dir,
+                blob,
+                p.to_string(),
+                l.bit_depth() as usize,
+                l.out_features,
+                l.in_features,
+                l.database_ref(),
+                &l.centroids,
+                &l.anchors_sparse_buffer(),
+                &l.bias,
+            );
+        };
 
     write_l(&mut blob, &mut dir, "token_embd", &model.embeddings);
     for (i, blk) in model.blocks.iter().enumerate() {
@@ -136,7 +134,12 @@ pub fn save_genomic_flat_q(
         if let Some(gu) = &blk.fused_gate_up {
             write_l(&mut blob, &mut dir, &format!("{}ffn_gate_up", p), gu);
         } else {
-            write_l(&mut blob, &mut dir, &format!("{}ffn_gate", p), &blk.gate_gen);
+            write_l(
+                &mut blob,
+                &mut dir,
+                &format!("{}ffn_gate", p),
+                &blk.gate_gen,
+            );
             write_l(&mut blob, &mut dir, &format!("{}ffn_up", p), &blk.up_gen);
         }
         write_l(&mut blob, &mut dir, &format!("{}ffn_down", p), &blk.w_down);
@@ -155,14 +158,16 @@ pub fn save_genomic_flat_q(
         &[],
     );
 
-    let mut meta: serde_json::Value = serde_json::to_value(config).map_err(std::io::Error::other)?;
+    let mut meta: serde_json::Value =
+        serde_json::to_value(config).map_err(std::io::Error::other)?;
     if let Some(tok) = tokenizer {
         if let Some(obj) = meta.as_object_mut() {
             obj.insert(
                 "tokenizer".to_string(),
                 serde_json::Value::String(
-                    tok.to_string(true)
-                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?,
+                    tok.to_string(true).map_err(|e| {
+                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                    })?,
                 ),
             );
         }

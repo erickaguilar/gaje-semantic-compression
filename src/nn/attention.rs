@@ -275,8 +275,7 @@ impl GenomicAttention {
             }
             // d_v
             for i in 0..head_dim {
-                d_v[kv_h_off + i] +=
-                    softmax_weights[h * seq_len + t_last] * d_attn_out[q_off + i];
+                d_v[kv_h_off + i] += softmax_weights[h * seq_len + t_last] * d_attn_out[q_off + i];
             }
         }
 

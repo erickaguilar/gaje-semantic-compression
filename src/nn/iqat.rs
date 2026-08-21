@@ -50,7 +50,8 @@ impl IQATEngine {
             let s_act_in = self.capture_activation(student_model, token_id, block_idx)?;
 
             // 3. Ejecutar bloque del estudiante con la entrada real del estudiante
-            let s_act_out = student_model.blocks[block_idx].forward_core(s_act_in.clone(), count)?;
+            let s_act_out =
+                student_model.blocks[block_idx].forward_core(s_act_in.clone(), count)?;
 
             // 4. Calcular Deriva (Drift) y Gradiente
             // L = 0.5 * |s_out - t_out|^2 => dL/ds_out = s_out - t_out
