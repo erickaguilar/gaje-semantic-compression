@@ -1269,17 +1269,27 @@ class GenomicLLM:
                     n_blocks = meta.get("n_blocks", 24)
 
                     tokenizer = None
-                    embedded_tok = meta.get("tokenizer")
-                    if embedded_tok:
-                        try:
-                            from tokenizers import Tokenizer
+                    # 1. Prioridad: Tokenizador binario nativo GTOK embebido en cabecera .flat
+                    try:
+                        from gaje.processing.gtok import extract_gtok_from_flat
+                        tokenizer = extract_gtok_from_flat(input_path)
+                        if tokenizer is not None:
+                            print(f"⚡ [GTOK Native] Tokenizador binario nativo cargado directamente desde la cabecera .flat")
+                    except Exception as ex_gtok:
+                        pass
 
-                            if isinstance(embedded_tok, str):
-                                tokenizer = Tokenizer.from_str(embedded_tok)
-                            else:
-                                tokenizer = Tokenizer.from_str(json.dumps(embedded_tok))
-                        except Exception as ex_tok:
-                            print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
+                    if tokenizer is None:
+                        embedded_tok = meta.get("tokenizer")
+                        if embedded_tok:
+                            try:
+                                from tokenizers import Tokenizer
+
+                                if isinstance(embedded_tok, str):
+                                    tokenizer = Tokenizer.from_str(embedded_tok)
+                                else:
+                                    tokenizer = Tokenizer.from_str(json.dumps(embedded_tok))
+                            except Exception as ex_tok:
+                                print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
                     if tokenizer is None:
                         try:
                             from transformers import AutoTokenizer
