@@ -12,7 +12,7 @@ Este registro certifica la creación, verificación y hash criptográfico exacto
 
 | Modelo / Archivo | Tamaño | SHA-256 Checksum | Estado |
 | :--- | :---: | :--- | :---: |
-| `maximo.gaje` (DeepSeek-R1 1.5B) | 2.45 GB | `f2e6e066ecc3c3da39137f515607b68a9e38ba9e2019fd3e8ee30787fb583206` | 🟢 **PRODUCCIÓN (Líder Razonamiento CoT)** |
+| `maximo.gaje` (DeepSeek-R1 1.5B) | 1.23 GB | `97bb9dadcd27273c30c39b7ad7685343c291a312143f77c73267c6fb3f117693` | 🟢 **PRODUCCIÓN (Líder Razonamiento CoT)** |
 | `pro.gaje` (Qwen 2.5 3B) | 2.24 GB | `e20ec4bf79c6d4ba40e0bc8ae92ff9fb172c72b2dd2bbcefa042533b3a39e31d` | 🟢 **PRODUCCIÓN (General Multilingüe 3B)** |
 | `turbo.gaje` (Qwen 2 0.5B) | 499 MB | `507f35213606f7df2b6b553c1537233f81e370a4a838520ec719ce3f9b231ff6` | 🟢 **PRODUCCIÓN (Micro-Rápido 0.5B)** |
 | `nano.gaje` (SmolLM2 135M) | 474 MB | `fca97beeaeb3bfa8ba2061b47fb5d58d929ca32fbcf2b55f17d36371fc5bb290` | 🟢 **PRODUCCIÓN (Nano Edge 135M)** |
@@ -25,18 +25,18 @@ Cualquier modelo puede ser regenerado en minutos descargando el GGUF fuente desd
 
 ### 🥇 Receta 1: DeepSeek-R1-Distill-1.5B (Razonamiento CoT Máximo)
 ```bash
-# 1. Descargar GGUF oficial Q8_0
-wget -c "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf" \
-  -O models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf
+# 1. Descargar GGUF oficial
+wget -c "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf" \
+  -O models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
 
 # 2. Transmutar a formato binario plano GAJE con embeddings Q8_0
 python3 scripts/export_gaje_flat.py \
-  --input models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf \
+  --input models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf \
   --output models/production/maximo.gaje \
   --quant-embed
 
 # 3. Limpiar origen
-rm -f models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf
+rm -f models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
 ```
 
 ---
