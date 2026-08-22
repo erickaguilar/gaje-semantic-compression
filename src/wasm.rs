@@ -1,11 +1,15 @@
 //! # 🧠 GAJE-WASM: El Motor como Tronco Encefálico (In-Browser Runtime)
 //!
 //! Este módulo expone la interfaz `wasm-bindgen` para ejecutar modelos genómicos planos (.flat)
-//! directamente dentro de navegadores web (Web Workers / Main Thread) sin servidores de fondo.
+//! y la memoria soberana Island Model (.gmem v2) directamente dentro del navegador web
+//! (Web Workers / Main Thread), integrando el ciclo sensorio-motor completo y consolidación
+//! autonómica (ciclo de sueño en background) sin intermediación de servidores externos.
 
+use crate::compute::island::IslandOrchestrator;
 use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
 use crate::io::flat_reader::GajeFlatFileReader;
+use crate::io::gmem::GmemMemoryIndex;
 use crate::nn::llm::GenomicLLM;
 use wasm_bindgen::prelude::*;
 
@@ -14,6 +18,38 @@ pub struct GajeWasmEngine {
     llm: GenomicLLM,
     config: ModelConfig,
     tokenizer: Option<GtokNativeTokenizer>,
+    memory: IslandOrchestrator,
+}
+
+/// Genera una representación vectorial determinista normalizada a partir de palabras y n-gramas de texto.
+fn text_to_embedding(text: &str, dim: usize) -> Vec<f32> {
+    let mut vec = vec![0.0f32; dim];
+    let words: Vec<&str> = text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if words.is_empty() {
+        return vec;
+    }
+
+    for word in words {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for &b in word.to_lowercase().as_bytes() {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        let idx = (h as usize) % dim;
+        vec[idx] += 1.0;
+    }
+
+    let norm = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 1e-6 {
+        for v in &mut vec {
+            *v /= norm;
+        }
+    }
+    vec
 }
 
 #[wasm_bindgen]
@@ -45,12 +81,222 @@ impl GajeWasmEngine {
             .load_genomic()
             .map_err(|e| JsValue::from_str(&format!("Error instanciando GenomicLLM: {}", e)))?;
 
+        let memory = IslandOrchestrator::new(config.n_embd as u32);
+
         Ok(Self {
             llm,
             config,
             tokenizer,
+            memory,
         })
     }
+
+    // =========================================================================
+    // 1. VÍAS AFERENTES (SENSORIAL): Ingesta & Resonancia Semántica en WASM
+    // =========================================================================
+
+    /// Ingesta sensorial: registra un nuevo recuerdo en el nicho de memoria Island especificado.
+    #[wasm_bindgen]
+    pub fn ingest_sensory(
+        &mut self,
+        text: &str,
+        vector: &[f32],
+        niche: &str,
+        custom_id: Option<u64>,
+    ) -> Result<u64, JsValue> {
+        let dim = self.config.n_embd;
+        let v = if vector.len() == dim {
+            vector.to_vec()
+        } else {
+            text_to_embedding(text, dim)
+        };
+
+        let next_id = custom_id.unwrap_or_else(|| {
+            let count = self.memory.episodic.entries.len()
+                + self.memory.documental.entries.len()
+                + self.memory.conversational.entries.len();
+            (count as u64) + 1
+        });
+
+        match niche.to_lowercase().as_str() {
+            "episodic" | "episodica" | "episódica" => {
+                self.memory.episodic.add_entry(next_id, v, text.to_string());
+            }
+            "documental" | "doc" => {
+                self.memory
+                    .documental
+                    .add_entry(next_id, v, text.to_string());
+            }
+            "conversational" | "conversacion" | "conversación" => {
+                self.memory
+                    .conversational
+                    .add_entry(next_id, v, text.to_string());
+            }
+            _ => {
+                return Err(JsValue::from_str(
+                    "Nicho desconocido. Opciones válidas: episodic, documental, conversational",
+                ));
+            }
+        }
+
+        Ok(next_id)
+    }
+
+    /// Recupera los contextos más resonantes en la memoria Island como objeto JSON.
+    #[wasm_bindgen]
+    pub fn retrieve_context(
+        &self,
+        query_text: &str,
+        query_vector: &[f32],
+        top_k: usize,
+    ) -> Result<String, JsValue> {
+        let dim = self.config.n_embd;
+        let q_vec = if query_vector.len() == dim {
+            query_vector.to_vec()
+        } else {
+            text_to_embedding(query_text, dim)
+        };
+
+        let results = self.memory.retrieve_context(&q_vec, top_k);
+        let items: Vec<serde_json::Value> = results
+            .into_iter()
+            .map(|r| {
+                serde_json::json!({
+                    "id": r.id,
+                    "text": r.text,
+                    "similarity": r.similarity,
+                    "niche": r.niche.as_str()
+                })
+            })
+            .collect();
+
+        serde_json::to_string(&items)
+            .map_err(|e| JsValue::from_str(&format!("Error serializando retrieval: {}", e)))
+    }
+
+    // =========================================================================
+    // 2. CICLO AUTONÓMICO: Sueño, Consolidación y Poda Semántica en WASM
+    // =========================================================================
+
+    /// Ejecuta el ciclo autonómico de consolidación de memoria (sueño biológico en background).
+    #[wasm_bindgen]
+    pub fn autonomic_sleep_cycle(&mut self, dedup_threshold: f32) -> Result<String, JsValue> {
+        let stats = self.memory.consolidate_memory(dedup_threshold);
+        serde_json::to_string(&stats)
+            .map_err(|e| JsValue::from_str(&format!("Error en ciclo de sueño: {}", e)))
+    }
+
+    /// Exporta la memoria de un nicho a formato binario .gmem v2 para persistencia en IndexedDB/OPFS.
+    #[wasm_bindgen]
+    pub fn export_gmem_island(&self, niche: &str) -> Result<Vec<u8>, JsValue> {
+        let idx = match niche.to_lowercase().as_str() {
+            "episodic" | "episodica" | "episódica" => &self.memory.episodic,
+            "documental" | "doc" => &self.memory.documental,
+            "conversational" | "conversacion" | "conversación" => &self.memory.conversational,
+            _ => {
+                return Err(JsValue::from_str(
+                    "Nicho desconocido. Opciones: episodic, documental, conversational",
+                ));
+            }
+        };
+        Ok(idx.save_to_bytes())
+    }
+
+    /// Importa la memoria de un nicho desde bytes binarios .gmem v2 recuperados de IndexedDB/OPFS.
+    #[wasm_bindgen]
+    pub fn import_gmem_island(&mut self, niche: &str, bytes: &[u8]) -> Result<(), JsValue> {
+        let idx = GmemMemoryIndex::load_from_bytes(bytes)
+            .map_err(|e| JsValue::from_str(&format!("Error importando .gmem: {}", e)))?;
+
+        match niche.to_lowercase().as_str() {
+            "episodic" | "episodica" | "episódica" => self.memory.episodic = idx,
+            "documental" | "doc" => self.memory.documental = idx,
+            "conversational" | "conversacion" | "conversación" => self.memory.conversational = idx,
+            _ => {
+                return Err(JsValue::from_str(
+                    "Nicho desconocido. Opciones: episodic, documental, conversational",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Retorna estadísticas en tiempo real del estrato de memoria Island.
+    #[wasm_bindgen]
+    pub fn get_memory_stats(&self) -> String {
+        serde_json::to_string(&serde_json::json!({
+            "dim": self.memory.dim,
+            "niche_weights": self.memory.niche_weights,
+            "episodic_entries": self.memory.episodic.entries.len(),
+            "documental_entries": self.memory.documental.entries.len(),
+            "conversational_entries": self.memory.conversational.entries.len(),
+            "documental_consolidated": self.memory.documental.is_consolidated(),
+            "total_entries": self.memory.episodic.entries.len() + self.memory.documental.entries.len() + self.memory.conversational.entries.len(),
+        }))
+        .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    // =========================================================================
+    // 3. VÍAS EFERENTES (MOTORA) & CHAT CONTEXTUAL INTEGRADO
+    // =========================================================================
+
+    /// Chat end-to-end con inyección automática de memoria asociativa e ingesta de turno.
+    #[wasm_bindgen]
+    pub fn chat_with_memory(
+        &mut self,
+        prompt: &str,
+        max_tokens: usize,
+        temperature: f32,
+        repetition_penalty: f32,
+        inject_rag: bool,
+    ) -> Result<String, JsValue> {
+        let augmented_prompt = if inject_rag {
+            let q_vec = text_to_embedding(prompt, self.config.n_embd);
+            let contexts = self.memory.retrieve_context(&q_vec, 2);
+            if contexts.is_empty() {
+                prompt.to_string()
+            } else {
+                let context_str = contexts
+                    .iter()
+                    .map(|c| format!("- {}", c.text))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!(
+                    "Contexto de memoria:\n{}\n\nUsuario: {}",
+                    context_str, prompt
+                )
+            }
+        } else {
+            prompt.to_string()
+        };
+
+        let response = self.chat(
+            &augmented_prompt,
+            max_tokens,
+            temperature,
+            repetition_penalty,
+        )?;
+
+        // Auto-ingesta del turno conversacional
+        let conv_record = format!("U: {} | A: {}", prompt, response);
+        let _ = self.ingest_sensory(&conv_record, &[], "conversational", None);
+
+        Ok(response)
+    }
+
+    /// Emite decisiones motoras estructuradas (Tool Calling / Actuadores).
+    #[wasm_bindgen]
+    pub fn actuate(&mut self, prompt: &str, tools_schema_json: &str) -> Result<String, JsValue> {
+        let system_instruction = format!(
+            "Eres un agente motor que debe responder exclusivamente en JSON según este esquema de herramientas:\n{}\n\nEntrada del usuario: {}",
+            tools_schema_json, prompt
+        );
+        self.chat(&system_instruction, 128, 0.2, 1.1)
+    }
+
+    // =========================================================================
+    // 4. MÉTODOS BASE DE GENERACIÓN Y TOKENIZACIÓN
+    // =========================================================================
 
     /// Tokeniza un texto a un arreglo de IDs de tokens en JS.
     #[wasm_bindgen]

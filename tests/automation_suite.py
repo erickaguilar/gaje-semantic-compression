@@ -661,6 +661,30 @@ console.log(JSON.stringify(Array.from(genIds)));
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    # =========================================================================
+    # SUITE 12: Tronco Encefálico Sensorio-Motor y Ciclo Autonómico WASM
+    # =========================================================================
+    def test_15_wasm_brainstem_sensorimotor(self):
+        """TC-12.1: Tronco Encefálico Sensorio-Motor y Ciclo Autonómico en WebAssembly."""
+        print(
+            "\n[SUITE 12] Validando Tronco Encefálico Sensorio-Motor y Ciclo Autonómico en WASM..."
+        )
+        import subprocess
+
+        js_script = os.path.join(PROJECT_ROOT, "scripts", "test_wasm_sensorimotor.js")
+        if not os.path.exists(js_script):
+            self.skipTest("Script test_wasm_sensorimotor.js no encontrado")
+
+        res = subprocess.run(["node", js_script], capture_output=True, text=True)
+        if res.returncode != 0:
+            print("STDOUT:", res.stdout)
+            print("STDERR:", res.stderr)
+        self.assertEqual(res.returncode, 0, f"Error en test WASM Node: {res.stderr}")
+        self.assertIn("CERTIFICACIÓN WASM 100% EXITOSA", res.stdout)
+        print(
+            "[SUITE 12] Tronco Encefálico y Ciclo Autonómico WASM certificados al 100%."
+        )
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)

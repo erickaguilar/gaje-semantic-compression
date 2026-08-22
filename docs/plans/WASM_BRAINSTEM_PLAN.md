@@ -1,6 +1,6 @@
 # Plan: GAJE-WASM — El Motor como Tronco Encefálico (Build WASM + API Sensorio-Motora)
 
-> Rama: `test/experimental` · Estado: **PROPUESTO** · Fecha: 2026-08-20
+> Rama: `develop` · Estado: **IMPLEMENTADO Y CERTIFICADO (100%)** · Fecha: 2026-08-22
 > Complementa a `docs/plans/MASTER_ROADMAP_2026.md`, `docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md`
 > y al mandato de `docs/meta/EMPIRICAL_TRUTH_STATE.md`.
 > **Tesis**: el motor GAJE puede compilarse a WebAssembly sin alterar su semántica y,

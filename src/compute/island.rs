@@ -9,7 +9,7 @@ use crate::io::gmem::GmemMemoryIndex;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum IslandNiche {
     Episodic,
     Documental,
@@ -35,6 +35,7 @@ impl IslandNiche {
     }
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct IslandSearchResult {
     pub niche: IslandNiche,
     pub id: u64,

@@ -159,38 +159,38 @@ impl GmemMemoryIndex {
         hash
     }
 
-    /// Guarda el índice en disco con la estructura binaria .gmem v2
-    pub fn save_to_file(&self, path: &str) -> IoResult<()> {
-        let mut file = File::create(path)?;
-
+    /// Serializa el índice a bytes en formato binario .gmem v2 (ideal para WASM / IndexedDB / OPFS)
+    pub fn save_to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
         // 1. Escribir Header de 64 bytes
         let header_bytes: &[u8; 64] = unsafe { std::mem::transmute(&self.header) };
-        file.write_all(header_bytes)?;
+        buf.extend_from_slice(header_bytes);
 
         // 2. Escribir Entradas
         for entry in &self.entries {
-            file.write_all(&entry.id.to_le_bytes())?;
-
-            // Escribir vector (dim * 4 bytes)
+            buf.extend_from_slice(&entry.id.to_le_bytes());
             for &val in &entry.vector {
-                file.write_all(&val.to_le_bytes())?;
+                buf.extend_from_slice(&val.to_le_bytes());
             }
-
-            // Escribir longitud y texto
             let text_bytes = entry.text.as_bytes();
             let text_len = text_bytes.len() as u32;
-            file.write_all(&text_len.to_le_bytes())?;
-            file.write_all(text_bytes)?;
+            buf.extend_from_slice(&text_len.to_le_bytes());
+            buf.extend_from_slice(text_bytes);
         }
-
-        Ok(())
+        buf
     }
 
-    /// Carga el índice binario .gmem desde disco (soporta v1 legacy y v2)
-    pub fn load_from_file(path: &str) -> IoResult<Self> {
-        let mut file = File::open(path)?;
+    /// Deserializa un índice binario .gmem desde un slice de bytes (soporta v1 y v2)
+    pub fn load_from_bytes(bytes: &[u8]) -> IoResult<Self> {
+        if bytes.len() < 64 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Buffer demasiado corto para cabecera .gmem",
+            ));
+        }
+
         let mut header_bytes = [0u8; 64];
-        file.read_exact(&mut header_bytes)?;
+        header_bytes.copy_from_slice(&bytes[0..64]);
 
         let mut header: GmemHeader = unsafe { std::mem::transmute(header_bytes) };
         if &header.magic != GMEM_MAGIC {
@@ -212,32 +212,74 @@ impl GmemMemoryIndex {
 
         let mut entries = Vec::with_capacity(header.num_entries as usize);
         let dim = header.dim as usize;
+        let mut offset = 64;
 
         for _ in 0..header.num_entries {
-            let mut id_bytes = [0u8; 8];
-            file.read_exact(&mut id_bytes)?;
-            let id = u64::from_le_bytes(id_bytes);
+            if offset + 8 > bytes.len() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Fin inesperado leyendo ID de entrada .gmem",
+                ));
+            }
+            let id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap());
+            offset += 8;
 
+            let vec_bytes_len = dim * 4;
+            if offset + vec_bytes_len > bytes.len() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Fin inesperado leyendo vector de entrada .gmem",
+                ));
+            }
             let mut vector = vec![0.0f32; dim];
             for i in 0..dim {
-                let mut val_bytes = [0u8; 4];
-                file.read_exact(&mut val_bytes)?;
-                vector[i] = f32::from_le_bytes(val_bytes);
+                let v_bytes: [u8; 4] = bytes[offset + i * 4..offset + (i + 1) * 4]
+                    .try_into()
+                    .unwrap();
+                vector[i] = f32::from_le_bytes(v_bytes);
             }
+            offset += vec_bytes_len;
 
-            let mut len_bytes = [0u8; 4];
-            file.read_exact(&mut len_bytes)?;
-            let text_len = u32::from_le_bytes(len_bytes) as usize;
+            if offset + 4 > bytes.len() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Fin inesperado leyendo longitud de texto .gmem",
+                ));
+            }
+            let text_len =
+                u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+            offset += 4;
 
-            let mut text_bytes = vec![0u8; text_len];
-            file.read_exact(&mut text_bytes)?;
-            let text = String::from_utf8(text_bytes)
+            if offset + text_len > bytes.len() {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "Fin inesperado leyendo texto .gmem",
+                ));
+            }
+            let text = String::from_utf8(bytes[offset..offset + text_len].to_vec())
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+            offset += text_len;
 
             entries.push(GmemEntry { id, vector, text });
         }
 
         Ok(Self { header, entries })
+    }
+
+    /// Guarda el índice en disco con la estructura binaria .gmem v2
+    pub fn save_to_file(&self, path: &str) -> IoResult<()> {
+        let bytes = self.save_to_bytes();
+        let mut file = File::create(path)?;
+        file.write_all(&bytes)?;
+        Ok(())
+    }
+
+    /// Carga el índice binario .gmem desde disco (soporta v1 legacy y v2)
+    pub fn load_from_file(path: &str) -> IoResult<Self> {
+        let mut file = File::open(path)?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+        Self::load_from_bytes(&bytes)
     }
 
     /// Busca los K vecinos más cercanos por Similitud Coseno vectorizada
