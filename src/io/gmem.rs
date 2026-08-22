@@ -19,19 +19,19 @@ pub const GMEM_FLAG_PROMOTED: u32 = 1 << 2;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GmemHeader {
-    pub magic: [u8; 4],        // b"GMEM" (4 bytes)
-    pub version: u32,          // 2 (4 bytes)
-    pub dim: u32,              // Dimensión de embeddings (4 bytes)
-    pub index_type: u8,        // 0: Plano / Cosine, 1: HNSW (1 byte)
-    pub _pad: [u8; 3],         // Alineación (3 bytes)
-    pub num_entries: u64,      // Número de entradas (8 bytes)
+    pub magic: [u8; 4],   // b"GMEM" (4 bytes)
+    pub version: u32,     // 2 (4 bytes)
+    pub dim: u32,         // Dimensión de embeddings (4 bytes)
+    pub index_type: u8,   // 0: Plano / Cosine, 1: HNSW (1 byte)
+    pub _pad: [u8; 3],    // Alineación (3 bytes)
+    pub num_entries: u64, // Número de entradas (8 bytes)
     // --- Campos de Linaje y Versionado (40 bytes antes reservados) ---
-    pub epoch_id: u64,         // Identificador monotónico de época (8 bytes)
-    pub parent_epoch: u64,     // ID de época padre (0 = raíz / linaje) (8 bytes)
-    pub created_at_unix: i64,  // Timestamp UTC de creación (8 bytes)
-    pub metrics_hash: u64,     // Hash de integridad del manifiesto (8 bytes)
-    pub flags: u32,            // bit0: Consolidada | bit1: Sellada | bit2: Promovida (4 bytes)
-    pub _reserved: [u8; 4],    // Alineación final a 64 bytes (4 bytes)
+    pub epoch_id: u64,        // Identificador monotónico de época (8 bytes)
+    pub parent_epoch: u64,    // ID de época padre (0 = raíz / linaje) (8 bytes)
+    pub created_at_unix: i64, // Timestamp UTC de creación (8 bytes)
+    pub metrics_hash: u64,    // Hash de integridad del manifiesto (8 bytes)
+    pub flags: u32,           // bit0: Consolidada | bit1: Sellada | bit2: Promovida (4 bytes)
+    pub _reserved: [u8; 4],   // Alineación final a 64 bytes (4 bytes)
 }
 
 impl Default for GmemHeader {
@@ -302,7 +302,9 @@ mod tests {
         index.header.metrics_hash = hash;
 
         let temp_path = "/tmp/test_gmem_v2_lineage.gmem";
-        index.save_to_file(temp_path).expect("Error guardando .gmem v2");
+        index
+            .save_to_file(temp_path)
+            .expect("Error guardando .gmem v2");
 
         let loaded = GmemMemoryIndex::load_from_file(temp_path).expect("Error cargando .gmem v2");
         assert_eq!(loaded.epoch_id(), 42);
@@ -331,7 +333,7 @@ mod tests {
             header_raw[4..8].copy_from_slice(&1u32.to_le_bytes()); // version 1
             header_raw[8..12].copy_from_slice(&4u32.to_le_bytes()); // dim 4
             header_raw[16..24].copy_from_slice(&1u64.to_le_bytes()); // 1 entry
-            // 40 reserved bytes are zeroed
+                                                                     // 40 reserved bytes are zeroed
             file.write_all(&header_raw).unwrap();
 
             // Entry 1
