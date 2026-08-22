@@ -27,6 +27,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 ### 📊 Resultados y Certificaciones Oficiales (`docs/reports/`)
 *   **[BENCHMARK_OFFICIAL_v1_6.md](docs/reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
 *   **[GTOK_CERTIFICATION_REPORT.md](docs/reports/GTOK_CERTIFICATION_REPORT.md)**: **CERTIFICACIÓN OFICIAL GTOK v1.0** — Formato binario nativo de tokenización zero-dependency, incrustable en cabecera `.flat`.
+*   **[QUANTUM_CODEBOOK_BENCHMARK.md](docs/reports/QUANTUM_CODEBOOK_BENCHMARK.md)**: **BENCHMARK OFICIAL DE CODEBOOK CUÁNTICO (.qemb)** — 94.4% de reducción en tablas de embeddings de vocabulario masivo mediante superposición dispersa.
 *   **[QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md](docs/reports/QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md)**: **INFORME DE PROTOTIPO CUÁNTICO-GENÓMICO** — Estados de superposición, pureza $\gamma=1.0$ y colapso contextual vía regla de Born.
 *   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: Benchmark histórico de compresión, memoria, velocidad y PPL por modelo.
 *   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
