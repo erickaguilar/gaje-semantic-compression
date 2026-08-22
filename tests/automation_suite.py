@@ -194,6 +194,50 @@ class TestGajeAutomationSuite(unittest.TestCase):
         print(f"[SUITE 4] Estado cuántico-genómico: |token⟩ = 0.6|A⟩ + 0.8|G⟩")
         print(f"[SUITE 4] Traza(ρ) = {trace_rho:.2f} | Probabilidad de colapso en contexto G: {prob_G:.2%}")
 
+    # =========================================================================
+    # SUITE 5: Certificación de Tokenizador Binario GTOK & Incrustación en .flat
+    # =========================================================================
+    def test_06_gtok_binary_certification(self):
+        """TC-5.1: Verificación de compresión, decodificación e incrustación en .flat de GTOK."""
+        print("\n[SUITE 5] Validando formato binario nativo GTOK...")
+        from gaje.processing.gtok import (
+            GtokTokenizer,
+            export_hf_tokenizer_to_gtok,
+            embed_gtok_into_flat,
+            extract_gtok_from_flat,
+            has_embedded_gtok,
+        )
+
+        vocab = ["<unk>", "<s>", "</s>", "<pad>", "H", "ola", "Hola", "ADN"]
+        merges = [(4, 5, 6)]
+        specials = {"bos": 1, "eos": 2, "unk": 0, "pad": 3}
+        gtok = GtokTokenizer(vocab=vocab, merges=merges, special_tokens=specials, additional_stop_ids=[2])
+
+        binary_data = gtok.to_bytes()
+        self.assertEqual(binary_data[:4], b"GTOK")
+
+        # Test roundtrip de incrustación
+        import tempfile
+        import struct
+        header = bytearray(4096)
+        header[:4] = b"GAJE"
+        struct.pack_into("<III", header, 4, 2, 0, 1)
+        with tempfile.NamedTemporaryFile(suffix=".flat", delete=False) as tf:
+            tf.write(header)
+            tf.write(b"DUMMY_DATA")
+            tmp_flat = tf.name
+
+        try:
+            embed_gtok_into_flat(tmp_flat, gtok)
+            self.assertTrue(has_embedded_gtok(tmp_flat))
+            extracted = extract_gtok_from_flat(tmp_flat)
+            self.assertIsNotNone(extracted)
+            self.assertEqual(extracted.decode([6]), "Hola")
+            print("[SUITE 5] GTOK verificado: Decodificación y Roundtrip .flat 100% exitoso.")
+        finally:
+            if os.path.exists(tmp_flat):
+                os.remove(tmp_flat)
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
@@ -204,3 +248,4 @@ def run_all_suites():
 
 if __name__ == "__main__":
     run_all_suites()
+
