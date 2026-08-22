@@ -341,6 +341,55 @@ class TestGajeAutomationSuite(unittest.TestCase):
 
         print(f"[SUITE 7] Paridad GPU certificada: SwiGLU Δ={diff_swiglu:.2e} | GEMV Δ={diff_gemv:.2e}")
 
+    # =========================================================================
+    # SUITE 8: Certificación de Paridad Bit a Bit WebAssembly (GAJE-WASM)
+    # =========================================================================
+    def test_09_wasm_bit_parity(self):
+        """TC-8.1: Determinismo bit a bit idéntico entre CPU Nativo y WebAssembly (GajeWasmEngine)."""
+        print("\n[SUITE 8] Validando Determinismo y Paridad Bit a Bit WebAssembly...")
+        import subprocess
+
+        model_path = os.path.join(MODELS_DIR, "production", "smollm2_135m.flat")
+        if not os.path.exists(model_path):
+            self.skipTest(f"Modelo {model_path} no encontrado para prueba WASM.")
+
+        llm = GenomicLLM.load_genomic(model_path)
+        prompt_tokens = [10, 42, 128, 256, 512]
+        max_new_tokens = 8
+        temperature = 0.0
+        repetition_penalty = 1.0
+        stop_ids = [2]
+
+        native_tokens = llm.rust_llm.generate_native_py(
+            prompt_tokens, max_new_tokens, temperature, repetition_penalty, stop_ids
+        )
+
+        wasm_script = f"""
+import fs from 'fs';
+import {{ GajeWasmEngine }} from './pkg/wasm_node/_impl.js';
+const fileBuffer = fs.readFileSync('{model_path}');
+const engine = GajeWasmEngine.load_from_bytes(new Uint8Array(fileBuffer));
+const promptIds = new Uint32Array({json.dumps(prompt_tokens)});
+const stopIds = new Uint32Array({json.dumps(stop_ids)});
+const genIds = engine.generate(promptIds, {max_new_tokens}, {temperature}, {repetition_penalty}, stopIds);
+console.log(JSON.stringify(Array.from(genIds)));
+"""
+        wasm_res = subprocess.run(
+            ["node", "--input-type=module", "-e", wasm_script],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        wasm_tokens = json.loads(wasm_res.stdout.strip())
+        self.assertEqual(
+            native_tokens,
+            wasm_tokens,
+            f"Discrepancia entre Native ({native_tokens}) y WASM ({wasm_tokens})",
+        )
+        print(f"[SUITE 8] Paridad WASM 100% verificada: {len(native_tokens)} tokens idénticos bit a bit.")
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
