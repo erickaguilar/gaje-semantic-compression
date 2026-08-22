@@ -42,6 +42,7 @@ pub struct IslandSearchResult {
     pub text: String,
 }
 
+#[derive(Clone)]
 #[cfg_attr(feature = "python", pyclass)]
 pub struct IslandOrchestrator {
     pub dim: u32,

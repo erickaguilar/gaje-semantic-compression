@@ -611,6 +611,56 @@ console.log(JSON.stringify(Array.from(genIds)));
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_14_memory_evolution_and_cross_breeding(self):
+        """TC-11.3: Cross-Breeding de memoria entre organismos y evolución DNI de nichos."""
+        from gaje.core._impl import EpochManager, IslandOrchestrator
+        import shutil
+        import tempfile
+
+        print(
+            "\n[SUITE 11.3] Validando Evolución de Memoria DNI y Cross-Breeding (.gmem v2)..."
+        )
+        temp_dir = tempfile.mkdtemp(prefix="gaje_suite11_breed_")
+        dim = 64
+
+        try:
+            mgr_a = EpochManager(temp_dir, "org_a", dim)
+            orch_a = IslandOrchestrator(dim)
+            v_a = [1.0] + [0.0] * (dim - 1)
+            orch_a.add_memory_py("documental", 111, v_a, "MEMORIA_A")
+            mgr_a.create_snapshot_py(orch_a, "Gen A", None)
+
+            mgr_b = EpochManager(temp_dir, "org_b", dim)
+            orch_b = IslandOrchestrator(dim)
+            v_b = [0.0, 1.0] + [0.0] * (dim - 2)
+            orch_b.add_memory_py("documental", 222, v_b, "MEMORIA_B")
+            mgr_b.create_snapshot_py(orch_b, "Gen B", None)
+
+            # Cross breeding B -> A
+            stats_json = mgr_a.merge_memory_islands_py(orch_a, orch_b, 0.95)
+            stats = json.loads(stats_json)
+            self.assertEqual(stats["total_documental_entries"], 2)
+
+            # Evolución DNI
+            golden = [(v_a, 111), (v_b, 222)]
+            weights, fit = mgr_a.evolve_memory_niche_weights_py(
+                orch_a, golden, generations=30, population_size=8, mutation_rate=0.2
+            )
+            self.assertGreaterEqual(fit, 0.90)
+
+            # Snapshot y Gate
+            ep_h = mgr_a.create_snapshot_py(orch_a, "Híbrido A+B", None)
+            verdict_json = mgr_a.evaluate_and_gate_py(ep_h, golden)
+            verdict = json.loads(verdict_json)
+            self.assertTrue(verdict["passed"])
+            self.assertEqual(verdict["needle_recall"], 1.0)
+
+            print(
+                f"[SUITE 11.3] Cross-Breeding y Evolución DNI certificadas al 100%: Fitness {fit:.4f}."
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)

@@ -731,12 +731,15 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
         println!("  seal       --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
         println!("  evaluate   --organism <NOMBRE> --candidate <ID> [--root <DIR>]");
         println!("  consolidate --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
+        println!("  merge      --organism <DESTINO> --from-organism <DONANTE> [--dim <DIM>] [--root <DIR>]");
+        println!("  evolve     --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
         return Ok(());
     }
 
     let subcmd = &args[0];
     let mut root_dir = "models/memory_epochs".to_string();
     let mut organism = String::new();
+    let mut from_organism = String::new();
     let mut comment = "Snapshot CLI".to_string();
     let mut epoch_id = 0u64;
     let mut candidate_id = 0u64;
@@ -749,6 +752,9 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
             j += 2;
         } else if args[j] == "--organism" && j + 1 < args.len() {
             organism = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--from-organism" && j + 1 < args.len() {
+            from_organism = args[j + 1].clone();
             j += 2;
         } else if args[j] == "--comment" && j + 1 < args.len() {
             comment = args[j + 1].clone();
@@ -907,6 +913,72 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
                 "   • Total entradas documentales: {}",
                 stats.total_documental_entries
             );
+        }
+        "merge" => {
+            if from_organism.is_empty() {
+                eprintln!("Error: Se requiere --from-organism <DONANTE>");
+                return Ok(());
+            }
+            println!(
+                "🧬 Fusionando memoria de linaje: '{}' (Donante) -> '{}' (Receptor)...",
+                from_organism, organism
+            );
+            let mut donor_mgr =
+                _impl::compute::epoch_manager::EpochManager::new(&root_dir, &from_organism, dim)
+                    .map_err(|e| e.to_string())?;
+            let donor_orch = donor_mgr
+                .rollback_to(donor_mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let mut target_orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+
+            let stats = mgr.merge_memory_islands(&mut target_orch, &donor_orch, 0.95);
+            let new_epoch_id = mgr
+                .create_snapshot(
+                    &mut target_orch,
+                    &format!("Cross-Breeding con {}", from_organism),
+                    None,
+                )
+                .map_err(|e| e.to_string())?;
+
+            println!(
+                "✅ Fusión completada exitosamente: Creada Época ID {}",
+                new_epoch_id
+            );
+            println!(
+                "   • Recuerdos documentales transferidos: {}",
+                stats.episodic_transferred
+            );
+            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
+            println!(
+                "   • Total entradas documentales receptor: {}",
+                stats.total_documental_entries
+            );
+        }
+        "evolve" => {
+            println!(
+                "🧬 Ejecutando Evolución de Capa de Memoria DNI para '{}'...",
+                organism
+            );
+            let mut orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let dummy_vec = vec![1.0; dim as usize];
+            let golden = vec![(dummy_vec, 1u64)];
+            let (weights, fit) = mgr.evolve_memory_niche_weights(&mut orch, &golden, 50, 16, 0.25);
+            let new_epoch_id = mgr
+                .create_snapshot(
+                    &mut orch,
+                    &format!("Evolución DNI (Fitness: {:.4})", fit),
+                    None,
+                )
+                .map_err(|e| e.to_string())?;
+            println!(
+                "🏆 Evolución completada: Época ID {} (Fitness: {:.4})",
+                new_epoch_id, fit
+            );
+            println!("   • Pesos de Nicho Óptimos: {:?}", weights);
         }
         _ => {
             eprintln!("Subcomando de época desconocido: '{}'", subcmd);
