@@ -137,19 +137,14 @@ impl GenomicLinear {
         // por fila: para lineales grandes (p.ej. lm_head con vocab 151936) la
         // sobrecarga de una tarea por fila era el cuello de botella del entrenamiento.
         let out = self.out_features;
-        let n_threads = rayon::current_num_threads();
-        let results: Vec<f32> = (0..n_threads)
-            .into_par_iter()
-            .flat_map(|c| {
-                let start = c * out / n_threads;
-                let end = (((c + 1) * out) / n_threads).min(out);
-                let mut chunk = Vec::with_capacity(end - start);
-                for i in start..end {
-                    chunk.push(self.compute_single_row(i, &input, &m_factors, n_blocks));
-                }
-                chunk
-            })
-            .collect();
+        let mut results = vec![0.0f32; out];
+        let chunk_size = 64.max(out / (rayon::current_num_threads() * 4).max(1));
+        results.par_chunks_mut(chunk_size).enumerate().for_each(|(c_idx, chunk)| {
+            let start = c_idx * chunk_size;
+            for (i, val) in chunk.iter_mut().enumerate() {
+                *val = self.compute_single_row(start + i, &input, &m_factors, n_blocks);
+            }
+        });
         Ok(results)
     }
 
@@ -167,26 +162,21 @@ impl GenomicLinear {
         let o3 = l3.out_features;
         let total = o1 + o2 + o3;
 
-        let n_threads = rayon::current_num_threads();
-        let fused_out: Vec<f32> = (0..n_threads)
-            .into_par_iter()
-            .flat_map(|c| {
-                let start = c * total / n_threads;
-                let end = (((c + 1) * total) / n_threads).min(total);
-                let mut chunk = Vec::with_capacity(end - start);
-                for idx in start..end {
-                    let v = if idx < o1 {
-                        l1.compute_single_row(idx, input, &m_factors, n_blocks)
-                    } else if idx < o1 + o2 {
-                        l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
-                    } else {
-                        l3.compute_single_row(idx - o1 - o2, input, &m_factors, n_blocks)
-                    };
-                    chunk.push(v);
-                }
-                chunk
-            })
-            .collect();
+        let mut fused_out = vec![0.0f32; total];
+        let chunk_size = 64.max(total / (rayon::current_num_threads() * 4).max(1));
+        fused_out.par_chunks_mut(chunk_size).enumerate().for_each(|(c_idx, chunk)| {
+            let start = c_idx * chunk_size;
+            for (i, val) in chunk.iter_mut().enumerate() {
+                let idx = start + i;
+                *val = if idx < o1 {
+                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                } else if idx < o1 + o2 {
+                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                } else {
+                    l3.compute_single_row(idx - o1 - o2, input, &m_factors, n_blocks)
+                };
+            }
+        });
 
         let res1 = fused_out[0..o1].to_vec();
         let res2 = fused_out[o1..o1 + o2].to_vec();
@@ -206,24 +196,19 @@ impl GenomicLinear {
         let o2 = l2.out_features;
         let total = o1 + o2;
 
-        let n_threads = rayon::current_num_threads();
-        let fused_out: Vec<f32> = (0..n_threads)
-            .into_par_iter()
-            .flat_map(|c| {
-                let start = c * total / n_threads;
-                let end = (((c + 1) * total) / n_threads).min(total);
-                let mut chunk = Vec::with_capacity(end - start);
-                for idx in start..end {
-                    let v = if idx < o1 {
-                        l1.compute_single_row(idx, input, &m_factors, n_blocks)
-                    } else {
-                        l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
-                    };
-                    chunk.push(v);
-                }
-                chunk
-            })
-            .collect();
+        let mut fused_out = vec![0.0f32; total];
+        let chunk_size = 64.max(total / (rayon::current_num_threads() * 4).max(1));
+        fused_out.par_chunks_mut(chunk_size).enumerate().for_each(|(c_idx, chunk)| {
+            let start = c_idx * chunk_size;
+            for (i, val) in chunk.iter_mut().enumerate() {
+                let idx = start + i;
+                *val = if idx < o1 {
+                    l1.compute_single_row(idx, input, &m_factors, n_blocks)
+                } else {
+                    l2.compute_single_row(idx - o1, input, &m_factors, n_blocks)
+                };
+            }
+        });
 
         let res1 = fused_out[0..o1].to_vec();
         let res2 = fused_out[o1..total].to_vec();

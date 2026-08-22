@@ -16,6 +16,20 @@ impl GenomicLLM {
         }
     }
 
+    #[inline]
+    pub fn forward_blocks_only(&mut self, token_id: usize) -> Result<(), String> {
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
+        let mut h = self.get_token_embedding(token_id)?;
+        for block in &mut self.blocks {
+            h = block.forward_core(h, pos)?;
+        }
+        Ok(())
+    }
+
     pub fn forward_core(&mut self, token_id: usize, clear_cache: bool) -> Result<Vec<f32>, String> {
         if clear_cache {
             self.clear_cache_core();
@@ -711,16 +725,20 @@ impl GenomicLLM {
         repetition_penalty: f32,
         eos_token_ids: Vec<usize>,
     ) -> Result<Vec<usize>, String> {
-        if prompt_tokens.is_empty() {
+        let n_prompt = prompt_tokens.len();
+        if n_prompt == 0 {
             return Err("Prompt tokens cannot be empty".to_string());
         }
 
         self.clear_cache_core();
 
-        let mut last_logits = Vec::new();
-        for &tid in &prompt_tokens {
-            last_logits = self.forward_core(tid, false)?;
+        // Procesar tokens del prompt sin evaluar la proyección de vocabulario (lm_head)
+        for i in 0..n_prompt - 1 {
+            self.forward_blocks_only(prompt_tokens[i])?;
         }
+
+        // Solo evaluar logits de lm_head en el último token del prompt
+        let mut last_logits = self.forward_core(prompt_tokens[n_prompt - 1], false)?;
 
         let mut generated = Vec::new();
 

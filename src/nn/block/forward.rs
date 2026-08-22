@@ -94,6 +94,7 @@ impl RustGenomicBlock {
             GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
         };
 
+        #[cfg(debug_assertions)]
         if up.iter().any(|v| v.is_nan()) {
             return Err("NaN in up".into());
         }
@@ -108,6 +109,7 @@ impl RustGenomicBlock {
             }
         }
 
+        #[cfg(debug_assertions)]
         if ffn_out.iter().any(|v| v.is_nan()) {
             return Err("NaN in ffn_out".into());
         }
@@ -125,6 +127,7 @@ impl RustGenomicBlock {
             .w_down
             .forward_core(ffn_out, modulation, activate_rna)?;
 
+        #[cfg(debug_assertions)]
         if projected_ffn.iter().any(|v| v.is_nan()) {
             return Err("NaN in projected_ffn".into());
         }
@@ -135,6 +138,7 @@ impl RustGenomicBlock {
             .zip(projected_ffn.par_iter())
             .for_each(|(fi, &pi)| *fi += pi);
 
+        #[cfg(debug_assertions)]
         if final_out.iter().any(|v| v.is_nan()) {
             return Err("NaN after projected_ffn addition".into());
         }
