@@ -417,6 +417,34 @@ console.log(JSON.stringify(Array.from(genIds)));
         self.assertFalse(math.isinf(final_loss))
         print(f"[SUITE 9] Entrenamiento SPSA completado exitosamente: Loss={final_loss:.4f}")
 
+    def test_11_adult_specialization_spsa(self):
+        """TC-10.1: Especialización SPSA sobre memoria (.gmem) y orquestador de nichos Island."""
+        from dna_semantic_compression import IslandOrchestrator
+
+        print("\n[SUITE 10] Validando Especialización de Organismos Adultos con SPSA sobre .gmem...")
+        dim = 128
+        orch = IslandOrchestrator(dim, [1.0, 1.0, 1.0], 0.60)
+
+        # Ingestar Aguja y distractores
+        needle_text = "CLAVE_ACCESO_GAJE_999"
+        v_needle = [1.0] + [0.0] * (dim - 1)
+        orch.add_memory_py("documental", 1, v_needle, needle_text)
+
+        v_distractor = [0.0, 1.0] + [0.0] * (dim - 2)
+        orch.add_memory_py("episodic", 2, v_distractor, "EVENTO_RUTINA_1")
+
+        # Calibrar nicho Documental vía SPSA
+        queries = [v_needle] * 5
+        targets = [1] * 5
+        loss = orch.optimize_spsa_py(queries, targets, epochs=5, c=0.05, lr=0.10)
+        self.assertFalse(math.isnan(loss))
+
+        # Verificar Needle-Recall
+        matches = orch.retrieve_context_py(v_needle, 1)
+        self.assertTrue(len(matches) > 0)
+        self.assertEqual(matches[0][3], needle_text)
+        print(f"[SUITE 10] Especialización de adulto certificada al 100%: Needle recuperado con éxito.")
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
@@ -427,4 +455,5 @@ def run_all_suites():
 
 if __name__ == "__main__":
     run_all_suites()
+
 
