@@ -58,7 +58,13 @@ impl RustGenomicBlock {
             let v = qkv_out[q_dim + kv_dim..q_dim + 2 * kv_dim].to_vec();
             (q, k, v)
         } else {
-            GenomicLinear::forward_fused_3(&self.q_gen, &self.k_gen, &self.v_gen, &x_norm, modulation)?
+            GenomicLinear::forward_fused_3(
+                &self.q_gen,
+                &self.k_gen,
+                &self.v_gen,
+                &x_norm,
+                modulation,
+            )?
         };
         let (attn_out, softmax_weights, q_rope) =
             self.attn.forward_attention_cached(q, k, v, pos)?;
@@ -82,7 +88,9 @@ impl RustGenomicBlock {
 
         let mut ffn_out = vec![0.0f32; gate.len()];
         crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
-        let proj_ffn = self.w_down.forward_core(ffn_out.clone(), modulation, true)?;
+        let proj_ffn = self
+            .w_down
+            .forward_core(ffn_out.clone(), modulation, true)?;
 
         let mut final_out = x_post_attn.clone();
         for i in 0..final_out.len() {

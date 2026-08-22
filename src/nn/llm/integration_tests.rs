@@ -15,14 +15,16 @@ fn test_body_refine_changes_weights_on_real_model() {
     let x = model.embeddings.get_row_core(4).unwrap();
     let out = model.blocks[0].forward_core(x.clone(), 0).unwrap();
     let d_out = vec![0.01f32; out.len()];
-    model
-        .blocks[0]
+    model.blocks[0]
         .refine_with_grads_core(x, d_out, 0, 1e-3)
         .expect("refine_with_grads_core debió funcionar");
 
     let changed = model.blocks[0].w_down.centroids != before_down
         || model.blocks[0].w_o.centroids != before_wo;
-    assert!(changed, "el cuerpo Genomic4Bit debió mutar sus centroides tras refine");
+    assert!(
+        changed,
+        "el cuerpo Genomic4Bit debió mutar sus centroides tras refine"
+    );
 }
 
 #[test]
@@ -49,7 +51,10 @@ fn test_full_body_ce_training_changes_multiple_blocks() {
     let (logits, _) = model
         .forward_with_hidden_core(4, true)
         .expect("el forward normal debe seguir estable tras entrenar el cuerpo");
-    assert!(logits.iter().all(|v| v.is_finite()), "logits deben ser finitos");
+    assert!(
+        logits.iter().all(|v| v.is_finite()),
+        "logits deben ser finitos"
+    );
 
     let changed = model.blocks[n - 1].gate_gen.centroids != before_last;
     assert!(
@@ -84,7 +89,10 @@ fn test_cached_backprop_trains_middle_block_no_nan() {
     let (logits, _) = model
         .forward_with_hidden_core(4, true)
         .expect("forward tras caché debe seguir estable");
-    assert!(logits.iter().all(|v| v.is_finite()), "logits deben ser finitos tras caché");
+    assert!(
+        logits.iter().all(|v| v.is_finite()),
+        "logits deben ser finitos tras caché"
+    );
 
     // Los 3 bloques entrenados deben haber mutado sus centroides.
     let changed = model.blocks[n - 1].gate_gen.centroids != before_last
@@ -125,9 +133,7 @@ fn test_cached_full_body_no_nan() {
 
     let changed0 = model.blocks[0].gate_gen.centroids != before0;
     let changedlast = model.blocks[n - 1].gate_gen.centroids != beforelast;
-    eprintln!(
-        "full-body caché: block0 changed={changed0} | last changed={changedlast}"
-    );
+    eprintln!("full-body caché: block0 changed={changed0} | last changed={changedlast}");
     assert!(
         changed0 && changedlast,
         "el gradiente por caché debe llegar al bloque 0 y al último (no morir)"
@@ -136,7 +142,9 @@ fn test_cached_full_body_no_nan() {
 #[test]
 fn test_transpose_isolated_nibble() {
     let path = "models/production/smollm2_4bit.gaje.flat";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let mut model = load_genomic_auto(path).unwrap();
     // Toma el gate_gen del bloque 0 como linear Genomic4Bit aislado.
     let bi = 0usize;
@@ -150,12 +158,20 @@ fn test_transpose_isolated_nibble() {
         w[r] = 1.0;
         let d_ana = model.blocks[bi].gate_gen.backward_core(w).unwrap();
         for j in 0..n_in {
-            let mut xp = x.clone(); xp[j] += eps;
-            let yp = model.blocks[bi].gate_gen.forward_core(xp, None, true).unwrap();
-            let mut xm = x.clone(); xm[j] -= eps;
-            let ym = model.blocks[bi].gate_gen.forward_core(xm, None, true).unwrap();
-            let num = (yp[r] - ym[r]) / (2.0*eps);
-            let rel = (d_ana[j] - num).abs() / (d_ana[j].abs()+num.abs()+1e-9);
+            let mut xp = x.clone();
+            xp[j] += eps;
+            let yp = model.blocks[bi]
+                .gate_gen
+                .forward_core(xp, None, true)
+                .unwrap();
+            let mut xm = x.clone();
+            xm[j] -= eps;
+            let ym = model.blocks[bi]
+                .gate_gen
+                .forward_core(xm, None, true)
+                .unwrap();
+            let num = (yp[r] - ym[r]) / (2.0 * eps);
+            let rel = (d_ana[j] - num).abs() / (d_ana[j].abs() + num.abs() + 1e-9);
             if rel > worst {
                 worst = rel;
                 let bs = model.blocks[bi].gate_gen.block_size;
@@ -163,21 +179,37 @@ fn test_transpose_isolated_nibble() {
                 let sub = (j % bs) % 2;
                 let byte_idx = (j % bs) / 2;
                 let stride = model.blocks[bi].gate_gen.stride;
-                let db: &[u8] = match &model.blocks[bi].gate_gen.weight_db { crate::nn::linear::WeightDatabase::Genomic4Bit(d)=>d.as_ref(), _=>&[] };
+                let db: &[u8] = match &model.blocks[bi].gate_gen.weight_db {
+                    crate::nn::linear::WeightDatabase::Genomic4Bit(d) => d.as_ref(),
+                    _ => &[],
+                };
                 let nblk = model.blocks[bi].gate_gen.in_features / bs;
-                let byte = db.get(r*nblk*stride + b*stride + byte_idx).copied().unwrap_or(0);
-                eprintln!("  worst r={r} j={j} b={b} sub={sub} byte=0x{byte:02X} nibble={} ana={} num={}", if sub==0 {byte>>4} else {byte&0x0F}, d_ana[j], num);
+                let byte = db
+                    .get(r * nblk * stride + b * stride + byte_idx)
+                    .copied()
+                    .unwrap_or(0);
+                eprintln!(
+                    "  worst r={r} j={j} b={b} sub={sub} byte=0x{byte:02X} nibble={} ana={} num={}",
+                    if sub == 0 { byte >> 4 } else { byte & 0x0F },
+                    d_ana[j],
+                    num
+                );
             }
         }
     }
     eprintln!("transpose isolated (por fila): worst rel_err = {worst:.4}");
-    assert!(worst < 0.05, "backward_core (transpose) de Genomic4Bit no coincide con diferencias finitas");
+    assert!(
+        worst < 0.05,
+        "backward_core (transpose) de Genomic4Bit no coincide con diferencias finitas"
+    );
 }
 
 #[test]
 fn test_gradient_check_block_robust() {
     let path = "models/production/smollm2_4bit.gaje.flat";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let mut model = load_genomic_auto(path).unwrap();
     let bi = 0usize;
     let eps = 1e-3f64;
@@ -191,8 +223,7 @@ fn test_gradient_check_block_robust() {
     // forward_core_cached hace push al k/v_cache, así que limpiar antes de cada forward.
     model.clear_cache_core();
     let (_, cache) = model.blocks[bi].forward_core_cached(x.clone(), 0).unwrap();
-    let d_x_ana = model
-        .blocks[bi]
+    let d_x_ana = model.blocks[bi]
         .backward_core_cached(&cache, d_out.clone(), 0.0, 0.0)
         .unwrap();
 
@@ -203,20 +234,34 @@ fn test_gradient_check_block_robust() {
     let mut checked = 0usize;
     for j in 0..n_in {
         model.clear_cache_core();
-        let mut xp = x.clone(); xp[j] = xp[j] + eps as f32;
+        let mut xp = x.clone();
+        xp[j] = xp[j] + eps as f32;
         let (yp, _) = model.blocks[bi].forward_core_cached(xp, 0).unwrap();
         model.clear_cache_core();
-        let mut xm = x.clone(); xm[j] = xm[j] - eps as f32;
+        let mut xm = x.clone();
+        xm[j] = xm[j] - eps as f32;
         let (ym, _) = model.blocks[bi].forward_core_cached(xm, 0).unwrap();
-        let lp: f64 = yp.iter().zip(d_out.iter()).map(|(a,b)| *a as f64 * *b as f64).sum();
-        let lm: f64 = ym.iter().zip(d_out.iter()).map(|(a,b)| *a as f64 * *b as f64).sum();
+        let lp: f64 = yp
+            .iter()
+            .zip(d_out.iter())
+            .map(|(a, b)| *a as f64 * *b as f64)
+            .sum();
+        let lm: f64 = ym
+            .iter()
+            .zip(d_out.iter())
+            .map(|(a, b)| *a as f64 * *b as f64)
+            .sum();
         let num = (lp - lm) / (2.0 * eps);
         let a = d_x_ana[j] as f64;
-        if a.abs() < 1e-5 && num.abs() < 1e-5 { continue; }
+        if a.abs() < 1e-5 && num.abs() < 1e-5 {
+            continue;
+        }
         checked += 1;
         let rel = (a - num).abs() / (a.abs() + num.abs() + 1e-12);
         let strong = a.abs().max(num.abs()) > 0.02;
-        if rel > worst { worst = rel; }
+        if rel > worst {
+            worst = rel;
+        }
         if strong && rel > worst_strong {
             worst_strong = rel;
             if rel > 0.10 {
@@ -225,10 +270,11 @@ fn test_gradient_check_block_robust() {
         }
     }
     eprintln!("block gradient check: worst rel_err={worst:.4} worst_strong(>0.02)={worst_strong:.4} (checked {checked}/{n_in})");
-    assert!(worst_strong < 0.10, "backward_core_cached del bloque no coincide con diferencias finitas");
+    assert!(
+        worst_strong < 0.10,
+        "backward_core_cached del bloque no coincide con diferencias finitas"
+    );
 }
-
-
 
 #[test]
 fn test_refine_indexing_matches_forward() {
@@ -237,7 +283,9 @@ fn test_refine_indexing_matches_forward() {
     // comparando el delta real del centroide 0 contra una suma manual que
     // lee el db con el mapeo del forward. Sin re-evaluar forward (sin ruido f32).
     let path = "models/production/smollm2_4bit.gaje.flat";
-    if !std::path::Path::new(path).exists() { return; }
+    if !std::path::Path::new(path).exists() {
+        return;
+    }
     let mut model = load_genomic_auto(path).unwrap();
     let bi = 0usize;
     let lr = 1e-4f32;
@@ -253,8 +301,12 @@ fn test_refine_indexing_matches_forward() {
         _ => vec![],
     };
     // input y grads sintéticos con magnitudes O(1) para señal fuerte.
-    let x: Vec<f32> = (0..in_features).map(|j| ((j % 7) as f32 - 3.0) * 0.1).collect();
-    let grads: Vec<f32> = (0..out_features).map(|i| ((i % 5) as f32 - 2.0) * 0.05).collect();
+    let x: Vec<f32> = (0..in_features)
+        .map(|j| ((j % 7) as f32 - 3.0) * 0.1)
+        .collect();
+    let grads: Vec<f32> = (0..out_features)
+        .map(|i| ((i % 5) as f32 - 2.0) * 0.05)
+        .collect();
     drop(gl);
 
     let c_before = model.blocks[bi].gate_gen.centroids[0];
@@ -282,9 +334,17 @@ fn test_refine_indexing_matches_forward() {
     }
 
     let rel = (delta_actual as f64 - expected).abs() / (expected.abs() + 1e-12);
-    eprintln!("refine vs forward: delta_actual={delta_actual:.6} expected={expected:.6} rel_err={rel:.6}");
-    assert!(expected.abs() > 1e-3, "centroide 0 sin pesos asignados? señal demasiado débil");
-    assert!(rel < 1e-2, "refine no acumula con el mapeo del forward (rel_err={rel:.6})");
+    eprintln!(
+        "refine vs forward: delta_actual={delta_actual:.6} expected={expected:.6} rel_err={rel:.6}"
+    );
+    assert!(
+        expected.abs() > 1e-3,
+        "centroide 0 sin pesos asignados? señal demasiado débil"
+    );
+    assert!(
+        rel < 1e-2,
+        "refine no acumula con el mapeo del forward (rel_err={rel:.6})"
+    );
 }
 
 // ---- Entrenamiento del cuerpo con validación held-out (Vía B) ----
@@ -325,8 +385,8 @@ fn test_body_training_heldout_generalization() {
     let vocab = model.embeddings.out_features;
 
     // Tokenizar el corpus (prompt+answer) en el tokenizer del estudiante.
-    let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path)
-        .expect("cargar tokenizer");
+    let tokenizer =
+        crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("cargar tokenizer");
     let raw = std::fs::read_to_string(corpus_path).expect("leer corpus");
     let mut stream: Vec<usize> = Vec::new();
     for line in raw.lines() {
@@ -345,7 +405,11 @@ fn test_body_training_heldout_generalization() {
             }
         }
     }
-    assert!(stream.len() >= 40, "corpus demasiado corto: {}", stream.len());
+    assert!(
+        stream.len() >= 40,
+        "corpus demasiado corto: {}",
+        stream.len()
+    );
     eprintln!(
         "vocab={vocab} tok_vocab={} stream_len={} n_blocks={n}",
         tokenizer.vocab_size(),
@@ -357,7 +421,10 @@ fn test_body_training_heldout_generalization() {
     let train: Vec<usize> = stream[..stream.len() - held_len].to_vec();
 
     let loss_before = ce_loss(&mut model, &heldout);
-    assert!(loss_before.is_finite(), "loss held-out inicial debe ser finita");
+    assert!(
+        loss_before.is_finite(),
+        "loss held-out inicial debe ser finita"
+    );
     eprintln!("heldout CE ANTES = {loss_before:.4}");
 
     // Entrenar el cuerpo (escalera: últimos bloques), lr pequeño, grad-clip activo.
@@ -374,16 +441,26 @@ fn test_body_training_heldout_generalization() {
     let (logits, _) = model
         .forward_with_hidden_core(heldout[0], true)
         .expect("forward tras entrenar");
-    assert!(logits.iter().all(|v| v.is_finite()), "forward debe ser finito tras entrenar");
+    assert!(
+        logits.iter().all(|v| v.is_finite()),
+        "forward debe ser finito tras entrenar"
+    );
 
     let loss_after = ce_loss(&mut model, &heldout);
-    assert!(loss_after.is_finite(), "loss held-out final debe ser finita");
+    assert!(
+        loss_after.is_finite(),
+        "loss held-out final debe ser finita"
+    );
     eprintln!("heldout CE DESPUÉS = {loss_after:.4}");
 
     let body_mutated = model.blocks[n - 1].gate_gen.centroids != before_last;
     assert!(body_mutated, "el cuerpo debe mutar sus centroides");
 
-    let verdict = if loss_after < loss_before { "MEJORA" } else { "ESTABLE" };
+    let verdict = if loss_after < loss_before {
+        "MEJORA"
+    } else {
+        "ESTABLE"
+    };
     eprintln!("→ generalización: {verdict} ({loss_before:.4} -> {loss_after:.4})");
     assert!(
         loss_after <= loss_before * 1.5,
@@ -415,7 +492,9 @@ fn test_body_training_fullbody_heldout() {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
             let prompt = v["prompt"].as_str().unwrap_or("");
             let answer = v["answer"].as_str().unwrap_or("");
-            let ids = tokenizer.encode(&format!("{prompt}{answer}"), false).expect("encode");
+            let ids = tokenizer
+                .encode(&format!("{prompt}{answer}"), false)
+                .expect("encode");
             for id in ids {
                 stream.push((id as usize).min(vocab - 1));
             }
@@ -427,7 +506,11 @@ fn test_body_training_fullbody_heldout() {
     // Subset pequeño de entrenamiento para que el backward full-body sea factible.
     let train_max = stream.len() - held_len;
     let train: Vec<usize> = stream[..train_max.min(240)].to_vec();
-    eprintln!("full-body: train_len={} held_len={} n_blocks={n}", train.len(), heldout.len());
+    eprintln!(
+        "full-body: train_len={} held_len={} n_blocks={n}",
+        train.len(),
+        heldout.len()
+    );
 
     let loss_before = ce_loss(&mut model, &heldout);
     assert!(loss_before.is_finite());
@@ -444,7 +527,10 @@ fn test_body_training_fullbody_heldout() {
 
     model.clear_cache_core();
     let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
-    assert!(logits.iter().all(|v| v.is_finite()), "forward full-body debe ser finito");
+    assert!(
+        logits.iter().all(|v| v.is_finite()),
+        "forward full-body debe ser finito"
+    );
 
     let loss_after = ce_loss(&mut model, &heldout);
     assert!(loss_after.is_finite());
@@ -452,9 +538,16 @@ fn test_body_training_fullbody_heldout() {
 
     let changed0 = model.blocks[0].gate_gen.centroids != before0;
     let changedlast = model.blocks[n - 1].gate_gen.centroids != beforelast;
-    assert!(changed0 && changedlast, "full-body debe mutar bloque 0 y último (block0={changed0} last={changedlast})");
+    assert!(
+        changed0 && changedlast,
+        "full-body debe mutar bloque 0 y último (block0={changed0} last={changedlast})"
+    );
 
-    let verdict = if loss_after < loss_before { "MEJORA" } else { "ESTABLE" };
+    let verdict = if loss_after < loss_before {
+        "MEJORA"
+    } else {
+        "ESTABLE"
+    };
     eprintln!("→ full-body generalización: {verdict} ({loss_before:.4} -> {loss_after:.4})");
     assert!(
         loss_after <= loss_before * 1.5,
@@ -504,7 +597,10 @@ fn test_body_ladder_sweep() {
     let base_loss = ce_loss(&mut base, &heldout);
     drop(base);
 
-    eprintln!("=== Barrido escalera (train_len={}) ===  baseline heldout={base_loss:.4}", train.len());
+    eprintln!(
+        "=== Barrido escalera (train_len={}) ===  baseline heldout={base_loss:.4}",
+        train.len()
+    );
     let cfgs: Vec<(usize, f32)> = vec![(4, 1e-5), (8, 1e-5), (12, 5e-6), (16, 2e-6)];
     let mut best: Option<(usize, f32, f32)> = None;
     for (nb, lr) in cfgs {
@@ -517,14 +613,24 @@ fn test_body_ladder_sweep() {
         let finite = logits.iter().all(|v| v.is_finite());
         let after = ce_loss(&mut model, &heldout);
         let delta = after - base_loss;
-        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        let mark = if !finite {
+            "NaN!!"
+        } else if delta < -0.01 {
+            "MEJORA"
+        } else if delta <= 0.01 {
+            "ESTABLE"
+        } else {
+            "DEGRADA"
+        };
         eprintln!("  n_blk={nb:>2} lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
         if finite && (best.is_none() || after < best.unwrap().2) {
             best = Some((nb, lr, after));
         }
     }
     let (nb, lr, after) = best.expect("ninguna config finita");
-    eprintln!("→ mejor escalera: n_blk={nb} lr={lr:.0e} heldout={after:.4} (baseline {base_loss:.4})");
+    eprintln!(
+        "→ mejor escalera: n_blk={nb} lr={lr:.0e} heldout={after:.4} (baseline {base_loss:.4})"
+    );
     assert!(
         after < base_loss,
         "la mejor config de escalera no mejoró held-out (baseline {base_loss:.4} -> {after:.4})"
@@ -572,7 +678,10 @@ fn test_body_lr_sweep_blk8() {
     drop(base);
 
     let nb = 8usize;
-    eprintln!("=== Barrido lr (n_blk={nb}, train_len={}) === baseline={base_loss:.4}", train.len());
+    eprintln!(
+        "=== Barrido lr (n_blk={nb}, train_len={}) === baseline={base_loss:.4}",
+        train.len()
+    );
     let mut best: Option<(f32, f32)> = None;
     for lr in [2e-6f32, 5e-6, 1e-5, 2e-5, 5e-5] {
         let mut model = load_genomic_auto(model_path).unwrap();
@@ -584,7 +693,15 @@ fn test_body_lr_sweep_blk8() {
         let finite = logits.iter().all(|v| v.is_finite());
         let after = ce_loss(&mut model, &heldout);
         let delta = after - base_loss;
-        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        let mark = if !finite {
+            "NaN!!"
+        } else if delta < -0.01 {
+            "MEJORA"
+        } else if delta <= 0.01 {
+            "ESTABLE"
+        } else {
+            "DEGRADA"
+        };
         eprintln!("  lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
         if finite && (best.is_none() || after < best.unwrap().1) {
             best = Some((lr, after));
@@ -645,9 +762,21 @@ fn test_body_lr_high_boundary() {
         model.clear_cache_core();
         let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
         let finite = logits.iter().all(|v| v.is_finite());
-        let after = if finite { ce_loss(&mut model, &heldout) } else { f32::INFINITY };
+        let after = if finite {
+            ce_loss(&mut model, &heldout)
+        } else {
+            f32::INFINITY
+        };
         let delta = after - base_loss;
-        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        let mark = if !finite {
+            "NaN!!"
+        } else if delta < -0.01 {
+            "MEJORA"
+        } else if delta <= 0.01 {
+            "ESTABLE"
+        } else {
+            "DEGRADA"
+        };
         eprintln!("  lr={lr:.0e} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
     }
     // No assert: este test solo mapea la frontera de estabilidad (informativo).
@@ -711,16 +840,30 @@ fn test_body_layerwise_scale() {
         model.clear_cache_core();
         let (logits, _) = model.forward_with_hidden_core(heldout[0], true).unwrap();
         let finite = logits.iter().all(|v| v.is_finite());
-        let after = if finite { ce_loss(&mut model, &heldout) } else { f32::INFINITY };
+        let after = if finite {
+            ce_loss(&mut model, &heldout)
+        } else {
+            f32::INFINITY
+        };
         let delta = after - base_loss;
-        let mark = if !finite { "NaN!!" } else if delta < -0.01 { "MEJORA" } else if delta <= 0.01 { "ESTABLE" } else { "DEGRADA" };
+        let mark = if !finite {
+            "NaN!!"
+        } else if delta < -0.01 {
+            "MEJORA"
+        } else if delta <= 0.01 {
+            "ESTABLE"
+        } else {
+            "DEGRADA"
+        };
         eprintln!("  n_blk={nb:>2} {label:<14} train={tloss:.4} heldout={after:.4} Δ={delta:+.4} [{mark}]");
         if finite && (best.is_none() || after < best.unwrap().3) {
             best = Some((nb, decay, label, after));
         }
     }
     let (nb, decay, label, after) = best.expect("ninguna finita");
-    eprintln!("→ mejor: n_blk={nb} {label} (decay={decay}) heldout={after:.4} (baseline {base_loss:.4})");
+    eprintln!(
+        "→ mejor: n_blk={nb} {label} (decay={decay}) heldout={after:.4} (baseline {base_loss:.4})"
+    );
     assert!(
         after < base_loss,
         "lr por capas no mejoró held-out (baseline {base_loss:.4} -> {after:.4})"

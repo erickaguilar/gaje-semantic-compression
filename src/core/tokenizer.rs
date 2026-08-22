@@ -37,7 +37,10 @@ impl GajeTokenizer {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
         let inner =
             Tokenizer::from_file(path).map_err(|e| format!("Error cargando tokenizador: {}", e))?;
-        Ok(Self { inner: Some(inner), gtok: None })
+        Ok(Self {
+            inner: Some(inner),
+            gtok: None,
+        })
     }
 
     /// Carga el tokenizador desde bytes (JSON)
@@ -45,14 +48,20 @@ impl GajeTokenizer {
     pub fn from_bytes<B: AsRef<[u8]>>(bytes: B) -> Result<Self, Box<dyn Error>> {
         let inner = Tokenizer::from_bytes(bytes)
             .map_err(|e| format!("Error cargando tokenizador desde bytes: {}", e))?;
-        Ok(Self { inner: Some(inner), gtok: None })
+        Ok(Self {
+            inner: Some(inner),
+            gtok: None,
+        })
     }
 
     /// Inicializa el tokenizador desde un GTOK nativo (pure Rust / WASM)
     pub fn from_gtok(gtok: GtokNativeTokenizer) -> Self {
         #[cfg(feature = "native")]
         {
-            Self { inner: None, gtok: Some(gtok) }
+            Self {
+                inner: None,
+                gtok: Some(gtok),
+            }
         }
         #[cfg(not(feature = "native"))]
         {

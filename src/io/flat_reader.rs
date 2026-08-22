@@ -118,9 +118,8 @@ impl GajeFlatFileReader {
                 "Directorio de tensores excede el tamaño del buffer",
             ));
         }
-        let dir_entries: Vec<FlatTensorEntry> =
-            serde_json::from_slice(&slice[dir_start..dir_end])
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let dir_entries: Vec<FlatTensorEntry> = serde_json::from_slice(&slice[dir_start..dir_end])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let mut tensor_map = std::collections::HashMap::with_capacity(num_tensors);
         for entry in dir_entries {

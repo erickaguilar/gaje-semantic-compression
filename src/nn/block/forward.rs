@@ -99,8 +99,13 @@ impl RustGenomicBlock {
             return Err("NaN in up".into());
         }
 
-        let mut ffn_out = if std::env::var("GAJE_ENABLE_GPU").map(|v| v == "1").unwrap_or(false) {
-            if let Some(gpu_out) = crate::compute::gpu::pipeline::gpu_swiglu(&gate, &up, self.h_scale) {
+        let mut ffn_out = if std::env::var("GAJE_ENABLE_GPU")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
+            if let Some(gpu_out) =
+                crate::compute::gpu::pipeline::gpu_swiglu(&gate, &up, self.h_scale)
+            {
                 gpu_out
             } else {
                 let mut out = vec![0.0f32; gate.len()];

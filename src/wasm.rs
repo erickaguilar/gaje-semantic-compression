@@ -3,11 +3,11 @@
 //! Este módulo expone la interfaz `wasm-bindgen` para ejecutar modelos genómicos planos (.flat)
 //! directamente dentro de navegadores web (Web Workers / Main Thread) sin servidores de fondo.
 
-use wasm_bindgen::prelude::*;
 use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
 use crate::io::flat_reader::GajeFlatFileReader;
 use crate::nn::llm::GenomicLLM;
+use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub struct GajeWasmEngine {
@@ -35,9 +35,9 @@ impl GajeWasmEngine {
         let reader = GajeFlatFileReader::from_bytes(bytes.to_vec())
             .map_err(|e| JsValue::from_str(&format!("Error leyendo formato .flat: {}", e)))?;
 
-        let config = reader
-            .load_config()
-            .map_err(|e| JsValue::from_str(&format!("Error leyendo metadatos de configuración: {}", e)))?;
+        let config = reader.load_config().map_err(|e| {
+            JsValue::from_str(&format!("Error leyendo metadatos de configuración: {}", e))
+        })?;
 
         let tokenizer = reader.get_embedded_gtok();
 
@@ -58,7 +58,9 @@ impl GajeWasmEngine {
         if let Some(ref tok) = self.tokenizer {
             Ok(tok.encode(text))
         } else {
-            Err(JsValue::from_str("El modelo no contiene un tokenizador GTOK incrustado"))
+            Err(JsValue::from_str(
+                "El modelo no contiene un tokenizador GTOK incrustado",
+            ))
         }
     }
 
@@ -68,7 +70,9 @@ impl GajeWasmEngine {
         if let Some(ref tok) = self.tokenizer {
             Ok(tok.decode(ids))
         } else {
-            Err(JsValue::from_str("El modelo no contiene un tokenizador GTOK incrustado"))
+            Err(JsValue::from_str(
+                "El modelo no contiene un tokenizador GTOK incrustado",
+            ))
         }
     }
 
@@ -94,7 +98,9 @@ impl GajeWasmEngine {
                 repetition_penalty,
                 stop_usize,
             )
-            .map_err(|e| JsValue::from_str(&format!("Error en generación autorregresiva: {}", e)))?;
+            .map_err(|e| {
+                JsValue::from_str(&format!("Error en generación autorregresiva: {}", e))
+            })?;
 
         Ok(gen_usize.into_iter().map(|x| x as u32).collect())
     }
@@ -109,10 +115,9 @@ impl GajeWasmEngine {
         repetition_penalty: f32,
     ) -> Result<String, JsValue> {
         let (prompt_ids, stop_ids) = {
-            let tok = self
-                .tokenizer
-                .as_ref()
-                .ok_or_else(|| JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado"))?;
+            let tok = self.tokenizer.as_ref().ok_or_else(|| {
+                JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado")
+            })?;
 
             let p_ids = tok.encode(prompt);
             if p_ids.is_empty() {

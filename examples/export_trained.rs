@@ -32,7 +32,9 @@ use _impl::io::flat_writer::save_genomic_flat;
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 4 {
-        eprintln!("uso: export_trained <input.flat> <output.flat> <corpus> [n_blk] [lr] [decay] [epochs]");
+        eprintln!(
+            "uso: export_trained <input.flat> <output.flat> <corpus> [n_blk] [lr] [decay] [epochs]"
+        );
         std::process::exit(2);
     }
     let input = &args[1];
@@ -126,7 +128,9 @@ fn main() {
         let mut total = 0.0f32;
         let mut n = 0usize;
         for seq in &sequences {
-            let ce = model.eval_ce_core(seq).expect("eval CE base (forward-only)");
+            let ce = model
+                .eval_ce_core(seq)
+                .expect("eval CE base (forward-only)");
             total += ce * seq.len().saturating_sub(1) as f32;
             n += seq.len().saturating_sub(1);
         }

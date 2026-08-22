@@ -37,7 +37,9 @@ pub fn get_gpu_info_py(py: Python<'_>) -> PyResult<Option<PyObject>> {
 #[cfg(feature = "python")]
 #[pyfunction]
 pub fn gpu_swiglu_py(gate: Vec<f32>, up: Vec<f32>, h_scale: f32) -> PyResult<Option<Vec<f32>>> {
-    Ok(crate::compute::gpu::pipeline::gpu_swiglu(&gate, &up, h_scale))
+    Ok(crate::compute::gpu::pipeline::gpu_swiglu(
+        &gate, &up, h_scale,
+    ))
 }
 
 #[cfg(feature = "python")]
@@ -48,5 +50,7 @@ pub fn gpu_gemv_f32_py(
     rows: usize,
     cols: usize,
 ) -> PyResult<Option<Vec<f32>>> {
-    Ok(crate::compute::gpu::pipeline::gpu_gemv_f32(&weights, &x, rows, cols))
+    Ok(crate::compute::gpu::pipeline::gpu_gemv_f32(
+        &weights, &x, rows, cols,
+    ))
 }

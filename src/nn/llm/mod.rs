@@ -15,10 +15,10 @@
 // - [`python`](crate::nn::llm::python): bindings `#[pymethods]` (feature `python`).
 
 pub mod forward;
-pub mod mutation;
-pub mod python;
 #[cfg(test)]
 pub mod integration_tests;
+pub mod mutation;
+pub mod python;
 
 use std::sync::Arc;
 

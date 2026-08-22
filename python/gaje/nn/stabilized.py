@@ -951,7 +951,11 @@ class GenomicLLM:
 
     def has_quantum_embeddings(self) -> bool:
         """Indica si el modelo tiene activa una tabla de embeddings cuántica .qemb."""
-        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "has_quantum_embeddings"):
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "has_quantum_embeddings")
+        ):
             return bool(self.rust_llm.has_quantum_embeddings())
         return False
 
@@ -963,16 +967,26 @@ class GenomicLLM:
         elif isinstance(source, (bytes, bytearray)):
             data = bytes(source)
         else:
-            raise ValueError("source debe ser una ruta de archivo (str) o buffer binario (bytes)")
+            raise ValueError(
+                "source debe ser una ruta de archivo (str) o buffer binario (bytes)"
+            )
 
-        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "load_quantum_embeddings_bytes"):
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "load_quantum_embeddings_bytes")
+        ):
             self.rust_llm.load_quantum_embeddings_bytes(data)
             return True
         return False
 
     def unload_quantum_embeddings(self):
         """Descarga la tabla cuántica y revierte a embeddings estándar."""
-        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "unload_quantum_embeddings"):
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "unload_quantum_embeddings")
+        ):
             self.rust_llm.unload_quantum_embeddings()
 
     def forward(self, tokens, clear_cache=True):
@@ -1298,10 +1312,13 @@ class GenomicLLM:
                     # 1. Prioridad: Tokenizador binario nativo GTOK embebido en cabecera .flat
                     try:
                         from gaje.processing.gtok import extract_gtok_from_flat
+
                         tokenizer = extract_gtok_from_flat(input_path)
                         if tokenizer is not None:
-                            print(f"⚡ [GTOK Native] Tokenizador binario nativo cargado directamente desde la cabecera .flat")
-                    except Exception as ex_gtok:
+                            print(
+                                "⚡ [GTOK Native] Tokenizador binario nativo cargado directamente desde la cabecera .flat"
+                            )
+                    except Exception:
                         pass
 
                     if tokenizer is None:
@@ -1313,7 +1330,9 @@ class GenomicLLM:
                                 if isinstance(embedded_tok, str):
                                     tokenizer = Tokenizer.from_str(embedded_tok)
                                 else:
-                                    tokenizer = Tokenizer.from_str(json.dumps(embedded_tok))
+                                    tokenizer = Tokenizer.from_str(
+                                        json.dumps(embedded_tok)
+                                    )
                             except Exception as ex_tok:
                                 print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
                     if tokenizer is None:
@@ -1367,7 +1386,9 @@ class GenomicLLM:
                     # Autodetección de tabla cuántica companion (.qemb) - Opt-in controlado
                     if os.environ.get("GAJE_ENABLE_QEMB") == "1":
                         qemb_candidate = os.path.splitext(input_path)[0] + ".qemb"
-                        if os.path.exists(qemb_candidate) and os.path.isfile(qemb_candidate):
+                        if os.path.exists(qemb_candidate) and os.path.isfile(
+                            qemb_candidate
+                        ):
                             try:
                                 with open(qemb_candidate, "rb") as f_q:
                                     q_data = f_q.read()

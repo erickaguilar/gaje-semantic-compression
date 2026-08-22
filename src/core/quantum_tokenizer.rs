@@ -24,7 +24,10 @@ impl Complex32 {
     }
 
     pub fn conj(&self) -> Self {
-        Self { re: self.re, im: -self.im }
+        Self {
+            re: self.re,
+            im: -self.im,
+        }
     }
 
     pub fn mul(&self, other: &Self) -> Self {
@@ -54,7 +57,11 @@ impl DensityMatrix4x4 {
         for c in psi.iter() {
             norm_sq += c.norm_sq();
         }
-        let inv_norm = if norm_sq > 1e-9 { 1.0 / norm_sq.sqrt() } else { 1.0 };
+        let inv_norm = if norm_sq > 1e-9 {
+            1.0 / norm_sq.sqrt()
+        } else {
+            1.0
+        };
         let normalized = [
             Complex32::new(psi[0].re * inv_norm, psi[0].im * inv_norm),
             Complex32::new(psi[1].re * inv_norm, psi[1].im * inv_norm),
@@ -95,7 +102,11 @@ impl DensityMatrix4x4 {
         for val in context.iter() {
             c_norm_sq += val * val;
         }
-        let inv_c_norm = if c_norm_sq > 1e-9 { 1.0 / c_norm_sq.sqrt() } else { 1.0 };
+        let inv_c_norm = if c_norm_sq > 1e-9 {
+            1.0 / c_norm_sq.sqrt()
+        } else {
+            1.0
+        };
 
         for i in 0..4 {
             let base_prob = self.m[i][i].re;
@@ -128,10 +139,22 @@ impl QuantumGenomicTokenizer {
         let t4 = ((code * 23) % 360) as f32 * std::f32::consts::PI / 180.0;
 
         let psi = [
-            Complex32::new(t1.cos() * (t1.cos().powi(2) + self.smoothing), t1.sin() * (t1.cos().powi(2) + self.smoothing)),
-            Complex32::new(t2.cos() * (t2.sin().powi(2) + self.smoothing), t2.sin() * (t2.sin().powi(2) + self.smoothing)),
-            Complex32::new(t3.cos() * (t3.cos().powi(2) + self.smoothing), t3.sin() * (t3.cos().powi(2) + self.smoothing)),
-            Complex32::new(t4.cos() * (t4.sin().powi(2) + self.smoothing), t4.sin() * (t4.sin().powi(2) + self.smoothing)),
+            Complex32::new(
+                t1.cos() * (t1.cos().powi(2) + self.smoothing),
+                t1.sin() * (t1.cos().powi(2) + self.smoothing),
+            ),
+            Complex32::new(
+                t2.cos() * (t2.sin().powi(2) + self.smoothing),
+                t2.sin() * (t2.sin().powi(2) + self.smoothing),
+            ),
+            Complex32::new(
+                t3.cos() * (t3.cos().powi(2) + self.smoothing),
+                t3.sin() * (t3.cos().powi(2) + self.smoothing),
+            ),
+            Complex32::new(
+                t4.cos() * (t4.sin().powi(2) + self.smoothing),
+                t4.sin() * (t4.sin().powi(2) + self.smoothing),
+            ),
         ];
 
         DensityMatrix4x4::from_state_vector(&psi)
@@ -162,11 +185,19 @@ mod tests {
 
         // 1. Traza debe ser unitaria
         let tr = rho.trace();
-        assert!((tr - 1.0).abs() < 1e-4, "Traza(ρ) debe ser 1.0, obtenido: {}", tr);
+        assert!(
+            (tr - 1.0).abs() < 1e-4,
+            "Traza(ρ) debe ser 1.0, obtenido: {}",
+            tr
+        );
 
         // 2. Pureza de estado puro debe ser ~1.0
         let pur = rho.purity();
-        assert!((pur - 1.0).abs() < 1e-3, "Pureza de estado puro debe ser ~1.0, obtenido: {}", pur);
+        assert!(
+            (pur - 1.0).abs() < 1e-3,
+            "Pureza de estado puro debe ser ~1.0, obtenido: {}",
+            pur
+        );
     }
 
     #[test]

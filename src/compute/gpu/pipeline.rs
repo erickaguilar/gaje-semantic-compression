@@ -362,12 +362,7 @@ pub fn gpu_swiglu(gate: &[f32], up: &[f32], h_scale: f32) -> Option<Vec<f32>> {
 }
 
 /// Helper para ejecutar GEMV FP32 en GPU si está disponible
-pub fn gpu_gemv_f32(
-    weights: &[f32],
-    x: &[f32],
-    rows: usize,
-    cols: usize,
-) -> Option<Vec<f32>> {
+pub fn gpu_gemv_f32(weights: &[f32], x: &[f32], rows: usize, cols: usize) -> Option<Vec<f32>> {
     #[cfg(feature = "gpu")]
     {
         GLOBAL_GPU_PIPELINES

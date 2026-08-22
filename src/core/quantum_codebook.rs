@@ -33,8 +33,8 @@ pub struct QuantumEmbeddingTableNative {
     pub codebook: QuantumCodebookNative,
     pub num_tokens: usize,
     pub m: usize,
-    pub indices: Vec<u16>,    // num_tokens * m
-    pub amplitudes: Vec<u8>,  // num_tokens * m (quantized [0..255])
+    pub indices: Vec<u16>,   // num_tokens * m
+    pub amplitudes: Vec<u8>, // num_tokens * m (quantized [0..255])
 }
 
 impl QuantumEmbeddingTableNative {
@@ -103,9 +103,17 @@ impl QuantumEmbeddingTableNative {
 
     /// Descomprime y llena el vector `out` con el embedding reconstruido del token en O(m * dim)
     pub fn get_embedding(&self, token_id: usize, out: &mut [f32]) {
-        let tid = if token_id < self.num_tokens { token_id } else { 0 };
+        let tid = if token_id < self.num_tokens {
+            token_id
+        } else {
+            0
+        };
         let dim = self.codebook.dim;
-        assert_eq!(out.len(), dim, "El buffer de salida debe coincidir con la dimensión");
+        assert_eq!(
+            out.len(),
+            dim,
+            "El buffer de salida debe coincidir con la dimensión"
+        );
 
         // Inicializar en 0
         for x in out.iter_mut() {

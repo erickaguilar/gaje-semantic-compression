@@ -55,7 +55,9 @@ fn test_lm_head_fp32_update() {
         "FP32 weights must change after refine (path was a silent no-op)"
     );
 
-    let out_after = linear.forward_core(vec![1.0f32, 2.0, 3.0, 4.0], None, false).unwrap();
+    let out_after = linear
+        .forward_core(vec![1.0f32, 2.0, 3.0, 4.0], None, false)
+        .unwrap();
     assert!(
         (out_after[0] - out_before[0]).abs() > 0.0,
         "logit 0 must change after update"
@@ -170,7 +172,9 @@ fn test_q8_0_scale_update() {
     let input = vec![1.0f32; 32];
     let out_before = linear.forward_core(input.clone(), None, false).unwrap();
 
-    linear.refine_with_grads_core(input, vec![1.0f32], 1e-2).unwrap();
+    linear
+        .refine_with_grads_core(input, vec![1.0f32], 1e-2)
+        .unwrap();
 
     let s1 = match &linear.weight_db {
         WeightDatabase::GenomicQ8_0(db) => db[0].scale.to_f32(),
@@ -208,8 +212,21 @@ fn test_backward_transpose_q4_0() {
         .to_vec()
     };
     let linear = GenomicLinear::new(
-        raw_bytes, Vec::new(), Vec::new(), 2, 32, 32, Vec::new(), 1e-6,
-        Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), 4,
+        raw_bytes,
+        Vec::new(),
+        Vec::new(),
+        2,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        4,
     );
 
     let d_output = vec![2.0f32, 3.0];
@@ -332,7 +349,9 @@ fn test_q2_0_linear_forward_roundtrip() {
     for k in 0..8 {
         let mut byte = 0u8;
         for j in 0..4 {
-            let q = (((row0[k * 4 + j] - min0) * inv_scale0).round().clamp(0.0, 3.0)) as u8;
+            let q = (((row0[k * 4 + j] - min0) * inv_scale0)
+                .round()
+                .clamp(0.0, 3.0)) as u8;
             byte |= q << (j * 2);
         }
         qs0[k] = byte;
@@ -352,7 +371,9 @@ fn test_q2_0_linear_forward_roundtrip() {
     for k in 0..8 {
         let mut byte = 0u8;
         for j in 0..4 {
-            let q = (((row1[k * 4 + j] - min1) * inv_scale1).round().clamp(0.0, 3.0)) as u8;
+            let q = (((row1[k * 4 + j] - min1) * inv_scale1)
+                .round()
+                .clamp(0.0, 3.0)) as u8;
             byte |= q << (j * 2);
         }
         qs1[k] = byte;

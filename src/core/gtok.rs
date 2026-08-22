@@ -103,10 +103,30 @@ impl GtokNativeTokenizer {
             return Err("Buffer truncado en sección de tokens especiales".to_string());
         }
 
-        let bos_id = u32::from_le_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]);
-        let eos_id = u32::from_le_bytes([data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7]]);
-        let unk_id = u32::from_le_bytes([data[offset + 8], data[offset + 9], data[offset + 10], data[offset + 11]]);
-        let pad_id = u32::from_le_bytes([data[offset + 12], data[offset + 13], data[offset + 14], data[offset + 15]]);
+        let bos_id = u32::from_le_bytes([
+            data[offset],
+            data[offset + 1],
+            data[offset + 2],
+            data[offset + 3],
+        ]);
+        let eos_id = u32::from_le_bytes([
+            data[offset + 4],
+            data[offset + 5],
+            data[offset + 6],
+            data[offset + 7],
+        ]);
+        let unk_id = u32::from_le_bytes([
+            data[offset + 8],
+            data[offset + 9],
+            data[offset + 10],
+            data[offset + 11],
+        ]);
+        let pad_id = u32::from_le_bytes([
+            data[offset + 12],
+            data[offset + 13],
+            data[offset + 14],
+            data[offset + 15],
+        ]);
         let extra_stops_count = u16::from_le_bytes([data[offset + 16], data[offset + 17]]) as usize;
         offset += 18;
 
@@ -115,7 +135,12 @@ impl GtokNativeTokenizer {
             if data.len() < offset + 4 {
                 return Err("Buffer truncado en lista de stop tokens".to_string());
             }
-            let sid = u32::from_le_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]);
+            let sid = u32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
             extra_stop_ids.push(sid);
             offset += 4;
         }
@@ -128,7 +153,12 @@ impl GtokNativeTokenizer {
 
         let mut string_offsets = Vec::with_capacity(offsets_count);
         for _ in 0..offsets_count {
-            let off = u32::from_le_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]) as usize;
+            let off = u32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]) as usize;
             string_offsets.push(off);
             offset += 4;
         }
@@ -162,9 +192,24 @@ impl GtokNativeTokenizer {
         let mut merges_map = HashMap::with_capacity(merges_count);
 
         for _ in 0..merges_count {
-            let left = u32::from_le_bytes([data[offset], data[offset + 1], data[offset + 2], data[offset + 3]]);
-            let right = u32::from_le_bytes([data[offset + 4], data[offset + 5], data[offset + 6], data[offset + 7]]);
-            let target = u32::from_le_bytes([data[offset + 8], data[offset + 9], data[offset + 10], data[offset + 11]]);
+            let left = u32::from_le_bytes([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
+            let right = u32::from_le_bytes([
+                data[offset + 4],
+                data[offset + 5],
+                data[offset + 6],
+                data[offset + 7],
+            ]);
+            let target = u32::from_le_bytes([
+                data[offset + 8],
+                data[offset + 9],
+                data[offset + 10],
+                data[offset + 11],
+            ]);
             merges.push((left, right, target));
             merges_map.insert((left, right), target);
             offset += 12;
@@ -269,31 +314,15 @@ mod tests {
     fn test_gtok_native_roundtrip() {
         let data = vec![
             // Header: "GTOK", v=1, flags=1, vocab=4, merges=1
-            b'G', b'T', b'O', b'K',
-            1, 0, 1, 0,
-            4, 0, 0, 0,
-            1, 0, 0, 0,
+            b'G', b'T', b'O', b'K', 1, 0, 1, 0, 4, 0, 0, 0, 1, 0, 0, 0,
             // Specials: bos=1, eos=2, unk=0, pad=0, extra=0
-            1, 0, 0, 0,
-            2, 0, 0, 0,
-            0, 0, 0, 0,
-            0, 0, 0, 0,
-            0, 0,
+            1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             // String offsets: [0, 5, 8, 12, 14]
-            0, 0, 0, 0,
-            5, 0, 0, 0,
-            8, 0, 0, 0,
-            12, 0, 0, 0,
-            14, 0, 0, 0,
+            0, 0, 0, 0, 5, 0, 0, 0, 8, 0, 0, 0, 12, 0, 0, 0, 14, 0, 0, 0,
             // String pool: "<unk><s></s>AB"
-            b'<', b'u', b'n', b'k', b'>',
-            b'<', b's', b'>',
-            b'<', b'/', b's', b'>',
-            b'A', b'B',
+            b'<', b'u', b'n', b'k', b'>', b'<', b's', b'>', b'<', b'/', b's', b'>', b'A', b'B',
             // Merges: left=1, right=2 -> target=3
-            1, 0, 0, 0,
-            2, 0, 0, 0,
-            3, 0, 0, 0,
+            1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0,
         ];
 
         let tokenizer = GtokNativeTokenizer::from_bytes(&data).expect("Error parsing GTOK bytes");
