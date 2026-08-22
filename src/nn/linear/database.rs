@@ -95,6 +95,18 @@ impl GenomicOperable for WeightDatabase {
                     db_mut[byte_idx] = (db_mut[byte_idx] & 0xF0) | (new_bits & 0x0F);
                 }
             }
+            WeightDatabase::GenomicQ4_0(ref mut db) => {
+                let db_mut = Arc::make_mut(db);
+                let block_idx = byte_idx / 16;
+                let qs_idx = byte_idx % 16;
+                if let Some(block) = db_mut.get_mut(block_idx) {
+                    if sub_idx == 0 {
+                        block.qs[qs_idx] = (block.qs[qs_idx] & 0xF0) | (new_bits & 0x0F);
+                    } else {
+                        block.qs[qs_idx] = (block.qs[qs_idx] & 0x0F) | ((new_bits & 0x0F) << 4);
+                    }
+                }
+            }
             _ => {}
         }
     }
