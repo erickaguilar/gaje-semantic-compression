@@ -119,6 +119,40 @@ class QuantumCodebook:
 
         return top_indices.tolist(), amplitudes
 
+    def project_batch(self, embeddings: np.ndarray, m: int = 4, batch_size: int = 8192) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Proyecta por lotes (vectorizado) una matriz completa de embeddings continuos en superposiciones cuánticas.
+        Retorna (indices: uint16[N, m], amplitudes: uint8[N, m]).
+        """
+        num_tokens, dim = embeddings.shape
+        all_indices = np.zeros((num_tokens, m), dtype=np.uint16)
+        all_amplitudes = np.zeros((num_tokens, m), dtype=np.uint8)
+
+        norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        norms[norms < 1e-9] = 1.0
+        norm_emb = embeddings / norms
+
+        for start in range(0, num_tokens, batch_size):
+            end = min(start + batch_size, num_tokens)
+            batch = norm_emb[start:end]  # (B, dim)
+            sims = np.matmul(batch, self.centroids.T)  # (B, K)
+
+            top_m = np.argpartition(sims, -m, axis=1)[:, -m:]
+            row_idx = np.arange(len(batch))[:, None]
+            top_sims = sims[row_idx, top_m]
+            sort_order = np.argsort(-top_sims, axis=1)
+            sorted_top_m = top_m[row_idx, sort_order]  # (B, m)
+
+            raw_amps = np.maximum(0.0, sims[row_idx, sorted_top_m])  # (B, m)
+            amp_norms = np.linalg.norm(raw_amps, axis=1, keepdims=True)
+            amp_norms[amp_norms < 1e-9] = 1.0
+            norm_amps = raw_amps / amp_norms
+
+            all_indices[start:end] = sorted_top_m.astype(np.uint16)
+            all_amplitudes[start:end] = np.clip(np.round(norm_amps * 255.0), 0, 255).astype(np.uint8)
+
+        return all_indices, all_amplitudes
+
     def reconstruct(self, indices: List[int], amplitudes: List[float]) -> np.ndarray:
         """Reconstruye el embedding continuo a partir de su superposición cuántica."""
         reconstructed = np.zeros(self.dim, dtype=np.float32)
@@ -171,13 +205,7 @@ class QuantumEmbeddingTable:
         codebook.fit_from_embeddings(embeddings, num_iterations=15)
 
         table = cls(codebook, num_tokens, m=m)
-        
-        for t_i in range(num_tokens):
-            inds, amps = codebook.project_sparse(embeddings[t_i], m=m)
-            table.indices[t_i] = inds
-            # Cuantizar amplitudes en [0..255]
-            table.amplitudes[t_i] = [int(min(255, max(0, round(a * 255.0)))) for a in amps]
-
+        table.indices, table.amplitudes = codebook.project_batch(embeddings, m=m)
         return table
 
     def get_embedding(self, token_id: int) -> np.ndarray:
