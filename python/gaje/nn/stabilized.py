@@ -1030,7 +1030,7 @@ class GenomicLLM:
             and not use_spiking
             and not use_toroidal
         ):
-            eos_ids = [2, 151643, 151645]
+            eos_ids = [2, 151643, 151644, 151645]
             if (
                 hasattr(self.tokenizer, "eos_token_id")
                 and self.tokenizer.eos_token_id is not None
