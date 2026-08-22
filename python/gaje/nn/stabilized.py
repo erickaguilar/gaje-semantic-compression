@@ -949,6 +949,32 @@ class GenomicLLM:
         if hasattr(self, "rust_llm") and self.rust_llm:
             self.rust_llm.set_k_wta_ratio(ratio)
 
+    def has_quantum_embeddings(self) -> bool:
+        """Indica si el modelo tiene activa una tabla de embeddings cuántica .qemb."""
+        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "has_quantum_embeddings"):
+            return bool(self.rust_llm.has_quantum_embeddings())
+        return False
+
+    def load_quantum_embeddings(self, source) -> bool:
+        """Carga una tabla cuántica .qemb desde una ruta de archivo o buffer de bytes."""
+        if isinstance(source, str):
+            with open(source, "rb") as f:
+                data = f.read()
+        elif isinstance(source, (bytes, bytearray)):
+            data = bytes(source)
+        else:
+            raise ValueError("source debe ser una ruta de archivo (str) o buffer binario (bytes)")
+
+        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "load_quantum_embeddings_bytes"):
+            self.rust_llm.load_quantum_embeddings_bytes(data)
+            return True
+        return False
+
+    def unload_quantum_embeddings(self):
+        """Descarga la tabla cuántica y revierte a embeddings estándar."""
+        if hasattr(self, "rust_llm") and self.rust_llm and hasattr(self.rust_llm, "unload_quantum_embeddings"):
+            self.rust_llm.unload_quantum_embeddings()
+
     def forward(self, tokens, clear_cache=True):
         if clear_cache:
             self.rust_llm.clear_cache_py()
@@ -1337,6 +1363,19 @@ class GenomicLLM:
                     )
                     obj.config.rope_style = meta["config"].get("rope_style", "split")
                     obj.config.unpermute_weights = False
+
+                    # Autodetección de tabla cuántica companion (.qemb)
+                    qemb_candidate = os.path.splitext(input_path)[0] + ".qemb"
+                    if os.path.exists(qemb_candidate) and os.path.isfile(qemb_candidate):
+                        try:
+                            with open(qemb_candidate, "rb") as f_q:
+                                q_data = f_q.read()
+                            obj.rust_llm.load_quantum_embeddings_bytes(q_data)
+                            print(
+                                f"🧬 [Quantum Codebook] Activada tabla cuántica .qemb ({os.path.basename(qemb_candidate)}) — 91.1% ahorro de RAM en embeddings"
+                            )
+                        except Exception as ex_q:
+                            print(f"⚠️ Warning cargando .qemb companion: {ex_q}")
 
                     print(
                         f"⚡ [Zero-Copy Mmap] Metadata parsed: {obj.config.name} (n_embd={obj.n_embd}, n_head={obj.n_head}, n_head_kv={obj.n_head_kv}, head_dim={obj.head_dim}, rope_base={obj.rope_base})"
