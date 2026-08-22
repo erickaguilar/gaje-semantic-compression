@@ -23,6 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .expect("Error configurando el manejador de señales");
 
     let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && args[1] == "epoch" {
+        return handle_epoch_command(&args[2..]);
+    }
     let mut model_path = String::new();
     let mut prompt_arg = None;
     let mut i = 1;
@@ -713,5 +716,171 @@ fn generate(
             .map_err(|e| e.to_string())?;
     }
     println!();
+    Ok(())
+}
+
+fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if args.is_empty() {
+        println!("🏛️ GAJE HELIX — Gestor de Épocas de Memoria CLI (.gmem v2)");
+        println!("Uso: gaje-cli epoch <subcomando> [opciones]\n");
+        println!("Subcomandos disponibles:");
+        println!("  list       --organism <NOMBRE> [--root <DIR>]");
+        println!("  snapshot   --organism <NOMBRE> --comment <TEXTO> [--dim <DIM>] [--root <DIR>]");
+        println!("  rollback   --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  promote    --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  seal       --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  evaluate   --organism <NOMBRE> --candidate <ID> [--root <DIR>]");
+        return Ok(());
+    }
+
+    let subcmd = &args[0];
+    let mut root_dir = "models/memory_epochs".to_string();
+    let mut organism = String::new();
+    let mut comment = "Snapshot CLI".to_string();
+    let mut epoch_id = 0u64;
+    let mut candidate_id = 0u64;
+    let mut dim = 576u32;
+
+    let mut j = 1;
+    while j < args.len() {
+        if args[j] == "--root" && j + 1 < args.len() {
+            root_dir = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--organism" && j + 1 < args.len() {
+            organism = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--comment" && j + 1 < args.len() {
+            comment = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--epoch" && j + 1 < args.len() {
+            epoch_id = args[j + 1].parse().unwrap_or(0);
+            j += 2;
+        } else if args[j] == "--candidate" && j + 1 < args.len() {
+            candidate_id = args[j + 1].parse().unwrap_or(0);
+            j += 2;
+        } else if args[j] == "--dim" && j + 1 < args.len() {
+            dim = args[j + 1].parse().unwrap_or(576);
+            j += 2;
+        } else {
+            j += 1;
+        }
+    }
+
+    if organism.is_empty() {
+        eprintln!("Error: Se requiere el argumento --organism <NOMBRE>");
+        return Ok(());
+    }
+
+    let mut mgr = _impl::compute::epoch_manager::EpochManager::new(&root_dir, &organism, dim)
+        .map_err(|e| format!("Error en EpochManager: {}", e))?;
+
+    match subcmd.as_str() {
+        "list" => {
+            let epochs = mgr.list_epochs().map_err(|e| format!("{}", e))?;
+            println!(
+                "================================================================================"
+            );
+            println!("🏛️ GAJE HELIX: ÁRBOL DE LINAJE Y ÉPOCAS DE MEMORIA (.gmem v2)");
+            println!(
+                "Organismo: {} | Época Activa: {}",
+                organism, mgr.active_epoch_id
+            );
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            println!(
+                "{:<8} {:<8} {:<12} {:<10} {:<24} {}",
+                "EPOCH", "PADRE", "ESTADO", "ENTRADAS", "FECHA UTC", "COMENTARIO"
+            );
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            for ep in epochs {
+                let active_marker = if ep.epoch_id == mgr.active_epoch_id {
+                    "*"
+                } else {
+                    " "
+                };
+                println!(
+                    "{}{:<7} {:<8} {:<12} {:<10} {:<24} {}",
+                    active_marker,
+                    ep.epoch_id,
+                    ep.parent_epoch,
+                    ep.verdict,
+                    ep.entries_count,
+                    ep.created_at.chars().take(19).collect::<String>(),
+                    ep.comment
+                );
+            }
+            println!(
+                "================================================================================"
+            );
+        }
+        "snapshot" => {
+            let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
+            let new_id = mgr
+                .create_snapshot(&mut orch, &comment, None)
+                .map_err(|e| format!("{}", e))?;
+            println!(
+                "✅ Snapshot creado exitosamente: Época ID {} (Comentario: '{}')",
+                new_id, comment
+            );
+        }
+        "rollback" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            let _orch = mgr.rollback_to(epoch_id).map_err(|e| format!("{}", e))?;
+            println!(
+                "⚡ Rollback instantáneo completado exitosamente: Época activa ahora es ID {}",
+                epoch_id
+            );
+        }
+        "promote" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            mgr.promote_epoch(epoch_id).map_err(|e| format!("{}", e))?;
+            println!("🏆 Época {} promovida canónicamente como activa.", epoch_id);
+        }
+        "seal" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            mgr.seal_epoch(epoch_id).map_err(|e| format!("{}", e))?;
+            println!("🔒 Época {} sellada inmutablemente.", epoch_id);
+        }
+        "evaluate" => {
+            if candidate_id == 0 {
+                eprintln!("Error: Especifique --candidate <ID>");
+                return Ok(());
+            }
+            println!(
+                "🔬 Evaluando Gate de Promoción para Época Candidata {}...",
+                candidate_id
+            );
+            let dummy_vec = vec![1.0; dim as usize];
+            let golden = vec![(dummy_vec, 1u64)];
+            let verdict = mgr
+                .evaluate_and_gate(candidate_id, &golden)
+                .map_err(|e| format!("{}", e))?;
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            println!("Gate Superado: {}", verdict.passed);
+            println!("Acción Ejecutada: {}", verdict.action_taken);
+            println!("Detalle: {}", verdict.reason);
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+        }
+        _ => {
+            eprintln!("Subcomando de época desconocido: '{}'", subcmd);
+        }
+    }
+
     Ok(())
 }
