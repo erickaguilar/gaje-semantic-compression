@@ -59,7 +59,12 @@ def build_q2_0():
             arch_name = val.decode("utf-8") if isinstance(val, bytes) else str(val)
 
     n_embd, n_head, n_head_kv, n_blocks, eps, rope_base = (
-        896, 14, 2, 24, 1e-6, 1000000.0,
+        896,
+        14,
+        2,
+        24,
+        1e-6,
+        1000000.0,
     )
     for field_name, field in reader.fields.items():
         val = field.parts[field.data[0]][0]
@@ -120,7 +125,9 @@ def build_q2_0():
         print(f"[!] Warning: tokenizer {tokenizer_id} falló ({e}). Usando Qwen2-0.5B.")
         tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-0.5B-Instruct")
     tokenizer_str = (
-        tokenizer.backend_tokenizer.to_str() if hasattr(tokenizer, "backend_tokenizer") else ""
+        tokenizer.backend_tokenizer.to_str()
+        if hasattr(tokenizer, "backend_tokenizer")
+        else ""
     )
 
     tensors_by_name = {t.name: t for t in reader.tensors}
@@ -177,7 +184,9 @@ def build_q2_0():
             pad = 32 - (flat.size % 32)
             flat = np.concatenate([flat, np.zeros(pad, dtype=np.float32)])
             # Q2_0 exige exactitud: si no es divisible, truncar es inválido
-            print(f"[!] {name}: {flat.size} no divisible por 32, rellenando a {flat.size}")
+            print(
+                f"[!] {name}: {flat.size} no divisible por 32, rellenando a {flat.size}"
+            )
         dna = core.quantize_q2_0_native(flat.tobytes())
 
         dna_off, dna_len = add_blob_data(f"{name}.dna", dna)
@@ -232,7 +241,9 @@ def build_q2_0():
             out_f, in_f = weights_f32.shape[0], 1
         flat = np.ascontiguousarray(weights_f32.reshape(-1), dtype=np.float32)
         if flat.size % 32 != 0:
-            flat = np.concatenate([flat, np.zeros(32 - (flat.size % 32), dtype=np.float32)])
+            flat = np.concatenate(
+                [flat, np.zeros(32 - (flat.size % 32), dtype=np.float32)]
+            )
         dna = core.quantize_q8_0_native(flat.tobytes())
         dna_off, dna_len = add_blob_data(f"{name}.dna", dna)
         c_off, c_len = add_blob_data(f"{name}.centroids", b"")
@@ -260,16 +271,21 @@ def build_q2_0():
         if tensor_obj.tensor_type == gguf.GGMLQuantizationType.F32:
             raw_data = np.frombuffer(tensor_obj.data, dtype=np.float32)
         elif tensor_obj.tensor_type == gguf.GGMLQuantizationType.F16:
-            raw_data = np.frombuffer(tensor_obj.data, dtype=np.float16).astype(np.float32)
+            raw_data = np.frombuffer(tensor_obj.data, dtype=np.float16).astype(
+                np.float32
+            )
         elif tensor_obj.tensor_type == gguf.GGMLQuantizationType.Q8_0:
             return dequantize_q8_0(tensor_obj, n_h, h_d, is_q_k, rope_style="split")
         else:
             raise ValueError(f"Unsupported quantization type: {tensor_obj.tensor_type}")
-        out_f = tensor_obj.shape[1] if len(tensor_obj.shape) == 2 else tensor_obj.shape[0]
+        out_f = (
+            tensor_obj.shape[1] if len(tensor_obj.shape) == 2 else tensor_obj.shape[0]
+        )
         in_f = tensor_obj.shape[0] if len(tensor_obj.shape) == 2 else 1
         w_matrix = raw_data.reshape(out_f, in_f)
         if is_q_k and n_h is not None and h_d is not None:
             from gaje.utils.quantization import unpermute_to_split
+
             w_matrix = unpermute_to_split(w_matrix, n_h, h_d)
         return w_matrix
 
@@ -278,7 +294,9 @@ def build_q2_0():
     if args.quant_embed:
         add_q8_tensor("token_embd", embd_mat)
     else:
-        add_f32_tensor("token_embd", embd_mat, out_f=embd_mat.shape[0], in_f=embd_mat.shape[1])
+        add_f32_tensor(
+            "token_embd", embd_mat, out_f=embd_mat.shape[0], in_f=embd_mat.shape[1]
+        )
     del embd_mat
     gc.collect()
 
@@ -290,7 +308,9 @@ def build_q2_0():
     )
     add_f32_tensor("output_norm", out_norm, out_f=n_embd)
 
-    lm_head_t = tensors_by_name.get("lm_head.weight", tensors_by_name["token_embd.weight"])
+    lm_head_t = tensors_by_name.get(
+        "lm_head.weight", tensors_by_name["token_embd.weight"]
+    )
     lm_mat = get_tensor_f32_matrix(lm_head_t)
     if args.quant_embed:
         add_q8_tensor("lm_head", lm_mat)
@@ -316,12 +336,20 @@ def build_q2_0():
             add_f32_tensor(p + norm_suffix, nb, out_f=n_embd)
 
         w_q = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_q.weight"], n_head, head_dim, is_q_k=qk_permute
+            tensors_by_name[f"blk.{i}.attn_q.weight"],
+            n_head,
+            head_dim,
+            is_q_k=qk_permute,
         )
         w_k = get_tensor_f32_matrix(
-            tensors_by_name[f"blk.{i}.attn_k.weight"], n_head_kv, head_dim, is_q_k=qk_permute
+            tensors_by_name[f"blk.{i}.attn_k.weight"],
+            n_head_kv,
+            head_dim,
+            is_q_k=qk_permute,
         )
-        w_v = get_tensor_f32_matrix(tensors_by_name[f"blk.{i}.attn_v.weight"], is_q_k=False)
+        w_v = get_tensor_f32_matrix(
+            tensors_by_name[f"blk.{i}.attn_v.weight"], is_q_k=False
+        )
         w_qkv = np.concatenate([w_q, w_k, w_v], axis=0)
         add_linear_tensor(p + "attn_qkv", w_qkv)
         del w_q, w_k, w_v, w_qkv
@@ -347,12 +375,23 @@ def build_q2_0():
     header_bin = bytearray(4096)
     struct.pack_into(
         "<4sIIIQQQQIIIIIIII",
-        header_bin, 0,
-        b"GAJE", 0x000908, 0x0003, len(tensor_directory),
-        len(metadata_json_bytes), len(dir_json_bytes),
-        0, 0,  # weights_offset/weights_len rellenados tras calcular
-        32, 3,  # group_size, quant_format=3 (Q2_0)
-        arch_family, n_embd, n_head, n_head_kv, n_blocks,
+        header_bin,
+        0,
+        b"GAJE",
+        0x000908,
+        0x0003,
+        len(tensor_directory),
+        len(metadata_json_bytes),
+        len(dir_json_bytes),
+        0,
+        0,  # weights_offset/weights_len rellenados tras calcular
+        32,
+        3,  # group_size, quant_format=3 (Q2_0)
+        arch_family,
+        n_embd,
+        n_head,
+        n_head_kv,
+        n_blocks,
         1 if qk_permute else 0,
     )
 

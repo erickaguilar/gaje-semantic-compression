@@ -35,7 +35,16 @@ def run_smollm2_quantum_compression():
     print("📂 Leyendo cabecera y tabla de tensores de smollm2_135m.flat...")
     with open(model_path, "rb") as f:
         header = f.read(4096)
-        magic, ver, flags, num_tensors, meta_len, dir_len, w_off, w_len = struct.unpack_from("<4sIIIQQQQ", header, 0)
+        (
+            magic,
+            ver,
+            flags,
+            num_tensors,
+            meta_len,
+            dir_len,
+            w_off,
+            w_len,
+        ) = struct.unpack_from("<4sIIIQQQQ", header, 0)
         _meta = json.loads(f.read(meta_len).decode("utf-8"))
         directory = json.loads(f.read(dir_len).decode("utf-8"))
 
@@ -56,11 +65,17 @@ def run_smollm2_quantum_compression():
         # Buscar offset absoluto
         f.seek(w_off + dna_off)
         raw_emb_bytes = f.read(dna_len)
-        real_emb = np.frombuffer(raw_emb_bytes, dtype=np.float32).reshape(vocab_size, n_embd).copy()
+        real_emb = (
+            np.frombuffer(raw_emb_bytes, dtype=np.float32)
+            .reshape(vocab_size, n_embd)
+            .copy()
+        )
 
     raw_mb = (vocab_size * n_embd * 4) / (1024 * 1024)
     print(f"📊 Tensor 'token_embd' extraído: {vocab_size} tokens x {n_embd} dim")
-    print(f"   • Tamaño original en FP32: {raw_mb:.2f} MB ({len(raw_emb_bytes):,} bytes)")
+    print(
+        f"   • Tamaño original en FP32: {raw_mb:.2f} MB ({len(raw_emb_bytes):,} bytes)"
+    )
 
     # 2. Compresión Cuántica (K=4096 / 8192, m=4)
     K = 4096
@@ -72,7 +87,9 @@ def run_smollm2_quantum_compression():
     fit_time = time.time() - t0
     print(f"   • Codebook ajustado en {fit_time:.2f} s")
 
-    print(f"⏳ Proyectando los {vocab_size} tokens a superposiciones cuánticas m={m}...")
+    print(
+        f"⏳ Proyectando los {vocab_size} tokens a superposiciones cuánticas m={m}..."
+    )
     t1 = time.time()
     table = QuantumEmbeddingTable(codebook, vocab_size, m=m)
     table.indices, table.amplitudes = codebook.project_batch(real_emb, m=m)
@@ -87,7 +104,9 @@ def run_smollm2_quantum_compression():
 
     # 4. Medir fidelidad de reconstrucción en tokens reales
     sample_size = 2000
-    fidelity = codebook.evaluate_reconstruction_fidelity(real_emb, m=m, sample_size=sample_size)
+    fidelity = codebook.evaluate_reconstruction_fidelity(
+        real_emb, m=m, sample_size=sample_size
+    )
 
     # 5. Benchmark de latencia de lookup
     t2 = time.time()
@@ -101,7 +120,9 @@ def run_smollm2_quantum_compression():
     print(f"• Archivo generado: {output_qemb}")
     print(f"• Tamaño original en FP32:      {raw_mb:.2f} MB")
     print(f"• Tamaño comprimido (.qemb):    {qemb_mb:.2f} MB")
-    print(f"• Reducción de Memoria RAM:     {savings:.2f}% ({raw_mb / qemb_mb:.1f}x más ligero)")
+    print(
+        f"• Reducción de Memoria RAM:     {savings:.2f}% ({raw_mb / qemb_mb:.1f}x más ligero)"
+    )
     print(f"• Fidelidad Real (CosSim):      {fidelity:.4f}")
     print(f"• Latencia de Lookup al Vuelo:  {lookup_us:.2f} µs por token")
     print("=" * 80)
