@@ -74,6 +74,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[docs/sdd/MIXED_BIT_ARCHITECTURE.md](docs/sdd/MIXED_BIT_ARCHITECTURE.md)**: Arquitectura de bits mixtos.
 *   **[docs/bdd/BORN_GENOMIC_FLOW.md](docs/bdd/BORN_GENOMIC_FLOW.md)**: Flujo genómico.
 *   **[docs/certifications/CERTIFICATION_REPORT_V1.5.md](docs/certifications/CERTIFICATION_REPORT_V1.5.md)**: Reporte de certificación.
+*   **[docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN DE INFERENCIA CUÁNTICA (.qemb)** — Validación de compresión del 98.9%, descompresión SIMD y pruebas end-to-end.
 
 ---
 
