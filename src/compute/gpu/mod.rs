@@ -3,6 +3,7 @@
 // =============================================================================
 
 pub mod context;
+pub mod pipeline;
 
 #[cfg(feature = "python")]
 pub mod python;

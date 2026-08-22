@@ -152,5 +152,13 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::compute::gpu::python::get_gpu_info_py,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::gpu_swiglu_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::gpu_gemv_f32_py,
+        m
+    )?)?;
     Ok(())
 }

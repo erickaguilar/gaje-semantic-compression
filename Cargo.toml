@@ -42,10 +42,11 @@ indicatif = "0.18.4"
 # Aceleración por GPU (Vulkan / WGPU)
 wgpu = { version = "24.0.0", optional = true }
 pollster = { version = "0.4", optional = true }
+bytemuck = { version = "1.20", features = ["derive"], optional = true }
 
 [features]
 default = ["gpu"]
-gpu = ["dep:wgpu", "dep:pollster"]
+gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 python = ["pyo3", "numpy", "pyo3/extension-module", "gpu"]
 
 [profile.release]
