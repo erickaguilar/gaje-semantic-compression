@@ -18,6 +18,25 @@ FLAG_BPE = 0x0001
 FLAG_BYTE_FALLBACK = 0x0002
 FLAG_QUANTUM_GENOMIC = 0x0004
 
+def _bytes_to_unicode() -> Dict[int, str]:
+    bs = (
+        list(range(ord("!"), ord("~") + 1))
+        + list(range(ord("¡"), ord("¬") + 1))
+        + list(range(ord("®"), ord("ÿ") + 1))
+    )
+    cs = bs[:]
+    n = 0
+    for b in range(2**8):
+        if b not in bs:
+            bs.append(b)
+            cs.append(2**8 + n)
+            n += 1
+    return dict(zip(bs, [chr(c) for c in cs]))
+
+
+_BYTE_ENCODER = _bytes_to_unicode()
+_BYTE_DECODER = {v: k for k, v in _BYTE_ENCODER.items()}
+
 
 class GtokTokenizer:
     """Zero-dependency Native Binary Tokenizer for GAJE Helix."""
@@ -163,55 +182,72 @@ class GtokTokenizer:
             f.write(self.to_bytes())
 
     def decode(self, token_ids: List[int]) -> str:
-        """Decodifica una lista de IDs a texto plano UTF-8."""
-        pieces = []
+        """Decodifica una lista de IDs a texto plano UTF-8 mediante decodificación byte-level BPE."""
+        text_pieces = []
         for tid in token_ids:
             if 0 <= tid < len(self.vocab):
-                pieces.append(self.vocab[tid])
-        raw_text = "".join(pieces)
-        # Manejo de reemplazo de espacio estándar BPE (Ġ /   -> espacio)
-        return raw_text.replace("Ġ", " ").replace(" ", " ")
+                text_pieces.append(self.vocab[tid])
+        full_text = "".join(text_pieces)
+
+        # Si el texto contiene caracteres byte-level BPE (como Ġ, Ċ, etc.)
+        byte_array = bytearray()
+        for char in full_text:
+            if char in _BYTE_DECODER:
+                byte_array.append(_BYTE_DECODER[char])
+            else:
+                for b in char.encode("utf-8"):
+                    byte_array.append(b)
+
+        return byte_array.decode("utf-8", errors="replace")
 
     def encode(self, text: str, add_special_tokens: bool = False) -> List[int]:
-        """Codifica un texto a IDs de tokens utilizando búsqueda de vocabulario y BPE."""
+        """Codifica un texto a IDs de tokens utilizando búsqueda de vocabulario y byte-level BPE."""
         if not text:
             return []
 
-        # Tokenización básica de caracteres iniciales
-        tokens: List[int] = []
-        for char in text:
-            # Reemplazar espacio por símbolo BPE si existe en vocab
-            c_mod = "Ġ" + char if char != " " else "Ġ"
-            if char in self.token_to_id:
-                tokens.append(self.token_to_id[char])
-            elif c_mod in self.token_to_id:
-                tokens.append(self.token_to_id[c_mod])
-            elif " " + char in self.token_to_id:
-                tokens.append(self.token_to_id[" " + char])
-            else:
-                tokens.append(self.special_tokens.get("unk", 0))
+        import re
+        # Extraer tokens especiales si están presentes en el texto
+        special_keys = [re.escape(k) for k in self.token_to_id.keys() if k.startswith("<|") or k in ["<s>", "</s>", "<think>", "</think>"]]
+        if special_keys:
+            pattern = re.compile("(" + "|".join(special_keys) + ")")
+            chunks = pattern.split(text)
+        else:
+            chunks = [text]
 
-        # Aplicar fusiones BPE iterativamente
-        if len(tokens) > 1 and self.merges_dict:
-            while True:
-                best_pair = None
-                best_idx = -1
-                for i in range(len(tokens) - 1):
-                    pair = (tokens[i], tokens[i + 1])
-                    if pair in self.merges_dict:
-                        best_pair = pair
-                        best_idx = i
+        final_tokens: List[int] = []
+        for chunk in chunks:
+            if not chunk:
+                continue
+            if chunk in self.token_to_id:
+                final_tokens.append(self.token_to_id[chunk])
+                continue
+
+            # Mapear bytes UTF-8 a caracteres estándar BPE (ej. '\n' -> 'Ċ', ' ' -> 'Ġ')
+            chunk_bytes = chunk.encode("utf-8")
+            tokens = [self.token_to_id.get(_BYTE_ENCODER[b], self.special_tokens.get("unk", 0)) for b in chunk_bytes]
+
+            # Aplicar fusiones BPE iterativamente
+            if len(tokens) > 1 and self.merges_dict:
+                while True:
+                    best_pair = None
+                    best_idx = -1
+                    for i in range(len(tokens) - 1):
+                        pair = (tokens[i], tokens[i + 1])
+                        if pair in self.merges_dict:
+                            best_pair = pair
+                            best_idx = i
+                            break
+                    if best_pair is None:
                         break
-                if best_pair is None:
-                    break
-                # Aplicar fusión
-                target_id = self.merges_dict[best_pair]
-                tokens = tokens[:best_idx] + [target_id] + tokens[best_idx + 2 :]
+                    target_id = self.merges_dict[best_pair]
+                    tokens = tokens[:best_idx] + [target_id] + tokens[best_idx + 2 :]
+
+            final_tokens.extend(tokens)
 
         if add_special_tokens and "bos" in self.special_tokens:
-            tokens = [self.special_tokens["bos"]] + tokens
+            final_tokens = [self.special_tokens["bos"]] + final_tokens
 
-        return tokens
+        return final_tokens
 
 
 def export_hf_tokenizer_to_gtok(hf_tokenizer_json_path: str, output_gtok_path: str) -> GtokTokenizer:
