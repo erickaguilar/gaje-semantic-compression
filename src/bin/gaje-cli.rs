@@ -776,7 +776,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
 
     match subcmd.as_str() {
         "list" => {
-            let epochs = mgr.list_epochs().map_err(|e| format!("{}", e))?;
+            let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
             println!(
                 "================================================================================"
             );
@@ -789,8 +789,8 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
                 "--------------------------------------------------------------------------------"
             );
             println!(
-                "{:<8} {:<8} {:<12} {:<10} {:<24} {}",
-                "EPOCH", "PADRE", "ESTADO", "ENTRADAS", "FECHA UTC", "COMENTARIO"
+                "{:<8} {:<8} {:<12} {:<10} {:<24} COMENTARIO",
+                "EPOCH", "PADRE", "ESTADO", "ENTRADAS", "FECHA UTC"
             );
             println!(
                 "--------------------------------------------------------------------------------"
@@ -820,7 +820,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
             let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
             let new_id = mgr
                 .create_snapshot(&mut orch, &comment, None)
-                .map_err(|e| format!("{}", e))?;
+                .map_err(|e| e.to_string())?;
             println!(
                 "✅ Snapshot creado exitosamente: Época ID {} (Comentario: '{}')",
                 new_id, comment
@@ -831,7 +831,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
                 eprintln!("Error: Especifique --epoch <ID>");
                 return Ok(());
             }
-            let _orch = mgr.rollback_to(epoch_id).map_err(|e| format!("{}", e))?;
+            let _orch = mgr.rollback_to(epoch_id).map_err(|e| e.to_string())?;
             println!(
                 "⚡ Rollback instantáneo completado exitosamente: Época activa ahora es ID {}",
                 epoch_id
@@ -842,7 +842,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
                 eprintln!("Error: Especifique --epoch <ID>");
                 return Ok(());
             }
-            mgr.promote_epoch(epoch_id).map_err(|e| format!("{}", e))?;
+            mgr.promote_epoch(epoch_id).map_err(|e| e.to_string())?;
             println!("🏆 Época {} promovida canónicamente como activa.", epoch_id);
         }
         "seal" => {
@@ -850,7 +850,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
                 eprintln!("Error: Especifique --epoch <ID>");
                 return Ok(());
             }
-            mgr.seal_epoch(epoch_id).map_err(|e| format!("{}", e))?;
+            mgr.seal_epoch(epoch_id).map_err(|e| e.to_string())?;
             println!("🔒 Época {} sellada inmutablemente.", epoch_id);
         }
         "evaluate" => {
@@ -866,7 +866,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
             let golden = vec![(dummy_vec, 1u64)];
             let verdict = mgr
                 .evaluate_and_gate(candidate_id, &golden)
-                .map_err(|e| format!("{}", e))?;
+                .map_err(|e| e.to_string())?;
             println!(
                 "--------------------------------------------------------------------------------"
             );
