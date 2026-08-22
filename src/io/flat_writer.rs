@@ -315,18 +315,33 @@ pub fn init_born_genomic_model(
         use rand::Rng;
         let mut rng = rand::thread_rng();
         let n = i * o;
-        let mut data = vec![0.0f32; n];
-        for val in data.iter_mut() {
-            *val = rng.gen_range(-0.02..0.02);
+        let n_blocks = n / 32;
+        let mut q4_blocks = Vec::with_capacity(n_blocks);
+        for _ in 0..n_blocks {
+            let mut qs = [0u8; 16];
+            for q in qs.iter_mut() {
+                let low = rng.gen_range(0..16u8);
+                let high = rng.gen_range(0..16u8);
+                *q = low | (high << 4);
+            }
+            q4_blocks.push(crate::io::header::Q4_0Block {
+                scale: half::f16::from_f32(0.002),
+                min: half::f16::from_f32(-0.015),
+                qs,
+            });
         }
-        let (dna, c, a) = crate::compute::math::genomize_f32_core(&data, b_s, -1.0, algebraic_c);
+        let u8_bytes: Vec<u8> = unsafe {
+            let ptr = q4_blocks.as_ptr() as *const u8;
+            let len = q4_blocks.len() * std::mem::size_of::<crate::io::header::Q4_0Block>();
+            std::slice::from_raw_parts(ptr, len).to_vec()
+        };
         GenomicLinear::new(
-            dna,
-            a,
-            c,
+            u8_bytes,
+            Vec::new(),
+            Vec::new(),
             o,
             i,
-            b_s,
+            32,
             Vec::new(),
             1e-6,
             Vec::new(),
@@ -335,7 +350,7 @@ pub fn init_born_genomic_model(
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            2, // Default bit_depth for backwards compatibility
+            4, // 4-bit Q4_0 nativo
         )
     };
     let embeddings = init_l(config.n_embd, vocab_size);
@@ -379,6 +394,10 @@ pub fn init_born_genomic_model(
         topology: None,
         quantum_embeddings: None,
     };
-    save_genomic_model(path, &model, &config, None)?;
+    if path.ends_with(".flat") {
+        save_genomic_flat(path, &model, &config, None)?;
+    } else {
+        save_genomic_model(path, &model, &config, None)?;
+    }
     Ok(model)
 }

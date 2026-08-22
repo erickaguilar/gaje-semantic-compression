@@ -41,10 +41,9 @@ impl GenomicTrainerCore {
         }
 
         for i in 0..seq_len {
-            let token_id = input_ids[i];
-            let target_id = target_ids[i];
-
+            let token_id = if input_ids[i] < model.lm_head.out_features { input_ids[i] } else { input_ids[i] % model.lm_head.out_features.max(1) };
             let (logits, h_norm) = model.forward_with_hidden_core(token_id, false)?;
+            let target_id = if target_ids[i] < logits.len() { target_ids[i] } else { target_ids[i] % logits.len().max(1) };
 
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_exp = 0.0f32;

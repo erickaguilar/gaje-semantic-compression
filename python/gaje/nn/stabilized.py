@@ -1520,12 +1520,16 @@ class GenomicLLM:
             n_elements = out_features * in_features
             expected_2bit = (n_elements + 3) // 4
             expected_4bit = (n_elements + 1) // 2
+            expected_q4_0 = (n_elements // 32) * 20
+            expected_q8_0 = (n_elements // 32) * 34
             expected_32bit = n_elements * 4
 
             if len(dna) == expected_32bit:
                 bit_depth = 32
-            elif len(dna) == expected_4bit:
+            elif len(dna) == expected_q4_0 or len(dna) == expected_4bit:
                 bit_depth = 4
+            elif len(dna) == expected_q8_0:
+                bit_depth = 8
             elif len(dna) == expected_2bit:
                 bit_depth = 2
             else:

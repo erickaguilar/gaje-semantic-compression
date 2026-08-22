@@ -160,6 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
             "gold_embryo" => (384, 8, 6, 49152),
             "micro_organism" => (128, 2, 4, 32768),
+            "embryo_5m" => (256, 4, 4, 32768),
             "silver_fetus" => (512, 12, 8, 32768),
             "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
             "silver_adult_32m" => (512, 8, 8, 32768), // 32MB Toroidal (67M parameters)
@@ -198,7 +199,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if Path::new("models/core/tokenizer.json").exists() {
             let tok = GajeTokenizer::from_file("models/core/tokenizer.json")
                 .map_err(|e| e.to_string())?;
-            _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            if path.ends_with(".flat") {
+                _impl::io::loader::save_genomic_flat(&path, &model, &config, Some(&tok))?;
+            } else {
+                _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            }
             println!("[+] Tokenizador 'models/core/tokenizer.json' integrado en el organismo.");
         }
         println!("[+] Nuevo organismo inicializado exitosamente.");

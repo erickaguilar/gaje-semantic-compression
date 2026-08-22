@@ -47,16 +47,20 @@ impl NativeLoader {
         let n_elements = i_f * o_f;
         let expected_2bit = (n_elements + 3) / 4;
         let expected_4bit = (n_elements + 1) / 2;
+        let expected_q4_0 = (n_elements / 32) * 20;
+        let expected_q8_0 = (n_elements / 32) * 34;
 
         let bit_depth = if dna.len() == n_elements * 4 {
             32
-        } else if dna.len() == expected_4bit {
+        } else if dna.len() == expected_q4_0 || dna.len() == expected_4bit {
             4
+        } else if dna.len() == expected_q8_0 {
+            8
         } else if dna.len() == expected_2bit {
             2
         } else {
-            panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con 2-bit ({}) ni 4-bit ({})",
-                    dna.len(), p, expected_2bit, expected_4bit);
+            panic!("[Loader Critical] Tamaño de buffer DNA ({}) para capa '{}' no coincide con Q4_0 ({}), 4-bit ({}) ni 2-bit ({})",
+                    dna.len(), p, expected_q4_0, expected_4bit, expected_2bit);
         };
 
         GenomicLinear::new(
