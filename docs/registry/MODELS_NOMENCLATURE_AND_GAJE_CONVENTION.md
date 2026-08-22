@@ -10,28 +10,28 @@
 
 | Nombre Canónico GAJE | Nombre Técnico Original | Arquitectura Base | Peso HD | RAM Residente | Tipo Cuantización | Rol y Especialidad |
 | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
-| 🧠 **`maximo.gaje`** | `DeepSeek-R1-Distill-Qwen-7B-Q4_K_M` | **DeepSeek-R1-Distill-Qwen-7B** | **4.89 GB** | **~2.2 GB - 3.4 GB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Razonamiento Máximo (CoT)**: 7B parámetros. Lógica formal, matemáticas avanzadas, código, deducción y pensamiento profundo. |
-| 🌐 **`pro.gaje`** | `qwen2_5_3b_q4_0_q8_0_embd.gaje.flat` | **Qwen2.5-3B-Instruct** | **2.24 GB** | **~1.7 GB - 2.5 GB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Capacidad Pro Multilingüe**: 3B parámetros. Lenguaje general, redacción avanzada, síntesis multilingüe (ES, EN, ZH, RU, DE, FR). |
-| ⚡ **`turbo.gaje`** | `qwen2_0_5b_q4_0_q8_0_embd.gaje.flat` | **Qwen2-0.5B-Instruct** | **499 MB** | **~350 MB - 500 MB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Micro-Modelo Ultrarrápido**: 0.5B parámetros. Respuestas instantáneas de baja latencia en entornos de memoria limitada. |
-| 🧬 **`nano.gaje`** | `smollm2_4bit_clean.gaje.flat` | **SmolLM2-135M-Instruct** | **474 MB** | **~180 MB - 300 MB** | `Q4_0` (Cuerpo) + `FP32` (Embeddings) | **Nano-Agente Edge**: 135M parámetros. Dispositivos embebidos, IoT, pruebas de compresión genómica extrema y micro-controladores. |
+| 🧠 **`maximo.gaje`** | `DeepSeek-R1-Distill-Qwen-1.5B-Q8_0` | **DeepSeek-R1-Distill-Qwen-1.5B** | **2.45 GB** | **~475 MB - 1.4 GB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Razonamiento Máximo (CoT)**: Lógica formal, matemáticas, deducción, código y pensamiento profundo nativo. |
+| 🌐 **`pro.gaje`** | `qwen2_5_3b_q4_0_q8_0_embd.gaje.flat` | **Qwen2.5-3B-Instruct** | **2.24 GB** | **~1.7 GB - 2.5 GB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Capacidad Pro Multilingüe**: Lenguaje general, redacción avanzada, síntesis multilingüe (ES, EN, ZH, RU, DE, FR). |
+| ⚡ **`turbo.gaje`** | `qwen2_0_5b_q4_0_q8_0_embd.gaje.flat` | **Qwen2-0.5B-Instruct** | **499 MB** | **~350 MB - 500 MB** | `Q4_0` (Cuerpo) + `Q8_0` (Embd/Head) | **Micro-Modelo Ultrarrápido**: Respuestas instantáneas de baja latencia en entornos de memoria limitada. |
+| 🧬 **`nano.gaje`** | `smollm2_4bit_clean.gaje.flat` | **SmolLM2-135M-Instruct** | **474 MB** | **~180 MB - 300 MB** | `Q4_0` (Cuerpo) + `FP32` (Embeddings) | **Nano-Agente Edge**: Dispositivos embebidos, IoT, pruebas de compresión genómica extrema y micro-controladores. |
 
 ---
 
 ## 🔬 2. Ficha Técnica Detallada de Modelos
 
-### 🧠 A. `maximo.gaje` (DeepSeek-R1 7B)
+### 🧠 A. `maximo.gaje` (DeepSeek-R1 1.5B CoT)
 * **Identificador Canónico:** `maximo.gaje`
-* **Modelo Origen:** `deepseek-ai/DeepSeek-R1-Distill-Qwen-7B`
+* **Modelo Origen:** `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`
 * **Plantilla de Chat:** ChatML con Trigger de Pensamiento Profundo:
   ```text
   <|im_start|>system\nEres un asistente experto y preciso que responde en español.<|im_end|>\n<|im_start|>user\n{PROMPT}<|im_end|>\n<|im_start|>assistant\n<think>\n
   ```
-* **Dimensiones de Embedding (`n_embd`):** `3584`
+* **Dimensiones de Embedding (`n_embd`):** `1536`
 * **Capas Transformer (`n_blocks`):** `28`
-* **Cabezas de Atención (Q / KV):** `28` / `4` (GQA - Grouped Query Attention)
+* **Cabezas de Atención (Q / KV):** `12` / `2` (GQA - Grouped Query Attention)
 * **Head Dim:** `128`
 * **Rotary Embedding (RoPE Base):** `1,000,000.0`
-* **Vocabulario:** `152,064` tokens
+* **Vocabulario:** `151,936` tokens
 * **Algoritmo de Inferencia:** Cuantización híbrida 4-bit AVX2 con kernel `q4_0_dot` y de-cuantización `Q8_0` en tiempo real.
 
 ---
@@ -39,10 +39,7 @@
 ### 🌐 B. `pro.gaje`
 * **Identificador Canónico:** `pro.gaje`
 * **Modelo Origen:** `Qwen/Qwen2.5-3B-Instruct`
-* **Plantilla de Chat:** ChatML estándar:
-  ```text
-  <|im_start|>system\nYou are a helpful and precise assistant.<|im_end|>\n<|im_start|>user\n{PROMPT}<|im_end|>\n<|im_start|>assistant\n
-  ```
+* **Plantilla de Chat:** ChatML estándar.
 * **Dimensiones de Embedding:** `2048`
 * **Capas Transformer:** `36`
 * **Cabezas de Atención (Q / KV):** `16` / `2` (GQA)
@@ -75,8 +72,8 @@
 Para regenerar cualquiera de estos organismos directamente desde sus fuentes GGUF hacia el formato binario `.gaje`:
 
 ```bash
-# 1. Regenerar maximo.gaje (DeepSeek-R1 7B)
-python3 scripts/export_gaje_flat.py --input data/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf --output models/production/maximo.gaje --quant-embed
+# 1. Regenerar maximo.gaje (DeepSeek-R1 1.5B)
+python3 scripts/export_gaje_flat.py --input data/models/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf --output models/production/maximo.gaje --quant-embed
 
 # 2. Regenerar pro.gaje (Qwen 2.5 3B)
 python3 scripts/export_gaje_flat.py --input data/models/qwen2.5-3b-instruct-q8_0.gguf --output models/production/pro.gaje --quant-embed
@@ -93,7 +90,7 @@ python3 scripts/export_gaje_flat.py --input data/models/smollm2-135m-instruct-fp
 ## 🔒 4. Verificación de Integridad Criptográfica (SHA-256)
 
 ```text
-5af4c3dabe620628d628231d41ae0e0f99962d0ff36785f0caab487f9d417ba2  models/production/maximo.gaje
+f2e6e066ecc3c3da39137f515607b68a9e38ba9e2019fd3e8ee30787fb583206  models/production/maximo.gaje
 e20ec4bf79c6d4ba40e0bc8ae92ff9fb172c72b2dd2bbcefa042533b3a39e31d  models/production/pro.gaje
 507f35213606f7df2b6b553c1537233f81e370a4a838520ec719ce3f9b231ff6  models/production/turbo.gaje
 fca97beeaeb3bfa8ba2061b47fb5d58d929ca32fbcf2b55f17d36371fc5bb290  models/production/nano.gaje
