@@ -730,6 +730,7 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
         println!("  promote    --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
         println!("  seal       --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
         println!("  evaluate   --organism <NOMBRE> --candidate <ID> [--root <DIR>]");
+        println!("  consolidate --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
         return Ok(());
     }
 
@@ -875,6 +876,36 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
             println!("Detalle: {}", verdict.reason);
             println!(
                 "--------------------------------------------------------------------------------"
+            );
+        }
+        "consolidate" => {
+            println!(
+                "💤 Iniciando Ciclo de Consolidación Autonómica para '{}'...",
+                organism
+            );
+            let mut orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let stats = orch.consolidate_memory(0.95);
+            let new_epoch_id = mgr
+                .create_snapshot(&mut orch, "Consolidación Autonómica (Ciclo de Sueño)", None)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "✅ Consolidación completada exitosamente: Creada Época ID {}",
+                new_epoch_id
+            );
+            println!(
+                "   • Recuerdos episódicos consolidados: {}",
+                stats.episodic_transferred
+            );
+            println!(
+                "   • Recuerdos conversacionales consolidados: {}",
+                stats.conversational_transferred
+            );
+            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
+            println!(
+                "   • Total entradas documentales: {}",
+                stats.total_documental_entries
             );
         }
         _ => {

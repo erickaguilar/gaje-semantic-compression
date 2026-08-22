@@ -569,6 +569,48 @@ console.log(JSON.stringify(Array.from(genIds)));
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_13_autonomic_consolidation_sleep_cycle(self):
+        """TC-11.2: Consolidación autonómica de nichos volátiles a documental y poda semántica."""
+        from gaje.core._impl import EpochManager, IslandOrchestrator
+        import shutil
+        import tempfile
+
+        print(
+            "\n[SUITE 11.2] Validando Consolidación Autonómica y Ciclo de Sueño (.gmem v2)..."
+        )
+        temp_dir = tempfile.mkdtemp(prefix="gaje_suite11_cons_")
+        dim = 64
+
+        try:
+            mgr = EpochManager(temp_dir, "smollm2_cons_suite", dim)
+            orch = IslandOrchestrator(dim)
+
+            # Ingesta volátil
+            v_golden = [1.0] + [0.0] * (dim - 1)
+            orch.add_memory_py("episodic", 7777, v_golden, "AGUJA_CONSOLIDA_SUITE")
+            orch.add_memory_py("conversational", 7778, v_golden, "ECO_DUPLICADO")
+
+            # Consolidar
+            stats_json = orch.consolidate_memory_py(0.95)
+            stats = json.loads(stats_json)
+
+            self.assertEqual(stats["episodic_transferred"], 1)
+            self.assertEqual(stats["duplicates_pruned"], 1)
+            self.assertEqual(stats["total_documental_entries"], 1)
+
+            # Snapshot y Gate
+            ep_cons = mgr.create_snapshot_py(orch, "Época Consolidada Suite", None)
+            verdict_json = mgr.evaluate_and_gate_py(ep_cons, [(v_golden, 7777)])
+            verdict = json.loads(verdict_json)
+            self.assertTrue(verdict["passed"])
+            self.assertEqual(mgr.active_epoch_id, ep_cons)
+
+            print(
+                "[SUITE 11.2] Consolidación autonómica y poda de duplicados certificadas al 100%."
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)

@@ -136,6 +136,11 @@ impl GmemMemoryIndex {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.header.num_entries = 0;
+    }
+
     /// Calcula un hash FNV-1a de 64 bits sobre las entradas para auditoría de integridad
     pub fn compute_entries_hash(&self) -> u64 {
         let mut hash: u64 = 0xcbf29ce484222325;

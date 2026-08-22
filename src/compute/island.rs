@@ -327,6 +327,63 @@ impl IslandOrchestrator {
         }
         Ok(())
     }
+
+    pub fn consolidate_memory(&mut self, dedup_threshold: f32) -> ConsolidationStats {
+        let mut transferred_epi = 0;
+        let mut transferred_conv = 0;
+        let mut pruned = 0;
+
+        let epi_entries = std::mem::take(&mut self.episodic.entries);
+        for entry in epi_entries {
+            let max_sim = match self.documental.search_top_k(&entry.vector, 1).first() {
+                Some((_, s)) => *s,
+                None => 0.0,
+            };
+
+            if max_sim >= dedup_threshold {
+                pruned += 1;
+            } else {
+                self.documental
+                    .add_entry(entry.id, entry.vector, entry.text);
+                transferred_epi += 1;
+            }
+        }
+
+        let conv_entries = std::mem::take(&mut self.conversational.entries);
+        for entry in conv_entries {
+            let max_sim = match self.documental.search_top_k(&entry.vector, 1).first() {
+                Some((_, s)) => *s,
+                None => 0.0,
+            };
+
+            if max_sim >= dedup_threshold {
+                pruned += 1;
+            } else {
+                self.documental
+                    .add_entry(entry.id, entry.vector, entry.text);
+                transferred_conv += 1;
+            }
+        }
+
+        self.documental.set_consolidated(true);
+        self.episodic.clear();
+        self.conversational.clear();
+
+        ConsolidationStats {
+            episodic_transferred: transferred_epi,
+            conversational_transferred: transferred_conv,
+            duplicates_pruned: pruned,
+            total_documental_entries: self.documental.entries.len(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ConsolidationStats {
+    pub episodic_transferred: usize,
+    pub conversational_transferred: usize,
+    pub duplicates_pruned: usize,
+    pub total_documental_entries: usize,
 }
 
 #[cfg(feature = "python")]
@@ -430,6 +487,12 @@ impl IslandOrchestrator {
     pub fn load_all_py(&mut self, dir_path: &str) -> PyResult<()> {
         self.load_all(dir_path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn consolidate_memory_py(&mut self, dedup_threshold: f32) -> PyResult<String> {
+        let stats = self.consolidate_memory(dedup_threshold);
+        serde_json::to_string_pretty(&stats)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 }
 
