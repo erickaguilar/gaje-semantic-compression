@@ -369,6 +369,30 @@ impl IslandOrchestrator {
         Ok(())
     }
 
+    pub fn save_epoch(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> PyResult<()> {
+        std::fs::create_dir_all(dir_path).map_err(|e| {
+            pyo3::exceptions::PyIOError::new_err(format!("Error creando directorio: {}", e))
+        })?;
+        
+        self.episodic.set_epoch_id(epoch_id);
+        self.episodic.set_parent_epoch(parent_epoch);
+        self.documental.set_epoch_id(epoch_id);
+        self.documental.set_parent_epoch(parent_epoch);
+        self.conversational.set_epoch_id(epoch_id);
+        self.conversational.set_parent_epoch(parent_epoch);
+
+        self.save_all(dir_path)
+    }
+
+    pub fn get_epoch_info(&self) -> (u64, u64, bool, bool) {
+        (
+            self.documental.epoch_id(),
+            self.documental.parent_epoch(),
+            self.documental.is_sealed(),
+            self.documental.is_promoted(),
+        )
+    }
+
     pub fn load_all(&mut self, dir_path: &str) -> PyResult<()> {
         let epi_path = format!("{}/episodic.gmem", dir_path);
         let doc_path = format!("{}/documental.gmem", dir_path);
