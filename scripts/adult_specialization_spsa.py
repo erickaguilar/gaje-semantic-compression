@@ -143,7 +143,9 @@ def main():
     augmented_prompt = orchestrator.build_augmented_prompt_py(
         "¿Cuál es la clave secreta de acceso al núcleo?", v_needle.tolist(), 256
     )
-    print(f"  • Prompt Aumentado construido con éxito ({len(augmented_prompt)} caracteres).")
+    print(
+        f"  • Prompt Aumentado construido con éxito ({len(augmented_prompt)} caracteres)."
+    )
 
     # Generación con el modelo adulto
     prompt_tokens = [280, 395]
