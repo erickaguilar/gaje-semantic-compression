@@ -1,3 +1,4 @@
+use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
 use crate::io::db_loader::NativeLoader;
 use crate::io::header::FlatHeaderV2;
@@ -66,6 +67,31 @@ impl GajeFlatFileReader {
             metadata_json,
             header,
         })
+    }
+
+    /// Retorna si el archivo .flat contiene un tokenizador GTOK incrustado
+    pub fn has_embedded_tokenizer(&self) -> bool {
+        self.header.gtok_len > 0
+    }
+
+    /// Obtiene la referencia directa a los bytes del tokenizador GTOK incrustado
+    pub fn get_embedded_gtok_bytes(&self) -> Option<&[u8]> {
+        if self.header.gtok_len == 0 {
+            return None;
+        }
+        let start = self.header.gtok_offset as usize;
+        let end = start + self.header.gtok_len as usize;
+        if end <= self.mmap.len() {
+            Some(&self.mmap[start..end])
+        } else {
+            None
+        }
+    }
+
+    /// Deserializa el tokenizador GTOK nativo directamente desde el mapeo mmap
+    pub fn get_embedded_gtok(&self) -> Option<GtokNativeTokenizer> {
+        self.get_embedded_gtok_bytes()
+            .and_then(|bytes| GtokNativeTokenizer::from_bytes(bytes).ok())
     }
 
     pub fn get_slice(&self, off: usize, len: usize) -> &[u8] {

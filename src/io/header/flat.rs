@@ -36,8 +36,12 @@ pub struct FlatHeaderV2 {
     pub arch_n_blocks: u32,
     pub arch_qk_permute: u32,
 
-    // === RESERVA (4016 bytes) ===
-    pub reserved: [u8; 4016],
+    // === GTOK EMBEDDED TOKENIZER (16 bytes) ===
+    pub gtok_offset: u64,
+    pub gtok_len: u64,
+
+    // === RESERVA (4000 bytes) ===
+    pub reserved: [u8; 4000],
 }
 
 impl FlatHeaderV2 {

@@ -282,3 +282,90 @@ def export_hf_tokenizer_to_gtok(hf_tokenizer_json_path: str, output_gtok_path: s
 
     gtok.save(output_gtok_path)
     return gtok
+
+
+def embed_gtok_into_flat(flat_path: str, gtok_source: Any, output_path: Optional[str] = None) -> str:
+    """Incrusta un tokenizador GTOK directamente en la cabecera binaria de un modelo .flat (Single-File LLM)."""
+    if isinstance(gtok_source, str):
+        if gtok_source.endswith(".json"):
+            # Convertir al vuelo
+            temp_gtok = gtok_source.replace(".json", ".gtok")
+            gtok_obj = export_hf_tokenizer_to_gtok(gtok_source, temp_gtok)
+            gtok_bytes = gtok_obj.to_bytes()
+        else:
+            with open(gtok_source, "rb") as f:
+                gtok_bytes = f.read()
+    elif isinstance(gtok_source, GtokTokenizer):
+        gtok_bytes = gtok_source.to_bytes()
+    elif isinstance(gtok_source, bytes):
+        gtok_bytes = gtok_source
+    else:
+        raise TypeError("gtok_source debe ser una ruta de archivo, GtokTokenizer o bytes crudos")
+
+    target_file = output_path if output_path else flat_path
+
+    # Si es el mismo archivo, abrimos en modo r+b para modificar in-place
+    if target_file == flat_path:
+        with open(flat_path, "r+b") as f:
+            header = bytearray(f.read(4096))
+            if header[:4] != b"GAJE":
+                raise ValueError("El archivo especificado no es un modelo binario plano .flat válido de GAJE")
+
+            f.seek(0, os.SEEK_END)
+            gtok_offset = f.tell()
+            gtok_len = len(gtok_bytes)
+            f.write(gtok_bytes)
+
+            # Actualizar campos gtok_offset (80..88) y gtok_len (88..96) en el header
+            struct.pack_into("<QQ", header, 80, gtok_offset, gtok_len)
+            f.seek(0)
+            f.write(header)
+    else:
+        with open(flat_path, "rb") as f_in:
+            data = bytearray(f_in.read())
+
+        if data[:4] != b"GAJE":
+            raise ValueError("El archivo especificado no es un modelo binario plano .flat válido de GAJE")
+
+        gtok_offset = len(data)
+        gtok_len = len(gtok_bytes)
+        data.extend(gtok_bytes)
+
+        # Actualizar campos gtok_offset y gtok_len en la cabecera
+        struct.pack_into("<QQ", data, 80, gtok_offset, gtok_len)
+
+        with open(target_file, "wb") as f_out:
+            f_out.write(data)
+
+    return target_file
+
+
+def extract_gtok_from_flat(flat_path: str) -> Optional[GtokTokenizer]:
+    """Extrae el tokenizador GTOK incrustado en un archivo .flat sin dependencias externas."""
+    with open(flat_path, "rb") as f:
+        header = f.read(4096)
+        if len(header) < 4096 or header[:4] != b"GAJE":
+            return None
+
+        gtok_offset, gtok_len = struct.unpack_from("<QQ", header, 80)
+        if gtok_len == 0:
+            return None
+
+        f.seek(gtok_offset)
+        gtok_data = f.read(gtok_len)
+
+    return GtokTokenizer.from_bytes(gtok_data)
+
+
+def has_embedded_gtok(flat_path: str) -> bool:
+    """Verifica si un modelo .flat contiene un tokenizador GTOK incrustado."""
+    try:
+        with open(flat_path, "rb") as f:
+            header = f.read(4096)
+            if len(header) < 4096 or header[:4] != b"GAJE":
+                return False
+            _, gtok_len = struct.unpack_from("<QQ", header, 80)
+            return gtok_len > 0
+    except Exception:
+        return False
+

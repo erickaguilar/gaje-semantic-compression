@@ -193,7 +193,9 @@ pub fn save_genomic_flat_q(
         arch_n_head_kv: 0,
         arch_n_blocks: 0,
         arch_qk_permute: 0,
-        reserved: [0u8; 4016],
+        gtok_offset: 0,
+        gtok_len: 0,
+        reserved: [0u8; 4000],
     };
 
     let mut header_bin = [0u8; 4096];
