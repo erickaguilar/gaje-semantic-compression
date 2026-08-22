@@ -170,29 +170,30 @@ class TestGajeAutomationSuite(unittest.TestCase):
     # =========================================================================
     def test_05_quantum_genomic_tokenization(self):
         """TC-4.1: Mapeo de bases genómicas a vectores de estado y matrices de densidad ρ."""
-        print("\n[SUITE 4] Probando simulación de Tokenización Cuántico-Genómica...")
-        
-        basis = {
-            "A": np.array([1, 0, 0, 0], dtype=np.complex64),
-            "C": np.array([0, 1, 0, 0], dtype=np.complex64),
-            "G": np.array([0, 0, 1, 0], dtype=np.complex64),
-            "T": np.array([0, 0, 0, 1], dtype=np.complex64)
-        }
+        print("\n[SUITE 4] Probando Tokenización Cuántico-Genómica (QuantumGenomicTokenizer)...")
+        from gaje.processing.quantum_tokenizer import QuantumGenomicTokenizer, BASIS_A, BASIS_G
 
-        psi = 0.6 * basis["A"] + 0.8 * basis["G"]
-        norm = np.linalg.norm(psi)
-        psi_normalized = psi / norm
-        self.assertAlmostEqual(float(np.linalg.norm(psi_normalized)), 1.0, places=5)
+        tokenizer = QuantumGenomicTokenizer()
+        state = tokenizer.encode_char_to_state("G")
 
-        rho = np.outer(psi_normalized, np.conjugate(psi_normalized))
-        trace_rho = float(np.trace(rho).real)
-        self.assertAlmostEqual(trace_rho, 1.0, places=5, msg="La traza de la matriz de densidad debe ser 1")
+        # 1. Traza unitaria de la matriz de densidad
+        self.assertAlmostEqual(state.trace, 1.0, places=5, msg="La traza de la matriz de densidad debe ser 1")
 
-        P_context = np.outer(basis["G"], np.conjugate(basis["G"]))
-        prob_G = float(np.trace(np.matmul(rho, P_context)).real)
-        self.assertGreater(prob_G, 0.5, "La proyección en Guanina debe tener la mayor probabilidad")
-        print(f"[SUITE 4] Estado cuántico-genómico: |token⟩ = 0.6|A⟩ + 0.8|G⟩")
-        print(f"[SUITE 4] Traza(ρ) = {trace_rho:.2f} | Probabilidad de colapso en contexto G: {prob_G:.2%}")
+        # 2. Pureza cuántica
+        self.assertAlmostEqual(state.purity, 1.0, delta=0.01)
+
+        # 3. Colapso contextual proyectivo
+        ctx_g = BASIS_G
+        base, conf = state.collapse_with_context(ctx_g)
+        self.assertEqual(base, "G")
+        self.assertGreater(conf, 0.5)
+
+        # 4. Codificación completa a ADN
+        dna = tokenizer.collapse_text_to_dna("GAJE", context_text="Biología Genómica")
+        self.assertEqual(len(dna), 4)
+
+        print(f"[SUITE 4] Estado cuántico verificado: Traza(ρ) = {state.trace:.2f} | Pureza = {state.purity:.2f}")
+        print(f"[SUITE 4] Colapso contextual a ADN: 'GAJE' -> '{dna}' (Confianza Guanina: {conf:.2%})")
 
     # =========================================================================
     # SUITE 5: Certificación de Tokenizador Binario GTOK & Incrustación en .flat

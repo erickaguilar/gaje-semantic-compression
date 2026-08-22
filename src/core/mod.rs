@@ -8,3 +8,4 @@ pub mod session_memory;
 pub mod tokenizer;
 pub mod topology;
 pub mod gtok;
+pub mod quantum_tokenizer;
