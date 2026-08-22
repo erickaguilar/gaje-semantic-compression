@@ -6,12 +6,10 @@ lexical diversity (Distinct-1, Distinct-2), repetition loops, and semantic keywo
 
 import os
 import re
-import sys
 import time
-import json
 import logging
 from dataclasses import dataclass, field, asdict
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 try:
     import psutil

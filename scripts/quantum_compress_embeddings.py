@@ -40,7 +40,7 @@ def compress_embeddings_cli(
         else:
             raise ValueError("Formato de entrada no soportado. Use .npy")
     else:
-        print(f"⚡ Generando matriz de prueba estándar (151,643 tokens x 896 dim)...")
+        print("⚡ Generando matriz de prueba estándar (151,643 tokens x 896 dim)...")
         np.random.seed(42)
         dense_emb = np.random.randn(151643, 896).astype(np.float32)
 

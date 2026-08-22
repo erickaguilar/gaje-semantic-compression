@@ -284,7 +284,12 @@ impl IslandOrchestrator {
         Ok(())
     }
 
-    pub fn save_epoch(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> std::io::Result<()> {
+    pub fn save_epoch(
+        &mut self,
+        dir_path: &str,
+        epoch_id: u64,
+        parent_epoch: u64,
+    ) -> std::io::Result<()> {
         std::fs::create_dir_all(dir_path)?;
 
         self.episodic.set_epoch_id(epoch_id);
@@ -408,7 +413,12 @@ impl IslandOrchestrator {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn save_epoch_py(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> PyResult<()> {
+    pub fn save_epoch_py(
+        &mut self,
+        dir_path: &str,
+        epoch_id: u64,
+        parent_epoch: u64,
+    ) -> PyResult<()> {
         self.save_epoch(dir_path, epoch_id, parent_epoch)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }

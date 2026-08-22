@@ -7,7 +7,6 @@ import numpy as np
 from python.gaje.processing.quantum_codebook import (
     QuantumCodebook,
     QuantumEmbeddingTable,
-    QEMB_MAGIC,
 )
 
 

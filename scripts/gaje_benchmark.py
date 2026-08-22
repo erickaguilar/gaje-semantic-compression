@@ -40,7 +40,7 @@ def format_markdown_table(reports: List[BenchmarkReport]) -> str:
     md.append("# 📊 GAJE Helix — Reporte Oficial de Benchmarks Científicos\n")
     md.append(f"**Fecha:** {time.strftime('%Y-%m-%d %H:%M:%S')}  ")
     md.append(f"**Versión del Motor:** GAJE v{get_project_version()} (Rust SIMD AVX2 + PyO3 / Python {sys.version.split()[0]})  ")
-    md.append(f"**Hardware de Referencia:** AMD Ryzen 7 5800H (16 hilos) - x86_64  \n")
+    md.append("**Hardware de Referencia:** AMD Ryzen 7 5800H (16 hilos) - x86_64  \n")
     md.append("---\n")
     md.append("## 🏆 1. Resumen Comparativo de Modelos\n")
     md.append("| Modelo | Arquitectura | Tamaño Disco | Cold-Start | Peak RSS | Gen Speed | Diversidad ($d_1/d_2$) | Recall Semántico | Degeneración | Compresión |")

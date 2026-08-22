@@ -515,7 +515,8 @@ console.log(JSON.stringify(Array.from(genIds)));
     def test_12_memory_epochs_and_lineage(self):
         """TC-11.1: Snapshots inmutables, árboles de linaje y rollback exacto sub-milisegundo."""
         from gaje.core._impl import EpochManager, IslandOrchestrator
-        import tempfile, shutil
+        import shutil
+        import tempfile
 
         print(
             "\n[SUITE 11] Validando Épocas de Memoria y Linaje Versionado (.gmem v2)..."

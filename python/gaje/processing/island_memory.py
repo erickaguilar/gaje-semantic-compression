@@ -9,7 +9,7 @@ import os
 import re
 import struct
 import time
-from typing import Dict, List, Tuple, Optional, Any
+from typing import List, Tuple, Optional
 
 GMEM_MAGIC = b"GMEM"
 GMEM_VERSION = 1

@@ -76,7 +76,7 @@ def train_student():
         print(f"✅ Organismo genómico persistido exitosamente en {save_time:.2f} ms.")
         print(f"   • Archivo: {OUTPUT_MODEL_PATH}")
         print(f"   • Tamaño: {size_mb:.2f} MB")
-        print(f"   • Formato: .gaje (Nacido por GAJE)")
+        print("   • Formato: .gaje (Nacido por GAJE)")
 
     print("=" * 65)
     print("🎉 FASE 2 FINALIZADA EXITOSAMENTE: MODELO NACIDO DISPONIBLE")

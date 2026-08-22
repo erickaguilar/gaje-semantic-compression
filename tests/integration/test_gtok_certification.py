@@ -133,7 +133,7 @@ class TestGtokCertification(unittest.TestCase):
         extracted = extract_gtok_from_flat(synthetic_flat)
         self.assertIsNotNone(extracted)
         self.assertEqual(len(extracted.vocab), len(self.tokenizer.vocab))
-        print(f"[GTOK CERT 4] Incrustación y extracción en modelo .flat certificada al 100%")
+        print("[GTOK CERT 4] Incrustación y extracción en modelo .flat certificada al 100%")
 
     # =========================================================================
     # CERTIFICACIÓN 5: Plasticidad Dinámica y Aprendizaje en Caliente

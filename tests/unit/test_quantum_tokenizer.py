@@ -2,7 +2,7 @@
 
 import unittest
 import numpy as np
-from python.gaje.processing.quantum_tokenizer import QuantumGenomicTokenizer, QuantumTokenState
+from python.gaje.processing.quantum_tokenizer import QuantumGenomicTokenizer
 
 
 class TestQuantumGenomicTokenizer(unittest.TestCase):

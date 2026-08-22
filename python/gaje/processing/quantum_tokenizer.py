@@ -7,7 +7,7 @@ and genomic 2-bit nucleotides, utilizing density matrices ρ and projective Born
 
 import math
 import cmath
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Optional
 import numpy as np
 
 # Bases estándar del espacio de Hilbert H^4 (2 qubits)

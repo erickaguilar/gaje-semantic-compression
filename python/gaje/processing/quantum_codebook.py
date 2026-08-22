@@ -7,7 +7,7 @@ using sparse superposition projection (m=4) and unit-norm amplitude normalizatio
 import math
 import struct
 import numpy as np
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple
 
 QEMB_MAGIC = b"QEMB"
 QEMB_VERSION = 1
