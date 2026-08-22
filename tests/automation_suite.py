@@ -12,6 +12,7 @@ Ejecuta de forma automatizada las 5 suites de validación:
 import os
 import sys
 import time
+import math
 import gc
 import json
 import unittest
@@ -389,6 +390,32 @@ console.log(JSON.stringify(Array.from(genIds)));
             f"Discrepancia entre Native ({native_tokens}) y WASM ({wasm_tokens})",
         )
         print(f"[SUITE 8] Paridad WASM 100% verificada: {len(native_tokens)} tokens idénticos bit a bit.")
+
+    def test_10_zero_order_spsa_training(self):
+        """TC-9.1: Entrenamiento nativo de orden cero (SPSA Discreto) sobre modelo .flat."""
+        from dna_semantic_compression import NativeGenomicTrainer
+
+        model_path = os.path.join(MODELS_DIR, "production", "smollm2_135m.flat")
+        if not os.path.exists(model_path):
+            self.skipTest(f"Modelo {model_path} no encontrado")
+
+        print("\n[SUITE 9] Validando Entrenamiento de Orden Cero (SPSA Discreto)...")
+        llm = GenomicLLM.load_genomic(model_path)
+        self.assertIsNotNone(llm)
+
+        dataset = [
+            [280, 395, 1599, 345, 406],
+            [102, 503, 894, 201, 77],
+            [55, 312, 440, 981, 1024],
+        ]
+
+        trainer = NativeGenomicTrainer(lr=0.01, resonance_weight=0.05)
+        final_loss = trainer.fit_zero_order(llm.rust_llm, dataset, epochs=2, k_coords=16)
+
+        self.assertGreater(final_loss, 0.0)
+        self.assertFalse(math.isnan(final_loss))
+        self.assertFalse(math.isinf(final_loss))
+        print(f"[SUITE 9] Entrenamiento SPSA completado exitosamente: Loss={final_loss:.4f}")
 
 
 def run_all_suites():

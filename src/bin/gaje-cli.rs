@@ -50,11 +50,19 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut teacher_tok_path = None;
     let mut do_iqat = false;
     let mut iqat_lr = 0.001;
+    let mut is_zero_order = false;
+    let mut zero_order_k = 32;
 
     while i < args.len() {
         if args[i] == "ingest" {
             is_ingest_mode = true;
             i += 1;
+        } else if args[i] == "--zero-order" || args[i] == "--spsa" {
+            is_zero_order = true;
+            i += 1;
+        } else if (args[i] == "--k-coords" || args[i] == "--zero-order-k") && i + 1 < args.len() {
+            zero_order_k = args[i + 1].parse().unwrap_or(32);
+            i += 2;
         } else if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i + 1].clone();
             i += 2;
@@ -442,12 +450,31 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
 
         let trainer = _impl::nn::trainer::GenomicTrainerCore::new(scale, resonance_weight);
+        let mut current_config = config.clone();
+
+        if is_zero_order {
+            println!(
+                "[*] Modo de Optimización: Orden Cero (SPSA Discreto, {} épocas, k={})",
+                train_epochs, zero_order_k
+            );
+            trainer.fit_zero_order(&mut model, &dataset, train_epochs, zero_order_k)?;
+            if let Some(ref path) = save_path {
+                _impl::io::loader::save_genomic_model(
+                    path,
+                    &model,
+                    &current_config,
+                    Some(&tokenizer),
+                )?;
+                println!("    [Checkpoint SPSA] Guardado exitosamente en {}", path);
+            }
+            return Ok(());
+        }
+
         let p1_end = (train_epochs as f32 * 0.2) as usize;
         let p2_end = (train_epochs as f32 * 0.7) as usize;
 
         // Recuperar el paso guardado de los metadatos DNI
         let mut start_step: usize = config.config.dni.parse().unwrap_or(0);
-        let mut current_config = config.clone();
 
         'epoch_loop: for epoch in 0..train_epochs {
             if !running.load(Ordering::SeqCst) {
