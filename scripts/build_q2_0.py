@@ -134,7 +134,7 @@ def build_q2_0():
     arch_key = {"2": "smollm", "1": "llama", "5": "llama"}.get(
         str(arch_family), "qwen2"
     )
-    cfg = ARCHITECTURES.get(arch_key, ARCHITECTURES["qwen2"])
+    _cfg = ARCHITECTURES.get(arch_key, ARCHITECTURES["qwen2"])
 
     metadata_dict = {
         "config": {

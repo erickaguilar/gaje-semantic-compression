@@ -25,7 +25,9 @@ class TestQuantumGenomicTokenizer(unittest.TestCase):
 
     def test_text_to_dna_encoding(self):
         text = "GAJE Helix Engine"
-        dna = self.tokenizer.collapse_text_to_dna(text, context_text="Biología Molecular y Cuántica")
+        dna = self.tokenizer.collapse_text_to_dna(
+            text, context_text="Biología Molecular y Cuántica"
+        )
         self.assertEqual(len(dna), len(text))
         for nucleotide in dna:
             self.assertIn(nucleotide, ["A", "C", "G", "T"])

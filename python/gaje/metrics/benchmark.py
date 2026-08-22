@@ -137,7 +137,7 @@ def evaluate_single_prompt(
     """Evalúa un único prompt sobre la instancia nativa del LLM."""
     prompt_text = test_case["prompt"]
     formatted = format_prompt_fn(model_name, prompt_text)
-    
+
     tokens = llm.tokenizer.encode(formatted, add_special_tokens=False)
     if hasattr(tokens, "ids"):
         tokens = tokens.ids
@@ -178,7 +178,9 @@ def evaluate_single_prompt(
     ttft_ms = elapsed_ms / max(1, generated_tokens_count)
 
     div = calculate_lexical_diversity(cleaned_resp)
-    recall = calculate_keyword_recall(cleaned_resp, test_case.get("expected_keywords", []))
+    recall = calculate_keyword_recall(
+        cleaned_resp, test_case.get("expected_keywords", [])
+    )
     has_loop = detect_repetition_loops(cleaned_resp)
 
     return PromptEvalResult(
@@ -211,7 +213,7 @@ def evaluate_model_benchmark(
 ) -> BenchmarkReport:
     """Ejecuta la suite completa de benchmark para un modelo."""
     rss_before = get_current_rss_mb()
-    
+
     # 1. Medición de Cold-Start
     start_load = time.time()
     llm = get_model_fn(models_root, model_name, genomic_llm_cls)

@@ -22,17 +22,19 @@ class QuantumCodebook:
         self.centroids = np.zeros((num_meta_tokens, dim), dtype=np.float32)
 
     @classmethod
-    def create_harmonic_codebook(cls, num_meta_tokens: int = 8192, dim: int = 1536) -> "QuantumCodebook":
+    def create_harmonic_codebook(
+        cls, num_meta_tokens: int = 8192, dim: int = 1536
+    ) -> "QuantumCodebook":
         """
         Genera un codebook inicial armónico determinista y ortogonalizado en la esfera unitaria,
         utilizando bases de Fourier/Chebyshev y fases cuánticas.
         """
         codebook = cls(num_meta_tokens, dim)
-        
+
         # Mapeo armónico de frecuencias fundamentales
         k_indices = np.arange(num_meta_tokens, dtype=np.float32).reshape(-1, 1)
         d_indices = np.arange(dim, dtype=np.float32).reshape(1, -1)
-        
+
         # Frecuencias espaciales cuánticas
         freqs = (k_indices + 1.0) * (d_indices + 1.0) * (math.pi / dim)
         mat = np.sin(freqs) + np.cos(freqs * 0.5)
@@ -43,7 +45,13 @@ class QuantumCodebook:
         codebook.centroids = (mat / norms).astype(np.float32)
         return codebook
 
-    def fit_from_embeddings(self, embeddings: np.ndarray, num_iterations: int = 10, batch_size: int = 4096, seed: int = 42):
+    def fit_from_embeddings(
+        self,
+        embeddings: np.ndarray,
+        num_iterations: int = 10,
+        batch_size: int = 4096,
+        seed: int = 42,
+    ):
         """
         Ajusta los centroides del codebook mediante Spherical Mini-Batch K-Means
         sobre la matriz de embeddings original.
@@ -62,13 +70,17 @@ class QuantumCodebook:
             indices = np.random.choice(num_samples, self.num_meta_tokens, replace=False)
             self.centroids = normalized_emb[indices].copy().astype(np.float32)
         else:
-            self.centroids = self.create_harmonic_codebook(self.num_meta_tokens, dim).centroids
+            self.centroids = self.create_harmonic_codebook(
+                self.num_meta_tokens, dim
+            ).centroids
 
         # Mini-batch Spherical K-Means iterations
         counts = np.ones(self.num_meta_tokens, dtype=np.float32)
-        
+
         for it in range(num_iterations):
-            batch_idx = np.random.choice(num_samples, min(batch_size, num_samples), replace=False)
+            batch_idx = np.random.choice(
+                num_samples, min(batch_size, num_samples), replace=False
+            )
             batch = normalized_emb[batch_idx]
 
             # Similitud coseno: batch (B x d) @ centroids.T (d x K) -> B x K
@@ -78,14 +90,18 @@ class QuantumCodebook:
             for b_i, c_idx in enumerate(nearest_centroids):
                 counts[c_idx] += 1.0
                 eta = 1.0 / counts[c_idx]
-                self.centroids[c_idx] = (1.0 - eta) * self.centroids[c_idx] + eta * batch[b_i]
+                self.centroids[c_idx] = (1.0 - eta) * self.centroids[
+                    c_idx
+                ] + eta * batch[b_i]
 
             # Re-normalizar centroides
             c_norms = np.linalg.norm(self.centroids, axis=1, keepdims=True)
             c_norms[c_norms < 1e-9] = 1.0
             self.centroids = (self.centroids / c_norms).astype(np.float32)
 
-    def project_sparse(self, vector: np.ndarray, m: int = 4) -> Tuple[List[int], List[float]]:
+    def project_sparse(
+        self, vector: np.ndarray, m: int = 4
+    ) -> Tuple[List[int], List[float]]:
         """
         Proyecta un vector de embedding continuo en una superposición lineal de m meta-tokens cuánticos,
         resolviendo las amplitudes óptimas mediante mínimos cuadrados en el subespacio de Hilbert (Gram 4x4).
@@ -119,7 +135,9 @@ class QuantumCodebook:
 
         return top_indices.tolist(), amplitudes
 
-    def project_batch(self, embeddings: np.ndarray, m: int = 4, batch_size: int = 8192) -> Tuple[np.ndarray, np.ndarray]:
+    def project_batch(
+        self, embeddings: np.ndarray, m: int = 4, batch_size: int = 8192
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Proyecta por lotes (vectorizado) una matriz completa de embeddings continuos en superposiciones cuánticas.
         Retorna (indices: uint16[N, m], amplitudes: uint8[N, m]).
@@ -149,7 +167,9 @@ class QuantumCodebook:
             norm_amps = raw_amps / amp_norms
 
             all_indices[start:end] = sorted_top_m.astype(np.uint16)
-            all_amplitudes[start:end] = np.clip(np.round(norm_amps * 255.0), 0, 255).astype(np.uint8)
+            all_amplitudes[start:end] = np.clip(
+                np.round(norm_amps * 255.0), 0, 255
+            ).astype(np.uint8)
 
         return all_indices, all_amplitudes
 
@@ -158,18 +178,22 @@ class QuantumCodebook:
         reconstructed = np.zeros(self.dim, dtype=np.float32)
         for idx, amp in zip(indices, amplitudes):
             reconstructed += amp * self.centroids[idx]
-        
+
         # Normalizar reconstrucción
         r_norm = np.linalg.norm(reconstructed)
         if r_norm > 1e-9:
             reconstructed = reconstructed / r_norm
         return reconstructed
 
-    def evaluate_reconstruction_fidelity(self, embeddings: np.ndarray, m: int = 4, sample_size: int = 1000) -> float:
+    def evaluate_reconstruction_fidelity(
+        self, embeddings: np.ndarray, m: int = 4, sample_size: int = 1000
+    ) -> float:
         """Evalúa la similitud coseno promedio de reconstrucción sobre una muestra de embeddings."""
         num_samples = len(embeddings)
-        sample_indices = np.random.choice(num_samples, min(sample_size, num_samples), replace=False)
-        
+        sample_indices = np.random.choice(
+            num_samples, min(sample_size, num_samples), replace=False
+        )
+
         cos_sims = []
         for idx in sample_indices:
             orig = embeddings[idx]
@@ -180,7 +204,7 @@ class QuantumCodebook:
 
             inds, amps = self.project_sparse(orig, m=m)
             rec = self.reconstruct(inds, amps)
-            
+
             sim = float(np.dot(orig_unit, rec))
             cos_sims.append(sim)
 
@@ -195,10 +219,14 @@ class QuantumEmbeddingTable:
         self.num_tokens = num_tokens
         self.m = m
         self.indices = np.zeros((num_tokens, m), dtype=np.uint16)
-        self.amplitudes = np.zeros((num_tokens, m), dtype=np.uint8)  # Cuantizado 8-bit [0..255]
+        self.amplitudes = np.zeros(
+            (num_tokens, m), dtype=np.uint8
+        )  # Cuantizado 8-bit [0..255]
 
     @classmethod
-    def from_dense_embeddings(cls, embeddings: np.ndarray, num_meta_tokens: int = 8192, m: int = 4) -> "QuantumEmbeddingTable":
+    def from_dense_embeddings(
+        cls, embeddings: np.ndarray, num_meta_tokens: int = 8192, m: int = 4
+    ) -> "QuantumEmbeddingTable":
         """Construye y comprime una tabla de embeddings densa completa."""
         num_tokens, dim = embeddings.shape
         codebook = QuantumCodebook(num_meta_tokens, dim)
@@ -248,19 +276,33 @@ class QuantumEmbeddingTable:
             header = f.read(64)
             if len(header) < 64:
                 raise ValueError("Archivo .qemb corrupto o truncado")
-            magic, version, m, num_meta_tokens, num_tokens, dim, _ = struct.unpack("<4sHHIII44s", header)
+            magic, version, m, num_meta_tokens, num_tokens, dim, _ = struct.unpack(
+                "<4sHHIII44s", header
+            )
             if magic != QEMB_MAGIC:
                 raise ValueError(f"Magic bytes inválidos: {magic}")
 
             codebook = QuantumCodebook(num_meta_tokens, dim)
             centroids_bytes = f.read(num_meta_tokens * dim * 4)
-            codebook.centroids = np.frombuffer(centroids_bytes, dtype=np.float32).reshape(num_meta_tokens, dim).copy()
+            codebook.centroids = (
+                np.frombuffer(centroids_bytes, dtype=np.float32)
+                .reshape(num_meta_tokens, dim)
+                .copy()
+            )
 
             table = cls(codebook, num_tokens, m=m)
             indices_bytes = f.read(num_tokens * m * 2)
-            table.indices = np.frombuffer(indices_bytes, dtype=np.uint16).reshape(num_tokens, m).copy()
+            table.indices = (
+                np.frombuffer(indices_bytes, dtype=np.uint16)
+                .reshape(num_tokens, m)
+                .copy()
+            )
 
             amplitudes_bytes = f.read(num_tokens * m * 1)
-            table.amplitudes = np.frombuffer(amplitudes_bytes, dtype=np.uint8).reshape(num_tokens, m).copy()
+            table.amplitudes = (
+                np.frombuffer(amplitudes_bytes, dtype=np.uint8)
+                .reshape(num_tokens, m)
+                .copy()
+            )
 
         return table

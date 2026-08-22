@@ -50,13 +50,24 @@ class DynamicVocabPlasticity:
     def _consolidate_dynamic_merges(self):
         """Convierte secuencias frecuentes en nuevas fusiones BPE dinámicas en memoria."""
         for (left, right), count in self.ngram_frequencies.items():
-            if count >= self.merge_threshold and (left, right) not in self.tokenizer.merges_dict:
+            if (
+                count >= self.merge_threshold
+                and (left, right) not in self.tokenizer.merges_dict
+            ):
                 if len(self.dynamic_merges) >= self.max_dynamic_merges:
                     break
 
                 # Obtener la representación decodificada del nuevo macro-token
-                left_str = self.tokenizer.vocab[left] if left < len(self.tokenizer.vocab) else f"<{left}>"
-                right_str = self.tokenizer.vocab[right] if right < len(self.tokenizer.vocab) else f"<{right}>"
+                left_str = (
+                    self.tokenizer.vocab[left]
+                    if left < len(self.tokenizer.vocab)
+                    else f"<{left}>"
+                )
+                right_str = (
+                    self.tokenizer.vocab[right]
+                    if right < len(self.tokenizer.vocab)
+                    else f"<{right}>"
+                )
                 new_token_str = left_str + right_str
 
                 # Asignar un ID en el espacio de vocabulario extendido dinámico

@@ -39,12 +39,18 @@ def format_markdown_table(reports: List[BenchmarkReport]) -> str:
     md = []
     md.append("# 📊 GAJE Helix — Reporte Oficial de Benchmarks Científicos\n")
     md.append(f"**Fecha:** {time.strftime('%Y-%m-%d %H:%M:%S')}  ")
-    md.append(f"**Versión del Motor:** GAJE v{get_project_version()} (Rust SIMD AVX2 + PyO3 / Python {sys.version.split()[0]})  ")
+    md.append(
+        f"**Versión del Motor:** GAJE v{get_project_version()} (Rust SIMD AVX2 + PyO3 / Python {sys.version.split()[0]})  "
+    )
     md.append("**Hardware de Referencia:** AMD Ryzen 7 5800H (16 hilos) - x86_64  \n")
     md.append("---\n")
     md.append("## 🏆 1. Resumen Comparativo de Modelos\n")
-    md.append("| Modelo | Arquitectura | Tamaño Disco | Cold-Start | Peak RSS | Gen Speed | Diversidad ($d_1/d_2$) | Recall Semántico | Degeneración | Compresión |")
-    md.append("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+    md.append(
+        "| Modelo | Arquitectura | Tamaño Disco | Cold-Start | Peak RSS | Gen Speed | Diversidad ($d_1/d_2$) | Recall Semántico | Degeneración | Compresión |"
+    )
+    md.append(
+        "| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
+    )
 
     for r in reports:
         d1_d2 = f"{r.avg_distinct_1:.2f} / {r.avg_distinct_2:.2f}"
@@ -57,35 +63,62 @@ def format_markdown_table(reports: List[BenchmarkReport]) -> str:
 
     md.append("\n---\n")
     md.append("## 🔬 2. Definición de Métricas Evaluadas\n")
-    md.append("* **Cold-Start (ms):** Tiempo para mapear el archivo binario a memoria vía Zero-Copy Mmap.")
-    md.append("* **Peak RSS (MB):** Memoria física residente máxima alcanzada en el sistema.")
-    md.append("* **Gen Speed (tok/s):** Throughput sostenido de generación autoregresiva token a token.")
-    md.append("* **Diversidad ($d_1 / d_2$):** Fracción de unigramas y bigramas únicos generados (métrica Distinct).")
-    md.append("* **Recall Semántico (%):** Porcentaje de conceptos clave esperados respondidos con éxito.")
-    md.append("* **Degeneración (%):** Tasa de respuestas que caen en bucles repetitivos (objetivo: 0.0%).")
+    md.append(
+        "* **Cold-Start (ms):** Tiempo para mapear el archivo binario a memoria vía Zero-Copy Mmap."
+    )
+    md.append(
+        "* **Peak RSS (MB):** Memoria física residente máxima alcanzada en el sistema."
+    )
+    md.append(
+        "* **Gen Speed (tok/s):** Throughput sostenido de generación autoregresiva token a token."
+    )
+    md.append(
+        "* **Diversidad ($d_1 / d_2$):** Fracción de unigramas y bigramas únicos generados (métrica Distinct)."
+    )
+    md.append(
+        "* **Recall Semántico (%):** Porcentaje de conceptos clave esperados respondidos con éxito."
+    )
+    md.append(
+        "* **Degeneración (%):** Tasa de respuestas que caen en bucles repetitivos (objetivo: 0.0%)."
+    )
     md.append("* **Compresión:** Ratio de ahorro de memoria vs FP32 equivalente.")
-    md.append("\n---\n*Reporte generado automáticamente por `scripts/gaje_benchmark.py`.*")
+    md.append(
+        "\n---\n*Reporte generado automáticamente por `scripts/gaje_benchmark.py`.*"
+    )
     return "\n".join(md)
 
 
 def print_ascii_table(reports: List[BenchmarkReport]):
     """Imprime un resumen formateado en la terminal."""
     print("\n" + "=" * 115)
-    print(f"{'MODELO':<28} | {'ARQ':<11} | {'DISCO':<8} | {'COLD(ms)':<8} | {'RSS(MB)':<8} | {'SPEED':<10} | {'RECALL':<8} | {'COMPRESIÓN'}")
+    print(
+        f"{'MODELO':<28} | {'ARQ':<11} | {'DISCO':<8} | {'COLD(ms)':<8} | {'RSS(MB)':<8} | {'SPEED':<10} | {'RECALL':<8} | {'COMPRESIÓN'}"
+    )
     print("=" * 115)
     for r in reports:
         speed = f"{r.avg_tokens_per_sec:.1f} tok/s"
         recall = f"{r.avg_keyword_recall * 100:.1f}%"
         comp = f"{r.compression_ratio:.1f}x ({r.memory_savings_pct:.0f}%)"
-        print(f"{r.model_name:<28} | {r.architecture:<11} | {r.file_size_mb:>6.1f}MB | {r.cold_start_ms:>8.1f} | {r.peak_rss_mb:>7.1f} | {speed:>10} | {recall:>8} | {comp}")
+        print(
+            f"{r.model_name:<28} | {r.architecture:<11} | {r.file_size_mb:>6.1f}MB | {r.cold_start_ms:>8.1f} | {r.peak_rss_mb:>7.1f} | {speed:>10} | {recall:>8} | {comp}"
+        )
     print("=" * 115 + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description="GAJE Scientific Benchmark CLI")
-    parser.add_argument("--models", nargs="*", help="Lista de nombres de modelos a evaluar")
-    parser.add_argument("--dataset", default=DEFAULT_DATASET, help="Ruta al archivo JSON de prompts")
-    parser.add_argument("--format", choices=["table", "markdown", "json"], default="table", help="Formato de salida")
+    parser.add_argument(
+        "--models", nargs="*", help="Lista de nombres de modelos a evaluar"
+    )
+    parser.add_argument(
+        "--dataset", default=DEFAULT_DATASET, help="Ruta al archivo JSON de prompts"
+    )
+    parser.add_argument(
+        "--format",
+        choices=["table", "markdown", "json"],
+        default="table",
+        help="Formato de salida",
+    )
     parser.add_argument("--output", help="Ruta del archivo de salida")
     parser.add_argument("--limit", type=int, default=None, help="Limitar a N prompts")
     args = parser.parse_args()
@@ -98,7 +131,7 @@ def main():
         dataset = json.load(f)
 
     if args.limit and args.limit > 0:
-        dataset["test_cases"] = dataset["test_cases"][:args.limit]
+        dataset["test_cases"] = dataset["test_cases"][: args.limit]
 
     # Modelos a evaluar
     available = list_available_models(MODELS_DIR)
@@ -133,7 +166,9 @@ def main():
                 get_stop_tokens_fn=get_stop_tokens,
             )
             reports.append(report)
-            print(f"  ✓ Cold-Start: {report.cold_start_ms} ms | Speed: {report.avg_tokens_per_sec} tok/s | Recall: {report.avg_keyword_recall * 100:.1f}%")
+            print(
+                f"  ✓ Cold-Start: {report.cold_start_ms} ms | Speed: {report.avg_tokens_per_sec} tok/s | Recall: {report.avg_keyword_recall * 100:.1f}%"
+            )
         except Exception as e:
             print(f"  ❌ Error evaluando {model_name}: {e}")
         finally:

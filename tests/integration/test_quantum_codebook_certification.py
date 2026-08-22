@@ -38,7 +38,9 @@ class TestQuantumCodebookCertification(unittest.TestCase):
         proj = np.random.randn(24, cls.dim)
         cls.dense_emb = np.matmul(latent, proj).astype(np.float32)
 
-        cls.table = QuantumEmbeddingTable.from_dense_embeddings(cls.dense_emb, num_meta_tokens=cls.K, m=cls.m)
+        cls.table = QuantumEmbeddingTable.from_dense_embeddings(
+            cls.dense_emb, num_meta_tokens=cls.K, m=cls.m
+        )
         cls.table.save_qemb(cls.qemb_path)
 
     @classmethod
@@ -49,8 +51,14 @@ class TestQuantumCodebookCertification(unittest.TestCase):
         raw_size = self.num_tokens * self.dim * 4
         qemb_size = os.path.getsize(self.qemb_path)
         savings_pct = (1.0 - (qemb_size / raw_size)) * 100.0
-        print(f"\n[QEMB CERT 1] Tamaño FP32: {raw_size/1024:.1f} KB | .qemb: {qemb_size/1024:.1f} KB (Ahorro: {savings_pct:.1f}%)")
-        self.assertGreater(savings_pct, 80.0, "La compresión .qemb debe superar el 80% en pruebas reducidas (>94% a escala real)")
+        print(
+            f"\n[QEMB CERT 1] Tamaño FP32: {raw_size/1024:.1f} KB | .qemb: {qemb_size/1024:.1f} KB (Ahorro: {savings_pct:.1f}%)"
+        )
+        self.assertGreater(
+            savings_pct,
+            80.0,
+            "La compresión .qemb debe superar el 80% en pruebas reducidas (>94% a escala real)",
+        )
 
     def test_02_lookup_latency(self):
         t0 = time.time()
@@ -58,12 +66,18 @@ class TestQuantumCodebookCertification(unittest.TestCase):
         for i in range(num_lookups):
             _ = self.table.get_embedding(i % self.num_tokens)
         elapsed_us = ((time.time() - t0) / num_lookups) * 1_000_000.0
-        print(f"[QEMB CERT 2] Latencia de lookup cuántico: {elapsed_us:.2f} µs por token")
+        print(
+            f"[QEMB CERT 2] Latencia de lookup cuántico: {elapsed_us:.2f} µs por token"
+        )
         self.assertLess(elapsed_us, 50.0)
 
     def test_03_reconstruction_fidelity(self):
-        fidelity = self.table.codebook.evaluate_reconstruction_fidelity(self.dense_emb, m=self.m, sample_size=500)
-        print(f"[QEMB CERT 3] Fidelidad promedio de reconstrucción CosSim: {fidelity:.4f}")
+        fidelity = self.table.codebook.evaluate_reconstruction_fidelity(
+            self.dense_emb, m=self.m, sample_size=500
+        )
+        print(
+            f"[QEMB CERT 3] Fidelidad promedio de reconstrucción CosSim: {fidelity:.4f}"
+        )
         self.assertGreater(fidelity, 0.70)
 
 

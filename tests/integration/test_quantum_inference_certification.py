@@ -28,7 +28,7 @@ def run_certification():
         return
 
     process = psutil.Process()
-    base_rss = process.memory_info().rss / (1024 * 1024)
+    _base_rss = process.memory_info().rss / (1024 * 1024)
 
     # 1. Cargar modelo
     t_start = time.perf_counter()

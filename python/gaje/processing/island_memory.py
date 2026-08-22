@@ -16,8 +16,55 @@ GMEM_VERSION = 1
 
 
 STOPWORDS = {
-    "de", "la", "el", "y", "en", "un", "una", "unos", "unas", "que", "con", "por", "para", "los", "las", "del", "al", "o", "u", "es", "son", "fue", "era", "se", "su", "sus", "mi", "mis", "tu", "tus",
-    "the", "of", "and", "in", "to", "is", "are", "was", "were", "for", "on", "with", "as", "by", "at", "an", "be", "this", "that"
+    "de",
+    "la",
+    "el",
+    "y",
+    "en",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "que",
+    "con",
+    "por",
+    "para",
+    "los",
+    "las",
+    "del",
+    "al",
+    "o",
+    "u",
+    "es",
+    "son",
+    "fue",
+    "era",
+    "se",
+    "su",
+    "sus",
+    "mi",
+    "mis",
+    "tu",
+    "tus",
+    "the",
+    "of",
+    "and",
+    "in",
+    "to",
+    "is",
+    "are",
+    "was",
+    "were",
+    "for",
+    "on",
+    "with",
+    "as",
+    "by",
+    "at",
+    "an",
+    "be",
+    "this",
+    "that",
 }
 
 
@@ -62,7 +109,14 @@ def _cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
 
 
 class IslandMemoryEntry:
-    def __init__(self, entry_id: int, niche: str, text: str, embedding: List[float], timestamp: float):
+    def __init__(
+        self,
+        entry_id: int,
+        niche: str,
+        text: str,
+        embedding: List[float],
+        timestamp: float,
+    ):
         self.entry_id = entry_id
         self.niche = niche  # "episodic", "documental", "conversational"
         self.text = text
@@ -93,9 +147,18 @@ class IslandMemoryManager:
 
         # Inicializar memorias base esenciales de GAJE
         os.makedirs(os.path.dirname(os.path.abspath(self.gmem_path)), exist_ok=True)
-        self.add_memory("documental", "GAJE Helix Engine v1.6.0: Motor de compresión genómica y LLM nativo en Rust con SIMD AVX2.")
-        self.add_memory("documental", "Island Model: Sistema de persistencia zero-copy .gmem con latencia de 0.75 ms.")
-        self.add_memory("documental", "Cuantización: Formato Q4_0 con 8.0x de compresión y 87.5% de ahorro de memoria.")
+        self.add_memory(
+            "documental",
+            "GAJE Helix Engine v1.6.0: Motor de compresión genómica y LLM nativo en Rust con SIMD AVX2.",
+        )
+        self.add_memory(
+            "documental",
+            "Island Model: Sistema de persistencia zero-copy .gmem con latencia de 0.75 ms.",
+        )
+        self.add_memory(
+            "documental",
+            "Cuantización: Formato Q4_0 con 8.0x de compresión y 87.5% de ahorro de memoria.",
+        )
         self.save()
 
     def add_memory(self, niche: str, text: str):
@@ -127,7 +190,9 @@ class IslandMemoryManager:
                 e for e in self.entries if e.niche != "documental"
             ][-300:]
 
-    def retrieve_context(self, query: str, top_k: int = 2, threshold: float = 0.20) -> List[Tuple[IslandMemoryEntry, float]]:
+    def retrieve_context(
+        self, query: str, top_k: int = 2, threshold: float = 0.20
+    ) -> List[Tuple[IslandMemoryEntry, float]]:
         """Recupera los recuerdos más relevantes en < 1 ms consultando los nichos en memoria."""
         q_emb = _compute_fast_embedding(query, self.dim)
         scored = []
@@ -148,7 +213,11 @@ class IslandMemoryManager:
 
         snippets = []
         for entry, sim in matches:
-            niche_icon = "⚡" if entry.niche == "episodic" else ("📚" if entry.niche == "documental" else "💬")
+            niche_icon = (
+                "⚡"
+                if entry.niche == "episodic"
+                else ("📚" if entry.niche == "documental" else "💬")
+            )
             snippets.append(f"• {niche_icon} {entry.text}")
 
         injection = "[Memoria de Largo Plazo .gmem:\n" + "\n".join(snippets) + "\n]"
@@ -159,14 +228,22 @@ class IslandMemoryManager:
         try:
             with open(self.gmem_path, "wb") as f:
                 # Cabecera (16 bytes): Magic(4B), Version(2B), Dim(2B), Count(4B), Reserved(4B)
-                header = struct.pack("<4sHHII", GMEM_MAGIC, GMEM_VERSION, self.dim, len(self.entries), 0)
+                header = struct.pack(
+                    "<4sHHII", GMEM_MAGIC, GMEM_VERSION, self.dim, len(self.entries), 0
+                )
                 f.write(header)
 
                 for e in self.entries:
                     text_bytes = e.text.encode("utf-8")
                     niche_bytes = e.niche.encode("utf-8")
                     # Entry Header: ID(8B), Timestamp(8B), NicheLen(2B), TextLen(4B)
-                    eh = struct.pack("<QdHI", e.entry_id, e.timestamp, len(niche_bytes), len(text_bytes))
+                    eh = struct.pack(
+                        "<QdHI",
+                        e.entry_id,
+                        e.timestamp,
+                        len(niche_bytes),
+                        len(text_bytes),
+                    )
                     f.write(eh)
                     f.write(niche_bytes)
                     f.write(text_bytes)

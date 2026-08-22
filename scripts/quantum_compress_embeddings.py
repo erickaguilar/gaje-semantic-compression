@@ -46,11 +46,15 @@ def compress_embeddings_cli(
 
     num_tokens, dim = dense_emb.shape
     raw_size_mb = (num_tokens * dim * 4) / (1024 * 1024)
-    print(f"📊 Dimensiones: {num_tokens} tokens x {dim} dim (Tamaño FP32: {raw_size_mb:.2f} MB)")
+    print(
+        f"📊 Dimensiones: {num_tokens} tokens x {dim} dim (Tamaño FP32: {raw_size_mb:.2f} MB)"
+    )
 
     # 2. Entrenar Codebook y Proyectar
     t0 = time.time()
-    print(f"⏳ Ajustando Codebook Cuántico de {num_meta_tokens} estados ({iterations} iteraciones)...")
+    print(
+        f"⏳ Ajustando Codebook Cuántico de {num_meta_tokens} estados ({iterations} iteraciones)..."
+    )
     codebook = QuantumCodebook(num_meta_tokens, dim)
     codebook.fit_from_embeddings(dense_emb, num_iterations=iterations, batch_size=8192)
 
@@ -70,7 +74,9 @@ def compress_embeddings_cli(
     savings = (1.0 - (qemb_size_mb / raw_size_mb)) * 100.0
 
     # 4. Evaluar fidelidad de reconstrucción
-    fidelity = codebook.evaluate_reconstruction_fidelity(dense_emb, m=m, sample_size=1000)
+    fidelity = codebook.evaluate_reconstruction_fidelity(
+        dense_emb, m=m, sample_size=1000
+    )
 
     print("\n" + "=" * 80)
     print("🏆 RESULTADOS DE LA COMPRESIÓN CUÁNTICA")
@@ -78,19 +84,36 @@ def compress_embeddings_cli(
     print(f"• Archivo de salida: {output_path}")
     print(f"• Tamaño original FP32: {raw_size_mb:.2f} MB")
     print(f"• Tamaño comprimido .qemb: {qemb_size_mb:.2f} MB")
-    print(f"• Ahorro de memoria RAM: {savings:.2f}% ({raw_size_mb / qemb_size_mb:.1f}x compresión)")
+    print(
+        f"• Ahorro de memoria RAM: {savings:.2f}% ({raw_size_mb / qemb_size_mb:.1f}x compresión)"
+    )
     print(f"• Fidelidad de Reconstrucción (CosSim): {fidelity:.4f}")
     print(f"• Tiempo total de procesamiento: {elapsed:.2f} s")
     print("=" * 80)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="GAJE Quantum Embedding Compression CLI")
-    parser.add_argument("--input", type=str, default="", help="Ruta al archivo .npy de embeddings")
-    parser.add_argument("--output", type=str, default="data/memory/quantum_vocab.qemb", help="Ruta de salida .qemb")
-    parser.add_argument("--meta_tokens", type=int, default=8192, help="Número de meta-tokens canónicos")
-    parser.add_argument("--m", type=int, default=4, help="Número de proyecciones por token")
-    parser.add_argument("--iterations", type=int, default=10, help="Iteraciones de clustering")
+    parser = argparse.ArgumentParser(
+        description="GAJE Quantum Embedding Compression CLI"
+    )
+    parser.add_argument(
+        "--input", type=str, default="", help="Ruta al archivo .npy de embeddings"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="data/memory/quantum_vocab.qemb",
+        help="Ruta de salida .qemb",
+    )
+    parser.add_argument(
+        "--meta_tokens", type=int, default=8192, help="Número de meta-tokens canónicos"
+    )
+    parser.add_argument(
+        "--m", type=int, default=4, help="Número de proyecciones por token"
+    )
+    parser.add_argument(
+        "--iterations", type=int, default=10, help="Iteraciones de clustering"
+    )
 
     args = parser.parse_args()
     compress_embeddings_cli(

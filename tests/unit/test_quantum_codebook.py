@@ -33,7 +33,9 @@ class TestQuantumCodebook(unittest.TestCase):
         dense_embeddings = np.random.randn(num_tokens, dim).astype(np.float32)
 
         codebook = QuantumCodebook(num_meta_tokens=K, dim=dim)
-        codebook.fit_from_embeddings(dense_embeddings, num_iterations=5, batch_size=1000)
+        codebook.fit_from_embeddings(
+            dense_embeddings, num_iterations=5, batch_size=1000
+        )
 
         # Proyectar y reconstruir un vector
         vec = dense_embeddings[0]
@@ -59,7 +61,9 @@ class TestQuantumCodebook(unittest.TestCase):
         m = 4
 
         dense = np.random.randn(num_tokens, dim).astype(np.float32)
-        table = QuantumEmbeddingTable.from_dense_embeddings(dense, num_meta_tokens=K, m=m)
+        table = QuantumEmbeddingTable.from_dense_embeddings(
+            dense, num_meta_tokens=K, m=m
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".qemb", delete=False) as tf:
             qemb_path = tf.name
@@ -71,7 +75,9 @@ class TestQuantumCodebook(unittest.TestCase):
             # Verificar tamaño binario: K*dim*4 + V*m*2 + V*m*1 + 64 bytes
             file_size = os.path.getsize(qemb_path)
             raw_dense_size = num_tokens * dim * 4
-            print(f"\n[QEMB TEST] Tamaño denso FP32: {raw_dense_size} B | Comprimido .qemb: {file_size} B")
+            print(
+                f"\n[QEMB TEST] Tamaño denso FP32: {raw_dense_size} B | Comprimido .qemb: {file_size} B"
+            )
 
             # Recargar
             reloaded = QuantumEmbeddingTable.load_qemb(qemb_path)

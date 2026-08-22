@@ -23,7 +23,12 @@ INDEX_TO_BASE = ["A", "C", "G", "T"]
 class QuantumTokenState:
     """Representa el estado cuántico-genómico de un token en superposición o estado mixto."""
 
-    def __init__(self, token_text: str, density_matrix: np.ndarray, pure_state: Optional[np.ndarray] = None):
+    def __init__(
+        self,
+        token_text: str,
+        density_matrix: np.ndarray,
+        pure_state: Optional[np.ndarray] = None,
+    ):
         self.token_text = token_text
         self.rho = np.array(density_matrix, dtype=np.complex128)
         self.pure_state = pure_state
@@ -65,7 +70,7 @@ class QuantumTokenState:
         """Proyecta el estado sobre el vector de contexto usando la regla de Born P = Tr(ρ |c⟩⟨c|)."""
         c_norm = context_vector / np.linalg.norm(context_vector)
         P_context = np.outer(c_norm, np.conjugate(c_norm))
-        prob_overlap = float(np.trace(np.matmul(self.rho, P_context)).real)
+        _prob_overlap = float(np.trace(np.matmul(self.rho, P_context)).real)
 
         # Proyectar sobre cada una de las 4 bases genómicas canónicas
         probs = {}
@@ -74,7 +79,9 @@ class QuantumTokenState:
             # Medición compuesta: Tr(ρ · P_base) ponderada por contexto
             p = float(np.trace(np.matmul(self.rho, P_base)).real)
             # Factor de afinidad contextual
-            p_contextual = p * float(np.abs(np.dot(np.conjugate(c_norm), base_vec)) ** 2)
+            p_contextual = p * float(
+                np.abs(np.dot(np.conjugate(c_norm), base_vec)) ** 2
+            )
             probs[base_name] = p_contextual
 
         total_p = sum(probs.values())
@@ -83,7 +90,9 @@ class QuantumTokenState:
             confidence = probs[collapsed_base] / total_p
         else:
             collapsed_base = INDEX_TO_BASE[int(np.argmax(np.diag(self.rho).real))]
-            confidence = float(np.diag(self.rho).real[INDEX_TO_BASE.index(collapsed_base)])
+            confidence = float(
+                np.diag(self.rho).real[INDEX_TO_BASE.index(collapsed_base)]
+            )
 
         return collapsed_base, confidence
 
@@ -107,12 +116,15 @@ class QuantumGenomicTokenizer:
         theta_3 = ((code * 13) % 360) * math.pi / 180.0
         theta_4 = ((code * 23) % 360) * math.pi / 180.0
 
-        raw_amplitudes = np.array([
-            cmath.rect(math.cos(theta_1) ** 2 + self.smoothing, theta_1),
-            cmath.rect(math.sin(theta_2) ** 2 + self.smoothing, theta_2),
-            cmath.rect(math.cos(theta_3) ** 2 + self.smoothing, theta_3),
-            cmath.rect(math.sin(theta_4) ** 2 + self.smoothing, theta_4),
-        ], dtype=np.complex128)
+        raw_amplitudes = np.array(
+            [
+                cmath.rect(math.cos(theta_1) ** 2 + self.smoothing, theta_1),
+                cmath.rect(math.sin(theta_2) ** 2 + self.smoothing, theta_2),
+                cmath.rect(math.cos(theta_3) ** 2 + self.smoothing, theta_3),
+                cmath.rect(math.sin(theta_4) ** 2 + self.smoothing, theta_4),
+            ],
+            dtype=np.complex128,
+        )
 
         norm = np.linalg.norm(raw_amplitudes)
         psi = raw_amplitudes / norm
@@ -124,7 +136,9 @@ class QuantumGenomicTokenizer:
         """Convierte una cadena de texto en una lista de estados cuánticos superpuestos."""
         return [self.encode_char_to_state(ch) for ch in text]
 
-    def collapse_text_to_dna(self, text: str, context_text: Optional[str] = None) -> str:
+    def collapse_text_to_dna(
+        self, text: str, context_text: Optional[str] = None
+    ) -> str:
         """
         Codifica un texto a estados cuánticos y los colapsa a una secuencia discreta de ADN (A, C, G, T)
         guiada por el contexto semántico o memoria episódica.
@@ -134,12 +148,15 @@ class QuantumGenomicTokenizer:
         if context_text:
             # Crear vector de contexto normalizado desde el texto de contexto
             ctx_hash = sum((idx + 1) * ord(c) for idx, c in enumerate(context_text))
-            ctx_vec = np.array([
-                math.cos(ctx_hash * 0.1),
-                math.sin(ctx_hash * 0.2),
-                math.cos(ctx_hash * 0.3),
-                math.sin(ctx_hash * 0.4)
-            ], dtype=np.complex128)
+            ctx_vec = np.array(
+                [
+                    math.cos(ctx_hash * 0.1),
+                    math.sin(ctx_hash * 0.2),
+                    math.cos(ctx_hash * 0.3),
+                    math.sin(ctx_hash * 0.4),
+                ],
+                dtype=np.complex128,
+            )
             ctx_vec = ctx_vec / np.linalg.norm(ctx_vec)
         else:
             # Contexto neutro uniforme

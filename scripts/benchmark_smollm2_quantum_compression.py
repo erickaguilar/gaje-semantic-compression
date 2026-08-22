@@ -36,7 +36,7 @@ def run_smollm2_quantum_compression():
     with open(model_path, "rb") as f:
         header = f.read(4096)
         magic, ver, flags, num_tensors, meta_len, dir_len, w_off, w_len = struct.unpack_from("<4sIIIQQQQ", header, 0)
-        meta = json.loads(f.read(meta_len).decode("utf-8"))
+        _meta = json.loads(f.read(meta_len).decode("utf-8"))
         directory = json.loads(f.read(dir_len).decode("utf-8"))
 
         emb_info = None

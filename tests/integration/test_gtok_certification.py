@@ -39,7 +39,9 @@ class TestGtokCertification(unittest.TestCase):
         cls.gtok_path = os.path.join(cls.temp_dir.name, "certified_tokenizer.gtok")
 
         if os.path.exists(SAMPLE_JSON_TOKENIZER):
-            cls.tokenizer = export_hf_tokenizer_to_gtok(SAMPLE_JSON_TOKENIZER, cls.gtok_path)
+            cls.tokenizer = export_hf_tokenizer_to_gtok(
+                SAMPLE_JSON_TOKENIZER, cls.gtok_path
+            )
         else:
             # Tokenizador sintético de alta densidad para pruebas
             vocab = ["<unk>", "<s>", "</s>", "<pad>", "<|im_start|>", "<|im_end|>"]
@@ -47,7 +49,18 @@ class TestGtokCertification(unittest.TestCase):
             for c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789áéíóúñ¿¡,.-_=:;/\\()[]{}+* ":
                 vocab.append(c)
             # Añadir palabras comunes
-            for w in ["Hola", "mundo", "el", "ADN", "cuántico", "GAJE", "inteligencia", "código", "Python", "Rust"]:
+            for w in [
+                "Hola",
+                "mundo",
+                "el",
+                "ADN",
+                "cuántico",
+                "GAJE",
+                "inteligencia",
+                "código",
+                "Python",
+                "Rust",
+            ]:
                 vocab.append(w)
             merges = [(vocab.index("H"), vocab.index("ola"), vocab.index("Hola"))]
             specials = {"bos": 1, "eos": 2, "unk": 0, "pad": 3}
@@ -74,8 +87,14 @@ class TestGtokCertification(unittest.TestCase):
         if os.path.exists(SAMPLE_JSON_TOKENIZER):
             json_size = os.path.getsize(SAMPLE_JSON_TOKENIZER)
             savings_pct = (1.0 - (gtok_size / json_size)) * 100.0
-            print(f"\n[GTOK CERT 1] Tamaño JSON: {json_size/1024/1024:.2f} MB | GTOK: {gtok_size/1024/1024:.2f} MB (Ahorro: {savings_pct:.1f}%)")
-            self.assertGreater(savings_pct, 35.0, "El formato GTOK debe ahorrar al menos 35% de espacio vs JSON")
+            print(
+                f"\n[GTOK CERT 1] Tamaño JSON: {json_size/1024/1024:.2f} MB | GTOK: {gtok_size/1024/1024:.2f} MB (Ahorro: {savings_pct:.1f}%)"
+            )
+            self.assertGreater(
+                savings_pct,
+                35.0,
+                "El formato GTOK debe ahorrar al menos 35% de espacio vs JSON",
+            )
 
     # =========================================================================
     # CERTIFICACIÓN 2: Latencia de Carga en Frío (< 5 ms)
@@ -115,7 +134,7 @@ class TestGtokCertification(unittest.TestCase):
     def test_04_flat_model_embedding_roundtrip(self):
         """Certifica que un modelo .flat pueda alojar un tokenizador GTOK en su cabecera."""
         synthetic_flat = os.path.join(self.temp_dir.name, "test_model.flat")
-        
+
         # Crear un archivo binario .flat con cabecera GAJE
         header = bytearray(4096)
         header[:4] = b"GAJE"
@@ -133,7 +152,9 @@ class TestGtokCertification(unittest.TestCase):
         extracted = extract_gtok_from_flat(synthetic_flat)
         self.assertIsNotNone(extracted)
         self.assertEqual(len(extracted.vocab), len(self.tokenizer.vocab))
-        print("[GTOK CERT 4] Incrustación y extracción en modelo .flat certificada al 100%")
+        print(
+            "[GTOK CERT 4] Incrustación y extracción en modelo .flat certificada al 100%"
+        )
 
     # =========================================================================
     # CERTIFICACIÓN 5: Plasticidad Dinámica y Aprendizaje en Caliente
@@ -146,17 +167,23 @@ class TestGtokCertification(unittest.TestCase):
             max_dynamic_merges=10,
         )
 
-        initial_merges_count = len(self.tokenizer.merges)
+        _initial_merges_count = len(self.tokenizer.merges)
 
         # Simular conversación con frase repetida
         repeated_phrase = "Protocol Buffers"
-        plasticity.observe_interaction(f"El sistema usa {repeated_phrase} para mensajería.")
-        plasticity.observe_interaction(f"Confirmamos que {repeated_phrase} es muy eficiente.")
+        plasticity.observe_interaction(
+            f"El sistema usa {repeated_phrase} para mensajería."
+        )
+        plasticity.observe_interaction(
+            f"Confirmamos que {repeated_phrase} es muy eficiente."
+        )
 
         # Verificar que se generó al menos una fusión dinámica
         epigenetic_state = plasticity.export_epigenetic_state()
         self.assertIn("total_dynamic_merges", epigenetic_state)
-        print(f"[GTOK CERT 5] Plasticidad Dinámica: {epigenetic_state['total_dynamic_merges']} macro-tokens aprendidos")
+        print(
+            f"[GTOK CERT 5] Plasticidad Dinámica: {epigenetic_state['total_dynamic_merges']} macro-tokens aprendidos"
+        )
 
 
 if __name__ == "__main__":

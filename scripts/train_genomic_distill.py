@@ -18,7 +18,9 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config
 
-CORPUS_PATH = os.path.join(PROJECT_ROOT, "data/distill/gemma4_distillation_dataset.jsonl")
+CORPUS_PATH = os.path.join(
+    PROJECT_ROOT, "data/distill/gemma4_distillation_dataset.jsonl"
+)
 OUTPUT_MODEL_PATH = os.path.join(PROJECT_ROOT, "models/born/gemma4_student.gaje")
 
 
@@ -37,7 +39,9 @@ def train_student():
             if line.strip():
                 dataset.append(json.loads(line))
 
-    print(f"[*] 1. Ingestando dataset de destilación: {len(dataset)} ejemplos multidisciplinares.")
+    print(
+        f"[*] 1. Ingestando dataset de destilación: {len(dataset)} ejemplos multidisciplinares."
+    )
 
     # 2. Inicializar estudiante nacido por GAJE
     print("[*] 2. Dando a luz al organismo genómico estudiante (gaje_native)...")
@@ -51,7 +55,9 @@ def train_student():
     print(f"   • Dimensión Embedding: {student.n_embd}")
 
     # 3. Tokenización y entrenamiento sobre el corpus
-    print("[*] 3. Procesando y optimizando centroides genómicos sobre el conocimiento del maestro...")
+    print(
+        "[*] 3. Procesando y optimizando centroides genómicos sobre el conocimiento del maestro..."
+    )
     tokenizer = student.tokenizer
     total_tokens = 0
 
@@ -60,7 +66,9 @@ def train_student():
         tokens = tokenizer.encode(full_text)
         token_ids = tokens.ids if hasattr(tokens, "ids") else tokens
         total_tokens += len(token_ids)
-        print(f"   [+] Ejemplo {idx:02d} ({item['category']}): {len(token_ids)} tokens procesados.")
+        print(
+            f"   [+] Ejemplo {idx:02d} ({item['category']}): {len(token_ids)} tokens procesados."
+        )
 
     print(f"✅ Destilación genómica completada: {total_tokens} tokens asimilados.")
 
