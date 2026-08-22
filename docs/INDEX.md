@@ -47,6 +47,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[SEMANTIC_ENRICHMENT_GUIDE.md](docs/guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes y Roadmap (`docs/plans/`)
+*   **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](docs/plans/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: **PLAN DE CODEBOOK CUÁNTICO (8,192 Meta-Tokens)** — Compresión de tablas de embeddings del 94.4% mediante superposición dispersa.
 *   **[WASM_BRAINSTEM_PLAN.md](docs/plans/WASM_BRAINSTEM_PLAN.md)**: GAJE-WASM — El motor como tronco encefálico (build WASM + API sensorio-motora).
 *   **[MEMORY_EPOCHS_PLAN.md](docs/plans/MEMORY_EPOCHS_PLAN.md)**: Épocas de memoria — conocimiento flexible versionado sobre cuerpo congelado (`.gmem` v2).
 *   **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](docs/plans/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo de orden cero — SPSA discreto sobre centroides.
