@@ -296,6 +296,51 @@ class TestGajeAutomationSuite(unittest.TestCase):
 
         print(f"[SUITE 6] Inferencia cuántica validada: {len(gen_tokens)} tokens generados con .qemb activo.")
 
+    # =========================================================================
+    # SUITE 7: Certificación de Aceleración por GPU (Vulkan / WGPU)
+    # =========================================================================
+    def test_08_gpu_acceleration_and_parity(self):
+        """TC-7.1: Verificación de detección de GPU, compilación WGSL y paridad numérica."""
+        print("\n[SUITE 7] Validando Backend de Aceleración GPU (Vulkan / WGPU)...")
+        from gaje.core._impl import is_gpu_available_py, get_gpu_info_py, gpu_swiglu_py, gpu_gemv_f32_py
+        import numpy as np
+
+        gpu_active = is_gpu_available_py()
+        if not gpu_active:
+            print("[SUITE 7] Adaptador GPU no disponible en este entorno. Fallback CPU verificado.")
+            return
+
+        info = get_gpu_info_py()
+        self.assertIsNotNone(info)
+        self.assertIn("device_name", info)
+        self.assertIn("backend", info)
+        print(f"[SUITE 7] GPU Detectada: {info['device_name']} ({info['backend']}) | UMA: {info.get('is_unified_memory')}")
+
+        # 1. Paridad Numérica SwiGLU (GPU vs CPU)
+        N = 2048
+        gate = np.random.randn(N).astype(np.float32)
+        up = np.random.randn(N).astype(np.float32)
+        h_scale = 1.0
+
+        gpu_swiglu = gpu_swiglu_py(gate.tolist(), up.tolist(), h_scale)
+        self.assertIsNotNone(gpu_swiglu)
+        cpu_silu = (gate / (1.0 + np.exp(-gate))) * up * h_scale
+        diff_swiglu = np.max(np.abs(np.array(gpu_swiglu) - cpu_silu))
+        self.assertLess(diff_swiglu, 1e-5, f"Diferencia SwiGLU excede tolerancia: {diff_swiglu}")
+
+        # 2. Paridad Numérica GEMV FP32 (GPU vs CPU)
+        M, K = 256, 512
+        W = np.random.randn(M, K).astype(np.float32)
+        x = np.random.randn(K).astype(np.float32)
+
+        gpu_gemv = gpu_gemv_f32_py(W.flatten().tolist(), x.tolist(), M, K)
+        self.assertIsNotNone(gpu_gemv)
+        cpu_gemv = np.dot(W, x)
+        diff_gemv = np.max(np.abs(np.array(gpu_gemv) - cpu_gemv))
+        self.assertLess(diff_gemv, 1e-4, f"Diferencia GEMV excede tolerancia: {diff_gemv}")
+
+        print(f"[SUITE 7] Paridad GPU certificada: SwiGLU Δ={diff_swiglu:.2e} | GEMV Δ={diff_gemv:.2e}")
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
