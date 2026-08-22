@@ -1,5 +1,6 @@
 use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
+#[cfg(feature = "native")]
 use crate::io::db_loader::NativeLoader;
 use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
@@ -22,8 +23,36 @@ pub struct FlatTensorEntry {
     pub bias_len: usize,
 }
 
+#[derive(Clone)]
+pub enum FlatBufferSource {
+    #[cfg(feature = "native")]
+    Mmap(Arc<memmap2::Mmap>),
+    Bytes(Arc<[u8]>),
+}
+
+impl FlatBufferSource {
+    #[inline(always)]
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            #[cfg(feature = "native")]
+            FlatBufferSource::Mmap(m) => &m[..],
+            FlatBufferSource::Bytes(b) => &b[..],
+        }
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.as_slice().is_empty()
+    }
+}
+
 pub struct GajeFlatFileReader {
-    pub mmap: Arc<memmap2::Mmap>,
+    pub source: FlatBufferSource,
     pub weights_offset: usize,
     pub tensor_map: std::collections::HashMap<String, FlatTensorEntry>,
     pub metadata_json: String,
@@ -31,11 +60,37 @@ pub struct GajeFlatFileReader {
 }
 
 impl GajeFlatFileReader {
+    #[cfg(feature = "native")]
     pub fn open(path: &str) -> std::io::Result<Self> {
         let file = std::fs::File::open(path)?;
         let mmap = unsafe { memmap2::Mmap::map(&file)? };
+        Self::from_source(FlatBufferSource::Mmap(Arc::new(mmap)))
+    }
 
-        let header = FlatHeaderV2::from_bytes(&mmap[..4096])
+    #[cfg(not(feature = "native"))]
+    pub fn open(path: &str) -> std::io::Result<Self> {
+        let bytes = std::fs::read(path)?;
+        Self::from_bytes(bytes)
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> std::io::Result<Self> {
+        Self::from_source(FlatBufferSource::Bytes(Arc::from(bytes.into_boxed_slice())))
+    }
+
+    pub fn from_arc_bytes(bytes: Arc<[u8]>) -> std::io::Result<Self> {
+        Self::from_source(FlatBufferSource::Bytes(bytes))
+    }
+
+    pub fn from_source(source: FlatBufferSource) -> std::io::Result<Self> {
+        let slice = source.as_slice();
+        if slice.len() < 4096 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "El buffer es menor a la cabecera de 4096 bytes",
+            ));
+        }
+
+        let header = FlatHeaderV2::from_bytes(&slice[..4096])
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
         let num_tensors = header.num_tensors as usize;
@@ -45,14 +100,26 @@ impl GajeFlatFileReader {
 
         let meta_start = 4096;
         let meta_end = meta_start + meta_len;
-        let metadata_json = std::str::from_utf8(&mmap[meta_start..meta_end])
+        if meta_end > slice.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Metadata excede el tamaño del buffer",
+            ));
+        }
+        let metadata_json = std::str::from_utf8(&slice[meta_start..meta_end])
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
             .to_string();
 
         let dir_start = meta_end;
         let dir_end = dir_start + dir_len;
+        if dir_end > slice.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Directorio de tensores excede el tamaño del buffer",
+            ));
+        }
         let dir_entries: Vec<FlatTensorEntry> =
-            serde_json::from_slice(&mmap[dir_start..dir_end])
+            serde_json::from_slice(&slice[dir_start..dir_end])
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         let mut tensor_map = std::collections::HashMap::with_capacity(num_tensors);
@@ -61,7 +128,7 @@ impl GajeFlatFileReader {
         }
 
         Ok(Self {
-            mmap: Arc::new(mmap),
+            source,
             weights_offset,
             tensor_map,
             metadata_json,
@@ -81,14 +148,15 @@ impl GajeFlatFileReader {
         }
         let start = self.header.gtok_offset as usize;
         let end = start + self.header.gtok_len as usize;
-        if end <= self.mmap.len() {
-            Some(&self.mmap[start..end])
+        let slice = self.source.as_slice();
+        if end <= slice.len() {
+            Some(&slice[start..end])
         } else {
             None
         }
     }
 
-    /// Deserializa el tokenizador GTOK nativo directamente desde el mapeo mmap
+    /// Deserializa el tokenizador GTOK nativo directamente desde el mapeo de memoria
     pub fn get_embedded_gtok(&self) -> Option<GtokNativeTokenizer> {
         self.get_embedded_gtok_bytes()
             .and_then(|bytes| GtokNativeTokenizer::from_bytes(bytes).ok())
@@ -99,7 +167,7 @@ impl GajeFlatFileReader {
             return &[];
         }
         let start = self.weights_offset + off;
-        &self.mmap[start..start + len]
+        &self.source.as_slice()[start..start + len]
     }
 
     pub fn get_f32_slice(&self, off: usize, len: usize) -> Vec<f32> {
@@ -147,9 +215,13 @@ impl GajeFlatFileReader {
         ))
     }
 
+    pub fn load_config(&self) -> std::io::Result<ModelConfig> {
+        serde_json::from_str(&self.metadata_json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))
+    }
+
     pub fn load_genomic(&self) -> std::io::Result<GenomicLLM> {
-        let mut config: ModelConfig = serde_json::from_str(&self.metadata_json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let mut config = self.load_config()?;
 
         // Override using ArchitectureDescriptor if present in binary header
         if let Some(desc) = self.header.architecture_descriptor() {
@@ -274,6 +346,16 @@ pub fn load_genomic_auto(path: &str) -> std::io::Result<GenomicLLM> {
             return reader.load_genomic();
         }
     }
-    let loader = NativeLoader::new(path)?;
-    loader.load_llm()
+    #[cfg(feature = "native")]
+    {
+        let loader = NativeLoader::new(path)?;
+        loader.load_llm()
+    }
+    #[cfg(not(feature = "native"))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "Formato no .flat no soportado en modo sin base nativa",
+        ))
+    }
 }

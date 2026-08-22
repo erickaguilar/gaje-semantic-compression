@@ -1,12 +1,12 @@
 use crate::compute::sampler::ToroidalSampler;
 use crate::core::session_memory::SessionBuffer;
 use crate::core::tokenizer::GajeTokenizer;
-use crate::io::loader::NativeLoader;
+use crate::io::flat_reader::GajeFlatFileReader;
 use crate::nn::llm::GenomicLLM;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// # 🏛️ GajeSession: Fachada de Alto Nivel para el SDK Nativo
+/// # 🏛️ GajeSession: Fachada de Alto Nivel para el SDK Nativo y WASM
 ///
 /// Encapsula el modelo, el sampler, la memoria de sesión y el tokenizador en un único
 /// objeto persistente para permitir inferencia fluida sin dependencias de Python.
@@ -26,10 +26,40 @@ impl GajeSession {
             crate::compute::kernels::init_shuffle_table();
         }
 
-        let loader = NativeLoader::new(model_path)?;
-        let model = loader.load_llm()?;
-        let config = loader.load_config()?;
-        let tokenizer = loader.load_tokenizer()?;
+        let reader = GajeFlatFileReader::open(model_path)?;
+        let model = reader.load_genomic()?;
+        let config = reader.load_config()?;
+        let tokenizer = reader
+            .get_embedded_gtok()
+            .map(GajeTokenizer::from_gtok)
+            .ok_or_else(|| "El modelo no incluye un tokenizador GTOK incrustado")?;
+
+        let n_embd = config.n_embd;
+        let sampler = ToroidalSampler::new_core(1.0, 0.1);
+        let memory = SessionBuffer::new(memory_capacity, n_embd);
+
+        Ok(Self {
+            model,
+            sampler,
+            memory,
+            tokenizer,
+            n_embd,
+        })
+    }
+
+    /// Inicializa una sesión desde un buffer en memoria (WASM / Zero-Server)
+    pub fn from_bytes(bytes: Vec<u8>, memory_capacity: usize) -> Result<Self, Box<dyn Error>> {
+        unsafe {
+            crate::compute::kernels::init_shuffle_table();
+        }
+
+        let reader = GajeFlatFileReader::from_bytes(bytes)?;
+        let model = reader.load_genomic()?;
+        let config = reader.load_config()?;
+        let tokenizer = reader
+            .get_embedded_gtok()
+            .map(GajeTokenizer::from_gtok)
+            .ok_or_else(|| "El modelo no incluye un tokenizador GTOK incrustado")?;
 
         let n_embd = config.n_embd;
         let sampler = ToroidalSampler::new_core(1.0, 0.1);

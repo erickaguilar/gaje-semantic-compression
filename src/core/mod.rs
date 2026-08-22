@@ -1,4 +1,5 @@
 pub mod archive;
+#[cfg(feature = "native")]
 pub mod db;
 pub mod dni;
 pub mod evolution_bitwise;
