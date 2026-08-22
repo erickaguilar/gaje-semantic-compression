@@ -205,7 +205,10 @@ impl IslandOrchestrator {
                 );
                 let s_epi = res_epi.first().map(|(_, s)| *s * weights[0]).unwrap_or(0.0);
                 let s_doc = res_doc.first().map(|(_, s)| *s * weights[1]).unwrap_or(0.0);
-                let s_conv = res_conv.first().map(|(_, s)| *s * weights[2]).unwrap_or(0.0);
+                let s_conv = res_conv
+                    .first()
+                    .map(|(_, s)| *s * weights[2])
+                    .unwrap_or(0.0);
 
                 let target_score = match target_niche {
                     0 => s_epi,
@@ -230,9 +233,21 @@ impl IslandOrchestrator {
         for ep in 0..epochs {
             // Generar vector de perturbación Rademacher ±1 independiente por dimensión
             let delta = [
-                if ((ep * 1664525 + 1013904223) >> 16) & 1 == 0 { 1.0f32 } else { -1.0f32 },
-                if (((ep + 7) * 22695477 + 1) >> 16) & 1 == 0 { 1.0f32 } else { -1.0f32 },
-                if (((ep + 19) * 1103515245 + 12345) >> 16) & 1 == 0 { 1.0f32 } else { -1.0f32 },
+                if ((ep * 1664525 + 1013904223) >> 16) & 1 == 0 {
+                    1.0f32
+                } else {
+                    -1.0f32
+                },
+                if (((ep + 7) * 22695477 + 1) >> 16) & 1 == 0 {
+                    1.0f32
+                } else {
+                    -1.0f32
+                },
+                if (((ep + 19) * 1103515245 + 12345) >> 16) & 1 == 0 {
+                    1.0f32
+                } else {
+                    -1.0f32
+                },
             ];
 
             let mut w_plus = self.niche_weights;
@@ -264,11 +279,7 @@ impl IslandOrchestrator {
 impl IslandOrchestrator {
     #[new]
     #[pyo3(signature = (dim, niche_weights=None, min_similarity=None))]
-    pub fn py_new(
-        dim: u32,
-        niche_weights: Option<Vec<f32>>,
-        min_similarity: Option<f32>,
-    ) -> Self {
+    pub fn py_new(dim: u32, niche_weights: Option<Vec<f32>>, min_similarity: Option<f32>) -> Self {
         let mut orch = Self::new(dim);
         if let Some(w) = niche_weights {
             if w.len() == 3 {

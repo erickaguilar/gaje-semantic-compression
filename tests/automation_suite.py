@@ -13,10 +13,8 @@ import os
 import sys
 import time
 import math
-import gc
 import json
 import unittest
-import numpy as np
 
 # Rutas del proyecto
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -67,10 +65,12 @@ class TestGajeAutomationSuite(unittest.TestCase):
     def test_01_models_discovery(self):
         """TC-1.1: Descubrimiento de modelos en el repositorio."""
         models = list_available_models(MODELS_DIR)
-        self.assertGreater(len(models), 0, "No se encontraron modelos en el directorio de modelos")
+        self.assertGreater(
+            len(models), 0, "No se encontraron modelos en el directorio de modelos"
+        )
         model_names = [m["name"] for m in models]
         print(f"\n[SUITE 1] Modelos detectados ({len(models)}): {model_names}")
-        
+
         has_flat = any(m.endswith(".flat") for m in model_names)
         self.assertTrue(has_flat, "Debe existir al menos un modelo .flat transmutado")
 
@@ -97,8 +97,10 @@ class TestGajeAutomationSuite(unittest.TestCase):
         elapsed = (time.time() - start_t) * 1000.0
 
         response = llm.tokenizer.decode(gen_ids).strip()
-        print(f"[SUITE 1] Respuesta generada ({len(gen_ids)} tokens en {elapsed:.2f} ms):")
-        print(f"          \"{response[:90]}...\"")
+        print(
+            f"[SUITE 1] Respuesta generada ({len(gen_ids)} tokens en {elapsed:.2f} ms):"
+        )
+        print(f'          "{response[:90]}..."')
         self.assertGreater(len(gen_ids), 0, "La generación no produjo ningún token")
 
     # =========================================================================
@@ -115,17 +117,27 @@ class TestGajeAutomationSuite(unittest.TestCase):
 
         print(f"\n[SUITE 2] Memoria RSS inicial: {rss_before:.2f} MB")
         print(f"[SUITE 2] Cargando [{model_name}]...")
-        llm = get_model(MODELS_DIR, model_name, GenomicLLM)
+        _llm = get_model(MODELS_DIR, model_name, GenomicLLM)
         rss_loaded = get_current_rss_mb()
-        print(f"[SUITE 2] Memoria RSS con modelo cargado: {rss_loaded:.2f} MB (+{rss_loaded - rss_before:.2f} MB)")
+        print(
+            f"[SUITE 2] Memoria RSS con modelo cargado: {rss_loaded:.2f} MB (+{rss_loaded - rss_before:.2f} MB)"
+        )
 
         print("[SUITE 2] Ejecutando unload_model() y malloc_trim(0)...")
         unload_model()
         rss_after = get_current_rss_mb()
         print(f"[SUITE 2] Memoria RSS tras purga agresiva: {rss_after:.2f} MB")
 
-        self.assertLess(rss_after, rss_loaded * 0.85, "La purga de memoria no liberó las páginas mmap correctamente")
-        self.assertEqual(len(loaded_models), 0, "No deben quedar modelos en loaded_models tras unload_model")
+        self.assertLess(
+            rss_after,
+            rss_loaded * 0.85,
+            "La purga de memoria no liberó las páginas mmap correctamente",
+        )
+        self.assertEqual(
+            len(loaded_models),
+            0,
+            "No deben quedar modelos en loaded_models tras unload_model",
+        )
 
     # =========================================================================
     # SUITE 3: Protocolo de Métricas SSE (__gaje_metrics__)
@@ -152,33 +164,42 @@ class TestGajeAutomationSuite(unittest.TestCase):
                 "dna_size": int(dims * bit_depth / 8.0),
                 "bit_depth": bit_depth,
                 "ratio": 8.0,
-                "saved": 87.5
+                "saved": 87.5,
             },
-            "dna": "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
+            "dna": "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC",
         }
 
         raw_json = json.dumps(metrics_sample)
         parsed = json.loads(raw_json)
         self.assertIn("__gaje_metrics__", parsed)
         m = parsed["__gaje_metrics__"]
-        tc = m['tokens_count']
-        rt = m['ratio']
-        sv = m['saved']
-        print(f"[SUITE 3] Métricas validadas con éxito: {tc} tokens (Ratio: {rt}x | Ahorro: {sv}%)")
+        tc = m["tokens_count"]
+        rt = m["ratio"]
+        sv = m["saved"]
+        print(
+            f"[SUITE 3] Métricas validadas con éxito: {tc} tokens (Ratio: {rt}x | Ahorro: {sv}%)"
+        )
 
     # =========================================================================
     # SUITE 4: Prototipo de Tokenización Cuántico-Genómica
     # =========================================================================
     def test_05_quantum_genomic_tokenization(self):
         """TC-4.1: Mapeo de bases genómicas a vectores de estado y matrices de densidad ρ."""
-        print("\n[SUITE 4] Probando Tokenización Cuántico-Genómica (QuantumGenomicTokenizer)...")
-        from gaje.processing.quantum_tokenizer import QuantumGenomicTokenizer, BASIS_A, BASIS_G
+        print(
+            "\n[SUITE 4] Probando Tokenización Cuántico-Genómica (QuantumGenomicTokenizer)..."
+        )
+        from gaje.processing.quantum_tokenizer import QuantumGenomicTokenizer, BASIS_G
 
         tokenizer = QuantumGenomicTokenizer()
         state = tokenizer.encode_char_to_state("G")
 
         # 1. Traza unitaria de la matriz de densidad
-        self.assertAlmostEqual(state.trace, 1.0, places=5, msg="La traza de la matriz de densidad debe ser 1")
+        self.assertAlmostEqual(
+            state.trace,
+            1.0,
+            places=5,
+            msg="La traza de la matriz de densidad debe ser 1",
+        )
 
         # 2. Pureza cuántica
         self.assertAlmostEqual(state.purity, 1.0, delta=0.01)
@@ -193,8 +214,12 @@ class TestGajeAutomationSuite(unittest.TestCase):
         dna = tokenizer.collapse_text_to_dna("GAJE", context_text="Biología Genómica")
         self.assertEqual(len(dna), 4)
 
-        print(f"[SUITE 4] Estado cuántico verificado: Traza(ρ) = {state.trace:.2f} | Pureza = {state.purity:.2f}")
-        print(f"[SUITE 4] Colapso contextual a ADN: 'GAJE' -> '{dna}' (Confianza Guanina: {conf:.2%})")
+        print(
+            f"[SUITE 4] Estado cuántico verificado: Traza(ρ) = {state.trace:.2f} | Pureza = {state.purity:.2f}"
+        )
+        print(
+            f"[SUITE 4] Colapso contextual a ADN: 'GAJE' -> '{dna}' (Confianza Guanina: {conf:.2%})"
+        )
 
     # =========================================================================
     # SUITE 5: Certificación de Tokenizador Binario GTOK & Incrustación en .flat
@@ -204,7 +229,6 @@ class TestGajeAutomationSuite(unittest.TestCase):
         print("\n[SUITE 5] Validando formato binario nativo GTOK...")
         from gaje.processing.gtok import (
             GtokTokenizer,
-            export_hf_tokenizer_to_gtok,
             embed_gtok_into_flat,
             extract_gtok_from_flat,
             has_embedded_gtok,
@@ -213,7 +237,9 @@ class TestGajeAutomationSuite(unittest.TestCase):
         vocab = ["<unk>", "<s>", "</s>", "<pad>", "H", "ola", "Hola", "ADN"]
         merges = [(4, 5, 6)]
         specials = {"bos": 1, "eos": 2, "unk": 0, "pad": 3}
-        gtok = GtokTokenizer(vocab=vocab, merges=merges, special_tokens=specials, additional_stop_ids=[2])
+        gtok = GtokTokenizer(
+            vocab=vocab, merges=merges, special_tokens=specials, additional_stop_ids=[2]
+        )
 
         binary_data = gtok.to_bytes()
         self.assertEqual(binary_data[:4], b"GTOK")
@@ -221,6 +247,7 @@ class TestGajeAutomationSuite(unittest.TestCase):
         # Test roundtrip de incrustación
         import tempfile
         import struct
+
         header = bytearray(4096)
         header[:4] = b"GAJE"
         struct.pack_into("<III", header, 4, 2, 0, 1)
@@ -235,7 +262,9 @@ class TestGajeAutomationSuite(unittest.TestCase):
             extracted = extract_gtok_from_flat(tmp_flat)
             self.assertIsNotNone(extracted)
             self.assertEqual(extracted.decode([6]), "Hola")
-            print("[SUITE 5] GTOK verificado: Decodificación y Roundtrip .flat 100% exitoso.")
+            print(
+                "[SUITE 5] GTOK verificado: Decodificación y Roundtrip .flat 100% exitoso."
+            )
         finally:
             if os.path.exists(tmp_flat):
                 os.remove(tmp_flat)
@@ -249,7 +278,11 @@ class TestGajeAutomationSuite(unittest.TestCase):
         import io
         import struct
         import numpy as np
-        from gaje.processing.quantum_codebook import QuantumEmbeddingTable, QEMB_MAGIC, QEMB_VERSION
+        from gaje.processing.quantum_codebook import (
+            QuantumEmbeddingTable,
+            QEMB_MAGIC,
+            QEMB_VERSION,
+        )
 
         model_path = os.path.join(MODELS_DIR, "production", "smollm2_135m.flat")
         if not os.path.exists(model_path):
@@ -268,10 +301,14 @@ class TestGajeAutomationSuite(unittest.TestCase):
         k = 256
         m = 4
         fake_emb = np.random.randn(vocab, dim).astype(np.float32)
-        table = QuantumEmbeddingTable.from_dense_embeddings(fake_emb, num_meta_tokens=k, m=m)
+        table = QuantumEmbeddingTable.from_dense_embeddings(
+            fake_emb, num_meta_tokens=k, m=m
+        )
 
         buf = io.BytesIO()
-        header = struct.pack("<4sHHIII44s", QEMB_MAGIC, QEMB_VERSION, m, k, vocab, dim, b"\x00" * 44)
+        header = struct.pack(
+            "<4sHHIII44s", QEMB_MAGIC, QEMB_VERSION, m, k, vocab, dim, b"\x00" * 44
+        )
         buf.write(header)
         buf.write(table.codebook.centroids.tobytes())
         buf.write(table.indices.tobytes())
@@ -295,7 +332,9 @@ class TestGajeAutomationSuite(unittest.TestCase):
         self.assertFalse(llm.has_quantum_embeddings())
         self.assertFalse(llm.rust_llm.has_quantum_embeddings())
 
-        print(f"[SUITE 6] Inferencia cuántica validada: {len(gen_tokens)} tokens generados con .qemb activo.")
+        print(
+            f"[SUITE 6] Inferencia cuántica validada: {len(gen_tokens)} tokens generados con .qemb activo."
+        )
 
     # =========================================================================
     # SUITE 7: Certificación de Aceleración por GPU (Vulkan / WGPU)
@@ -303,19 +342,28 @@ class TestGajeAutomationSuite(unittest.TestCase):
     def test_08_gpu_acceleration_and_parity(self):
         """TC-7.1: Verificación de detección de GPU, compilación WGSL y paridad numérica."""
         print("\n[SUITE 7] Validando Backend de Aceleración GPU (Vulkan / WGPU)...")
-        from gaje.core._impl import is_gpu_available_py, get_gpu_info_py, gpu_swiglu_py, gpu_gemv_f32_py
+        from gaje.core._impl import (
+            is_gpu_available_py,
+            get_gpu_info_py,
+            gpu_swiglu_py,
+            gpu_gemv_f32_py,
+        )
         import numpy as np
 
         gpu_active = is_gpu_available_py()
         if not gpu_active:
-            print("[SUITE 7] Adaptador GPU no disponible en este entorno. Fallback CPU verificado.")
+            print(
+                "[SUITE 7] Adaptador GPU no disponible en este entorno. Fallback CPU verificado."
+            )
             return
 
         info = get_gpu_info_py()
         self.assertIsNotNone(info)
         self.assertIn("device_name", info)
         self.assertIn("backend", info)
-        print(f"[SUITE 7] GPU Detectada: {info['device_name']} ({info['backend']}) | UMA: {info.get('is_unified_memory')}")
+        print(
+            f"[SUITE 7] GPU Detectada: {info['device_name']} ({info['backend']}) | UMA: {info.get('is_unified_memory')}"
+        )
 
         # 1. Paridad Numérica SwiGLU (GPU vs CPU)
         N = 2048
@@ -327,7 +375,9 @@ class TestGajeAutomationSuite(unittest.TestCase):
         self.assertIsNotNone(gpu_swiglu)
         cpu_silu = (gate / (1.0 + np.exp(-gate))) * up * h_scale
         diff_swiglu = np.max(np.abs(np.array(gpu_swiglu) - cpu_silu))
-        self.assertLess(diff_swiglu, 1e-5, f"Diferencia SwiGLU excede tolerancia: {diff_swiglu}")
+        self.assertLess(
+            diff_swiglu, 1e-5, f"Diferencia SwiGLU excede tolerancia: {diff_swiglu}"
+        )
 
         # 2. Paridad Numérica GEMV FP32 (GPU vs CPU)
         M, K = 256, 512
@@ -338,9 +388,13 @@ class TestGajeAutomationSuite(unittest.TestCase):
         self.assertIsNotNone(gpu_gemv)
         cpu_gemv = np.dot(W, x)
         diff_gemv = np.max(np.abs(np.array(gpu_gemv) - cpu_gemv))
-        self.assertLess(diff_gemv, 1e-4, f"Diferencia GEMV excede tolerancia: {diff_gemv}")
+        self.assertLess(
+            diff_gemv, 1e-4, f"Diferencia GEMV excede tolerancia: {diff_gemv}"
+        )
 
-        print(f"[SUITE 7] Paridad GPU certificada: SwiGLU Δ={diff_swiglu:.2e} | GEMV Δ={diff_gemv:.2e}")
+        print(
+            f"[SUITE 7] Paridad GPU certificada: SwiGLU Δ={diff_swiglu:.2e} | GEMV Δ={diff_gemv:.2e}"
+        )
 
     # =========================================================================
     # SUITE 8: Certificación de Paridad Bit a Bit WebAssembly (GAJE-WASM)
@@ -389,7 +443,9 @@ console.log(JSON.stringify(Array.from(genIds)));
             wasm_tokens,
             f"Discrepancia entre Native ({native_tokens}) y WASM ({wasm_tokens})",
         )
-        print(f"[SUITE 8] Paridad WASM 100% verificada: {len(native_tokens)} tokens idénticos bit a bit.")
+        print(
+            f"[SUITE 8] Paridad WASM 100% verificada: {len(native_tokens)} tokens idénticos bit a bit."
+        )
 
     def test_10_zero_order_spsa_training(self):
         """TC-9.1: Entrenamiento nativo de orden cero (SPSA Discreto) sobre modelo .flat."""
@@ -410,18 +466,24 @@ console.log(JSON.stringify(Array.from(genIds)));
         ]
 
         trainer = NativeGenomicTrainer(lr=0.01, resonance_weight=0.05)
-        final_loss = trainer.fit_zero_order(llm.rust_llm, dataset, epochs=2, k_coords=16)
+        final_loss = trainer.fit_zero_order(
+            llm.rust_llm, dataset, epochs=2, k_coords=16
+        )
 
         self.assertGreater(final_loss, 0.0)
         self.assertFalse(math.isnan(final_loss))
         self.assertFalse(math.isinf(final_loss))
-        print(f"[SUITE 9] Entrenamiento SPSA completado exitosamente: Loss={final_loss:.4f}")
+        print(
+            f"[SUITE 9] Entrenamiento SPSA completado exitosamente: Loss={final_loss:.4f}"
+        )
 
     def test_11_adult_specialization_spsa(self):
         """TC-10.1: Especialización SPSA sobre memoria (.gmem) y orquestador de nichos Island."""
         from dna_semantic_compression import IslandOrchestrator
 
-        print("\n[SUITE 10] Validando Especialización de Organismos Adultos con SPSA sobre .gmem...")
+        print(
+            "\n[SUITE 10] Validando Especialización de Organismos Adultos con SPSA sobre .gmem..."
+        )
         dim = 128
         orch = IslandOrchestrator(dim, [1.0, 1.0, 1.0], 0.60)
 
@@ -443,7 +505,9 @@ console.log(JSON.stringify(Array.from(genIds)));
         matches = orch.retrieve_context_py(v_needle, 1)
         self.assertTrue(len(matches) > 0)
         self.assertEqual(matches[0][3], needle_text)
-        print(f"[SUITE 10] Especialización de adulto certificada al 100%: Needle recuperado con éxito.")
+        print(
+            "[SUITE 10] Especialización de adulto certificada al 100%: Needle recuperado con éxito."
+        )
 
 
 def run_all_suites():
@@ -455,5 +519,3 @@ def run_all_suites():
 
 if __name__ == "__main__":
     run_all_suites()
-
-

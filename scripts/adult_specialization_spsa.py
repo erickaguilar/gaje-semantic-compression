@@ -17,20 +17,27 @@ import numpy as np
 import gaje.core._impl as _impl
 from gaje.nn.stabilized import GenomicLLM
 
+
 def main():
-    print("================================================================================")
+    print(
+        "================================================================================"
+    )
     print("🧬 GAJE HELIX: FASE 3 — ESPECIALIZACIÓN DE ORGANISMOS ADULTOS CONGELADOS")
-    print("================================================================================")
+    print(
+        "================================================================================"
+    )
 
     model_candidates = [
         "models/production/smollm2_135m.flat",
         "models/production/qwen2_0_5b.flat",
-        "models/production/qwen2_5_3b.flat"
+        "models/production/qwen2_5_3b.flat",
     ]
-    
+
     model_path = next((p for p in model_candidates if os.path.exists(p)), None)
     if not model_path:
-        print("❌ Error: No se encontró ningún modelo adulto .flat en models/production/")
+        print(
+            "❌ Error: No se encontró ningún modelo adulto .flat en models/production/"
+        )
         sys.exit(1)
 
     print(f"[*] Organismo Adulto Congelado: {model_path}")
@@ -46,7 +53,7 @@ def main():
 
     # 2. Ingesta de Datos Especializados y Needle (Aguja en el Pajar)
     NEEDLE_TEXT = "La clave de soberanía genómica y acceso al núcleo toroidal es: GAJE-RESONANCE-X99."
-    
+
     # Crear embeddings sintéticos normalizados
     np.random.seed(42)
     v_needle = np.random.randn(dim).astype(np.float32)
@@ -64,10 +71,12 @@ def main():
             niche,
             2000 + i,
             v_distractor.tolist(),
-            f"Evento de rutina del sistema #{i}: telemetría nominal de núcleos."
+            f"Evento de rutina del sistema #{i}: telemetría nominal de núcleos.",
         )
 
-    print("✅ Ingesta de memoria completada (1 Aguja en Isla Documental + 10 Distractores).")
+    print(
+        "✅ Ingesta de memoria completada (1 Aguja en Isla Documental + 10 Distractores)."
+    )
 
     # 3. Consulta de Línea Base (Antes de Especialización SPSA)
     print("\n[*] Evaluando Recuperación de Línea Base (Pre-SPSA)...")
@@ -79,23 +88,32 @@ def main():
     print("  • Top Match Pre-SPSA:", results_pre[0][3] if results_pre else "Ninguno")
 
     # 4. Optimización SPSA de Orden Cero sobre el Adaptador de Memoria
-    print("\n[*] Ejecutando Especialización SPSA de Orden Cero (Alineación de Nichos)...")
+    print(
+        "\n[*] Ejecutando Especialización SPSA de Orden Cero (Alineación de Nichos)..."
+    )
     queries = []
     target_nichos = []
-    
+
     # Generar muestras de entrenamiento para calibrar el enrutador de nichos
     for _ in range(20):
         q = v_needle + np.random.randn(dim).astype(np.float32) * 0.20
         q /= np.linalg.norm(q)
         queries.append(q.tolist())
-        target_nichos.append(1) # Documental
+        target_nichos.append(1)  # Documental
 
     t_spsa = time.time()
-    final_loss = orchestrator.optimize_spsa_py(queries, target_nichos, epochs=15, c=0.08, lr=0.15)
+    final_loss = orchestrator.optimize_spsa_py(
+        queries, target_nichos, epochs=15, c=0.08, lr=0.15
+    )
     spsa_duration_ms = (time.time() - t_spsa) * 1000.0
 
-    print(f"✅ Especialización SPSA finalizada en {spsa_duration_ms:.2f} ms | Loss de Nicho: {final_loss:.4f}")
-    print("  • Pesos calibrados de nichos:", [round(w, 4) for w in orchestrator.niche_weights])
+    print(
+        f"✅ Especialización SPSA finalizada en {spsa_duration_ms:.2f} ms | Loss de Nicho: {final_loss:.4f}"
+    )
+    print(
+        "  • Pesos calibrados de nichos:",
+        [round(w, 4) for w in orchestrator.niche_weights],
+    )
 
     # 5. Evaluación de Needle-Recall Post-Especialización
     print("\n[*] Evaluando Needle-Recall Post-Especialización...")
@@ -110,20 +128,22 @@ def main():
             hits += 1
 
     recall = (hits / eval_queries_count) * 100.0
-    print(f"🎯 Needle-Recall alcanzado: {recall:.1f}% ({hits}/{eval_queries_count} aciertos)")
+    print(
+        f"🎯 Needle-Recall alcanzado: {recall:.1f}% ({hits}/{eval_queries_count} aciertos)"
+    )
 
     if recall < 95.0:
-        print(f"❌ FALLO: Needle-Recall ({recall:.1f}%) inferior al umbral mínimo del 95.0%")
+        print(
+            f"❌ FALLO: Needle-Recall ({recall:.1f}%) inferior al umbral mínimo del 95.0%"
+        )
         sys.exit(1)
 
     # 6. Evaluación de No-Degeneración y Gate Generativo del Modelo
     print("\n[*] Evaluando Gate Generativo del Organismo Especializado...")
     augmented_prompt = orchestrator.build_augmented_prompt_py(
-        "¿Cuál es la clave secreta de acceso al núcleo?",
-        v_needle.tolist(),
-        256
+        "¿Cuál es la clave secreta de acceso al núcleo?", v_needle.tolist(), 256
     )
-    print("  • Prompt Aumentado construido con éxito.")
+    print(f"  • Prompt Aumentado construido con éxito ({len(augmented_prompt)} caracteres).")
 
     # Generación con el modelo adulto
     prompt_tokens = [280, 395]
@@ -146,14 +166,21 @@ def main():
     restored_orch = _impl.IslandOrchestrator(dim)
     restored_orch.load_all("models/memory_epochs")
     restored_matches = restored_orch.retrieve_context_py(v_needle.tolist(), 1)
-    
-    assert restored_matches[0][3] == NEEDLE_TEXT, "Fallo en la verificación de persistencia .gmem"
+
+    assert (
+        restored_matches[0][3] == NEEDLE_TEXT
+    ), "Fallo en la verificación de persistencia .gmem"
     print("✅ Reversibilidad y persistencia exacta de época .gmem certificada.")
 
-    print("\n================================================================================")
+    print(
+        "\n================================================================================"
+    )
     print("🏆 CERTIFICACIÓN DE ESPECIALIZACIÓN DE ADULTOS (FASE 3) COMPLETADA AL 100%")
     print("   Cuerpo Q4_0 congelado intacto | Needle-Recall >= 95% | 0% Degeneración")
-    print("================================================================================")
+    print(
+        "================================================================================"
+    )
+
 
 if __name__ == "__main__":
     main()
