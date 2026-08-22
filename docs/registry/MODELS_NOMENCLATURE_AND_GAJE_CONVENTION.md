@@ -1,8 +1,8 @@
 # 🧬 GAJE Nomenclatura Oficial del Ecosistema
 
 > **Versión del Estándar:** GAJE Genomic Runtime v0.9.8  
-> **Directorio de Modelos Transmutados:** `models/production/*.flat`  
 > **Directorio de Modelos Nacidos por GAJE:** `models/born/*.gaje`  
+> **Directorio de Modelos Transmutados:** `models/production/*.flat`  
 > **Motor de Inferencia:** Zero-Copy Flat Memory Map (`mmap`) con aceleración nativa SIMD AVX2/FMA en Rust 2021.
 
 ---
@@ -13,12 +13,20 @@ El ecosistema GAJE establece una distinción clara y estricta entre dos categor�
 
 | Extensión | Categoría | Definición y Origen | Ubicación |
 | :---: | :--- | :--- | :--- |
-| **`*.gaje`** | 🧬 **Organismos Nacidos por GAJE** | Modelos **entrenados, evolucionados o clonados genómicamente desde cero** mediante los algoritmos bio-inspirados de GAJE (matrices de ADN, tripletes de 2/4-bit, DNI y balance epigenético). | `models/born/` |
+| **`*.gaje`** | 🧬 **Organismos Nacidos por GAJE** | Modelos **entrenados, evolucionados o destilados genómicamente desde cero** mediante los algoritmos bio-inspirados de GAJE (matrices de ADN, tripletes de 2/4-bit, DNI y balance epigenético). | `models/born/` |
 | **`*.flat`** | ⚡ **Modelos Externos Transmutados** | Modelos abiertos consolidados (Qwen, DeepSeek, SmolLM) cuantizados en `Q4_0`/`Q8_0` y adaptados al formato binario plano para inferencia ultrarrápida `mmap` zero-copy. | `models/production/` |
 
 ---
 
-## 📋 2. Tabla Maestra de Modelos en Producción (`.flat`)
+## 🧬 2. Organismos Nacidos por GAJE (`models/born/*.gaje`)
+
+| Archivo | Arquitectura | Tamaño | SHA-256 Checksum | Rol y Especialidad |
+| :--- | :--- | :---: | :--- | :--- |
+| 🧬 **`gemma4_student.gaje`** | **`gaje_native` (Born-Genomic)** | **2.08 GB** | `ba4b0f767776fc3a17b621a16cbd5aae93bdb6fcde2948ddea820f7221ec4161` | **Estudiante Destilado Gemma 4**: Organismo genómico nativo nacido en GAJE con conocimiento asimilado del maestro multimodal `google/gemma-4-E2B-it`. |
+
+---
+
+## ⚡ 3. Modelos Transmutados en Producción (`models/production/*.flat`)
 
 | Archivo en Producción | Arquitectura Base | Peso HD | RAM Residente (mmap) | Cuantización | Rol y Especialidad |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -29,54 +37,15 @@ El ecosistema GAJE establece una distinción clara y estricta entre dos categor�
 
 ---
 
-## 🔬 3. Ficha Técnica Detallada de Modelos
-
-### 👑 A. `qwen2_5_3b.flat` (Modelo Principal)
-* **Identificador:** `qwen2_5_3b.flat`
-* **Modelo Origen:** `Qwen/Qwen2.5-3B-Instruct`
-* **Dimensiones de Embedding (`n_embd`):** `2048`
-* **Capas Transformer (`n_blocks`):** `36`
-* **Cabezas de Atención (Q / KV):** `16` / `2` (GQA)
-* **Vocabulario:** `151,936` tokens
-* **Plantilla de Chat:** ChatML estándar
-
----
-
-### 🧠 B. `deepseek_r1_1_5b.flat`
-* **Identificador:** `deepseek_r1_1_5b.flat`
-* **Modelo Origen:** `deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B`
-* **Dimensiones de Embedding (`n_embd`):** `1536`
-* **Capas Transformer (`n_blocks`):** `28`
-* **Cabezas de Atención (Q / KV):** `12` / `2` (GQA)
-* **Head Dim:** `128`
-* **Vocabulario:** `151,665` tokens
-* **Plantilla de Chat:** ChatML con trigger `<think>\n`
-
----
-
-## 🛠️ 4. Recetas de Transmutación
+## 🛠️ 4. Pipeline Completo de Destilación (Fase 1 ➔ Fase 3)
 
 ```bash
-# 1. Transmutar Qwen2.5-3B a formato .flat
-python3 scripts/export_gaje_flat.py --input data/models/qwen2.5-3b-instruct-q8_0.gguf --output models/production/qwen2_5_3b.flat --quant-embed
+# Fase 1: Generación del corpus de conocimiento maestro
+python3 scripts/generate_distill_corpus_gemma4.py
 
-# 2. Transmutar DeepSeek-R1-1.5B a formato .flat
-python3 scripts/export_gaje_flat.py --input data/models/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf --output models/production/deepseek_r1_1_5b.flat --quant-embed
+# Fase 2: Entrenamiento y nacimiento del estudiante genómico
+python3 scripts/train_genomic_distill.py
 
-# 3. Transmutar Qwen2-0.5B a formato .flat
-python3 scripts/export_gaje_flat.py --input data/models/qwen2-0_5b-instruct-fp16.gguf --output models/production/qwen2_0_5b.flat --quant-embed
-
-# 4. Transmutar SmolLM2-135M a formato .flat
-python3 scripts/export_gaje_flat.py --input data/models/smollm2-135m-instruct-fp16.gguf --output models/production/smollm2_135m.flat
-```
-
----
-
-## 🔒 5. Registro Criptográfico SHA-256
-
-```text
-e20ec4bf79c6d4ba40e0bc8ae92ff9fb172c72b2dd2bbcefa042533b3a39e31d  models/production/qwen2_5_3b.flat
-97bb9dadcd27273c30c39b7ad7685343c291a312143f77c73267c6fb3f117693  models/production/deepseek_r1_1_5b.flat
-507f35213606f7df2b6b553c1537233f81e370a4a838520ec719ce3f9b231ff6  models/production/qwen2_0_5b.flat
-fca97beeaeb3bfa8ba2061b47fb5d58d929ca32fbcf2b55f17d36371fc5bb290  models/production/smollm2_135m.flat
+# Fase 3: Activación en servidor web visual
+python3 examples/ui/web_ui/server.py
 ```

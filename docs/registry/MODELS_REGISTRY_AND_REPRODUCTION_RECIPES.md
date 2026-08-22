@@ -10,7 +10,14 @@
 
 Este registro certifica la creación, verificación y hash criptográfico exacto de todos los modelos del ecosistema GAJE:
 
-### A. Modelos Transmutados de Producción (`.flat`)
+### A. Organismos Nacidos por GAJE (`models/born/*.gaje`)
+| Modelo / Archivo | Tamaño | SHA-256 Checksum | Estado |
+| :--- | :---: | :--- | :---: |
+| `gemma4_student.gaje` | 2.08 GB | `ba4b0f767776fc3a17b621a16cbd5aae93bdb6fcde2948ddea820f7221ec4161` | 🟢 **BORN (Destilado de Gemma 4 E2B)** |
+
+---
+
+### B. Modelos Transmutados de Producción (`models/production/*.flat`)
 | Modelo / Archivo | Tamaño | SHA-256 Checksum | Estado |
 | :--- | :---: | :--- | :---: |
 | `qwen2_5_3b.flat` | 2.24 GB | `e20ec4bf79c6d4ba40e0bc8ae92ff9fb172c72b2dd2bbcefa042533b3a39e31d` | 🟢 **PRODUCCIÓN (Insignia General Multilingüe)** |
@@ -22,9 +29,18 @@ Este registro certifica la creación, verificación y hash criptográfico exacto
 
 ## 🍳 2. Recetario de Reproducción (Cómo Recrear Cualquier Modelo)
 
-Cualquier modelo puede ser regenerado en minutos descargando el GGUF fuente desde HuggingFace y ejecutando el exportador nativo universal `scripts/export_gaje_flat.py`.
+### 🥇 Receta Destilación: Organismo Nacido Gemma 4 (`gemma4_student.gaje`)
+```bash
+# 1. Generar el corpus de conocimiento maestro
+python3 scripts/generate_distill_corpus_gemma4.py
 
-### 🥇 Receta 1: Qwen2.5-3B-Instruct (Insignia General)
+# 2. Entrenar y dar a luz al estudiante genómico
+python3 scripts/train_genomic_distill.py
+```
+
+---
+
+### 🥈 Receta Transmutación: Qwen2.5-3B-Instruct (`qwen2_5_3b.flat`)
 ```bash
 # 1. Descargar GGUF oficial
 wget -c https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf \
@@ -38,57 +54,4 @@ python3 scripts/export_gaje_flat.py \
 
 # 3. Limpiar origen
 rm -f models/source/qwen2.5-3b-instruct-q4_k_m.gguf
-```
-
----
-
-### 🥈 Receta 2: DeepSeek-R1-Distill-1.5B (Razonamiento CoT)
-```bash
-# 1. Descargar GGUF oficial
-wget -c "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf" \
-  -O models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
-
-# 2. Transmutar a formato binario plano GAJE con embeddings Q8_0
-python3 scripts/export_gaje_flat.py \
-  --input models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf \
-  --output models/production/deepseek_r1_1_5b.flat \
-  --quant-embed
-
-# 3. Limpiar origen
-rm -f models/source/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
-```
-
----
-
-### 🥉 Receta 3: Qwen2-0.5B-Instruct (Micro Modelo Ultrarrápido)
-```bash
-# 1. Descargar GGUF
-wget -c https://huggingface.co/Qwen/Qwen2-0.5B-Instruct-GGUF/resolve/main/qwen2-0_5b-instruct-fp16.gguf \
-  -O models/source/qwen2-0_5b-instruct-fp16.gguf
-
-# 2. Transmutar a GAJE
-python3 scripts/export_gaje_flat.py \
-  --input models/source/qwen2-0_5b-instruct-fp16.gguf \
-  --output models/production/qwen2_0_5b.flat \
-  --quant-embed
-
-# 3. Limpiar origen
-rm -f models/source/qwen2-0_5b-instruct-fp16.gguf
-```
-
----
-
-### 🧬 Receta 4: SmolLM2-135M-Instruct (Nano-Agente Edge)
-```bash
-# 1. Descargar GGUF
-wget -c https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct-GGUF/resolve/main/smollm2-135m-instruct-fp16.gguf \
-  -O models/source/smollm2-135m-instruct-fp16.gguf
-
-# 2. Transmutar a GAJE
-python3 scripts/export_gaje_flat.py \
-  --input models/source/smollm2-135m-instruct-fp16.gguf \
-  --output models/production/smollm2_135m.flat
-
-# 3. Limpiar origen
-rm -f models/source/smollm2-135m-instruct-fp16.gguf
 ```
