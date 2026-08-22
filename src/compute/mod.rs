@@ -1,5 +1,6 @@
 pub mod diagnostics;
 pub mod event_queue;
+pub mod gpu;
 pub mod island;
 pub mod kernels;
 pub mod kv_cache;

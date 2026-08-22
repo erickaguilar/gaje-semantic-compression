@@ -144,5 +144,13 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::compute::math::dna_similarity_search,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::is_gpu_available_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::get_gpu_info_py,
+        m
+    )?)?;
     Ok(())
 }
