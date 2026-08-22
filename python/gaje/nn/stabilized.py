@@ -1364,18 +1364,19 @@ class GenomicLLM:
                     obj.config.rope_style = meta["config"].get("rope_style", "split")
                     obj.config.unpermute_weights = False
 
-                    # Autodetección de tabla cuántica companion (.qemb)
-                    qemb_candidate = os.path.splitext(input_path)[0] + ".qemb"
-                    if os.path.exists(qemb_candidate) and os.path.isfile(qemb_candidate):
-                        try:
-                            with open(qemb_candidate, "rb") as f_q:
-                                q_data = f_q.read()
-                            obj.rust_llm.load_quantum_embeddings_bytes(q_data)
-                            print(
-                                f"🧬 [Quantum Codebook] Activada tabla cuántica .qemb ({os.path.basename(qemb_candidate)}) — 91.1% ahorro de RAM en embeddings"
-                            )
-                        except Exception as ex_q:
-                            print(f"⚠️ Warning cargando .qemb companion: {ex_q}")
+                    # Autodetección de tabla cuántica companion (.qemb) - Opt-in controlado
+                    if os.environ.get("GAJE_ENABLE_QEMB") == "1":
+                        qemb_candidate = os.path.splitext(input_path)[0] + ".qemb"
+                        if os.path.exists(qemb_candidate) and os.path.isfile(qemb_candidate):
+                            try:
+                                with open(qemb_candidate, "rb") as f_q:
+                                    q_data = f_q.read()
+                                obj.rust_llm.load_quantum_embeddings_bytes(q_data)
+                                print(
+                                    f"🧬 [Quantum Codebook] Activada tabla cuántica .qemb ({os.path.basename(qemb_candidate)}) — 91.1% ahorro de RAM en embeddings"
+                                )
+                            except Exception as ex_q:
+                                print(f"⚠️ Warning cargando .qemb companion: {ex_q}")
 
                     print(
                         f"⚡ [Zero-Copy Mmap] Metadata parsed: {obj.config.name} (n_embd={obj.n_embd}, n_head={obj.n_head}, n_head_kv={obj.n_head_kv}, head_dim={obj.head_dim}, rope_base={obj.rope_base})"

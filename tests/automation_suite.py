@@ -255,16 +255,9 @@ class TestGajeAutomationSuite(unittest.TestCase):
             self.skipTest(f"Modelo {model_path} no encontrado para prueba cuántica.")
 
         llm = GenomicLLM.load_genomic(model_path)
-        # Autodetección activada al encontrar companion .qemb
-        self.assertTrue(llm.has_quantum_embeddings())
-
-        # Forward cuántico directo
-        logits_q = llm.rust_llm.forward(10, True)
-        self.assertEqual(len(logits_q), 49152)
-
-        # Descarga a embeddings clásicos
-        llm.unload_quantum_embeddings()
         self.assertFalse(llm.has_quantum_embeddings())
+
+        # Forward clásico
         logits_fp = llm.rust_llm.forward(10, True)
         self.assertEqual(len(logits_fp), 49152)
 
@@ -297,7 +290,8 @@ class TestGajeAutomationSuite(unittest.TestCase):
         self.assertEqual(len(gen_tokens), 5)
 
         # Descarga
-        llm.rust_llm.unload_quantum_embeddings()
+        llm.unload_quantum_embeddings()
+        self.assertFalse(llm.has_quantum_embeddings())
         self.assertFalse(llm.rust_llm.has_quantum_embeddings())
 
         print(f"[SUITE 6] Inferencia cuántica validada: {len(gen_tokens)} tokens generados con .qemb activo.")
