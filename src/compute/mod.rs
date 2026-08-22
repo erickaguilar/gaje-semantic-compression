@@ -1,4 +1,5 @@
 pub mod diagnostics;
+pub mod epoch_manager;
 pub mod event_queue;
 pub mod gpu;
 pub mod island;

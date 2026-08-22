@@ -272,6 +272,56 @@ impl IslandOrchestrator {
 
         current_loss
     }
+
+    pub fn save_all(&self, dir_path: &str) -> std::io::Result<()> {
+        std::fs::create_dir_all(dir_path)?;
+        self.episodic
+            .save_to_file(&format!("{}/episodic.gmem", dir_path))?;
+        self.documental
+            .save_to_file(&format!("{}/documental.gmem", dir_path))?;
+        self.conversational
+            .save_to_file(&format!("{}/conversational.gmem", dir_path))?;
+        Ok(())
+    }
+
+    pub fn save_epoch(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> std::io::Result<()> {
+        std::fs::create_dir_all(dir_path)?;
+
+        self.episodic.set_epoch_id(epoch_id);
+        self.episodic.set_parent_epoch(parent_epoch);
+        self.documental.set_epoch_id(epoch_id);
+        self.documental.set_parent_epoch(parent_epoch);
+        self.conversational.set_epoch_id(epoch_id);
+        self.conversational.set_parent_epoch(parent_epoch);
+
+        self.save_all(dir_path)
+    }
+
+    pub fn get_epoch_info(&self) -> (u64, u64, bool, bool) {
+        (
+            self.documental.epoch_id(),
+            self.documental.parent_epoch(),
+            self.documental.is_sealed(),
+            self.documental.is_promoted(),
+        )
+    }
+
+    pub fn load_all(&mut self, dir_path: &str) -> std::io::Result<()> {
+        let epi_path = format!("{}/episodic.gmem", dir_path);
+        let doc_path = format!("{}/documental.gmem", dir_path);
+        let conv_path = format!("{}/conversational.gmem", dir_path);
+
+        if std::path::Path::new(&epi_path).exists() {
+            self.episodic = crate::io::gmem::GmemMemoryIndex::load_from_file(&epi_path)?;
+        }
+        if std::path::Path::new(&doc_path).exists() {
+            self.documental = crate::io::gmem::GmemMemoryIndex::load_from_file(&doc_path)?;
+        }
+        if std::path::Path::new(&conv_path).exists() {
+            self.conversational = crate::io::gmem::GmemMemoryIndex::load_from_file(&conv_path)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "python")]
@@ -353,64 +403,23 @@ impl IslandOrchestrator {
         Ok(())
     }
 
-    pub fn save_all(&self, dir_path: &str) -> PyResult<()> {
-        std::fs::create_dir_all(dir_path).map_err(|e| {
-            pyo3::exceptions::PyIOError::new_err(format!("Error creando directorio: {}", e))
-        })?;
-        self.episodic
-            .save_to_file(&format!("{}/episodic.gmem", dir_path))
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        self.documental
-            .save_to_file(&format!("{}/documental.gmem", dir_path))
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        self.conversational
-            .save_to_file(&format!("{}/conversational.gmem", dir_path))
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        Ok(())
-    }
-
-    pub fn save_epoch(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> PyResult<()> {
-        std::fs::create_dir_all(dir_path).map_err(|e| {
-            pyo3::exceptions::PyIOError::new_err(format!("Error creando directorio: {}", e))
-        })?;
-
-        self.episodic.set_epoch_id(epoch_id);
-        self.episodic.set_parent_epoch(parent_epoch);
-        self.documental.set_epoch_id(epoch_id);
-        self.documental.set_parent_epoch(parent_epoch);
-        self.conversational.set_epoch_id(epoch_id);
-        self.conversational.set_parent_epoch(parent_epoch);
-
+    pub fn save_all_py(&self, dir_path: &str) -> PyResult<()> {
         self.save_all(dir_path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn get_epoch_info(&self) -> (u64, u64, bool, bool) {
-        (
-            self.documental.epoch_id(),
-            self.documental.parent_epoch(),
-            self.documental.is_sealed(),
-            self.documental.is_promoted(),
-        )
+    pub fn save_epoch_py(&mut self, dir_path: &str, epoch_id: u64, parent_epoch: u64) -> PyResult<()> {
+        self.save_epoch(dir_path, epoch_id, parent_epoch)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn load_all(&mut self, dir_path: &str) -> PyResult<()> {
-        let epi_path = format!("{}/episodic.gmem", dir_path);
-        let doc_path = format!("{}/documental.gmem", dir_path);
-        let conv_path = format!("{}/conversational.gmem", dir_path);
+    pub fn get_epoch_info_py(&self) -> (u64, u64, bool, bool) {
+        self.get_epoch_info()
+    }
 
-        if std::path::Path::new(&epi_path).exists() {
-            self.episodic = crate::io::gmem::GmemMemoryIndex::load_from_file(&epi_path)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        }
-        if std::path::Path::new(&doc_path).exists() {
-            self.documental = crate::io::gmem::GmemMemoryIndex::load_from_file(&doc_path)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        }
-        if std::path::Path::new(&conv_path).exists() {
-            self.conversational = crate::io::gmem::GmemMemoryIndex::load_from_file(&conv_path)
-                .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
-        }
-        Ok(())
+    pub fn load_all_py(&mut self, dir_path: &str) -> PyResult<()> {
+        self.load_all(dir_path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 }
 

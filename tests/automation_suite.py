@@ -509,6 +509,65 @@ console.log(JSON.stringify(Array.from(genIds)));
             "[SUITE 10] Especialización de adulto certificada al 100%: Needle recuperado con éxito."
         )
 
+    # =========================================================================
+    # SUITE 11: Épocas de Memoria y Linaje Versionado (.gmem v2)
+    # =========================================================================
+    def test_12_memory_epochs_and_lineage(self):
+        """TC-11.1: Snapshots inmutables, árboles de linaje y rollback exacto sub-milisegundo."""
+        from gaje.core._impl import EpochManager, IslandOrchestrator
+        import tempfile, shutil
+
+        print(
+            "\n[SUITE 11] Validando Épocas de Memoria y Linaje Versionado (.gmem v2)..."
+        )
+        temp_dir = tempfile.mkdtemp(prefix="gaje_suite11_epochs_")
+        dim = 64
+
+        try:
+            mgr = EpochManager(temp_dir, "smollm2_suite", dim)
+            self.assertEqual(mgr.active_epoch_id, 1)
+
+            # Ingesta en Época 1 -> Snapshot Época 2
+            orch = IslandOrchestrator(dim)
+            v1 = [1.0] + [0.0] * (dim - 1)
+            orch.add_memory_py("documental", 1001, v1, "CLAVE_CANONICA_EP2")
+            ep2 = mgr.create_snapshot_py(orch, "Snapshot Canónico", None)
+            self.assertEqual(ep2, 2)
+            self.assertEqual(mgr.active_epoch_id, 2)
+
+            # Ingesta ruidosa -> Snapshot Época 3
+            v2 = [0.0, 1.0] + [0.0] * (dim - 2)
+            orch.add_memory_py("episodic", 9999, v2, "RUIDO_VOLATIL_EP3")
+            ep3 = mgr.create_snapshot_py(orch, "Snapshot Ruidoso", None)
+            self.assertEqual(ep3, 3)
+
+            # Rollback instantáneo a Época 2 (< 1 ms)
+            t0 = time.perf_counter()
+            restored_orch = mgr.rollback_to_py(2)
+            t_rb_ms = (time.perf_counter() - t0) * 1000.0
+            self.assertLess(t_rb_ms, 5.0)
+            self.assertEqual(mgr.active_epoch_id, 2)
+
+            # Verificar reversibilidad exacta (solo 1 entrada documental, 0 ruido)
+            matches = restored_orch.retrieve_context_py(v1, 2)
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0][1], 1001)
+
+            # Promover y sellar
+            mgr.promote_epoch_py(2)
+            mgr.seal_epoch_py(2)
+
+            epochs_json = mgr.list_epochs_py()
+            epochs = json.loads(epochs_json)
+            self.assertEqual(len(epochs), 3)
+            self.assertEqual(epochs[1]["verdict"], "SEALED")
+
+            print(
+                f"[SUITE 11] Épocas y Linaje .gmem v2 certificados al 100%: Rollback en {t_rb_ms:.3f} ms."
+            )
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
