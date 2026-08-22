@@ -24,7 +24,9 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[BODY_QAT_06B_PROTOCOL.md](docs/research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
 *   **[temporal_4bit_fase1_test.py](docs/research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
 
-### 📊 Resultados y Certificaciones Oficiales (`docs/reports/`)
+### 📊 Resultados y Certificaciones Oficiales (`docs/reports/` y `docs/certifications/`)
+*   **[GPU_ACCELERATION_CERTIFICATION.md](docs/certifications/GPU_ACCELERATION_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE ACELERACIÓN GPU (Vulkan / WGPU)** — Despacho masivo de capas tensoriales sobre AMD Radeon Vega con memoria unificada (UMA) y concordancia matemática exacta.
+*   **[QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE INFERENCIA CUÁNTICA (.qemb)** — Cero regresión semántica y reducción del 91.1% en RAM.
 *   **[BENCHMARK_OFFICIAL_v1_6.md](docs/reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
 *   **[GTOK_CERTIFICATION_REPORT.md](docs/reports/GTOK_CERTIFICATION_REPORT.md)**: **CERTIFICACIÓN OFICIAL GTOK v1.0** — Formato binario nativo de tokenización zero-dependency, incrustable en cabecera `.flat`.
 *   **[QUANTUM_CODEBOOK_BENCHMARK.md](docs/reports/QUANTUM_CODEBOOK_BENCHMARK.md)**: **BENCHMARK OFICIAL DE CODEBOOK CUÁNTICO (.qemb)** — 94.4% de reducción en tablas de embeddings de vocabulario masivo mediante superposición dispersa.
