@@ -19,6 +19,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 
 ### 🔬 Investigación (`docs/research/`)
 *   **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](docs/research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
+*   **[FROZEN_BODY_CAUSAL_AB_PROTOCOL.md](docs/research/FROZEN_BODY_CAUSAL_AB_PROTOCOL.md)**: Protocolo A/B causal del cuerpo congelado — aislamiento de causas sobre por qué los cuerpos cuantizados no deben recibir QAT post-cuantización.
 *   **[CE_VS_GENERATION.md](docs/research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
 *   **[BODY_QAT_06B_PROTOCOL.md](docs/research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
 *   **[temporal_4bit_fase1_test.py](docs/research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
@@ -46,6 +47,9 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[SEMANTIC_ENRICHMENT_GUIDE.md](docs/guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes y Roadmap (`docs/plans/`)
+*   **[WASM_BRAINSTEM_PLAN.md](docs/plans/WASM_BRAINSTEM_PLAN.md)**: GAJE-WASM — El motor como tronco encefálico (build WASM + API sensorio-motora).
+*   **[MEMORY_EPOCHS_PLAN.md](docs/plans/MEMORY_EPOCHS_PLAN.md)**: Épocas de memoria — conocimiento flexible versionado sobre cuerpo congelado (`.gmem` v2).
+*   **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](docs/plans/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo de orden cero — SPSA discreto sobre centroides.
 *   **[TESTING_AND_VERIFICATION_PLAN.md](docs/plans/TESTING_AND_VERIFICATION_PLAN.md)**: Plan maestro de pruebas, verificación de hardware, SSE y purga de memoria.
 *   **[GAJE_BENCHMARK_SUITE_PLAN.md](docs/plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite de benchmarks y dataset estandarizado de evaluación.
 *   **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](docs/plans/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Especificación del formato binario nativo GTOK y roadmap de 4 fases.
