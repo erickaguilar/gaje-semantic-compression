@@ -18,12 +18,16 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](docs/meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+*   **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](docs/research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
 *   **[CE_VS_GENERATION.md](docs/research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
 *   **[BODY_QAT_06B_PROTOCOL.md](docs/research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
 *   **[temporal_4bit_fase1_test.py](docs/research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
 
-### 📊 Resultados Verificados (`docs/reports/`)
-*   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: **BENCHMARK OFICIAL** v1.6.0-alpha — compresión, memoria, velocidad y PPL por modelo (reproducible).
+### 📊 Resultados y Certificaciones Oficiales (`docs/reports/`)
+*   **[BENCHMARK_OFFICIAL_v1_6.md](docs/reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
+*   **[GTOK_CERTIFICATION_REPORT.md](docs/reports/GTOK_CERTIFICATION_REPORT.md)**: **CERTIFICACIÓN OFICIAL GTOK v1.0** — Formato binario nativo de tokenización zero-dependency, incrustable en cabecera `.flat`.
+*   **[QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md](docs/reports/QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md)**: **INFORME DE PROTOTIPO CUÁNTICO-GENÓMICO** — Estados de superposición, pureza $\gamma=1.0$ y colapso contextual vía regla de Born.
+*   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: Benchmark histórico de compresión, memoria, velocidad y PPL por modelo.
 *   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
 *   **[session_findings_v1.6.0_phase_3.1.md](docs/reports/session_findings_v1.6.0_phase_3.1.md)**: Hallazgos de la fase 3.1 (formato `.flat`).
 *   **[session_findings_v1.6.0_phase_3.2.md](docs/reports/session_findings_v1.6.0_phase_3.2.md)**: Hallazgos de la fase 3.2.
@@ -32,6 +36,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[qwen2_distillation_report.md](docs/reports/qwen2_distillation_report.md)**: Reporte de destilación Qwen2.
 
 ### 🛠️ Guías Operativas (`docs/guides/`)
+*   **[AUTOMATION_SUITE_GUIDE.md](docs/guides/AUTOMATION_SUITE_GUIDE.md)**: Manual de ejecución de la suite de pruebas automatizada de regresión e integración continua.
 *   **[GAJE_CLI_GUIDE.md](docs/guides/GAJE_CLI_GUIDE.md)**: **MANUAL PRINCIPAL.** Comandos y parámetros del motor nativo Rust.
 *   **[ARCHITECTURE.md](docs/guides/ARCHITECTURE.md)**: Arquitectura del motor.
 *   **[OPERATIONAL_WORKFLOWS_V1.1.0.md](docs/guides/OPERATIONAL_WORKFLOWS_V1.1.0.md)**: Flujos de trabajo del protocolo GAJE-Flow.
@@ -41,13 +46,20 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[SEMANTIC_ENRICHMENT_GUIDE.md](docs/guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes y Roadmap (`docs/plans/`)
+*   **[TESTING_AND_VERIFICATION_PLAN.md](docs/plans/TESTING_AND_VERIFICATION_PLAN.md)**: Plan maestro de pruebas, verificación de hardware, SSE y purga de memoria.
+*   **[GAJE_BENCHMARK_SUITE_PLAN.md](docs/plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite de benchmarks y dataset estandarizado de evaluación.
+*   **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](docs/plans/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Especificación del formato binario nativo GTOK y roadmap de 4 fases.
 *   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
 *   **[NEXT_STEPS_2026.md](docs/plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos.
 *   **[NATIVE_SEMANTIC_RAG_PLAN.md](docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
 *   **[OPERATION_REBIRTH.md](docs/plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
 *   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
-*   **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento completo de cuantización espacial por bloque a 2 bits/peso (Q2_0) vs Q4_0 — la vía real a menor RAM tras la refutación de la emulación temporal; 4 fases con umbrales de decisión.
-*   **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](docs/research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)** — el formato funciona y ahorra ~38% de RAM del cuerpo (H1 ✅), pero destruye la generación semántica (H2 ❌): sopa de tokens aleatoria vs respuestas coherentes del Q4_0. Incluye hallazgo metodológico: la métrica de n-gramas es ciega al colapso semántico.
+*   **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento completo de cuantización espacial por bloque a 2 bits/peso (Q2_0) vs Q4_0.
+*   **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](docs/research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)**.
+
+### 🏷️ Registro y Nomenclatura (`docs/registry/`)
+*   **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](docs/registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).
+*   **[MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md](docs/registry/MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md)**: Recetas de reproducción y registro de modelos en producción.
 
 ### 🏛️ Especificaciones Técnicas (`docs/sdd/` y `docs/bdd/`)
 *   **[docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md)**: Arquitectura del núcleo.
