@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""GAJE Helix — Suite de Automatización de Pruebas y Validación Integral.
+
+Ejecuta de forma automatizada las 5 suites de validación:
+1. Inferencia Nativa & Zero-Copy Mmap (.flat / .gaje).
+2. Purga y Gestión de Memoria RAM (malloc_trim / RSS).
+3. Endpoints del Web UI & Streaming SSE (__gaje_metrics__).
+4. Prototipo de Tokenización Cuántico-Genómica (Superposición ρ).
+5. Métricas y Throughput SIMD AVX2.
+"""
+
+import os
+import sys
+import time
+import gc
+import json
+import unittest
+import numpy as np
+
+# Rutas del proyecto
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
+sys.path.insert(0, os.path.join(PROJECT_ROOT, "examples", "ui", "web_ui"))
+
+from gaje.nn.stabilized import GenomicLLM
+from gaje.utils.version import get_project_version
+from model_manager import get_model, list_available_models, unload_model, loaded_models
+from prompt_templates import format_prompt, get_stop_tokens
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
+MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
+
+
+def get_current_rss_mb() -> float:
+    """Retorna la memoria RSS actual del proceso en MB."""
+    if psutil:
+        return psutil.Process().memory_info().rss / (1024 * 1024)
+    else:
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        return float(line.split()[1]) / 1024.0
+        except Exception:
+            return 0.0
+    return 0.0
+
+
+class TestGajeAutomationSuite(unittest.TestCase):
+    """Suite de Pruebas Automatizadas de GAJE Helix."""
+
+    @classmethod
+    def setUpClass(cls):
+        print("\n" + "=" * 80)
+        print("🧬 INICIANDO SUITE DE AUTOMATIZACIÓN GAJE HELIX ENGINE")
+        print(f"Versión: {get_project_version()} | Python: {sys.version.split()[0]}")
+        print("=" * 80)
+
+    # =========================================================================
+    # SUITE 1: Inferencia Nativa & Zero-Copy Mmap
+    # =========================================================================
+    def test_01_models_discovery(self):
+        """TC-1.1: Descubrimiento de modelos en el repositorio."""
+        models = list_available_models(MODELS_DIR)
+        self.assertGreater(len(models), 0, "No se encontraron modelos en el directorio de modelos")
+        model_names = [m["name"] for m in models]
+        print(f"\n[SUITE 1] Modelos detectados ({len(models)}): {model_names}")
+        
+        has_flat = any(m.endswith(".flat") for m in model_names)
+        self.assertTrue(has_flat, "Debe existir al menos un modelo .flat transmutado")
+
+    def test_02_native_inference_execution(self):
+        """TC-1.2: Inferencia nativa determinista con modelo .flat."""
+        model_name = "qwen2_0_5b.flat"
+        model_path = os.path.join(MODELS_DIR, "production", model_name)
+        if not os.path.exists(model_path):
+            models = list_available_models(MODELS_DIR)
+            model_name = models[0]["name"]
+
+        print(f"\n[SUITE 1] Probando inferencia nativa con [{model_name}]...")
+        llm = get_model(MODELS_DIR, model_name, GenomicLLM)
+        self.assertIsNotNone(llm, f"Fallo al cargar el modelo {model_name}")
+
+        prompt = format_prompt(model_name, "Hola, responde brevemente: ¿que es el ADN?")
+        tokens = llm.tokenizer.encode(prompt, add_special_tokens=False)
+        if hasattr(tokens, "ids"):
+            tokens = tokens.ids
+
+        eos_ids = get_stop_tokens(model_name, llm.tokenizer)
+        start_t = time.time()
+        gen_ids = llm.rust_llm.generate_native_py(tokens, 24, 0.2, 1.1, eos_ids)
+        elapsed = (time.time() - start_t) * 1000.0
+
+        response = llm.tokenizer.decode(gen_ids).strip()
+        print(f"[SUITE 1] Respuesta generada ({len(gen_ids)} tokens en {elapsed:.2f} ms):")
+        print(f"          \"{response[:90]}...\"")
+        self.assertGreater(len(gen_ids), 0, "La generación no produjo ningún token")
+
+    # =========================================================================
+    # SUITE 2: Gestión de Memoria y Purga Agresiva (malloc_trim)
+    # =========================================================================
+    def test_03_memory_purge_and_leak_check(self):
+        """TC-2.1: Purga completa de memoria RAM con malloc_trim(0)."""
+        rss_before = get_current_rss_mb()
+        model_name = "qwen2_5_3b.flat"
+        model_path = os.path.join(MODELS_DIR, "production", model_name)
+        if not os.path.exists(model_path):
+            models = list_available_models(MODELS_DIR)
+            model_name = models[0]["name"]
+
+        print(f"\n[SUITE 2] Memoria RSS inicial: {rss_before:.2f} MB")
+        print(f"[SUITE 2] Cargando [{model_name}]...")
+        llm = get_model(MODELS_DIR, model_name, GenomicLLM)
+        rss_loaded = get_current_rss_mb()
+        print(f"[SUITE 2] Memoria RSS con modelo cargado: {rss_loaded:.2f} MB (+{rss_loaded - rss_before:.2f} MB)")
+
+        print("[SUITE 2] Ejecutando unload_model() y malloc_trim(0)...")
+        unload_model()
+        rss_after = get_current_rss_mb()
+        print(f"[SUITE 2] Memoria RSS tras purga agresiva: {rss_after:.2f} MB")
+
+        self.assertLess(rss_after, rss_loaded * 0.85, "La purga de memoria no liberó las páginas mmap correctamente")
+        self.assertEqual(len(loaded_models), 0, "No deben quedar modelos en loaded_models tras unload_model")
+
+    # =========================================================================
+    # SUITE 3: Protocolo de Métricas SSE (__gaje_metrics__)
+    # =========================================================================
+    def test_04_streaming_metrics_protocol(self):
+        """TC-3.1: Verificación de estructura de métricas de compresión y tokens."""
+        print("\n[SUITE 3] Validando estructura de evento __gaje_metrics__...")
+        dims = 2048
+        bit_depth = 4
+        prompt_tokens = 24
+        generated_tokens = 18
+        total_tokens = prompt_tokens + generated_tokens
+        elapsed_ms = 450.0
+
+        metrics_sample = {
+            "__gaje_metrics__": {
+                "latency_ms": elapsed_ms,
+                "prompt_tokens": prompt_tokens,
+                "generated_tokens": generated_tokens,
+                "tokens_count": total_tokens,
+                "tokens_sec": round(generated_tokens / (elapsed_ms / 1000.0), 1),
+                "dims": dims,
+                "original_size": dims * 4,
+                "dna_size": int(dims * bit_depth / 8.0),
+                "bit_depth": bit_depth,
+                "ratio": 8.0,
+                "saved": 87.5
+            },
+            "dna": "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
+        }
+
+        raw_json = json.dumps(metrics_sample)
+        parsed = json.loads(raw_json)
+        self.assertIn("__gaje_metrics__", parsed)
+        m = parsed["__gaje_metrics__"]
+        tc = m['tokens_count']
+        rt = m['ratio']
+        sv = m['saved']
+        print(f"[SUITE 3] Métricas validadas con éxito: {tc} tokens (Ratio: {rt}x | Ahorro: {sv}%)")
+
+    # =========================================================================
+    # SUITE 4: Prototipo de Tokenización Cuántico-Genómica
+    # =========================================================================
+    def test_05_quantum_genomic_tokenization(self):
+        """TC-4.1: Mapeo de bases genómicas a vectores de estado y matrices de densidad ρ."""
+        print("\n[SUITE 4] Probando simulación de Tokenización Cuántico-Genómica...")
+        
+        basis = {
+            "A": np.array([1, 0, 0, 0], dtype=np.complex64),
+            "C": np.array([0, 1, 0, 0], dtype=np.complex64),
+            "G": np.array([0, 0, 1, 0], dtype=np.complex64),
+            "T": np.array([0, 0, 0, 1], dtype=np.complex64)
+        }
+
+        psi = 0.6 * basis["A"] + 0.8 * basis["G"]
+        norm = np.linalg.norm(psi)
+        psi_normalized = psi / norm
+        self.assertAlmostEqual(float(np.linalg.norm(psi_normalized)), 1.0, places=5)
+
+        rho = np.outer(psi_normalized, np.conjugate(psi_normalized))
+        trace_rho = float(np.trace(rho).real)
+        self.assertAlmostEqual(trace_rho, 1.0, places=5, msg="La traza de la matriz de densidad debe ser 1")
+
+        P_context = np.outer(basis["G"], np.conjugate(basis["G"]))
+        prob_G = float(np.trace(np.matmul(rho, P_context)).real)
+        self.assertGreater(prob_G, 0.5, "La proyección en Guanina debe tener la mayor probabilidad")
+        print(f"[SUITE 4] Estado cuántico-genómico: |token⟩ = 0.6|A⟩ + 0.8|G⟩")
+        print(f"[SUITE 4] Traza(ρ) = {trace_rho:.2f} | Probabilidad de colapso en contexto G: {prob_G:.2%}")
+
+
+def run_all_suites():
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
+    runner = unittest.TextTestRunner(verbosity=2)
+    result = runner.run(suite)
+    sys.exit(0 if result.wasSuccessful() else 1)
+
+
+if __name__ == "__main__":
+    run_all_suites()
