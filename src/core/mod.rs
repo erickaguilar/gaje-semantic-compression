@@ -9,3 +9,4 @@ pub mod tokenizer;
 pub mod topology;
 pub mod gtok;
 pub mod quantum_tokenizer;
+pub mod quantum_codebook;

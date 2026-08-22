@@ -87,7 +87,8 @@ class QuantumCodebook:
 
     def project_sparse(self, vector: np.ndarray, m: int = 4) -> Tuple[List[int], List[float]]:
         """
-        Proyecta un vector de embedding continuo en una superposición lineal de m meta-tokens cuánticos.
+        Proyecta un vector de embedding continuo en una superposición lineal de m meta-tokens cuánticos,
+        resolviendo las amplitudes óptimas mediante mínimos cuadrados en el subespacio de Hilbert (Gram 4x4).
         Retorna (indices, amplitudes) con sum(amplitudes^2) = 1.0.
         """
         v_norm = np.linalg.norm(vector)
@@ -100,10 +101,16 @@ class QuantumCodebook:
 
         # Seleccionar los m mejores meta-tokens
         top_indices = np.argsort(projections)[::-1][:m]
-        top_projections = projections[top_indices]
+        M_k = self.centroids[top_indices]  # m x dim
 
-        # Asegurar no negatividad de amplitudes iniciales y normalizar
-        raw_amps = np.maximum(0.0, top_projections)
+        # Resolver mínimos cuadrados en el subespacio 4x4: Gram = M_k @ M_k.T
+        try:
+            Gram = np.matmul(M_k, M_k.T) + 1e-5 * np.eye(m, dtype=np.float32)
+            rhs = np.matmul(M_k, v)
+            raw_amps = np.linalg.solve(Gram, rhs)
+        except Exception:
+            raw_amps = np.maximum(0.0, projections[top_indices])
+
         amp_norm = np.linalg.norm(raw_amps)
         if amp_norm > 1e-9:
             amplitudes = (raw_amps / amp_norm).tolist()
