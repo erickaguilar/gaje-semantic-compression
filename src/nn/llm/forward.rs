@@ -4,6 +4,18 @@
 use crate::nn::llm::GenomicLLM;
 
 impl GenomicLLM {
+    #[inline]
+    pub fn get_token_embedding(&self, token_id: usize) -> Result<Vec<f32>, String> {
+        if let Some(ref qemb) = self.quantum_embeddings {
+            let dim = qemb.codebook.dim;
+            let mut out = vec![0.0f32; dim];
+            qemb.get_embedding(token_id, &mut out);
+            Ok(out)
+        } else {
+            self.embeddings.get_row_core(token_id)
+        }
+    }
+
     pub fn forward_core(&mut self, token_id: usize, clear_cache: bool) -> Result<Vec<f32>, String> {
         if clear_cache {
             self.clear_cache_core();
@@ -21,7 +33,7 @@ impl GenomicLLM {
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
 
         let t_blocks_start = std::time::Instant::now();
-        let mut h = self.embeddings.get_row_core(token_id)?;
+        let mut h = self.get_token_embedding(token_id)?;
         for block in &mut self.blocks {
             h = block.forward_core(h, pos)?;
         }
@@ -92,7 +104,7 @@ impl GenomicLLM {
             .as_ref()
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
 
-        let mut h = self.embeddings.get_row_core(token_id)?;
+        let mut h = self.get_token_embedding(token_id)?;
         for block in &mut self.blocks {
             h = block.forward_core(h, pos)?;
         }
@@ -213,7 +225,7 @@ impl GenomicLLM {
                 let d_x_final =
                     crate::compute::kernels::rms_norm_backward(&h_norm, &d_h, &self.output_norm, self.eps);
                 // Entrada real del último bloque (re-propaga bloques anteriores, cache ya poblada)
-                let mut x_in = self.embeddings.get_row_core(tokens[i])?;
+                let mut x_in = self.get_token_embedding(tokens[i])?;
                 let pos = self.blocks[0].attn.k_cache_len();
                 for blk in &mut self.blocks[..n_blocks - 1] {
                     x_in = blk.forward_core(x_in, pos)?;
@@ -251,7 +263,7 @@ impl GenomicLLM {
 
             // Forward capturando la entrada de cada bloque.
             let mut block_inputs: Vec<Vec<f32>> = Vec::with_capacity(n);
-            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            let mut h = self.get_token_embedding(tokens[i])?;
             for blk in &mut self.blocks {
                 block_inputs.push(h.clone());
                 h = blk.forward_core(h, pos)?;
@@ -329,7 +341,7 @@ impl GenomicLLM {
 
             // Forward con caché por bloque.
             let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
-            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            let mut h = self.get_token_embedding(tokens[i])?;
             for blk in &mut self.blocks {
                 let (out, cache) = blk.forward_core_cached(h, pos)?;
                 caches.push(cache);
@@ -419,7 +431,7 @@ impl GenomicLLM {
             };
 
             let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
-            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            let mut h = self.get_token_embedding(tokens[i])?;
             for blk in &mut self.blocks {
                 let (out, cache) = blk.forward_core_cached(h, pos)?;
                 caches.push(cache);
@@ -517,7 +529,7 @@ impl GenomicLLM {
             };
 
             let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
-            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            let mut h = self.get_token_embedding(tokens[i])?;
             for blk in &mut self.blocks {
                 let (out, cache) = blk.forward_core_cached(h, pos)?;
                 caches.push(cache);
@@ -554,7 +566,7 @@ impl GenomicLLM {
                     } else {
                         0
                     };
-                    let mut b_h = base.embeddings.get_row_core(tokens[i])?;
+                    let mut b_h = base.get_token_embedding(tokens[i])?;
                     for b_blk in &mut base.blocks {
                         let (out, _cache) = b_blk.forward_core_cached(b_h, base_pos)?;
                         b_h = out;
@@ -632,7 +644,7 @@ impl GenomicLLM {
                 0
             };
             let mut caches: Vec<crate::nn::block::BlockCache> = Vec::with_capacity(n);
-            let mut h = self.embeddings.get_row_core(tokens[i])?;
+            let mut h = self.get_token_embedding(tokens[i])?;
             for blk in &mut self.blocks {
                 let (out, cache) = blk.forward_core_cached(h, pos)?;
                 caches.push(cache);

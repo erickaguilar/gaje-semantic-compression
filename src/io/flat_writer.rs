@@ -377,6 +377,7 @@ pub fn init_born_genomic_model(
         eps: config.eps,
         k_wta_ratio: 0.50,
         topology: None,
+        quantum_embeddings: None,
     };
     save_genomic_model(path, &model, &config, None)?;
     Ok(model)

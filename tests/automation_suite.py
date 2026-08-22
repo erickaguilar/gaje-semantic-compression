@@ -239,6 +239,62 @@ class TestGajeAutomationSuite(unittest.TestCase):
             if os.path.exists(tmp_flat):
                 os.remove(tmp_flat)
 
+    # =========================================================================
+    # SUITE 6: Certificación del Loop de Inferencia Cuántico (.qemb)
+    # =========================================================================
+    def test_07_quantum_embedding_inference_loop(self):
+        """TC-6.1: Verificación de inferencia y forward nativo con Quantum Embedding Table (.qemb)."""
+        print("\n[SUITE 6] Validando Loop de Inferencia Cuántico (.qemb)...")
+        import io
+        import struct
+        import numpy as np
+        from gaje.processing.quantum_codebook import QuantumEmbeddingTable, QEMB_MAGIC, QEMB_VERSION
+
+        model_path = os.path.join(MODELS_DIR, "production", "smollm2_135m.flat")
+        if not os.path.exists(model_path):
+            self.skipTest(f"Modelo {model_path} no encontrado para prueba cuántica.")
+
+        llm = GenomicLLM.load_genomic(model_path)
+        self.assertFalse(llm.rust_llm.has_quantum_embeddings())
+
+        # Forward clásico
+        logits_fp = llm.rust_llm.forward(10, True)
+        self.assertEqual(len(logits_fp), 49152)
+
+        # Generar tabla cuántica sintética
+        dim = 576
+        vocab = 49152
+        k = 256
+        m = 4
+        fake_emb = np.random.randn(vocab, dim).astype(np.float32)
+        table = QuantumEmbeddingTable.from_dense_embeddings(fake_emb, num_meta_tokens=k, m=m)
+
+        buf = io.BytesIO()
+        header = struct.pack("<4sHHIII44s", QEMB_MAGIC, QEMB_VERSION, m, k, vocab, dim, b"\x00" * 44)
+        buf.write(header)
+        buf.write(table.codebook.centroids.tobytes())
+        buf.write(table.indices.tobytes())
+        buf.write(table.amplitudes.tobytes())
+        qemb_bytes = buf.getvalue()
+
+        # Cargar en motor nativo
+        llm.rust_llm.load_quantum_embeddings_bytes(qemb_bytes)
+        self.assertTrue(llm.rust_llm.has_quantum_embeddings())
+
+        # Forward cuántico
+        logits_q = llm.rust_llm.forward(10, True)
+        self.assertEqual(len(logits_q), 49152)
+
+        # Generación nativa cuántica
+        gen_tokens = llm.rust_llm.generate_native_py([10, 42], 5, 0.7, 1.0, [2])
+        self.assertEqual(len(gen_tokens), 5)
+
+        # Descarga
+        llm.rust_llm.unload_quantum_embeddings()
+        self.assertFalse(llm.rust_llm.has_quantum_embeddings())
+
+        print(f"[SUITE 6] Inferencia cuántica validada: {len(gen_tokens)} tokens generados con .qemb activo.")
+
 
 def run_all_suites():
     suite = unittest.TestLoader().loadTestsFromTestCase(TestGajeAutomationSuite)
