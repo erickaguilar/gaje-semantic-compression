@@ -46,12 +46,14 @@ impl GenomicLLM {
             .as_ref()
             .map(|t| t.get_modulation_factors(self.blocks.len(), 2, 0.5));
 
+        #[cfg(not(target_arch = "wasm32"))]
         let t_blocks_start = std::time::Instant::now();
         let mut h = self.get_token_embedding(token_id)?;
         for block in &mut self.blocks {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+        #[cfg(not(target_arch = "wasm32"))]
         let blocks_ms = t_blocks_start.elapsed().as_secs_f32() * 1000.0;
 
         let entropy = crate::compute::math::calculate_activation_entropy(&h_norm);
@@ -66,13 +68,16 @@ impl GenomicLLM {
             return Err("LM Head out_features is 0!".to_string());
         }
 
+        #[cfg(not(target_arch = "wasm32"))]
         let t_head_start = std::time::Instant::now();
         let mut logits = self
             .lm_head
             .forward_core(h_norm, modulation, activate_rna)?;
+        #[cfg(not(target_arch = "wasm32"))]
         let head_ms = t_head_start.elapsed().as_secs_f32() * 1000.0;
 
         // Visual debug timing if enabled
+        #[cfg(not(target_arch = "wasm32"))]
         if std::env::var("GAJE_PROFILE_VERBOSE").is_ok() {
             eprintln!(
                 "⏱️ [Profiling Token] Transformer Blocks: {:.2} ms | LM Head: {:.2} ms",

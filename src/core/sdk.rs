@@ -114,7 +114,11 @@ impl GajeSession {
         let response = self.generate(&prompt, max_new_tokens, temperature, top_p)?;
 
         // 5. Recirculación: Guardar en Memoria de Sesión
+        #[cfg(not(target_arch = "wasm32"))]
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        #[cfg(target_arch = "wasm32")]
+        let timestamp = 0u64;
+
         let interaction = format!("U: {}\nA: {}", user_input, response);
         self.memory.push(interaction, user_phase, timestamp);
 
