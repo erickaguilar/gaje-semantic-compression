@@ -192,3 +192,4 @@ python tests/benchmark_spsa_discrete.py
 *Protocolo GAJE-Flow v1.6.0-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*
 
 *Generado: 2026-08-22 | Motor: GAJE Helix v1.6.0-alpha | Licencia: AGPL-3.0*
+
