@@ -14,6 +14,53 @@ use pyo3::prelude::*;
 pub const GTOK_MAGIC: &[u8; 4] = b"GTOK";
 pub const GTOK_VERSION: u16 = 1;
 
+lazy_static::lazy_static! {
+    static ref BYTE_TO_UNICODE: Vec<String> = {
+        let mut bs: Vec<u32> = (b'!' as u32..=b'~' as u32)
+            .chain(161..=172)
+            .chain(174..=255)
+            .collect();
+        let mut cs = bs.clone();
+        let mut n = 0;
+        for b in 0..=255 {
+            if !bs.contains(&b) {
+                bs.push(b);
+                cs.push(256 + n);
+                n += 1;
+            }
+        }
+        let mut v = vec![String::new(); 256];
+        for (b, c) in bs.into_iter().zip(cs.into_iter()) {
+            if let Some(ch) = char::from_u32(c) {
+                v[b as usize] = ch.to_string();
+            }
+        }
+        v
+    };
+    static ref UNICODE_TO_BYTE: HashMap<char, u8> = {
+        let mut bs: Vec<u32> = (b'!' as u32..=b'~' as u32)
+            .chain(161..=172)
+            .chain(174..=255)
+            .collect();
+        let mut cs = bs.clone();
+        let mut n = 0;
+        for b in 0..=255 {
+            if !bs.contains(&b) {
+                bs.push(b);
+                cs.push(256 + n);
+                n += 1;
+            }
+        }
+        let mut map = HashMap::new();
+        for (b, c) in bs.into_iter().zip(cs.into_iter()) {
+            if let Some(ch) = char::from_u32(c) {
+                map.insert(ch, b as u8);
+            }
+        }
+        map
+    };
+}
+
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone, Debug)]
 pub struct GtokNativeTokenizer {
@@ -230,65 +277,129 @@ impl GtokNativeTokenizer {
         })
     }
 
-    /// Codifica texto a IDs de tokens usando BPE.
+    /// Codifica texto a IDs de tokens usando Byte-Level BPE determinista.
     pub fn encode(&self, text: &str) -> Vec<u32> {
         if text.is_empty() {
             return Vec::new();
         }
 
-        let mut tokens: Vec<u32> = Vec::with_capacity(text.len());
-        for c in text.chars() {
-            let s = c.to_string();
-            let g_s = format!("Ġ{}", c);
-            let sp_s = format!(" {}", c);
+        // 1. Identificar y preservar tokens especiales
+        let mut special_tokens: Vec<&str> = self
+            .token_to_id
+            .keys()
+            .filter(|k| {
+                k.starts_with("<|")
+                    || *k == "<s>"
+                    || *k == "</s>"
+                    || *k == "<think>"
+                    || *k == "</think>"
+            })
+            .map(|s| s.as_str())
+            .collect();
+        special_tokens.sort_by(|a, b| b.len().cmp(&a.len()));
 
-            if let Some(&id) = self.token_to_id.get(&s) {
-                tokens.push(id);
-            } else if let Some(&id) = self.token_to_id.get(&g_s) {
-                tokens.push(id);
-            } else if let Some(&id) = self.token_to_id.get(&sp_s) {
-                tokens.push(id);
-            } else {
-                tokens.push(self.unk_id);
-            }
-        }
+        let mut chunks: Vec<(&str, bool)> = Vec::new();
+        let mut remaining = text;
 
-        // BPE iterative merge loop
-        if tokens.len() > 1 && !self.merges_map.is_empty() {
-            loop {
-                let mut best_pair = None;
-                let mut best_idx = 0;
-
-                for i in 0..(tokens.len() - 1) {
-                    let pair = (tokens[i], tokens[i + 1]);
-                    if let Some(&target) = self.merges_map.get(&pair) {
-                        best_pair = Some(target);
-                        best_idx = i;
-                        break;
-                    }
-                }
-
-                if let Some(target_id) = best_pair {
-                    tokens[best_idx] = target_id;
-                    tokens.remove(best_idx + 1);
-                } else {
+        while !remaining.is_empty() {
+            let mut matched_special = None;
+            for &st in &special_tokens {
+                if remaining.starts_with(st) {
+                    matched_special = Some(st);
                     break;
                 }
             }
-        }
 
-        tokens
-    }
+            if let Some(st) = matched_special {
+                chunks.push((st, true));
+                remaining = &remaining[st.len()..];
+            } else {
+                let next_special_idx = special_tokens
+                    .iter()
+                    .filter_map(|&st| remaining.find(st))
+                    .min();
 
-    /// Decodifica IDs a texto plano UTF-8.
-    pub fn decode(&self, token_ids: &[u32]) -> String {
-        let mut result = String::new();
-        for &id in token_ids {
-            if let Some(token_str) = self.vocab.get(id as usize) {
-                result.push_str(token_str);
+                let regular_chunk_len = next_special_idx.unwrap_or(remaining.len());
+                if regular_chunk_len > 0 {
+                    chunks.push((&remaining[..regular_chunk_len], false));
+                    remaining = &remaining[regular_chunk_len..];
+                }
             }
         }
-        result.replace("Ġ", " ").replace(" ", " ")
+
+        let mut final_tokens: Vec<u32> = Vec::new();
+
+        for (chunk, is_special) in chunks {
+            if is_special {
+                if let Some(&id) = self.token_to_id.get(chunk) {
+                    final_tokens.push(id);
+                }
+                continue;
+            }
+
+            if let Some(&id) = self.token_to_id.get(chunk) {
+                final_tokens.push(id);
+                continue;
+            }
+
+            // Mapear bytes UTF-8 a caracteres estándar BPE
+            let mut tokens: Vec<u32> = Vec::with_capacity(chunk.len());
+            for &b in chunk.as_bytes() {
+                let unicode_char_str = &BYTE_TO_UNICODE[b as usize];
+                if let Some(&id) = self.token_to_id.get(unicode_char_str) {
+                    tokens.push(id);
+                } else {
+                    tokens.push(self.unk_id);
+                }
+            }
+
+            // BPE iterative merge loop
+            if tokens.len() > 1 && !self.merges_map.is_empty() {
+                loop {
+                    let mut best_pair = None;
+                    let mut best_idx = 0;
+
+                    for i in 0..(tokens.len() - 1) {
+                        let pair = (tokens[i], tokens[i + 1]);
+                        if let Some(&target) = self.merges_map.get(&pair) {
+                            best_pair = Some(target);
+                            best_idx = i;
+                            break;
+                        }
+                    }
+
+                    if let Some(target_id) = best_pair {
+                        tokens[best_idx] = target_id;
+                        tokens.remove(best_idx + 1);
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            final_tokens.extend(tokens);
+        }
+
+        final_tokens
+    }
+
+    /// Decodifica IDs a texto plano UTF-8 reconstruyendo bytes de BPE.
+    pub fn decode(&self, token_ids: &[u32]) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        for &id in token_ids {
+            if let Some(token_str) = self.vocab.get(id as usize) {
+                for c in token_str.chars() {
+                    if let Some(&b) = UNICODE_TO_BYTE.get(&c) {
+                        bytes.push(b);
+                    } else {
+                        let mut buf = [0u8; 4];
+                        let s = c.encode_utf8(&mut buf);
+                        bytes.extend_from_slice(s.as_bytes());
+                    }
+                }
+            }
+        }
+        String::from_utf8_lossy(&bytes).to_string()
     }
 
     /// Tamaño del vocabulario.

@@ -250,32 +250,95 @@ impl GajeWasmEngine {
         repetition_penalty: f32,
         inject_rag: bool,
     ) -> Result<String, JsValue> {
-        let augmented_prompt = if inject_rag {
-            let q_vec = text_to_embedding(prompt, self.config.n_embd);
-            let contexts = self.memory.retrieve_context(&q_vec, 2);
-            if contexts.is_empty() {
-                prompt.to_string()
-            } else {
-                let context_str = contexts
+        let (prompt_ids, stop_ids) = {
+            let tok = self.tokenizer.as_ref().ok_or_else(|| {
+                JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado")
+            })?;
+
+            let mut relevant_context = String::new();
+            if inject_rag {
+                let q_vec = text_to_embedding(prompt, self.config.n_embd);
+                let contexts = self.memory.retrieve_context(&q_vec, 2);
+                let relevant_snippets: Vec<String> = contexts
                     .iter()
+                    .filter(|c| c.similarity >= 0.50)
                     .map(|c| format!("- {}", c.text))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                format!(
-                    "Contexto de memoria:\n{}\n\nUsuario: {}",
-                    context_str, prompt
-                )
+                    .collect();
+
+                if !relevant_snippets.is_empty() {
+                    relevant_context = format!(
+                        "Información de memoria recuperada:\n{}\n\n",
+                        relevant_snippets.join("\n")
+                    );
+                }
             }
-        } else {
-            prompt.to_string()
+
+            let formatted = if tok.token_to_id.contains_key("<|im_start|>") {
+                if !relevant_context.is_empty() {
+                    format!(
+                        "<|im_start|>system\n{}Responde al usuario de manera precisa y directa.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                        relevant_context, prompt
+                    )
+                } else {
+                    format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                        prompt
+                    )
+                }
+            } else if tok.token_to_id.contains_key("<|user|>") {
+                if !relevant_context.is_empty() {
+                    format!(
+                        "<|system|>\n{}<|end|>\n<|user|>\n{}<|end|>\n<|assistant|>\n",
+                        relevant_context, prompt
+                    )
+                } else {
+                    format!("<|user|>\n{}<|end|>\n<|assistant|>\n", prompt)
+                }
+            } else if !relevant_context.is_empty() {
+                format!("{}{}", relevant_context, prompt)
+            } else {
+                prompt.to_string()
+            };
+
+            let p_ids = tok.encode(&formatted);
+            if p_ids.is_empty() {
+                return Ok(String::new());
+            }
+
+            let mut s_ids = vec![2];
+            if let Some(&im_end) = tok.token_to_id.get("<|im_end|>") {
+                s_ids.push(im_end);
+            }
+            if let Some(&eos) = tok.token_to_id.get("<|endoftext|>") {
+                s_ids.push(eos);
+            }
+            if let Some(&eot) = tok.token_to_id.get("<end_of_turn>") {
+                s_ids.push(eot);
+            }
+            (p_ids, s_ids)
         };
 
-        let response = self.chat(
-            &augmented_prompt,
+        let gen_ids = self.generate(
+            &prompt_ids,
             max_tokens,
             temperature,
             repetition_penalty,
+            &stop_ids,
         )?;
+
+        let full_text = if let Some(ref tok) = self.tokenizer {
+            tok.decode(&gen_ids)
+        } else {
+            String::new()
+        };
+
+        let cleaned = full_text
+            .trim_end_matches("<|im_end|>")
+            .trim_end_matches("<|endoftext|>")
+            .trim_end_matches("<end_of_turn>")
+            .trim();
+
+        let response = cleaned.to_string();
 
         // Auto-ingesta del turno conversacional
         let conv_record = format!("U: {} | A: {}", prompt, response);
@@ -365,7 +428,18 @@ impl GajeWasmEngine {
                 JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado")
             })?;
 
-            let p_ids = tok.encode(prompt);
+            let formatted = if tok.token_to_id.contains_key("<|im_start|>") {
+                format!(
+                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                    prompt
+                )
+            } else if tok.token_to_id.contains_key("<|user|>") {
+                format!("<|user|>\n{}<|end|>\n<|assistant|>\n", prompt)
+            } else {
+                prompt.to_string()
+            };
+
+            let p_ids = tok.encode(&formatted);
             if p_ids.is_empty() {
                 return Ok(String::new());
             }

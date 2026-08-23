@@ -75,6 +75,10 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly gaje_session_chat: (a: number, b: number, c: number, d: number, e: number) => number;
+    readonly gaje_session_free: (a: number) => void;
+    readonly gaje_session_load: (a: number, b: number) => number;
+    readonly gaje_string_free: (a: number) => void;
     readonly __wbg_gajewasmengine_free: (a: number, b: number) => void;
     readonly gajewasmengine_actuate: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly gajewasmengine_autonomic_sleep_cycle: (a: number, b: number, c: number) => void;
@@ -92,10 +96,6 @@ export interface InitOutput {
     readonly gajewasmengine_load_from_bytes: (a: number, b: number, c: number) => void;
     readonly gajewasmengine_reset_cache: (a: number) => void;
     readonly gajewasmengine_retrieve_context: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
-    readonly gaje_session_chat: (a: number, b: number, c: number, d: number, e: number) => number;
-    readonly gaje_session_free: (a: number) => void;
-    readonly gaje_session_load: (a: number, b: number) => number;
-    readonly gaje_string_free: (a: number) => void;
     readonly __wbindgen_export: (a: number) => void;
     readonly __wbindgen_export2: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export3: (a: number, b: number) => number;

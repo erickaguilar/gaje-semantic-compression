@@ -66,11 +66,17 @@ print(
 print(f"[*] Presupuesto de Cómputo por Brazo: {FORWARD_BUDGET} forward passes")
 print(f"[*] Loss Inicial: {initial_loss:.4f}\n")
 
+# Configuración de mutación dirigida para el Brazo A (vecinos en codebook)
+# En lugar de reasignaciones aleatorias completas, perturbamos a centros vecinos (±1)
+# para crear una comparación justa con SPSA (que también hace perturbaciones dirigidas)
+A_USE_DIRECTED_MUTATION = True
+
 
 # ==============================================================================
 # BRAZO A: Mutación Aleatoria Simple (Random Mutation Hill Climbing)
+# Usa perturbaciones dirigidas a vecinos de códigobook para comparación justa con SPSA
 # ==============================================================================
-print("[1/4] Ejecutando Brazo A: Mutación Aleatoria Simple...")
+print("[1/4] Ejecutando Brazo A: Mutación Aleatoria Simple (directed)...")
 indices_a = initial_indices.copy()
 current_loss_a = initial_loss
 loss_history_a = [current_loss_a]
@@ -80,7 +86,11 @@ for step in range(FORWARD_BUDGET):
     mut_indices = indices_a.copy()
     rows = np.random.randint(0, OUT_FEATURES, size=K_PERTURBATIONS)
     cols = np.random.randint(0, IN_FEATURES, size=K_PERTURBATIONS)
-    new_vals = np.random.randint(0, NUM_CENTROIDS, size=K_PERTURBATIONS, dtype=np.uint8)
+    # Perturbación dirigida: mover a centroide vecino (±1), clampear a [0, NUM_CENTROIDS-1]
+    neighbor_deltas = np.random.choice([-1, 1], size=K_PERTURBATIONS)
+    new_vals = np.clip(
+        indices_a[rows, cols].astype(np.int32) + neighbor_deltas, 0, NUM_CENTROIDS - 1
+    ).astype(np.uint8)
     mut_indices[rows, cols] = new_vals
 
     cand_loss = compute_loss(mut_indices)  # 1 forward
@@ -109,8 +119,8 @@ t0 = time.time()
 spsa_steps = FORWARD_BUDGET // 2  # 2 forwards por paso
 
 for step in range(spsa_steps):
-    # Schedule de temperatura T_g: saltos mayores al inicio, vecinos al final
-    progress = step / spsa_steps
+    # Schedule de temperatura T_g: suave 3→0.5, decay cuadrático para exploración inicial
+    progress = (step / spsa_steps) ** 2
     temp = max(1, int(round(3.0 * (1.0 - progress))))
 
     target_row = np.random.randint(0, OUT_FEATURES)

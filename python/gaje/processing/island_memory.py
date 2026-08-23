@@ -205,9 +205,11 @@ class IslandMemoryManager:
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_k]
 
-    def format_memory_injection(self, query: str, top_k: int = 2) -> Optional[str]:
+    def format_memory_injection(
+        self, query: str, top_k: int = 2, threshold: float = 0.50
+    ) -> Optional[str]:
         """Recupera y formatea el contexto inyectable garantizando no exceder el presupuesto de tokens."""
-        matches = self.retrieve_context(query, top_k=top_k)
+        matches = self.retrieve_context(query, top_k=top_k, threshold=threshold)
         if not matches:
             return None
 

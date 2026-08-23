@@ -45,6 +45,20 @@ perturba **asignaciones de centroide**:
 Dos forwards por paso. Sin grafo, sin activaciones, sin STE. La mutación deja de ser
 ciega: pasa de "mutar y rezar" (poblaciones completas) a **comparación dirigida de pares**.
 
+### 1.4 Consejo de Maestros (Configuración Corrected)
+
+> **Importante:** Para evitar degeneración y mantener coherencia, el Consejo de Maestros
+> debe usar modelos Qwen2.5 con arquitectura completa (SwiGLU + RoPE completo), no
+> DeepSeek-R1 base. Los modelos base DeepSeek carecen de la arquitectura completa que
+> requiere GAJE para una correcta calibración de centroides.
+
+| Maestro | Arquitectura | Tamaño | Rol |
+|:---|:---:|:---:|:---|
+| **Qwen2.5-3B-Instruct** | Qwen2.5 completa (SwiGLU + RoPE) | 3.0B | Maestro general, multilingüe |
+| **Qwen2.5-1.5B-Instruct** | Qwen2.5 completa (SwiGLU + RoPE) | 1.5B | Maestro de razonamiento CoT |
+
+**Referencia:** `docs/reports/qwen2_distillation_report.md` § "Modelo Maestro Defectuoso"
+
 ---
 
 ## 2. Objetivo e hipótesis
