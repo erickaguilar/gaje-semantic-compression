@@ -137,6 +137,19 @@ def transmute_model(key, keep_source=False):
         print(f"❌ Error durante la exportación a .flat del modelo {key}")
         return False
 
+    # 2.5 GATE DE NACIMIENTO (Mandato de Verdad Empírica): un organismo con
+    # pesos corruptos NO llega a producción. Si falla, se conserva el GGUF
+    # fuente para poder re-exportar tras corregir el exportador.
+    validator = os.path.join(PROJECT_ROOT, "scripts", "validate_flat_birth.py")
+    print("\n🚪 Gate de Nacimiento: validando coherencia factual greedy...")
+    gate = subprocess.run([sys.executable, validator, flat_file])
+    if gate.returncode != 0:
+        print(
+            f"☠️  NACIMIENTO RECHAZADO para {spec['output_flat']}. "
+            "El archivo NO se promociona. GGUF fuente conservado para re-export."
+        )
+        return False
+
     # 3. Limpieza de archivo GGUF temporal si no se requiere conservar
     if not keep_source and os.path.exists(gguf_file):
         print(
