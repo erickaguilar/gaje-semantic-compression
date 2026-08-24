@@ -31,8 +31,8 @@ MODELS_CATALOG = {
     },
     "qwen_7b": {
         "title": "GAJE Ultra (Qwen 2.5 7B Instruct)",
-        "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
-        "gguf_name": "qwen2.5-7b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+        "gguf_name": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
         "output_flat": "gaje_ultra_7b.flat",
         "tokenizer": "Qwen/Qwen2.5-7B-Instruct"
     },
@@ -45,8 +45,8 @@ MODELS_CATALOG = {
     },
     "coder_7b": {
         "title": "GAJE Coder Ultra (Qwen 2.5 Coder 7B Instruct)",
-        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
-        "gguf_name": "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+        "gguf_name": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
         "output_flat": "gaje_coder_7b.flat",
         "tokenizer": "Qwen/Qwen2.5-Coder-7B-Instruct"
     }
