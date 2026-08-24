@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "dna-semantic-compression"
-version = "1.6.0-alpha"
+version = "1.7.0-alpha"
 description = "Genomic Semantic Compression Protocol (GAJE) for high-density vector storage."
 authors = [{name = "Erick Aguilar"}]
 license = {text = "AGPL-3.0-only"}

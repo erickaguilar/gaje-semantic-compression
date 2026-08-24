@@ -1,17 +1,30 @@
-# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.6.0-alpha)
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.0-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.6.0--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
-[![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
+[![Version](https://img.shields.io/badge/version-1.7.0--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/reports/session_findings_v1.6.0_phase_3.1.md)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
 
-**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano **`.gaje.flat` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además memoria persistente **Island Model `.gmem`** y cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**).
+**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano **`.gaje.flat` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
 
 > **2-bits (experimental):** la cuantización de **2-bits por peso (4 estados `00=A`, `01=C`, `11=G`, `10=T`)** se desarrolla en el módulo neuromórfico (`src/nn/spiking`) y quedó documentada como frente de investigación (inviable en hardware comercial por costo de cómputo). **La ruta de producción certificada es Q4_0 + FP32.**
 
 ---
 
-## 🔬 Estado Empírico y Certificación del Motor (v1.6.0-alpha)
+## 📦 Catálogo de Modelos Certificados (Hugging Face Hub)
+
+Los modelos oficiales listos para ejecución nativa en servidor o WebAssembly en navegador están disponibles en el [Repositorio Oficial de Hugging Face (`eaguilar/gaje-models`)](https://huggingface.co/eaguilar/gaje-models):
+
+| Organismo / Modelo | Formato | Tamaño | Entorno Óptimo | Precisión y Capacidad |
+| :--- | :---: | :---: | :---: | :--- |
+| **`gaje_nano_1.5b.flat`** | `.gaje.flat` v2 | **1.23 GB** | WebAssembly (Móvil / Web) | Ultra-rápido, bajo consumo RAM, ideal para teléfonos. |
+| **`gaje_prime_3b.flat`** | `.gaje.flat` v2 | **2.24 GB** | WASM Desktop / Cloud | Equilibrado, alta coherencia contextual y lógica general. |
+| **`gaje_ultra_7b.flat`** | `.gaje.flat` v2 | **4.88 GB** | Servidor / Cloud Nativo | Razonamiento profundo, codificación y tareas complejas. |
+
+---
+
+## 🔬 Estado Empírico y Certificación del Motor (v1.7.0-alpha)
 
 Siguiendo el **Mandato de Verdad Empírica** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](docs/meta/EMPIRICAL_TRUTH_STATE.md)), el motor GAJE Helix cuenta con la siguiente certificación oficial:
 
