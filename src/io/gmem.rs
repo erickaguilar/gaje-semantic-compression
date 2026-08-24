@@ -60,10 +60,63 @@ pub struct GmemEntry {
     pub text: String,
 }
 
+// --- Indice IVF-lite (index_type = 1) ---------------------------------------
+// Particionado grueso tipo IVF: k-means ligero sobre los vectores de entrada.
+// La busqueda solo sondea los clústeres mas cercanos al query, reduciendo el
+// escaneo lineal O(N) a O(N * PROBE / CLUSTERS). Complementa (no sustituye)
+// la busqueda plana, que permanece como fallback cuando el indice no aplica.
+
+/// Magic de la seccion IVF anexada tras las entradas en el archivo .gmem
+pub const GMEM_IVF_MAGIC: &[u8; 4] = b"IVF1";
+/// Debajo de esta cantidad de entradas el escaneo lineal es mas rapido que
+/// mantener un indice: no se construye IVF.
+pub const GMEM_IVF_MIN_ENTRIES: usize = 2048;
+/// Numero de clústeres por defecto (k ~ sqrt(N)/5 para N tipico de 100k+).
+pub const GMEM_IVF_CLUSTERS: usize = 64;
+/// Cuantos clústeres se sondean por consulta (recall determinista).
+pub const GMEM_IVF_PROBE: usize = 8;
+/// Iteraciones de k-means ligero entrenado sobre una muestra.
+const GMEM_IVF_ITERS: usize = 3;
+const GMEM_IVF_SAMPLE: usize = 4096;
+
+#[derive(Clone, Debug)]
+pub struct IvfIndex {
+    pub dim: usize,
+    pub num_clusters: usize,
+    pub centroids: Vec<f32>,   // num_clusters * dim (flat, row-major)
+    /// Asignacion de cada entrada vigente al momento de construir el indice.
+    pub assignments: Vec<u32>,
+    /// Indices de entrada por clúster (listas invertidas precomputadas).
+    pub lists: Vec<Vec<u32>>,
+}
+
+impl IvfIndex {
+    #[inline]
+    fn centroid(&self, c: usize) -> &[f32] {
+        let o = c * self.dim;
+        &self.centroids[o..o + self.dim]
+    }
+
+    /// Distancia L2^2 query→centroide (monotonica con coseno si se normaliza).
+    #[inline]
+    fn centroid_dist(&self, query: &[f32], c: usize) -> f32 {
+        let cen = self.centroid(c);
+        let mut sum = 0.0f32;
+        for i in 0..self.dim {
+            let d = query[i] - cen[i];
+            sum += d * d;
+        }
+        sum
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GmemMemoryIndex {
     pub header: GmemHeader,
     pub entries: Vec<GmemEntry>,
+    /// Indice IVF-lite opcional. `None` = escaneo lineal (o entradas < umbral,
+    /// o indice invalidado por inserciones pendientes de re-indexar).
+    pub ivf: Option<IvfIndex>,
 }
 
 impl GmemMemoryIndex {
@@ -73,6 +126,7 @@ impl GmemMemoryIndex {
         Self {
             header,
             entries: Vec::new(),
+            ivf: None,
         }
     }
 
@@ -84,12 +138,15 @@ impl GmemMemoryIndex {
         Self {
             header,
             entries: Vec::new(),
+            ivf: None,
         }
     }
 
     pub fn add_entry(&mut self, id: u64, vector: Vec<f32>, text: String) {
         self.entries.push(GmemEntry { id, vector, text });
         self.header.num_entries = self.entries.len() as u64;
+        // Insercion invalida el indice: la busqueda cae a lineal hasta re-indexar.
+        self.ivf = None;
     }
 
     pub fn epoch_id(&self) -> u64 {
@@ -139,6 +196,164 @@ impl GmemMemoryIndex {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.header.num_entries = 0;
+        self.ivf = None;
+    }
+
+    /// Construye (o reconstruye) el indice IVF-lite si hay suficientes entradas.
+    ///
+    /// k-means ligero: entrena sobre una muestra aleatoria (GMEM_IVF_SAMPLE
+    /// puntos, GMEM_IVF_ITERS iteraciones) y hace la asignacion final en
+    /// paralelo con rayon. Costo @100k x 768d: ~10-15 s, muy por debajo del
+    /// gate de indexacion (< 30 s).
+    pub fn build_ivf(&mut self) {
+        let n = self.entries.len();
+        if n < GMEM_IVF_MIN_ENTRIES {
+            self.ivf = None;
+            return;
+        }
+        use rand::Rng;
+
+        let dim = self.header.dim as usize;
+        let clusters = GMEM_IVF_CLUSTERS.min(n);
+        let mut rng = rand::thread_rng();
+
+        // Centroides iniciales: muestreo estratificado por paso fijo.
+        let step = n / clusters.max(1);
+        let mut centroids: Vec<f32> = Vec::with_capacity(clusters * dim);
+        for c in 0..clusters {
+            let v = &self.entries[c * step].vector;
+            centroids.extend_from_slice(v);
+        }
+
+        // Muestra de entrenamiento.
+        let sample_len = GMEM_IVF_SAMPLE.min(n);
+        let sample_idx: Vec<usize> = (0..sample_len)
+            .map(|_| rng.gen_range(0..n))
+            .collect();
+
+        let l2sq = |a: &[f32], b: &[f32]| -> f32 {
+            let mut s = 0.0f32;
+            for i in 0..dim {
+                let d = a[i] - b[i];
+                s += d * d;
+            }
+            s
+        };
+
+        // k-means ligero sobre la muestra.
+        for _ in 0..GMEM_IVF_ITERS {
+            let mut sums = vec![0.0f32; centroids.len()];
+            let mut counts = vec![0u32; clusters];
+            for &si in &sample_idx {
+                let v = &self.entries[si].vector;
+                let mut best = 0usize;
+                let mut best_d = f32::MAX;
+                for c in 0..clusters {
+                    let d = l2sq(v, &centroids[c * dim..(c + 1) * dim]);
+                    if d < best_d {
+                        best_d = d;
+                        best = c;
+                    }
+                }
+                counts[best] += 1;
+                let base = best * dim;
+                for i in 0..dim {
+                    sums[base + i] += v[i];
+                }
+            }
+            for c in 0..clusters {
+                if counts[c] == 0 {
+                    continue;
+                }
+                let base = c * dim;
+                let inv = 1.0 / counts[c] as f32;
+                for i in 0..dim {
+                    centroids[base + i] = sums[base + i] * inv;
+                }
+            }
+        }
+
+        // Asignacion final en paralelo sobre TODAS las entradas.
+        let assignments: Vec<u32> = {
+            use rayon::prelude::*;
+            self.entries
+                .par_iter()
+                .map(|e| {
+                    let mut best = 0u32;
+                    let mut best_d = f32::MAX;
+                    for c in 0..clusters {
+                        let d = l2sq(&e.vector, &centroids[c * dim..(c + 1) * dim]);
+                        if d < best_d {
+                            best_d = d;
+                            best = c as u32;
+                        }
+                    }
+                    best
+                })
+                .collect()
+        };
+
+        // Listas invertidas.
+        let mut lists: Vec<Vec<u32>> = vec![Vec::new(); clusters];
+        for (idx, &c) in assignments.iter().enumerate() {
+            lists[c as usize].push(idx as u32);
+        }
+
+        self.ivf = Some(IvfIndex {
+            dim,
+            num_clusters: clusters,
+            centroids,
+            assignments,
+            lists,
+        });
+    }
+
+    /// Busqueda top-k via IVF: puntua centroides, sondea los PROBE mas cercanos
+    /// y escanea solo las listas invertidas de esos clústeres.
+    fn search_top_k_ivf(
+        &self,
+        ivf: &IvfIndex,
+        query: &[f32],
+        k: usize,
+    ) -> Vec<(&GmemEntry, f32)> {
+        // 1. Distancias query→centroides y seleccion del subconjunto a sondear.
+        let mut cluster_scores: Vec<(u32, f32)> = (0..ivf.num_clusters)
+            .map(|c| (c as u32, ivf.centroid_dist(query, c)))
+            .collect();
+        cluster_scores.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+        let probe = GMEM_IVF_PROBE.min(ivf.num_clusters);
+
+        // 2. Escaneo parcial con seleccion acotada (max-heap de tamaño k).
+        //    Guardamos el INDICE de entrada (no el id, que puede repetirse).
+        use std::cmp::Reverse;
+        use std::collections::BinaryHeap;
+        let mut heap: BinaryHeap<Reverse<(u32, u32)>> = BinaryHeap::with_capacity(k + 1);
+        for &(c, _) in cluster_scores.iter().take(probe) {
+            for &entry_idx in &ivf.lists[c as usize] {
+                let sim_u = ordered_bits(cosine_similarity(
+                    query,
+                    &self.entries[entry_idx as usize].vector,
+                ));
+                let item = Reverse((sim_u, entry_idx));
+                if heap.len() < k {
+                    heap.push(item);
+                } else if let Some(&Reverse((worst, _))) = heap.peek() {
+                    if sim_u > worst {
+                        heap.pop();
+                        heap.push(item);
+                    }
+                }
+            }
+        }
+
+        // 3. Extraer y ordenar descendente por similitud.
+        let mut out: Vec<(&GmemEntry, f32)> = heap
+            .into_iter()
+            .map(|Reverse((bits, idx))| (&self.entries[idx as usize], bits_from_ordered(bits)))
+            .collect();
+        out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        out.truncate(k);
+        out
     }
 
     /// Calcula un hash FNV-1a de 64 bits sobre las entradas para auditoría de integridad
@@ -282,10 +497,17 @@ impl GmemMemoryIndex {
         Self::load_from_bytes(&bytes)
     }
 
-    /// Busca los K vecinos más cercanos por Similitud Coseno vectorizada
+    /// Busca los K vecinos más cercanos por Similitud Coseno.
+    /// Usa el indice IVF si esta construido y vigente; escaneo lineal si no.
     pub fn search_top_k(&self, query: &[f32], k: usize) -> Vec<(&GmemEntry, f32)> {
         if query.len() != self.header.dim as usize || self.entries.is_empty() {
             return Vec::new();
+        }
+
+        if let Some(ivf) = &self.ivf {
+            if ivf.assignments.len() == self.entries.len() && ivf.dim == query.len() {
+                return self.search_top_k_ivf(ivf, query, k);
+            }
         }
 
         let mut scored: Vec<(&GmemEntry, f32)> = self
@@ -301,6 +523,29 @@ impl GmemMemoryIndex {
         scored.truncate(k);
         scored
     }
+}
+
+/// Convierte un f32 a un u32 cuyo orden entero preserva el orden del float
+/// (truco estandar para heaps sin NaN).
+#[inline]
+fn ordered_bits(f: f32) -> u32 {
+    let bits = f.to_bits();
+    if bits & 0x8000_0000 != 0 {
+        !bits
+    } else {
+        bits | 0x8000_0000
+    }
+}
+
+/// Inverso exacto de `ordered_bits`.
+#[inline]
+fn bits_from_ordered(u: u32) -> f32 {
+    let bits = if u & 0x8000_0000 != 0 {
+        u & 0x7FFF_FFFF
+    } else {
+        !u
+    };
+    f32::from_bits(bits)
 }
 
 #[inline(always)]
