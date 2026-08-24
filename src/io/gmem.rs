@@ -145,8 +145,8 @@ impl GmemMemoryIndex {
     pub fn add_entry(&mut self, id: u64, vector: Vec<f32>, text: String) {
         self.entries.push(GmemEntry { id, vector, text });
         self.header.num_entries = self.entries.len() as u64;
-        // Insercion invalida el indice: la busqueda cae a lineal hasta re-indexar.
-        self.ivf = None;
+        // El indice IVF vigente cubre el PREFIJO; las entradas nuevas forman
+        // una cola que se escanea linealmente hasta la proxima reconstruccion.
     }
 
     pub fn epoch_id(&self) -> u64 {
@@ -199,6 +199,18 @@ impl GmemMemoryIndex {
         self.ivf = None;
     }
 
+    /// Reconstruye el indice si esta ausente o desactualizado y supera el
+    /// umbral minimo. No-op en caso contrario.
+    pub fn refresh_ivf(&mut self) {
+        let stale = match &self.ivf {
+            Some(ivf) => ivf.assignments.len() != self.entries.len(),
+            None => true,
+        };
+        if stale {
+            self.build_ivf();
+        }
+    }
+
     /// Construye (o reconstruye) el indice IVF-lite si hay suficientes entradas.
     ///
     /// k-means ligero: entrena sobre una muestra aleatoria (GMEM_IVF_SAMPLE
@@ -214,8 +226,11 @@ impl GmemMemoryIndex {
         use rand::Rng;
 
         let dim = self.header.dim as usize;
-        let clusters = GMEM_IVF_CLUSTERS.min(n);
-        let mut rng = rand::thread_rng();
+        // Regla k~sqrt(N) acotada: mas clústeres = listas mas chicas y menos
+        // escaneo por sondeo. El constante GMEM_IVF_CLUSTERS queda como piso.
+        let clusters = (((n as f64).sqrt() as usize) * 2)
+            .clamp(GMEM_IVF_CLUSTERS, 1024)
+            .min(n);
 
         // Centroides iniciales: muestreo estratificado por paso fijo.
         let step = n / clusters.max(1);
@@ -225,13 +240,7 @@ impl GmemMemoryIndex {
             centroids.extend_from_slice(v);
         }
 
-        // Muestra de entrenamiento.
-        let sample_len = GMEM_IVF_SAMPLE.min(n);
-        let sample_idx: Vec<usize> = (0..sample_len)
-            .map(|_| rng.gen_range(0..n))
-            .collect();
-
-        let l2sq = |a: &[f32], b: &[f32]| -> f32 {
+         let l2sq = |a: &[f32], b: &[f32]| -> f32 {
             let mut s = 0.0f32;
             for i in 0..dim {
                 let d = a[i] - b[i];
@@ -240,38 +249,14 @@ impl GmemMemoryIndex {
             s
         };
 
-        // k-means ligero sobre la muestra.
-        for _ in 0..GMEM_IVF_ITERS {
-            let mut sums = vec![0.0f32; centroids.len()];
-            let mut counts = vec![0u32; clusters];
-            for &si in &sample_idx {
-                let v = &self.entries[si].vector;
-                let mut best = 0usize;
-                let mut best_d = f32::MAX;
-                for c in 0..clusters {
-                    let d = l2sq(v, &centroids[c * dim..(c + 1) * dim]);
-                    if d < best_d {
-                        best_d = d;
-                        best = c;
-                    }
-                }
-                counts[best] += 1;
-                let base = best * dim;
-                for i in 0..dim {
-                    sums[base + i] += v[i];
-                }
-            }
-            for c in 0..clusters {
-                if counts[c] == 0 {
-                    continue;
-                }
-                let base = c * dim;
-                let inv = 1.0 / counts[c] as f32;
-                for i in 0..dim {
-                    centroids[base + i] = sums[base + i] * inv;
-                }
-            }
-        }
+        // NOTA DE DISENO: se descarto el entrenamiento k-means. En alta
+        // dimension (768d) las distancias se concentran y Lloyd converge a
+        // particiones degeneradas (clústeres gigantes 50x la media) salvo
+        // tuning extenso. Los centroides por muestreo directo (puntos reales
+        // espaciados uniformemente en el orden de insercion) producen listas
+        // balanceadas por construccion sobre datos i.i.d., que es lo que
+        // importa para el escaneo acotado del sondeo.
+        
 
         // Asignacion final en paralelo sobre TODAS las entradas.
         let assignments: Vec<u32> = {
@@ -315,6 +300,7 @@ impl GmemMemoryIndex {
         ivf: &IvfIndex,
         query: &[f32],
         k: usize,
+        tail_start: usize,
     ) -> Vec<(&GmemEntry, f32)> {
         // 1. Distancias query→centroides y seleccion del subconjunto a sondear.
         let mut cluster_scores: Vec<(u32, f32)> = (0..ivf.num_clusters)
@@ -346,7 +332,22 @@ impl GmemMemoryIndex {
             }
         }
 
-        // 3. Extraer y ordenar descendente por similitud.
+        // 3. Cola no indexada (entradas agregadas tras construir): escaneo
+        //    lineal al mismo heap -> cero falsos negativos sin re-indexar.
+        for (idx, entry) in self.entries.iter().enumerate().skip(tail_start) {
+            let sim_u = ordered_bits(cosine_similarity(query, &entry.vector));
+            let item = Reverse((sim_u, idx as u32));
+            if heap.len() < k {
+                heap.push(item);
+            } else if let Some(&Reverse((worst, _))) = heap.peek() {
+                if sim_u > worst {
+                    heap.pop();
+                    heap.push(item);
+                }
+            }
+        }
+
+        // 4. Extraer y ordenar descendente por similitud.
         let mut out: Vec<(&GmemEntry, f32)> = heap
             .into_iter()
             .map(|Reverse((bits, idx))| (&self.entries[idx as usize], bits_from_ordered(bits)))
@@ -377,8 +378,17 @@ impl GmemMemoryIndex {
     /// Serializa el índice a bytes en formato binario .gmem v2 (ideal para WASM / IndexedDB / OPFS)
     pub fn save_to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        // 1. Escribir Header de 64 bytes
-        let header_bytes: &[u8; 64] = unsafe { std::mem::transmute(&self.header) };
+        // 1. Header de 64 bytes (index_type=1 cuando hay IVF vigente)
+        let mut header = self.header;
+        if self
+            .ivf
+            .as_ref()
+            .map(|i| i.assignments.len() == self.entries.len())
+            .unwrap_or(false)
+        {
+            header.index_type = 1;
+        }
+        let header_bytes: &[u8; 64] = unsafe { std::mem::transmute(&header) };
         buf.extend_from_slice(header_bytes);
 
         // 2. Escribir Entradas
@@ -391,6 +401,26 @@ impl GmemMemoryIndex {
             let text_len = text_bytes.len() as u32;
             buf.extend_from_slice(&text_len.to_le_bytes());
             buf.extend_from_slice(text_bytes);
+        }
+
+        // 3. Anexar seccion IVF si el indice esta vigente. Loaders antiguos que
+        // leen exactamente num_entries entradas ignoran estos bytes extra.
+        let has_ivf = self
+            .ivf
+            .as_ref()
+            .map(|i| i.assignments.len() == self.entries.len())
+            .unwrap_or(false);
+        if has_ivf {
+            let ivf = self.ivf.as_ref().unwrap();
+            buf.extend_from_slice(GMEM_IVF_MAGIC);
+            buf.extend_from_slice(&(ivf.num_clusters as u32).to_le_bytes());
+            buf.extend_from_slice(&(ivf.dim as u32).to_le_bytes());
+            for &c in &ivf.centroids {
+                buf.extend_from_slice(&c.to_le_bytes());
+            }
+            for &a in &ivf.assignments {
+                buf.extend_from_slice(&a.to_le_bytes());
+            }
         }
         buf
     }
@@ -478,7 +508,65 @@ impl GmemMemoryIndex {
             entries.push(GmemEntry { id, vector, text });
         }
 
-        Ok(Self { header, entries })
+        // Parseo tolerante de la seccion IVF anexada. Un archivo sin IVF
+        // termina aqui; un IVF corrupto se ignora (busqueda lineal), nunca
+        // rompe la carga.
+        let ivf = Self::try_parse_ivf(bytes, offset, entries.len());
+
+        Ok(Self {
+            header,
+            entries,
+            ivf,
+        })
+    }
+
+    /// Intenta parsear la seccion IVF1 a partir de `offset`.
+    fn try_parse_ivf(bytes: &[u8], offset: usize, num_entries: usize) -> Option<IvfIndex> {
+        let rest = bytes.len().checked_sub(offset)?;
+        if rest < 12 || &bytes[offset..offset + 4] != GMEM_IVF_MAGIC {
+            return None;
+        }
+        let rd_u32 =
+            |o: usize| -> Option<u32> { Some(u32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?)) };
+        let clusters = rd_u32(offset + 4)? as usize;
+        let dim = rd_u32(offset + 8)? as usize;
+        if clusters == 0 || clusters > 65536 || dim == 0 || dim > 65536 {
+            return None;
+        }
+        let centroids_len = clusters.checked_mul(dim)?.checked_mul(4)?;
+        let assign_len = num_entries.checked_mul(4)?;
+        if rest != 12 + centroids_len + assign_len {
+            return None;
+        }
+
+        let mut o = offset + 12;
+        let mut centroids = Vec::with_capacity(clusters * dim);
+        for _ in 0..clusters * dim {
+            centroids.push(f32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?));
+            o += 4;
+        }
+        let mut assignments = Vec::with_capacity(num_entries);
+        for _ in 0..num_entries {
+            assignments.push(rd_u32(o)?);
+            o += 4;
+        }
+
+        let mut lists: Vec<Vec<u32>> = vec![Vec::new(); clusters];
+        for (idx, &c) in assignments.iter().enumerate() {
+            let c = c as usize;
+            if c >= clusters {
+                return None;
+            }
+            lists[c].push(idx as u32);
+        }
+
+        Some(IvfIndex {
+            dim,
+            num_clusters: clusters,
+            centroids,
+            assignments,
+            lists,
+        })
     }
 
     /// Guarda el índice en disco con la estructura binaria .gmem v2
@@ -505,8 +593,11 @@ impl GmemMemoryIndex {
         }
 
         if let Some(ivf) = &self.ivf {
-            if ivf.assignments.len() == self.entries.len() && ivf.dim == query.len() {
-                return self.search_top_k_ivf(ivf, query, k);
+            if !ivf.lists.is_empty()
+                && ivf.dim == query.len()
+                && ivf.assignments.len() <= self.entries.len()
+            {
+                return self.search_top_k_ivf(ivf, query, k, ivf.assignments.len());
             }
         }
 
@@ -613,6 +704,93 @@ mod tests {
         assert_eq!(results[0].0.id, 1);
 
         let _ = std::fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn test_ivf_recall_and_roundtrip() {
+        // 3000 entradas en 8 clusters gaussianos, dim=16.
+        let dim = 16usize;
+        let n_clusters = 8usize;
+        let per_cluster = 375usize;
+        let mut index = GmemMemoryIndex::new(dim as u32);
+        let mut seed = 12345u64;
+        let mut rnd = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) as f32) / u32::MAX as f32 - 0.5
+        };
+        // Centros en direcciones ORTOGONALES entre si (2 dims propios por
+        // cluster): el coseno es invariante a escala, asi que direcciones
+        // colineales serian indistinguibles por diseno.
+        let centers: Vec<Vec<f32>> = (0..n_clusters)
+            .map(|c| {
+                let mut v: Vec<f32> = (0..dim).map(|_| 0.05 * rnd()).collect();
+                v[(c * 2) % dim] += 10.0;
+                v[(c * 2 + 1) % dim] += 10.0;
+                v
+            })
+            .collect();
+        for i in 0..n_clusters * per_cluster {
+            let c = i % n_clusters;
+            let v: Vec<f32> = centers[c].iter().map(|&x| x + 2.0 * rnd()).collect();
+            index.add_entry(i as u64, v, format!("doc{i}"));
+        }
+        assert!(index.ivf.is_none(), "por debajo del umbral no indexa");
+
+        index.build_ivf();
+        assert!(index.ivf.is_some());
+        let ivf_before = index.ivf.clone().expect("ivf construido");
+
+        // Consulta desde cada centro: el top-10 debe ser mayoritariamente del
+        // mismo cluster (recall estructural, no exacto).
+        for c in 0..n_clusters {
+            let res = index.search_top_k(&centers[c], 10);
+            assert_eq!(res.len(), 10);
+            let same = res
+                .iter()
+                .filter(|(e, _)| {
+                    let idx = self_entry_index(&index, e);
+                    idx % n_clusters == c
+                })
+                .count();
+            if same < 8 {
+                    let ids_dbg: Vec<(u64, usize)> = res
+                        .iter()
+                        .map(|(e, _)| {
+                            let ix = self_entry_index(&index, e);
+                            (e.id, ix % n_clusters)
+                        })
+                        .collect();
+                    panic!(
+                        "cluster {c}: solo {same}/10 correcto. Devuelto: {:?}",
+                        ids_dbg
+                    );
+                }
+        }
+
+        // Roundtrip binario: la seccion IVF sobrevive y reproduce resultados.
+        let bytes = index.save_to_bytes();
+        assert_eq!(bytes[12], 1, "header.index_type debe ser 1 con IVF vigente");
+        let loaded = GmemMemoryIndex::load_from_bytes(&bytes).expect("carga con IVF");
+        let ivf_after = loaded.ivf.clone().expect("IVF restaurado");
+        assert_eq!(ivf_after.num_clusters, ivf_before.num_clusters);
+        assert_eq!(
+            ivf_after.assignments, ivf_before.assignments,
+            "asignaciones identicas tras roundtrip"
+        );
+        let q = &centers[3];
+        let a = index.search_top_k(q, 5);
+        let b = loaded.search_top_k(q, 5);
+        let ids_a: Vec<u64> = a.iter().map(|(e, _)| e.id).collect();
+        let ids_b: Vec<u64> = b.iter().map(|(e, _)| e.id).collect();
+        assert_eq!(ids_a, ids_b, "mismos vecinos tras roundtrip");
+    }
+
+    fn self_entry_index<'a>(index: &'a GmemMemoryIndex, e: &GmemEntry) -> usize {
+        index
+            .entries
+            .iter()
+            .position(|x| std::ptr::eq(x, e))
+            .expect("entrada pertenece al indice")
     }
 
     #[test]

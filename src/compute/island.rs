@@ -467,6 +467,19 @@ impl IslandOrchestrator {
         Ok(())
     }
 
+    /// Reconstruye el indice IVF-lite de cada isla (entradas >= umbral).
+    /// Devuelve el numero de entradas indexadas por isla.
+    pub fn refresh_indexes_py(&mut self) -> PyResult<(usize, usize, usize)> {
+        self.episodic.refresh_ivf();
+        self.documental.refresh_ivf();
+        self.conversational.refresh_ivf();
+        Ok((
+            self.episodic.entries.len(),
+            self.documental.entries.len(),
+            self.conversational.entries.len(),
+        ))
+    }
+
     pub fn save_all_py(&self, dir_path: &str) -> PyResult<()> {
         self.save_all(dir_path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
