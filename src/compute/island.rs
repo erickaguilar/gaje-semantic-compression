@@ -275,8 +275,14 @@ impl IslandOrchestrator {
         current_loss
     }
 
-    pub fn save_all(&self, dir_path: &str) -> std::io::Result<()> {
+    pub fn save_all(&mut self, dir_path: &str) -> std::io::Result<()> {
         std::fs::create_dir_all(dir_path)?;
+        // Construir/actualizar el indice IVF de cada isla antes de serializar:
+        // el byte index_type=1 y la seccion IVF1 viajan en el archivo resultante.
+        // refresh_ivf es no-op bajo el umbral o si ya esta vigente.
+        self.episodic.refresh_ivf();
+        self.documental.refresh_ivf();
+        self.conversational.refresh_ivf();
         self.episodic
             .save_to_file(&format!("{}/episodic.gmem", dir_path))?;
         self.documental
@@ -480,7 +486,7 @@ impl IslandOrchestrator {
         ))
     }
 
-    pub fn save_all_py(&self, dir_path: &str) -> PyResult<()> {
+    pub fn save_all_py(&mut self, dir_path: &str) -> PyResult<()> {
         self.save_all(dir_path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
