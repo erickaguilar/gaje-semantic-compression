@@ -7,6 +7,7 @@ pub mod kernels;
 pub mod kv_cache;
 pub mod lagrangian;
 pub mod math;
+pub mod graph;
 pub mod mcts;
 pub mod metrics;
 pub mod phase;

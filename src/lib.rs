@@ -54,6 +54,15 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
     m.add_class::<crate::compute::rag::NativeSemanticRAG>()?;
     m.add_class::<crate::compute::island::IslandOrchestrator>()?;
+    m.add_class::<crate::compute::graph::GraphBenchResult>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::graph::boundary_step_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::graph::graph_bench_native_py,
+        m
+    )?)?;
     m.add_class::<crate::compute::epoch_manager::EpochManager>()?;
     m.add_class::<crate::nn::iqat::NativeIQATEngine>()?;
     m.add_function(wrap_pyfunction!(
