@@ -90,7 +90,12 @@ def main():
     print("-" * 64)
     print(f"GATE: {passed}/{len(probes)} ({score:.0f}%)")
     ok = passed == len(probes)
-    print("VEREDICTO:", "🏆 ORGANISMO VIABLE" if ok else "☠️  NACIMIENTO RECHAZADO (pesos corruptos o degenerados)")
+    print(
+        "VEREDICTO:",
+        "🏆 ORGANISMO VIABLE"
+        if ok
+        else "☠️  NACIMIENTO RECHAZADO (pesos corruptos o degenerados)",
+    )
     return 0 if ok else 1
 
 
