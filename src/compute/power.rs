@@ -74,7 +74,7 @@ impl PowerManager {
 
     /// Asigna el hilo actual a un cluster específico.
     pub fn set_thread_affinity(&self, cluster: CpuCluster) -> Result<(), String> {
-        #[cfg(target_os = "android")]
+        #[cfg(all(target_os = "android", feature = "native"))]
         {
             if let Some(cores) = self.clusters.get(&cluster) {
                 unsafe {
@@ -98,10 +98,10 @@ impl PowerManager {
             }
             Err("Cluster no disponible".to_string())
         }
-        #[cfg(not(target_os = "android"))]
+        #[cfg(not(all(target_os = "android", feature = "native")))]
         {
             let _ = cluster;
-            Ok(()) // No-op en sistemas no compatibles (x86_64, etc.)
+            Ok(()) // No-op en sistemas no compatibles (x86_64, wasm32, etc.)
         }
     }
 

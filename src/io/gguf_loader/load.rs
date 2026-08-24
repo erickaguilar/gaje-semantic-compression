@@ -169,6 +169,7 @@ impl GGUFLoader {
             eps: config.eps,
             k_wta_ratio: 0.50,
             topology: None,
+            quantum_embeddings: None,
         })
     }
 }

@@ -138,9 +138,13 @@ def export_gaje_flat():
         6: "Qwen/Qwen2-0.5B-Instruct",
     }
 
-    # Custom mapping logic based on model filename for Qwen2.5 3B
-    if arch_family == 4 and "3b" in model_name_lower:
+    # Custom mapping logic based on model filename
+    if "deepseek" in model_name_lower or "r1" in model_name_lower:
+        tokenizer_id = args.tokenizer or "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+    elif arch_family == 4 and "3b" in model_name_lower:
         tokenizer_id = args.tokenizer or "Qwen/Qwen2.5-3B-Instruct"
+    elif arch_family == 4 and ("1.5b" in model_name_lower or "1_5b" in model_name_lower):
+        tokenizer_id = args.tokenizer or "Qwen/Qwen2.5-1.5B-Instruct"
     else:
         tokenizer_id = args.tokenizer or tokenizer_map.get(
             arch_family, "Qwen/Qwen2-0.5B-Instruct"

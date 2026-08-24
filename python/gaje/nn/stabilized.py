@@ -951,6 +951,46 @@ class GenomicLLM:
         if hasattr(self, "rust_llm") and self.rust_llm:
             self.rust_llm.set_k_wta_ratio(ratio)
 
+    def has_quantum_embeddings(self) -> bool:
+        """Indica si el modelo tiene activa una tabla de embeddings cuántica .qemb."""
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "has_quantum_embeddings")
+        ):
+            return bool(self.rust_llm.has_quantum_embeddings())
+        return False
+
+    def load_quantum_embeddings(self, source) -> bool:
+        """Carga una tabla cuántica .qemb desde una ruta de archivo o buffer de bytes."""
+        if isinstance(source, str):
+            with open(source, "rb") as f:
+                data = f.read()
+        elif isinstance(source, (bytes, bytearray)):
+            data = bytes(source)
+        else:
+            raise ValueError(
+                "source debe ser una ruta de archivo (str) o buffer binario (bytes)"
+            )
+
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "load_quantum_embeddings_bytes")
+        ):
+            self.rust_llm.load_quantum_embeddings_bytes(data)
+            return True
+        return False
+
+    def unload_quantum_embeddings(self):
+        """Descarga la tabla cuántica y revierte a embeddings estándar."""
+        if (
+            hasattr(self, "rust_llm")
+            and self.rust_llm
+            and hasattr(self.rust_llm, "unload_quantum_embeddings")
+        ):
+            self.rust_llm.unload_quantum_embeddings()
+
     def forward(self, tokens, clear_cache=True):
         if clear_cache:
             self.rust_llm.clear_cache_py()
@@ -992,7 +1032,7 @@ class GenomicLLM:
             and not use_spiking
             and not use_toroidal
         ):
-            eos_ids = [2, 151643, 151645]
+            eos_ids = [2, 151643, 151644, 151645]
             if (
                 hasattr(self.tokenizer, "eos_token_id")
                 and self.tokenizer.eos_token_id is not None
@@ -1271,17 +1311,32 @@ class GenomicLLM:
                     n_blocks = meta.get("n_blocks", 24)
 
                     tokenizer = None
-                    embedded_tok = meta.get("tokenizer")
-                    if embedded_tok:
-                        try:
-                            from tokenizers import Tokenizer
+                    # 1. Prioridad: Tokenizador binario nativo GTOK embebido en cabecera .flat
+                    try:
+                        from gaje.processing.gtok import extract_gtok_from_flat
 
-                            if isinstance(embedded_tok, str):
-                                tokenizer = Tokenizer.from_str(embedded_tok)
-                            else:
-                                tokenizer = Tokenizer.from_str(json.dumps(embedded_tok))
-                        except Exception as ex_tok:
-                            print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
+                        tokenizer = extract_gtok_from_flat(input_path)
+                        if tokenizer is not None:
+                            print(
+                                "⚡ [GTOK Native] Tokenizador binario nativo cargado directamente desde la cabecera .flat"
+                            )
+                    except Exception:
+                        pass
+
+                    if tokenizer is None:
+                        embedded_tok = meta.get("tokenizer")
+                        if embedded_tok:
+                            try:
+                                from tokenizers import Tokenizer
+
+                                if isinstance(embedded_tok, str):
+                                    tokenizer = Tokenizer.from_str(embedded_tok)
+                                else:
+                                    tokenizer = Tokenizer.from_str(
+                                        json.dumps(embedded_tok)
+                                    )
+                            except Exception as ex_tok:
+                                print(f"⚠️ Warning tokenizer embebido: {ex_tok}")
                     if tokenizer is None:
                         try:
                             from transformers import AutoTokenizer
@@ -1329,6 +1384,22 @@ class GenomicLLM:
                     )
                     obj.config.rope_style = meta["config"].get("rope_style", "split")
                     obj.config.unpermute_weights = False
+
+                    # Autodetección de tabla cuántica companion (.qemb) - Opt-in controlado
+                    if os.environ.get("GAJE_ENABLE_QEMB") == "1":
+                        qemb_candidate = os.path.splitext(input_path)[0] + ".qemb"
+                        if os.path.exists(qemb_candidate) and os.path.isfile(
+                            qemb_candidate
+                        ):
+                            try:
+                                with open(qemb_candidate, "rb") as f_q:
+                                    q_data = f_q.read()
+                                obj.rust_llm.load_quantum_embeddings_bytes(q_data)
+                                print(
+                                    f"🧬 [Quantum Codebook] Activada tabla cuántica .qemb ({os.path.basename(qemb_candidate)}) — 91.1% ahorro de RAM en embeddings"
+                                )
+                            except Exception as ex_q:
+                                print(f"⚠️ Warning cargando .qemb companion: {ex_q}")
 
                     print(
                         f"⚡ [Zero-Copy Mmap] Metadata parsed: {obj.config.name} (n_embd={obj.n_embd}, n_head={obj.n_head}, n_head_kv={obj.n_head_kv}, head_dim={obj.head_dim}, rope_base={obj.rope_base})"
@@ -1472,12 +1543,16 @@ class GenomicLLM:
             n_elements = out_features * in_features
             expected_2bit = (n_elements + 3) // 4
             expected_4bit = (n_elements + 1) // 2
+            expected_q4_0 = (n_elements // 32) * 20
+            expected_q8_0 = (n_elements // 32) * 34
             expected_32bit = n_elements * 4
 
             if len(dna) == expected_32bit:
                 bit_depth = 32
-            elif len(dna) == expected_4bit:
+            elif len(dna) == expected_q4_0 or len(dna) == expected_4bit:
                 bit_depth = 4
+            elif len(dna) == expected_q8_0:
+                bit_depth = 8
             elif len(dna) == expected_2bit:
                 bit_depth = 2
             else:

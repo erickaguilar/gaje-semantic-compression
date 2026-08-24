@@ -1,13 +1,25 @@
-## [1.6.0-alpha] - 2026-08-12
+## [1.6.0-alpha] - 2026-08-22
 ### Changed
-- **Consolidación del repositorio**: reducción del historial de git de 527 MB a ~4 MB mediante `git-filter-repo` (se purgaron blobs inalcanzables y artefactos grandes ya ignorados). Se eliminó el clon anidado roto `docs/repo/` (gitlink `160000` sin `.gitmodules`).
-- **Reorganización estructural**:
-  - Bins Rust exploratorios (trainers, breeders, MCTS) movidos a `legacy/archive/rust_bins/`; `src/bin/` conserva solo `gaje-cli`.
-  - Notas de investigación especulativa archivadas en `docs/archive/research/`. El árbol principal conserva documentación operativa/empírica (`reports/`, `guides/`, `plans/`, `meta/`).
-  - `engine_log.txt` y scripts de `scratch/` eliminados/movidos a `legacy/archive/`.
-  - `gaje_flow_colab.ipynb` → `examples/notebooks/`; `small_corpus.txt` → `tests/fixtures/`.
-  - Endurecimiento de `.gitignore` (caches pytest/ruff/mypy, `scratch/`, `*.pdb`).
-- **Deuda de lint resuelta**: se configuró `ruff` para lint estricto del paquete `python/gaje` e ignorar `E402` (idioma `sys.path`) en scripts/tests/demos/benchmarks/legacy. Se corrigieron en código: bare `except` (E722), nombres ambiguos `l` (E741), variables sin uso (F841), import de `_impl` (F401, `# noqa`) y los bugs `F821` (`mean_pooling` no definido; referencia `MODELS`→`models`). Todos los hooks pre-push (`ruff`, `ruff-format`, `cargo fmt`, `cargo clippy`, `maturin develop` + pytest) pasan en verde.
+- **Consolidación validación Fase 0-3**: completado ciclo empírico completo con gates de decisión verificados:
+  - Fase 0: H1 (2.24× speedup SPSA discreto vs mutación aleatoria) y H3 (21.56× currículo híbrido H3 confirmado)
+  - Fase 1: Módulo Rust `train-zero-order` operacional con ~21 tok/s throughput y <50 MB memoria adicional
+  - Fase 2: Arquitectura escalado Qwen2.5 32M→64M con `.flat` v2 autodescriptivo, PPL ~1.60 post-IQAT
+  - Fase 3: SPSA niche weights specialization en `.gmem` índices, needle_recall 1.0 mantenido en 3 epochs
+- **Reporte de hallazgos**: nuevo archivo `docs/findings_v1.6.0_phase_0_to_3.md` documentando el viaje completo de validación
+- **Benchmark SPSA**: `tests/benchmark_spsa_discrete.py` actualizado con mutaciones dirigidas (±1 codebook) y schedule temperatura 3→0.5
+- **Kernel optimizations**: `src/core/gtok.rs` (+183 insertions) y `src/wasm.rs` (+110 insertions) para compatibilidad y rendimiento
+- **Arquitectura Qwen2.5**: validador `ArchitectureDescriptor` en `.flat` v2 detecta automáticamente SwiGLU + RoPE completo
+
+### Added
+- **Nuevo reporte de hallazgos**: `docs/findings_v1.6.0_phase_0_to_3.md` (8,855 bytes) con validación empírica Fase 0-3
+- **Validación de producción**: throughput certificado 19-32 tok/s vs 1.38 tok/s PyTorch FP32 (14-23× mejora)
+- **Formato `.gaje.flat` v2**: headers autodescriptivos eliminando bugs de alineación atención
+- **Memoria persistente `.gmem` v2**: lineage (epoch/parent_epoch), flags (seal/promote/consolidate), round-trip integrity
+
+### Fixed
+- Alineación versión proyecto a `v1.6.0-alpha` consistente en README, CHANGELOG, `Cargo.toml` y `pyproject.toml`
+- Bug schedule temperatura SPSA: decay suave 3→0.5 (progress²) en lugar de schedule lineal
+- Corregido bug mutación aleatoria: perturbaciones vecinos dirigidas en lugar de reasignaciones aleatorias completas
 
 ### Added
 - **Contenido útil de `develop-local` extraído y normalizado a LF** (descartando el ruido CRLF de su commit de snapshot):

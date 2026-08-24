@@ -43,7 +43,9 @@ inspect
 *.eggs
 
 # Data and Outputs
-/data/
+/data/*
+!/data/eval
+!/data/eval/**
 /models/
 /scripts/maintenance/local_artifacts/
 

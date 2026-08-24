@@ -65,6 +65,148 @@ fn test_lm_head_fp32_update() {
 }
 
 #[test]
+fn test_q4_0_ste_updates_q_levels() {
+    // Etapa 3 IQAT: STE re-cuantiza los niveles q ademas de escala/min.
+    use crate::io::header::Q4_0Block;
+    let mk_block = |q: u8| Q4_0Block {
+        scale: half::f16::from_f32(0.1),
+        min: half::f16::from_f32(-0.5),
+        qs: [q | (q << 4); 16],
+    };
+    let blocks = vec![mk_block(5), mk_block(9)];
+    let raw_bytes: Vec<u8> = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<Q4_0Block>(),
+        )
+        .to_vec()
+    };
+
+    let mut linear = GenomicLinear::new(
+        raw_bytes.clone(),
+        Vec::new(),
+        Vec::new(),
+        2,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        4,
+    );
+
+    // Snapshot de niveles q antes
+    fn q_snapshot(linear: &GenomicLinear) -> Vec<u8> {
+        if let WeightDatabase::GenomicQ4_0(db) = &linear.weight_db {
+            db.iter()
+                .flat_map(|b| (0..32).map(move |k| b.q_value(k)))
+                .collect()
+        } else {
+            panic!("se esperaba GenomicQ4_0");
+        }
+    }
+    let before = q_snapshot(&linear);
+
+    // Gradientes fuertes + lr alto para garantizar movimiento de niveles.
+    let input: Vec<f32> = vec![1.0; 32];
+    let grads: Vec<f32> = vec![50.0, -50.0];
+    linear
+        .refine_with_grads_ste_core(input, grads, 0.5)
+        .expect("STE refine");
+
+    let after = q_snapshot(&linear);
+    let changed = before
+        .iter()
+        .zip(after.iter())
+        .filter(|(a, b)| a != b)
+        .count();
+    assert!(
+        changed > 0,
+        "algun nivel q debe cambiar con gradiente fuerte"
+    );
+
+    // Niveles dentro del rango nibble y roundtrip de bytes intacto.
+    assert!(after.iter().all(|&q| q <= 15));
+    let repacked: Vec<u8> = {
+        if let WeightDatabase::GenomicQ4_0(db) = &linear.weight_db {
+            unsafe {
+                std::slice::from_raw_parts(
+                    db.as_ptr() as *const u8,
+                    db.len() * std::mem::size_of::<Q4_0Block>(),
+                )
+                .to_vec()
+            }
+        } else {
+            unreachable!();
+        }
+    };
+    assert_eq!(
+        repacked.len(),
+        raw_bytes.len(),
+        "formato binario preservado"
+    );
+}
+
+#[test]
+fn test_q4_0_ste_zero_grads_is_noop() {
+    // Con gradientes cero ni escala/min ni q deben moverse.
+    use crate::io::header::Q4_0Block;
+    let mk_block = |q: u8| Q4_0Block {
+        scale: half::f16::from_f32(0.1),
+        min: half::f16::from_f32(-0.5),
+        qs: [q | (q << 4); 16],
+    };
+    let blocks = vec![mk_block(5), mk_block(9)];
+    let raw_bytes: Vec<u8> = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<Q4_0Block>(),
+        )
+        .to_vec()
+    };
+
+    let mut linear = GenomicLinear::new(
+        raw_bytes,
+        Vec::new(),
+        Vec::new(),
+        2,
+        32,
+        32,
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        4,
+    );
+
+    let input: Vec<f32> = vec![1.0; 32];
+    linear
+        .refine_with_grads_ste_core(input, vec![0.0, 0.0], 0.5)
+        .expect("STE noop");
+
+    if let WeightDatabase::GenomicQ4_0(db) = &linear.weight_db {
+        let block = &db[0];
+        // Comparar contra la representacion f16 exacta (no el literal f32).
+        let scale16 = half::f16::from_f32(0.1).to_f32();
+        let min16 = half::f16::from_f32(-0.5).to_f32();
+        assert_eq!(block.scale.to_f32(), scale16, "escala intacta");
+        assert_eq!(block.min.to_f32(), min16, "min intacto");
+        assert!((0..32).all(|k| block.q_value(k) == 5), "niveles q intactos");
+    } else {
+        panic!("se esperaba GenomicQ4_0");
+    }
+}
+
+#[test]
 fn test_q4_0_scale_min_update() {
     // Cuerpo Q4_0: out=2, in=32 -> 1 bloque por fila, 2 bloques en total.
     // W[i,j] = q*scale + min; q fijo. Solo scale/min deben recalibrarse (IQAT).

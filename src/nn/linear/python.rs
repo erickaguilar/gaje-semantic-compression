@@ -62,6 +62,16 @@ impl GenomicLinear {
         self.refine_with_grads_core(input, grads, lr)
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
+    /// Etapa 3 IQAT: QAT de escala/min + re-cuantizacion de q con STE.
+    pub fn refine_with_grads_ste(
+        &mut self,
+        input: Vec<f32>,
+        grads: Vec<f32>,
+        lr: f32,
+    ) -> PyResult<()> {
+        self.refine_with_grads_ste_core(input, grads, lr)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
     pub fn recalibrate_centroids(&mut self, shift: f32) -> PyResult<()> {
         self.recalibrate_centroids_core(shift)
             .map_err(pyo3::exceptions::PyValueError::new_err)

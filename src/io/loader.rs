@@ -11,10 +11,14 @@
 //! - [`ffi`](crate::io::ffi): wrappers PyO3 hacia el núcleo.
 
 pub use crate::io::config::*;
+#[cfg(feature = "native")]
 pub use crate::io::db_loader::*;
+#[cfg(feature = "native")]
 pub use crate::io::ffi::*;
 pub use crate::io::flat_reader::*;
+#[cfg(feature = "native")]
 pub use crate::io::flat_writer::*;
+#[cfg(feature = "native")]
 pub use crate::io::gguf_loader::*;
 
 pub fn load_topology(path: &str) -> std::io::Result<crate::core::topology::CentroidGraph> {

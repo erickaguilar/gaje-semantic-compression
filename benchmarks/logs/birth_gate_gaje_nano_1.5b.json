@@ -1,0 +1,13 @@
+{
+  "model": "gaje_nano_1.5b.flat",
+  "source": "Qwen2.5-1.5B-Instruct Q4_K_M GGUF via transmute_qwen_models.py",
+  "arch": {"n_embd": 1536, "n_head": 12, "n_head_kv": 2, "head_dim": 128},
+  "gate": "2/2 PASS - ORGANISMO VIABLE",
+  "probes": {
+    "germany": "berlin, and the capital of germany is berlin.",
+    "france": "paris, and the capital of italy is rome."
+  },
+  "load_time_s": 3.7,
+  "warmup_pages": 323449,
+  "date": "2026-08-24"
+}

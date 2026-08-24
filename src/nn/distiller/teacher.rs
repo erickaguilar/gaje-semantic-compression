@@ -5,6 +5,7 @@
 use pyo3::prelude::*;
 
 use crate::core::tokenizer::GajeTokenizer;
+#[cfg(feature = "native")]
 use crate::io::loader::GGUFLoader;
 use crate::nn::llm::GenomicLLM;
 
@@ -22,7 +23,7 @@ pub struct Teacher {
 #[cfg_attr(feature = "python", pymethods)]
 impl Teacher {
     /// Crea un nuevo maestro cargando un modelo GGUF y su tokenizador.
-    #[cfg(feature = "python")]
+    #[cfg(all(feature = "python", feature = "native"))]
     #[new]
     pub fn py_new(
         name: String,
@@ -38,6 +39,7 @@ impl Teacher {
 impl Teacher {
     /// Crea un nuevo maestro cargando un modelo GGUF y su tokenizador.
     /// El mapeo de vocabulario se pre-calcula comparando tokens decodificados.
+    #[cfg(feature = "native")]
     pub fn new(
         name: String,
         model_path: &str,

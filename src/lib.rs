@@ -15,6 +15,8 @@ pub mod ffi;
 pub mod io;
 pub mod nn;
 pub mod pyo3_shim;
+#[cfg(feature = "wasm")]
+pub mod wasm;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
@@ -51,6 +53,17 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::nn::distiller::CouncilOfTeachers>()?;
     m.add_class::<crate::nn::distiller::NativeGenomicDistiller>()?;
     m.add_class::<crate::compute::rag::NativeSemanticRAG>()?;
+    m.add_class::<crate::compute::island::IslandOrchestrator>()?;
+    m.add_class::<crate::compute::graph::GraphBenchResult>()?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::graph::boundary_step_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::graph::graph_bench_native_py,
+        m
+    )?)?;
+    m.add_class::<crate::compute::epoch_manager::EpochManager>()?;
     m.add_class::<crate::nn::iqat::NativeIQATEngine>()?;
     m.add_function(wrap_pyfunction!(
         crate::io::loader::init_born_genomic_model_py,
@@ -142,6 +155,22 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(
         crate::compute::math::dna_similarity_search,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::is_gpu_available_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::get_gpu_info_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::gpu_swiglu_py,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::gpu::python::gpu_gemv_f32_py,
         m
     )?)?;
     Ok(())

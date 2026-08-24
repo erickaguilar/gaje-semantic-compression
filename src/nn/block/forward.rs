@@ -94,20 +94,31 @@ impl RustGenomicBlock {
             GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
         };
 
+        #[cfg(debug_assertions)]
         if up.iter().any(|v| v.is_nan()) {
             return Err("NaN in up".into());
         }
 
-        let mut ffn_out = vec![0.0f32; gate.len()];
-        match self.act_fn.as_str() {
-            "swiglu" => {
-                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
+        let mut ffn_out = if std::env::var("GAJE_ENABLE_GPU")
+            .map(|v| v == "1")
+            .unwrap_or(false)
+        {
+            if let Some(gpu_out) =
+                crate::compute::gpu::pipeline::gpu_swiglu(&gate, &up, self.h_scale)
+            {
+                gpu_out
+            } else {
+                let mut out = vec![0.0f32; gate.len()];
+                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
+                out
             }
-            _ => {
-                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, self.h_scale);
-            }
-        }
+        } else {
+            let mut out = vec![0.0f32; gate.len()];
+            crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
+            out
+        };
 
+        #[cfg(debug_assertions)]
         if ffn_out.iter().any(|v| v.is_nan()) {
             return Err("NaN in ffn_out".into());
         }
@@ -125,6 +136,7 @@ impl RustGenomicBlock {
             .w_down
             .forward_core(ffn_out, modulation, activate_rna)?;
 
+        #[cfg(debug_assertions)]
         if projected_ffn.iter().any(|v| v.is_nan()) {
             return Err("NaN in projected_ffn".into());
         }
@@ -135,6 +147,7 @@ impl RustGenomicBlock {
             .zip(projected_ffn.par_iter())
             .for_each(|(fi, &pi)| *fi += pi);
 
+        #[cfg(debug_assertions)]
         if final_out.iter().any(|v| v.is_nan()) {
             return Err("NaN after projected_ffn addition".into());
         }

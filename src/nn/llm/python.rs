@@ -27,6 +27,7 @@ impl GenomicLLM {
             eps,
             k_wta_ratio: 0.50,
             topology: None,
+            quantum_embeddings: None,
         }
     }
 
@@ -179,5 +180,21 @@ impl GenomicLLM {
     pub fn undo_homeostasis_mutation(&mut self, deltas: Vec<f32>) -> PyResult<()> {
         self.undo_homeostasis_mutation_core(deltas)
             .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    pub fn load_quantum_embeddings_bytes(&mut self, data: &[u8]) -> PyResult<()> {
+        let table = crate::core::quantum_codebook::QuantumEmbeddingTableNative::from_bytes(data)
+            .map_err(pyo3::exceptions::PyValueError::new_err)?;
+        self.quantum_embeddings = Some(std::sync::Arc::new(table));
+        Ok(())
+    }
+
+    pub fn has_quantum_embeddings(&self) -> bool {
+        self.quantum_embeddings.is_some()
+    }
+
+    pub fn unload_quantum_embeddings(&mut self) -> PyResult<()> {
+        self.quantum_embeddings = None;
+        Ok(())
     }
 }

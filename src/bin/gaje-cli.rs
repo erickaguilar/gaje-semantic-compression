@@ -23,6 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .expect("Error configurando el manejador de señales");
 
     let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && args[1] == "epoch" {
+        return handle_epoch_command(&args[2..]);
+    }
     let mut model_path = String::new();
     let mut prompt_arg = None;
     let mut i = 1;
@@ -50,11 +53,19 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut teacher_tok_path = None;
     let mut do_iqat = false;
     let mut iqat_lr = 0.001;
+    let mut is_zero_order = false;
+    let mut zero_order_k = 32;
 
     while i < args.len() {
         if args[i] == "ingest" {
             is_ingest_mode = true;
             i += 1;
+        } else if args[i] == "--zero-order" || args[i] == "--spsa" {
+            is_zero_order = true;
+            i += 1;
+        } else if (args[i] == "--k-coords" || args[i] == "--zero-order-k") && i + 1 < args.len() {
+            zero_order_k = args[i + 1].parse().unwrap_or(32);
+            i += 2;
         } else if args[i] == "--model" && i + 1 < args.len() {
             model_path = args[i + 1].clone();
             i += 2;
@@ -152,6 +163,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
             "gold_embryo" => (384, 8, 6, 49152),
             "micro_organism" => (128, 2, 4, 32768),
+            "embryo_5m" => (256, 4, 4, 32768),
             "silver_fetus" => (512, 12, 8, 32768),
             "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
             "silver_adult_32m" => (512, 8, 8, 32768), // 32MB Toroidal (67M parameters)
@@ -190,7 +202,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if Path::new("models/core/tokenizer.json").exists() {
             let tok = GajeTokenizer::from_file("models/core/tokenizer.json")
                 .map_err(|e| e.to_string())?;
-            _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            if path.ends_with(".flat") {
+                _impl::io::loader::save_genomic_flat(&path, &model, &config, Some(&tok))?;
+            } else {
+                _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
+            }
             println!("[+] Tokenizador 'models/core/tokenizer.json' integrado en el organismo.");
         }
         println!("[+] Nuevo organismo inicializado exitosamente.");
@@ -442,12 +458,31 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
 
         let trainer = _impl::nn::trainer::GenomicTrainerCore::new(scale, resonance_weight);
+        let mut current_config = config.clone();
+
+        if is_zero_order {
+            println!(
+                "[*] Modo de Optimización: Orden Cero (SPSA Discreto, {} épocas, k={})",
+                train_epochs, zero_order_k
+            );
+            trainer.fit_zero_order(&mut model, &dataset, train_epochs, zero_order_k)?;
+            if let Some(ref path) = save_path {
+                _impl::io::loader::save_genomic_model(
+                    path,
+                    &model,
+                    &current_config,
+                    Some(&tokenizer),
+                )?;
+                println!("    [Checkpoint SPSA] Guardado exitosamente en {}", path);
+            }
+            return Ok(());
+        }
+
         let p1_end = (train_epochs as f32 * 0.2) as usize;
         let p2_end = (train_epochs as f32 * 0.7) as usize;
 
         // Recuperar el paso guardado de los metadatos DNI
         let mut start_step: usize = config.config.dni.parse().unwrap_or(0);
-        let mut current_config = config.clone();
 
         'epoch_loop: for epoch in 0..train_epochs {
             if !running.load(Ordering::SeqCst) {
@@ -681,5 +716,274 @@ fn generate(
             .map_err(|e| e.to_string())?;
     }
     println!();
+    Ok(())
+}
+
+fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if args.is_empty() {
+        println!("🏛️ GAJE HELIX — Gestor de Épocas de Memoria CLI (.gmem v2)");
+        println!("Uso: gaje-cli epoch <subcomando> [opciones]\n");
+        println!("Subcomandos disponibles:");
+        println!("  list       --organism <NOMBRE> [--root <DIR>]");
+        println!("  snapshot   --organism <NOMBRE> --comment <TEXTO> [--dim <DIM>] [--root <DIR>]");
+        println!("  rollback   --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  promote    --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  seal       --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
+        println!("  evaluate   --organism <NOMBRE> --candidate <ID> [--root <DIR>]");
+        println!("  consolidate --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
+        println!("  merge      --organism <DESTINO> --from-organism <DONANTE> [--dim <DIM>] [--root <DIR>]");
+        println!("  evolve     --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
+        return Ok(());
+    }
+
+    let subcmd = &args[0];
+    let mut root_dir = "models/memory_epochs".to_string();
+    let mut organism = String::new();
+    let mut from_organism = String::new();
+    let mut comment = "Snapshot CLI".to_string();
+    let mut epoch_id = 0u64;
+    let mut candidate_id = 0u64;
+    let mut dim = 576u32;
+
+    let mut j = 1;
+    while j < args.len() {
+        if args[j] == "--root" && j + 1 < args.len() {
+            root_dir = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--organism" && j + 1 < args.len() {
+            organism = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--from-organism" && j + 1 < args.len() {
+            from_organism = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--comment" && j + 1 < args.len() {
+            comment = args[j + 1].clone();
+            j += 2;
+        } else if args[j] == "--epoch" && j + 1 < args.len() {
+            epoch_id = args[j + 1].parse().unwrap_or(0);
+            j += 2;
+        } else if args[j] == "--candidate" && j + 1 < args.len() {
+            candidate_id = args[j + 1].parse().unwrap_or(0);
+            j += 2;
+        } else if args[j] == "--dim" && j + 1 < args.len() {
+            dim = args[j + 1].parse().unwrap_or(576);
+            j += 2;
+        } else {
+            j += 1;
+        }
+    }
+
+    if organism.is_empty() {
+        eprintln!("Error: Se requiere el argumento --organism <NOMBRE>");
+        return Ok(());
+    }
+
+    let mut mgr = _impl::compute::epoch_manager::EpochManager::new(&root_dir, &organism, dim)
+        .map_err(|e| format!("Error en EpochManager: {}", e))?;
+
+    match subcmd.as_str() {
+        "list" => {
+            let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
+            println!(
+                "================================================================================"
+            );
+            println!("🏛️ GAJE HELIX: ÁRBOL DE LINAJE Y ÉPOCAS DE MEMORIA (.gmem v2)");
+            println!(
+                "Organismo: {} | Época Activa: {}",
+                organism, mgr.active_epoch_id
+            );
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            println!(
+                "{:<8} {:<8} {:<12} {:<10} {:<24} COMENTARIO",
+                "EPOCH", "PADRE", "ESTADO", "ENTRADAS", "FECHA UTC"
+            );
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            for ep in epochs {
+                let active_marker = if ep.epoch_id == mgr.active_epoch_id {
+                    "*"
+                } else {
+                    " "
+                };
+                println!(
+                    "{}{:<7} {:<8} {:<12} {:<10} {:<24} {}",
+                    active_marker,
+                    ep.epoch_id,
+                    ep.parent_epoch,
+                    ep.verdict,
+                    ep.entries_count,
+                    ep.created_at.chars().take(19).collect::<String>(),
+                    ep.comment
+                );
+            }
+            println!(
+                "================================================================================"
+            );
+        }
+        "snapshot" => {
+            let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
+            let new_id = mgr
+                .create_snapshot(&mut orch, &comment, None)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "✅ Snapshot creado exitosamente: Época ID {} (Comentario: '{}')",
+                new_id, comment
+            );
+        }
+        "rollback" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            let _orch = mgr.rollback_to(epoch_id).map_err(|e| e.to_string())?;
+            println!(
+                "⚡ Rollback instantáneo completado exitosamente: Época activa ahora es ID {}",
+                epoch_id
+            );
+        }
+        "promote" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            mgr.promote_epoch(epoch_id).map_err(|e| e.to_string())?;
+            println!("🏆 Época {} promovida canónicamente como activa.", epoch_id);
+        }
+        "seal" => {
+            if epoch_id == 0 {
+                eprintln!("Error: Especifique --epoch <ID>");
+                return Ok(());
+            }
+            mgr.seal_epoch(epoch_id).map_err(|e| e.to_string())?;
+            println!("🔒 Época {} sellada inmutablemente.", epoch_id);
+        }
+        "evaluate" => {
+            if candidate_id == 0 {
+                eprintln!("Error: Especifique --candidate <ID>");
+                return Ok(());
+            }
+            println!(
+                "🔬 Evaluando Gate de Promoción para Época Candidata {}...",
+                candidate_id
+            );
+            let dummy_vec = vec![1.0; dim as usize];
+            let golden = vec![(dummy_vec, 1u64)];
+            let verdict = mgr
+                .evaluate_and_gate(candidate_id, &golden)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+            println!("Gate Superado: {}", verdict.passed);
+            println!("Acción Ejecutada: {}", verdict.action_taken);
+            println!("Detalle: {}", verdict.reason);
+            println!(
+                "--------------------------------------------------------------------------------"
+            );
+        }
+        "consolidate" => {
+            println!(
+                "💤 Iniciando Ciclo de Consolidación Autonómica para '{}'...",
+                organism
+            );
+            let mut orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let stats = orch.consolidate_memory(0.95);
+            let new_epoch_id = mgr
+                .create_snapshot(&mut orch, "Consolidación Autonómica (Ciclo de Sueño)", None)
+                .map_err(|e| e.to_string())?;
+            println!(
+                "✅ Consolidación completada exitosamente: Creada Época ID {}",
+                new_epoch_id
+            );
+            println!(
+                "   • Recuerdos episódicos consolidados: {}",
+                stats.episodic_transferred
+            );
+            println!(
+                "   • Recuerdos conversacionales consolidados: {}",
+                stats.conversational_transferred
+            );
+            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
+            println!(
+                "   • Total entradas documentales: {}",
+                stats.total_documental_entries
+            );
+        }
+        "merge" => {
+            if from_organism.is_empty() {
+                eprintln!("Error: Se requiere --from-organism <DONANTE>");
+                return Ok(());
+            }
+            println!(
+                "🧬 Fusionando memoria de linaje: '{}' (Donante) -> '{}' (Receptor)...",
+                from_organism, organism
+            );
+            let mut donor_mgr =
+                _impl::compute::epoch_manager::EpochManager::new(&root_dir, &from_organism, dim)
+                    .map_err(|e| e.to_string())?;
+            let donor_orch = donor_mgr
+                .rollback_to(donor_mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let mut target_orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+
+            let stats = mgr.merge_memory_islands(&mut target_orch, &donor_orch, 0.95);
+            let new_epoch_id = mgr
+                .create_snapshot(
+                    &mut target_orch,
+                    &format!("Cross-Breeding con {}", from_organism),
+                    None,
+                )
+                .map_err(|e| e.to_string())?;
+
+            println!(
+                "✅ Fusión completada exitosamente: Creada Época ID {}",
+                new_epoch_id
+            );
+            println!(
+                "   • Recuerdos documentales transferidos: {}",
+                stats.episodic_transferred
+            );
+            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
+            println!(
+                "   • Total entradas documentales receptor: {}",
+                stats.total_documental_entries
+            );
+        }
+        "evolve" => {
+            println!(
+                "🧬 Ejecutando Evolución de Capa de Memoria DNI para '{}'...",
+                organism
+            );
+            let mut orch = mgr
+                .rollback_to(mgr.active_epoch_id)
+                .map_err(|e| e.to_string())?;
+            let dummy_vec = vec![1.0; dim as usize];
+            let golden = vec![(dummy_vec, 1u64)];
+            let (weights, fit) = mgr.evolve_memory_niche_weights(&mut orch, &golden, 50, 16, 0.25);
+            let new_epoch_id = mgr
+                .create_snapshot(
+                    &mut orch,
+                    &format!("Evolución DNI (Fitness: {:.4})", fit),
+                    None,
+                )
+                .map_err(|e| e.to_string())?;
+            println!(
+                "🏆 Evolución completada: Época ID {} (Fitness: {:.4})",
+                new_epoch_id, fit
+            );
+            println!("   • Pesos de Nicho Óptimos: {:?}", weights);
+        }
+        _ => {
+            eprintln!("Subcomando de época desconocido: '{}'", subcmd);
+        }
+    }
+
     Ok(())
 }

@@ -26,6 +26,7 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 
 use crate::compute::kernels::rms_norm;
+use crate::core::quantum_codebook::QuantumEmbeddingTableNative;
 use crate::core::topology::CentroidGraph;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::GenomicLinear;
@@ -47,6 +48,7 @@ pub struct GenomicLLM {
     pub eps: f32,
     pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
+    pub quantum_embeddings: Option<Arc<QuantumEmbeddingTableNative>>,
 }
 
 #[cfg(not(feature = "python"))]
@@ -59,6 +61,7 @@ pub struct GenomicLLM {
     pub eps: f32,
     pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
+    pub quantum_embeddings: Option<Arc<QuantumEmbeddingTableNative>>,
 }
 
 pub use crate::nn::llm::forward::*;

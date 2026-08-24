@@ -33,6 +33,19 @@ impl Q4_0Block {
 
         (q4_value as f32) * scale + min
     }
+
+    /// Escribe el valor cuantizado (nibble) del peso `idx` dentro del bloque.
+    /// Layout inverso a `q_value`: par = nibble bajo, impar = nibble alto.
+    #[inline(always)]
+    pub fn set_q_value(&mut self, idx: usize, q: u8) {
+        let byte_idx = idx / 2;
+        let qv = q & 0x0F;
+        if idx % 2 == 0 {
+            self.qs[byte_idx] = (self.qs[byte_idx] & 0xF0) | qv;
+        } else {
+            self.qs[byte_idx] = (self.qs[byte_idx] & 0x0F) | (qv << 4);
+        }
+    }
 }
 
 /// Bloque de cuantización group-wise q8_0 con scale

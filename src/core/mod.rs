@@ -1,8 +1,12 @@
 pub mod archive;
+#[cfg(feature = "native")]
 pub mod db;
 pub mod dni;
 pub mod evolution_bitwise;
+pub mod gtok;
 pub mod index;
+pub mod quantum_codebook;
+pub mod quantum_tokenizer;
 pub mod sdk;
 pub mod session_memory;
 pub mod tokenizer;
