@@ -112,7 +112,9 @@ impl GajeFlatFileReader {
                 );
             });
         if spawned.is_err() {
-            eprintln!("⚠️ [Warm-up mmap] No se pudo crear el hilo de precarga; continuando sin warm-up");
+            eprintln!(
+                "⚠️ [Warm-up mmap] No se pudo crear el hilo de precarga; continuando sin warm-up"
+            );
         }
     }
 
