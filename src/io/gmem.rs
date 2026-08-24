@@ -83,7 +83,7 @@ const GMEM_IVF_SAMPLE: usize = 4096;
 pub struct IvfIndex {
     pub dim: usize,
     pub num_clusters: usize,
-    pub centroids: Vec<f32>,   // num_clusters * dim (flat, row-major)
+    pub centroids: Vec<f32>, // num_clusters * dim (flat, row-major)
     /// Asignacion de cada entrada vigente al momento de construir el indice.
     pub assignments: Vec<u32>,
     /// Indices de entrada por clúster (listas invertidas precomputadas).
@@ -240,7 +240,7 @@ impl GmemMemoryIndex {
             centroids.extend_from_slice(v);
         }
 
-         let l2sq = |a: &[f32], b: &[f32]| -> f32 {
+        let l2sq = |a: &[f32], b: &[f32]| -> f32 {
             let mut s = 0.0f32;
             for i in 0..dim {
                 let d = a[i] - b[i];
@@ -256,7 +256,6 @@ impl GmemMemoryIndex {
         // espaciados uniformemente en el orden de insercion) producen listas
         // balanceadas por construccion sobre datos i.i.d., que es lo que
         // importa para el escaneo acotado del sondeo.
-        
 
         // Asignacion final en paralelo sobre TODAS las entradas.
         let assignments: Vec<u32> = {
@@ -526,8 +525,9 @@ impl GmemMemoryIndex {
         if rest < 12 || &bytes[offset..offset + 4] != GMEM_IVF_MAGIC {
             return None;
         }
-        let rd_u32 =
-            |o: usize| -> Option<u32> { Some(u32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?)) };
+        let rd_u32 = |o: usize| -> Option<u32> {
+            Some(u32::from_le_bytes(bytes.get(o..o + 4)?.try_into().ok()?))
+        };
         let clusters = rd_u32(offset + 4)? as usize;
         let dim = rd_u32(offset + 8)? as usize;
         if clusters == 0 || clusters > 65536 || dim == 0 || dim > 65536 {
@@ -715,7 +715,9 @@ mod tests {
         let mut index = GmemMemoryIndex::new(dim as u32);
         let mut seed = 12345u64;
         let mut rnd = move || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             ((seed >> 33) as f32) / u32::MAX as f32 - 0.5
         };
         // Centros en direcciones ORTOGONALES entre si (2 dims propios por
@@ -753,18 +755,18 @@ mod tests {
                 })
                 .count();
             if same < 8 {
-                    let ids_dbg: Vec<(u64, usize)> = res
-                        .iter()
-                        .map(|(e, _)| {
-                            let ix = self_entry_index(&index, e);
-                            (e.id, ix % n_clusters)
-                        })
-                        .collect();
-                    panic!(
-                        "cluster {c}: solo {same}/10 correcto. Devuelto: {:?}",
-                        ids_dbg
-                    );
-                }
+                let ids_dbg: Vec<(u64, usize)> = res
+                    .iter()
+                    .map(|(e, _)| {
+                        let ix = self_entry_index(&index, e);
+                        (e.id, ix % n_clusters)
+                    })
+                    .collect();
+                panic!(
+                    "cluster {c}: solo {same}/10 correcto. Devuelto: {:?}",
+                    ids_dbg
+                );
+            }
         }
 
         // Roundtrip binario: la seccion IVF sobrevive y reproduce resultados.
