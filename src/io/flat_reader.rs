@@ -63,8 +63,57 @@ impl GajeFlatFileReader {
     #[cfg(feature = "native")]
     pub fn open(path: &str) -> std::io::Result<Self> {
         let file = std::fs::File::open(path)?;
-        let mmap = unsafe { memmap2::Mmap::map(&file)? };
-        Self::from_source(FlatBufferSource::Mmap(Arc::new(mmap)))
+        let mmap = std::sync::Arc::new(unsafe { memmap2::Mmap::map(&file)? });
+        Self::spawn_warmup(&mmap);
+        Self::from_source(FlatBufferSource::Mmap(mmap))
+    }
+
+    /// Precarga en background las páginas del mmap para que la primera inferencia
+    /// no pague los page-faults aleatorios (observado: ~22 s en un modelo de
+    /// 2.4 GB tras reiniciar el servidor). Combina MADV_WILLNEED (readahead del
+    /// kernel) con un toque explícito por página (fault-in garantizado).
+    ///
+    /// Se puede desactivar con GAJE_MMAP_WARMUP=0.
+    #[cfg(feature = "native")]
+    fn spawn_warmup(mmap: &std::sync::Arc<memmap2::Mmap>) {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        if std::env::var("GAJE_MMAP_WARMUP").as_deref() == Ok("0") {
+            return;
+        }
+
+        // Hint al kernel: readahead del mapeo completo (no bloquea).
+        let _ = mmap.advise(memmap2::Advice::WillNeed);
+
+        let mmap = std::sync::Arc::clone(mmap);
+        let spawned = std::thread::Builder::new()
+            .name("gaje-mmap-warmup".into())
+            .spawn(move || {
+                let start = std::time::Instant::now();
+                let slice = &mmap[..];
+                let len = slice.len();
+                const PAGE: usize = 4096;
+                // Contador atómico como black-box: impide que el optimizador
+                // elimine las lecturas de las páginas.
+                let touched = AtomicU64::new(0);
+                let mut offset = 0usize;
+                while offset < len {
+                    touched.fetch_add(slice[offset] as u64, Ordering::Relaxed);
+                    offset += PAGE;
+                }
+                let pages = (len / PAGE) + 1;
+                let checksum = touched.load(Ordering::Relaxed);
+                println!(
+                    "🔥 [Warm-up mmap] {} páginas ({:.1} GB) precargadas en {:.2}s (checksum interno: {}) — primera inferencia sin penalización de page-faults",
+                    pages,
+                    len as f32 / 1024.0 / 1024.0 / 1024.0,
+                    start.elapsed().as_secs_f32(),
+                    checksum % 1000
+                );
+            });
+        if spawned.is_err() {
+            eprintln!("⚠️ [Warm-up mmap] No se pudo crear el hilo de precarga; continuando sin warm-up");
+        }
     }
 
     #[cfg(not(feature = "native"))]
