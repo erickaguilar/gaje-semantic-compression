@@ -1,7 +1,7 @@
 # ⏱️ Arquitectura de Tiempo Unix (POSIX Epoch) en GAJE
 
-**Fecha de Implementación:** 23 de Agosto de 2026  
-**Módulos Afectados:** `server.py` (Backend Linux), `GajeHelixDB` (`storage.js`), `composer.js`, `utils.js`, `engine.js`  
+**Fecha de Implementación:** 23 de Agosto de 2026
+**Módulos Afectados:** `server.py` (Backend Linux), `GajeHelixDB` (`storage.js`), `composer.js`, `utils.js`, `engine.js`
 **Estado:** ✅ Aprobado y Certificado en Producción
 
 ---

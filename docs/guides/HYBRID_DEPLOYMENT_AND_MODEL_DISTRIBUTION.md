@@ -1,8 +1,8 @@
 # 🧬 Estrategia de Despliegue Híbrido y Distribución de Modelos GAJE
 
-**Fecha de Publicación:** 23 de Agosto de 2026  
-**Clasificación:** Guía Arquitectónica y Especificación de Producto  
-**Módulos:** Web UI, WebAssembly (WASM Engine), Backend Servidor (Python/Rust), Distribución Soberana  
+**Fecha de Publicación:** 23 de Agosto de 2026
+**Clasificación:** Guía Arquitectónica y Especificación de Producto
+**Módulos:** Web UI, WebAssembly (WASM Engine), Backend Servidor (Python/Rust), Distribución Soberana
 **Estado:** ✅ Aprobado y en Hoja de Ruta
 
 ---
