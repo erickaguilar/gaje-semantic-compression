@@ -114,7 +114,9 @@ def main():
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         json.dump(verdict, f, indent=2)
-    print(f"\nVeredicto: {'✅ GATE PASA — lineal suficiente' if not failing else '❌ GATE FALLA desde N=' + format(failing[0]['n'], ',')}")
+    print(
+        f"\nVeredicto: {'✅ GATE PASA — lineal suficiente' if not failing else '❌ GATE FALLA desde N=' + format(failing[0]['n'], ',')}"
+    )
     print(f"Resultados guardados en {out}")
 
 
