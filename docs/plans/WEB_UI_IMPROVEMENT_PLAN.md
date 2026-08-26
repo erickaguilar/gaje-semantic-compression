@@ -1,9 +1,19 @@
 # Plan de Mejora — `examples/ui/web_ui`
 
 **Fecha:** 2026-08-13
+**Última actualización:** 2026-08-19
 **Rama:** `test/experimental`
-**Estado:** Propuesto (pendiente de aprobación e implementación)
+**Estado:** En ejecución (Fases 1–3 y parte de 4 implementadas)
 **Ámbitos:** Integración del diagrama de arquitectura · Calidad y robustez (backend + frontend) · Streaming real · Tests · Migración futura a Rust · Descarga de modelos desde la web · Uso local/WebAssembly (estilo Cactus Needle)
+
+> **Nota de estructura (2026-08-19):** tras el merge de `develop`, `examples/ui/web_ui`
+> dejó de ser un conjunto de archivos dentro de este repo y pasó a ser un **submódulo git**
+> apuntando a [`erickaguilar/gaje-web-ui`](https://github.com/erickaguilar/gaje-web-ui)
+> (ver `.gitmodules`). Todas las rutas de archivo de este plan (`server.py`, `index.html`,
+> `script.js`, `style.css`, `architecture_view.js`, `architecture_graph.json`, `architecture.html`)
+> residen ahora **dentro del submódulo**, no en el árbol de `gaje-semantic-compression`.
+> El frontend sigue siendo agnóstico al backend; el plan mantiene su vigencia salvo la ubicación
+> física de los archivos.
 
 ---
 
@@ -345,9 +355,15 @@ class GajeHandler(...):
 | 2026-08-13 | Fase 1 (diagrama de arquitectura embebible) | ✅ Commit `8bda756` |
 | 2026-08-13 | Fase 2.2–2.3 (streaming SSE, botón Detener, historial localStorage) | ✅ Commit `d29e1c8` |
 | 2026-08-13 | Fase 4 parcial — test E2E de streaming + historial (mock) | ✅ Commit `f3b42e9` |
-| 2026-08-13 | Fase 3.4 (estados de generación), 3.5 (accesibilidad), 3.6 (barra de progreso de carga) | ✅ Pendiente de commit |
+| 2026-08-13 | Fase 3.4 (estados de generación), 3.5 (accesibilidad), 3.6 (barra de progreso de carga) | ✅ Commit `f3b42e9` |
+| 2026-08-19 | UI pasa a **submódulo** `gaje-web-ui` (los archivos ya no viven en este repo) | ✅ Merge `cda98fb` |
 | — | Fase 4 completo (unit tests backend, E2E contra servidor real, CI) | ⏳ Pendiente |
 | — | Fase 5 (migración servidor a Rust single-binary) | ⏳ Pendiente |
 | — | Fase 6 (catálogo/descarga de modelos, uso local, WASM) | ⏳ Pendiente |
 
 **Nota rendimiento (verificado 2026-08-13):** la inferencia nativa genera ~0.1 tok/s en este hardware; el streaming por SSE y `generate_native_py` en bloque son igual de lentos (ambos ~103 s para 10 tokens). El cuello de botella es la velocidad del modelo, no el overhead FFI del streaming. Acelerar requiere optimizar la inferencia (Fase 5 / mejores kernels).
+
+**Nota de ubicación (2026-08-19):** los commits `8bda756`/`d29e1c8`/`f3b42e9` corresponden a la
+historia **previa** de `examples/ui/web_ui` cuando residía en este repo. A partir del merge
+`cda98fb` esa carpeta es un submódulo con su propio historial y repo remoto (`gaje-web-ui`);
+las fases pendientes (4 completo, 5, 6) deben ejecutarse **dentro del submódulo**.
