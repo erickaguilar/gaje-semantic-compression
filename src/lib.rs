@@ -1,14 +1,11 @@
 #![allow(
-    warnings,
-    unused,
-    clippy::all,
-    dead_code,
     clippy::too_many_arguments,
     clippy::needless_range_loop,
     clippy::manual_checked_ops,
     clippy::non_canonical_partial_ord_impl,
     clippy::manual_div_ceil
 )]
+
 pub mod compute;
 pub mod core;
 pub mod ffi;

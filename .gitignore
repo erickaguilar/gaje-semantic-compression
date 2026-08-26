@@ -51,12 +51,20 @@ inspect
 
 # Large Model Artifacts (GAJE/GGUF/Binaries)
 *.gaje
+*.flat
+*.gmem
 *.gguf
 *.bin
 *.pth
 *.ckpt
 *.npy
 *.zip
+*.exe
+*.o
+*.a
+*.lib
+*.sqlite
+*.sqlite3
 *.jsonl
 gaje_v2_premium/
 .antigravitycli/

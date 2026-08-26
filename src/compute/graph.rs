@@ -161,7 +161,7 @@ impl StateGraph {
                         })
                         .collect();
                     st = merge_states(merged);
-                    current = current; // permanece en el nodo despues del join
+                    // permanece en el nodo actual despues del join
                 }
             }
             st.touch();

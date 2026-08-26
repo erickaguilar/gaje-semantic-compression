@@ -28,4 +28,4 @@ def get_project_version():
                         return match.group(1)
     except Exception:
         pass
-    return "0.9.5-alpha"  # Fallback a la versión actual si falla todo
+    return "1.7.0-alpha"  # Fallback a la versión actual si falla todo
