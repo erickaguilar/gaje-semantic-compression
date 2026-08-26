@@ -233,7 +233,7 @@ for i in range(n_blocks):
     w_down_obj = tensors_by_name[f"blk.{i}.ffn_down.weight"]
     process_and_write(p + "ffn_down", w_down_obj, bit_depth=4, bias_obj=None)
 
-    print(f"  [~] Bloque {i+1}/{n_blocks} fusionado (4 capas) y liberado de RAM.")
+    print(f"  [~] Bloque {i + 1}/{n_blocks} fusionado (4 capas) y liberado de RAM.")
     gc.collect()
 
 

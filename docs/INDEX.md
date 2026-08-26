@@ -40,6 +40,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[qwen2_distillation_report.md](docs/reports/qwen2_distillation_report.md)**: Reporte de destilación Qwen2.
 
 ### 🛠️ Guías Operativas (`docs/guides/`)
+*   **[FAST_MODEL_DOWNLOAD_GUIDE.md](docs/guides/FAST_MODEL_DOWNLOAD_GUIDE.md)**: **DESCARGAS ACELERADAS.** Protocolo multi-hilo con `hf_transfer` y `aria2c` a 100-500 MB/s.
 *   **[AUTOMATION_SUITE_GUIDE.md](docs/guides/AUTOMATION_SUITE_GUIDE.md)**: Manual de ejecución de la suite de pruebas automatizada de regresión e integración continua.
 *   **[GAJE_CLI_GUIDE.md](docs/guides/GAJE_CLI_GUIDE.md)**: **MANUAL PRINCIPAL.** Comandos y parámetros del motor nativo Rust.
 *   **[ARCHITECTURE.md](docs/guides/ARCHITECTURE.md)**: Arquitectura del motor.

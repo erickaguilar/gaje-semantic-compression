@@ -14,9 +14,13 @@ from gaje.nn.stabilized import GenomicLLM
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "production", "smollm2_135m.flat")
 
-print("================================================================================")
+print(
+    "================================================================================"
+)
 print("🧬 GAJE-WASM: TEST DE PARIDAD BIT A BIT (NATIVE CPU VS WEBASSEMBLY)")
-print("================================================================================")
+print(
+    "================================================================================"
+)
 
 if not os.path.exists(MODEL_PATH):
     print(f"❌ Modelo {MODEL_PATH} no encontrado.")
@@ -59,7 +63,7 @@ wasm_res = subprocess.run(
     cwd=PROJECT_ROOT,
     capture_output=True,
     text=True,
-    check=True
+    check=True,
 )
 
 wasm_tokens = json.loads(wasm_res.stdout.strip())
@@ -70,7 +74,9 @@ print("\n[3/3] Evaluando concordancia token a token...")
 print(f"  • Nativo CPU: {native_tokens}")
 print(f"  • WASM:       {wasm_tokens}")
 
-assert len(native_tokens) == len(wasm_tokens), f"Longitud dispar: {len(native_tokens)} vs {len(wasm_tokens)}"
+assert len(native_tokens) == len(
+    wasm_tokens
+), f"Longitud dispar: {len(native_tokens)} vs {len(wasm_tokens)}"
 
 discrepancies = []
 for idx, (n_tok, w_tok) in enumerate(zip(native_tokens, wasm_tokens)):
@@ -81,8 +87,14 @@ if discrepancies:
     print(f"❌ Discrepancias encontradas: {discrepancies}")
     sys.exit(1)
 else:
-    print("✅ PARIDAD BIT A BIT 100% PERFECTA: Nativo y WebAssembly producen exactamente los mismos tokens.")
+    print(
+        "✅ PARIDAD BIT A BIT 100% PERFECTA: Nativo y WebAssembly producen exactamente los mismos tokens."
+    )
 
-print("\n================================================================================")
+print(
+    "\n================================================================================"
+)
 print("🎯 CERTIFICACIÓN DE DETERMINISMO GAJE-WASM: APROBADA")
-print("================================================================================")
+print(
+    "================================================================================"
+)

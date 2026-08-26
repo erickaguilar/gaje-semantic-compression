@@ -6,6 +6,7 @@ import struct
 import numpy as np
 import gguf
 import argparse
+
 try:
     from transformers import AutoTokenizer
 except ImportError:
@@ -102,7 +103,13 @@ def export_gaje_flat():
     model_name_lower = os.path.basename(gguf_path).lower()
 
     # Mapeo de familias: 1=Llama, 2=SmolLM, 3=Qwen2, 4=Qwen2_5, 5=Gemma, 6=Unknown
-    if "deepseek" in model_name_lower or "r1" in model_name_lower or "qwen2.5" in model_name_lower or "qwen2_5" in model_name_lower or "qwen2.5" in arch_name.lower():
+    if (
+        "deepseek" in model_name_lower
+        or "r1" in model_name_lower
+        or "qwen2.5" in model_name_lower
+        or "qwen2_5" in model_name_lower
+        or "qwen2.5" in arch_name.lower()
+    ):
         arch_family = 4
         qk_permute = False
     elif "qwen2" in model_name_lower or "qwen2" in arch_name.lower():
@@ -143,7 +150,9 @@ def export_gaje_flat():
         tokenizer_id = args.tokenizer or "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
     elif arch_family == 4 and "3b" in model_name_lower:
         tokenizer_id = args.tokenizer or "Qwen/Qwen2.5-3B-Instruct"
-    elif arch_family == 4 and ("1.5b" in model_name_lower or "1_5b" in model_name_lower):
+    elif arch_family == 4 and (
+        "1.5b" in model_name_lower or "1_5b" in model_name_lower
+    ):
         tokenizer_id = args.tokenizer or "Qwen/Qwen2.5-1.5B-Instruct"
     else:
         tokenizer_id = args.tokenizer or tokenizer_map.get(
@@ -157,9 +166,7 @@ def export_gaje_flat():
             if hasattr(tokenizer, "backend_tokenizer"):
                 tokenizer_str = tokenizer.backend_tokenizer.to_str()
         except Exception as e:
-            print(
-                f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}."
-            )
+            print(f"[!] Warning: No se pudo cargar el tokenizer {tokenizer_id}: {e}.")
 
     # Determinar vocab_size real desde el tensor token_embd.weight
     embd_tensor = tensors_by_name["token_embd.weight"]
@@ -454,7 +461,7 @@ def export_gaje_flat():
             bias_obj=None,
         )
 
-        print(f"  [~] Bloque {i+1}/{n_blocks} empaquetado en binario plano.")
+        print(f"  [~] Bloque {i + 1}/{n_blocks} empaquetado en binario plano.")
         gc.collect()
 
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
@@ -513,7 +520,9 @@ def export_gaje_flat():
         f.write(blob_bytes)
 
     print(f"\n✅ Exportación Flat Zero-Copy v0.9.8 Finalizada Exitosamente: {out_path}")
-    print(f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024*1024):.2f} MB")
+    print(
+        f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB"
+    )
     print(f"  - Offset de Pesos (Alineado a 4KB): {weights_offset} bytes")
 
 

@@ -7,13 +7,11 @@ PYTHON_DIR = os.path.join(PROJECT_ROOT, "python")
 if PYTHON_DIR not in sys.path:
     sys.path.insert(0, PYTHON_DIR)
 
-from unittest.mock import patch, MagicMock
 from gaje.download import (
     resolve_model_key,
     format_bytes,
     get_system_specs,
     MODEL_REGISTRY,
-    ALIASES,
 )
 
 

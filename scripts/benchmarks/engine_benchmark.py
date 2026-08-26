@@ -5,6 +5,7 @@ Uso:
     python scripts/benchmarks/engine_benchmark.py
     python scripts/benchmarks/engine_benchmark.py --gen_tokens 64
 """
+
 import os
 import sys
 import time

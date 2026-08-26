@@ -15,7 +15,6 @@ import sys
 import argparse
 import subprocess
 import urllib.request
-import time
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODELS_ROOT = os.path.join(PROJECT_ROOT, "models", "production")
@@ -59,7 +58,7 @@ def download_with_progress(url, dest_path):
 
     # Intentar usar curl o wget si están disponibles para mayor velocidad
     try:
-        ret = subprocess.run(
+        subprocess.run(
             ["curl", "-L", "--progress-bar", "-o", dest_path, url], check=True
         )
         return True
@@ -67,13 +66,12 @@ def download_with_progress(url, dest_path):
         pass
 
     try:
-        ret = subprocess.run(["wget", "-c", "-O", dest_path, url], check=True)
+        subprocess.run(["wget", "-c", "-O", dest_path, url], check=True)
         return True
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
 
     # Fallback con urllib
-    start_time = time.time()
 
     def reporthook(count, block_size, total_size):
         if total_size > 0:

@@ -79,10 +79,10 @@ def run_diagnostics(model_path, model_name="Current Organism"):
     print("\n📈 MÉTRICAS DE RANKING:")
     print(f"   - Top-1 Match:          {'✅ SÍ' if top1_match else '❌ NO'}")
     print(
-        f"   - Top-5 Intersección:   {top5_intersect}/5 ({top5_intersect/5*100:.1f}%)"
+        f"   - Top-5 Intersección:   {top5_intersect}/5 ({top5_intersect / 5 * 100:.1f}%)"
     )
     print(
-        f"   - Top-10 Intersección:  {top10_intersect}/10 ({top10_intersect/10*100:.1f}%)"
+        f"   - Top-10 Intersección:  {top10_intersect}/10 ({top10_intersect / 10 * 100:.1f}%)"
     )
     print(
         f"   - Ranking de Target ('{tokenizer.decode([target_token_id])}'): {gaje_rank_str} en GAJE"
@@ -116,7 +116,7 @@ def run_diagnostics(model_path, model_name="Current Organism"):
         match = hf_top1 == gaje_top1
 
         print(
-            f"Step {step+1:02d} | Token Forzado HF: {hf_next_tok:<6d} ({repr(tokenizer.decode([hf_next_tok])):<12s}) | CosSim: {step_cos:.6f} | Match Top-1: {'✅' if match else '❌ (GAJE=' + repr(tokenizer.decode([gaje_top1])) + ')'}"
+            f"Step {step + 1:02d} | Token Forzado HF: {hf_next_tok:<6d} ({repr(tokenizer.decode([hf_next_tok])):<12s}) | CosSim: {step_cos:.6f} | Match Top-1: {'✅' if match else '❌ (GAJE=' + repr(tokenizer.decode([gaje_top1])) + ')'}"
         )
 
         current_input_ids.append(hf_next_tok)

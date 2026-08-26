@@ -302,7 +302,7 @@ def export_qwen2_5_1_5b_flat():
             bias_obj=None,
         )
 
-        print(f"  [~] Bloque {i+1}/{n_blocks} empaquetado en binario plano (4-bit).")
+        print(f"  [~] Bloque {i + 1}/{n_blocks} empaquetado en binario plano (4-bit).")
         gc.collect()
 
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
@@ -362,7 +362,9 @@ def export_qwen2_5_1_5b_flat():
     print(
         f"\n✅ Exportación Flat Zero-Copy Qwen2.5-1.5B Finalizada Exitosamente: {out_path}"
     )
-    print(f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024*1024):.2f} MB")
+    print(
+        f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB"
+    )
     print(f"  - Offset de Pesos (Alineado a 4KB): {weights_offset} bytes")
 
 

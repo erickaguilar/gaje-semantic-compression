@@ -24,7 +24,7 @@ t0 = time.perf_counter()
 tokens = llm.generate_native_py(prompt_tokens, 20, 0.3, 1.1, [2, 151643, 151645])
 dt1 = (time.perf_counter() - t0) * 1000.0
 print(
-    f"Test 1 (Without torch import): {dt1:.2f} ms total for {len(tokens)} tokens ({dt1/len(tokens):.2f} ms/tok)"
+    f"Test 1 (Without torch import): {dt1:.2f} ms total for {len(tokens)} tokens ({dt1 / len(tokens):.2f} ms/tok)"
 )
 
 # Test 2: Import torch (which configures CPU thread pool/affinity)
@@ -37,5 +37,5 @@ t0 = time.perf_counter()
 tokens = llm.generate_native_py(prompt_tokens, 20, 0.3, 1.1, [2, 151643, 151645])
 dt2 = (time.perf_counter() - t0) * 1000.0
 print(
-    f"Test 2 (With torch imported):   {dt2:.2f} ms total for {len(tokens)} tokens ({dt2/len(tokens):.2f} ms/tok)"
+    f"Test 2 (With torch imported):   {dt2:.2f} ms total for {len(tokens)} tokens ({dt2 / len(tokens):.2f} ms/tok)"
 )

@@ -368,7 +368,7 @@ def build_q2_0():
         add_linear_tensor(p + "ffn_down", w_down)
         del w_down
         gc.collect()
-        print(f"  [~] Bloque {i+1}/{n_blocks} empaquetado a Q2_0.")
+        print(f"  [~] Bloque {i + 1}/{n_blocks} empaquetado a Q2_0.")
 
     dir_json_bytes = json.dumps(tensor_directory).encode("utf-8")
 
@@ -413,7 +413,7 @@ def build_q2_0():
         f.write(blob_bytes)
 
     print(f"\n✅ Exportación Flat Q2_0 finalizada: {out_path}")
-    print(f"  - Tamaño: {os.path.getsize(out_path) / (1024*1024):.2f} MB")
+    print(f"  - Tamaño: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB")
 
 
 if __name__ == "__main__":

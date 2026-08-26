@@ -16,6 +16,7 @@ Métricas por modelo (media sobre prompts):
 Uso:
     python scripts/eval_generation.py [--models a,lista,de,paths] [--temp 0.4] [--max_new 40]
 """
+
 import argparse
 import json
 import os
@@ -77,7 +78,9 @@ def is_degenerate(tokens):
 
 def generate(model, prompt, temperature, max_new):
     try:
-        return "".join(model.generate(prompt, max_new_tokens=max_new, temperature=temperature))
+        return "".join(
+            model.generate(prompt, max_new_tokens=max_new, temperature=temperature)
+        )
     except Exception as e:  # noqa: BLE001
         return f"[error: {e}]"
 
@@ -96,15 +99,17 @@ def eval_model(path, temperature, max_new, prompts):
         d1 = distinct_ngrams(toks, 1)
         d2 = distinct_ngrams(toks, 2)
         rep = repetition_rate(toks)
-        per_prompt.append({
-            "prompt": p,
-            "out": out,
-            "tokens": len(toks),
-            "d1": d1,
-            "d2": d2,
-            "rep": rep,
-            "deg": is_degenerate(toks),
-        })
+        per_prompt.append(
+            {
+                "prompt": p,
+                "out": out,
+                "tokens": len(toks),
+                "d1": d1,
+                "d2": d2,
+                "rep": rep,
+                "deg": is_degenerate(toks),
+            }
+        )
     n = len(per_prompt)
     agg = {
         "model": path,
@@ -122,8 +127,11 @@ def main():
     ap.add_argument("--models", default=",".join(DEFAULT_MODELS))
     ap.add_argument("--temp", type=float, default=0.4)
     ap.add_argument("--max_new", type=int, default=40)
-    ap.add_argument("--prompts-file", default="",
-                    help="JSON con lista de prompts para evaluar (defecto: PROMPTS internos).")
+    ap.add_argument(
+        "--prompts-file",
+        default="",
+        help="JSON con lista de prompts para evaluar (defecto: PROMPTS internos).",
+    )
     args = ap.parse_args()
 
     if args.prompts_file:
@@ -139,16 +147,20 @@ def main():
         results.append(agg)
         print(f"\n=== {path} (temp={args.temp}) ===")
         for x in per:
-            print(f"  {x['prompt'][:45]!r} -> len={x['tokens']:3d} "
-                  f"d1={x['d1']:.2f} d2={x['d2']:.2f} rep={x['rep']:.2f} "
-                  f"{'DEG' if x['deg'] else 'ok '}")
+            print(
+                f"  {x['prompt'][:45]!r} -> len={x['tokens']:3d} "
+                f"d1={x['d1']:.2f} d2={x['d2']:.2f} rep={x['rep']:.2f} "
+                f"{'DEG' if x['deg'] else 'ok '}"
+            )
             print(f"      {x['out'][:90]!r}")
 
     print("\n\n=== RESUMEN AGREGADO (d1/d2 más alto y rep/deg más bajo = mejor) ===")
     print(f"{'modelo':<55} {'d1':>5} {'d2':>5} {'rep':>5} {'len':>5} {'deg%':>5}")
     for r in results:
-        print(f"{os.path.basename(r['model']):<55} {r['d1']:.3f} {r['d2']:.3f} "
-              f"{r['rep']:.3f} {r['len']:5.1f} {r['deg']:5.0%}")
+        print(
+            f"{os.path.basename(r['model']):<55} {r['d1']:.3f} {r['d2']:.3f} "
+            f"{r['rep']:.3f} {r['len']:5.1f} {r['deg']:5.0%}"
+        )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """PPL GAJE por modelo + paridad FP16 (HuggingFace) sobre corpus ES limpio."""
+
 import os
 import sys
 import random
@@ -108,7 +109,7 @@ def main():
             except Exception:
                 pass
         out[tag] = {"ppl_gaje": round(float(np.mean(ppls)), 2) if ppls else None}
-        print(f"  GAJE {tag:<34} PPL={out[tag]['ppl_gaje']}  ({time.time()-t0:.0f}s)")
+        print(f"  GAJE {tag:<34} PPL={out[tag]['ppl_gaje']}  ({time.time() - t0:.0f}s)")
 
     if not args.skip_hf:
         import torch
@@ -136,7 +137,7 @@ def main():
                     pass
             out[key] = {"ppl_fp16": round(float(np.mean(ppls)), 2) if ppls else None}
             print(
-                f"  HF FP16 {key:<26} PPL={out[key]['ppl_fp16']}  ({time.time()-t0:.0f}s)"
+                f"  HF FP16 {key:<26} PPL={out[key]['ppl_fp16']}  ({time.time() - t0:.0f}s)"
             )
 
     with open(os.path.join(os.path.dirname(__file__), "ppl_results.json"), "w") as f:

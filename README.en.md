@@ -1,15 +1,28 @@
-# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.6.0-alpha)
+# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.0-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.6.0--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
-[![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/)
+[![Version](https://img.shields.io/badge/version-1.7.0--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](README.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (4 states: `00=A`, `01=C`, `11=G`, `10=T`), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), and instant memory-mapped file loading (**`.gaje.flat` v2**).
+**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), instant memory-mapped file loading (**`.gaje.flat` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
 
 ---
 
-## 🔬 Empirical Status & Scientific Diagnosis (v1.6.0-alpha)
+## 📦 Certified Model Catalog (Hugging Face Hub)
+
+Official pre-packaged models are available at the [Official Hugging Face Hub (`eaguilar/gaje-models`)](https://huggingface.co/eaguilar/gaje-models):
+
+| Organism / Model | Format | Size | Optimal Runtime | Capabilities |
+| :--- | :---: | :---: | :---: | :--- |
+| **`gaje_nano_1.5b.flat`** | `.gaje.flat` v2 | **1.23 GB** | WebAssembly (Mobile / Web) | Ultra-fast, minimal RAM footprint, ideal for phones. |
+| **`gaje_prime_3b.flat`** | `.gaje.flat` v2 | **2.24 GB** | WASM Desktop / Cloud | Balanced, high general reasoning and contextual depth. |
+| **`gaje_ultra_7b.flat`** | `.gaje.flat` v2 | **4.88 GB** | Server / Cloud Native | Deep reasoning, multi-turn coding and complex analysis. |
+
+---
+
+## 🔬 Empirical Status & Scientific Diagnosis (v1.7.0-alpha)
 
 Following the principle of **Empirical Truth** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/docs/meta/EMPIRICAL_TRUTH_STATE.md)), the system presents the following certified functional state:
 

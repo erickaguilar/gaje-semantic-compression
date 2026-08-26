@@ -16,6 +16,7 @@ Uso:
         --prompts 150 --max_tokens 96 \
         --out data/distill/train_clean_150.jsonl
 """
+
 import argparse
 import json
 import os
@@ -131,7 +132,14 @@ PROMPT_BANK = [
 
 # Categorías de respuestas degeneradas a filtrar.
 DEGENERATE_MARKERS = [
-    "[error", "error:", "Traceback", "nan", "Por,", ",,,,,", "…", "???",
+    "[error",
+    "error:",
+    "Traceback",
+    "nan",
+    "Por,",
+    ",,,,,",
+    "…",
+    "???",
 ]
 
 
@@ -162,12 +170,12 @@ def is_degenerate(text, prompt):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--teacher",
-                    default="models/production/qwen2_5_3b_q4_0_q8_0_embd.gaje.flat")
+    ap.add_argument(
+        "--teacher", default="models/production/qwen2_5_3b_q4_0_q8_0_embd.gaje.flat"
+    )
     ap.add_argument("--prompts", type=int, default=150)
     ap.add_argument("--max_tokens", type=int, default=96)
-    ap.add_argument("--out",
-                    default="data/distill/train_clean_150.jsonl")
+    ap.add_argument("--out", default="data/distill/train_clean_150.jsonl")
     args = ap.parse_args()
 
     teacher_path = os.path.join(PROJECT_ROOT, args.teacher)
@@ -186,7 +194,9 @@ def main():
         ans = run(teacher, p, args.max_tokens)
         if is_degenerate(ans, p):
             skipped += 1
-            print(f"  [{i + 1}/{len(prompts)}] (filtrado) {p[:50]} -> {ans.strip()[:40]!r}")
+            print(
+                f"  [{i + 1}/{len(prompts)}] (filtrado) {p[:50]} -> {ans.strip()[:40]!r}"
+            )
             continue
         records.append({"prompt": p, "answer": ans})
         print(f"  [{i + 1}/{len(prompts)}] {p[:50]} -> {ans.strip()[:60]!r}")
@@ -195,7 +205,9 @@ def main():
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    print(f"\n[2/2] {len(records)} pares guardados en {out_path} (filtrados: {skipped})")
+    print(
+        f"\n[2/2] {len(records)} pares guardados en {out_path} (filtrados: {skipped})"
+    )
     del teacher
 
 

@@ -19,7 +19,7 @@ import urllib.error
 import ssl
 import platform
 import argparse
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional
 
 # Default target directory
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -229,7 +229,9 @@ def download_with_resume(
             print(f"✅ El modelo ya está completamente descargado en: {target_path}")
             return True
         elif not expected_size_bytes and actual_size > 0:
-            print(f"✅ Archivo ya existe ({format_bytes(actual_size)}) en: {target_path}")
+            print(
+                f"✅ Archivo ya existe ({format_bytes(actual_size)}) en: {target_path}"
+            )
             return True
 
     # SSL context with modern cipher support
@@ -245,7 +247,7 @@ def download_with_resume(
         headers["Range"] = f"bytes={existing_bytes}-"
         print(f"🔄 Reanudando descarga desde el byte {format_bytes(existing_bytes)}...")
     else:
-        print(f"📥 Iniciando descarga...")
+        print("📥 Iniciando descarga...")
 
     req = urllib.request.Request(url, headers=headers)
 
@@ -260,13 +262,23 @@ def download_with_resume(
             content_length = resp.headers.get("Content-Length")
 
             if status_code == 206:  # Partial content
-                total_bytes = existing_bytes + (int(content_length) if content_length else 0)
+                total_bytes = existing_bytes + (
+                    int(content_length) if content_length else 0
+                )
                 file_mode = "ab"
-            elif status_code == 200:  # Full content (server ignored range or new download)
+            elif (
+                status_code == 200
+            ):  # Full content (server ignored range or new download)
                 if existing_bytes > 0:
-                    print("⚠️ El servidor no soporta Range header; reiniciando desde byte 0.")
+                    print(
+                        "⚠️ El servidor no soporta Range header; reiniciando desde byte 0."
+                    )
                 existing_bytes = 0
-                total_bytes = int(content_length) if content_length else (expected_size_bytes or 0)
+                total_bytes = (
+                    int(content_length)
+                    if content_length
+                    else (expected_size_bytes or 0)
+                )
                 file_mode = "wb"
             else:
                 total_bytes = int(content_length) if content_length else 0
@@ -299,19 +311,21 @@ def download_with_resume(
         if e.code == 416:  # Range Not Satisfiable -> already complete
             if os.path.exists(temp_path):
                 shutil.move(temp_path, target_path)
-                print(f"✅ Descarga ya estaba completa.")
+                print("✅ Descarga ya estaba completa.")
                 return True
         print(f"\n❌ Error HTTP {e.code}: {e.reason}")
         return False
     except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
         sys.stdout.write("\n")
         print(f"\n⚠️ Conexión interrumpida: {e}")
-        print(f"💡 Puedes volver a ejecutar el comando y la descarga se reanudará automáticamente.")
+        print(
+            "💡 Puedes volver a ejecutar el comando y la descarga se reanudará automáticamente."
+        )
         return False
     except KeyboardInterrupt:
         sys.stdout.write("\n")
         print(f"\n⏸️ Descarga pausada por el usuario. Progreso guardado en: {temp_path}")
-        print(f"💡 Ejecuta el comando nuevamente para reanudar.")
+        print("💡 Ejecuta el comando nuevamente para reanudar.")
         return False
 
     # Atomically rename .part to destination
@@ -344,15 +358,21 @@ def list_models_catalog(dest_dir: str) -> None:
 
     print("=" * 76)
     print("🧬 GAJE HELIX — CATÁLOGO DE MODELOS Y ORGANISMOS GENÓMICOS")
-    print(f"💻 Sistema: {'Android/Termux' if specs['is_android'] else specs['platform']} "
-          f"({specs['machine']}) | RAM Disp: {specs['avail_ram_gb']:.1f} GB / {specs['total_ram_gb']:.1f} GB | "
-          f"Espacio Libre: {specs['free_storage_gb']:.1f} GB")
+    print(
+        f"💻 Sistema: {'Android/Termux' if specs['is_android'] else specs['platform']} "
+        f"({specs['machine']}) | RAM Disp: {specs['avail_ram_gb']:.1f} GB / {specs['total_ram_gb']:.1f} GB | "
+        f"Espacio Libre: {specs['free_storage_gb']:.1f} GB"
+    )
     print("=" * 76)
 
     for key, info in MODEL_REGISTRY.items():
         local_path = os.path.join(dest_dir, info["filename"])
         is_downloaded = os.path.exists(local_path)
-        status = "✅ \033[32mDESCARGADO\033[0m" if is_downloaded else "📥 \033[33mDISPONIBLE\033[0m"
+        status = (
+            "✅ \033[32mDESCARGADO\033[0m"
+            if is_downloaded
+            else "📥 \033[33mDISPONIBLE\033[0m"
+        )
 
         # Compatibility check
         if specs["total_ram_gb"] < info["min_ram_gb"]:
@@ -364,7 +384,9 @@ def list_models_catalog(dest_dir: str) -> None:
 
         print(f"\n📦 \033[1m{key}\033[0m  [{status}]  ({compat})")
         print(f"   • Archivo:    {info['filename']} (~{info['size_mb']} MB)")
-        print(f"   • Requisitos: RAM Mín {info['min_ram_gb']} GB (Recomendada: {info['recommended_ram_gb']} GB)")
+        print(
+            f"   • Requisitos: RAM Mín {info['min_ram_gb']} GB (Recomendada: {info['recommended_ram_gb']} GB)"
+        )
         print(f"   • Info:       {info['description']}")
         print(f"   • Comando:    python scripts/download_model.py {key}")
 
@@ -381,7 +403,7 @@ def download_model(
     key = resolve_model_key(model_name)
     if not key:
         print(f"❌ Error: Modelo '{model_name}' no encontrado en el registro.")
-        print(f"💡 Ejecuta con '--list' para ver todos los modelos disponibles.")
+        print("💡 Ejecuta con '--list' para ver todos los modelos disponibles.")
         return False
 
     info = MODEL_REGISTRY[key]
@@ -399,13 +421,19 @@ def download_model(
     # Pre-flight: Check free storage
     free_mb = specs["free_storage_gb"] * 1024
     if free_mb > 0 and free_mb < (info["size_mb"] + 100):
-        print(f"❌ Error de espacio: Se requieren ~{info['size_mb']} MB pero solo hay {free_mb:.0f} MB libres.")
+        print(
+            f"❌ Error de espacio: Se requieren ~{info['size_mb']} MB pero solo hay {free_mb:.0f} MB libres."
+        )
         return False
 
     # Pre-flight: RAM warning for Android
     if specs["is_android"] and specs["avail_ram_gb"] < info["min_ram_gb"]:
-        print(f"⚠️ AVISO PARA ANDROID: El dispositivo cuenta con {specs['avail_ram_gb']:.1f} GB de RAM libre.")
-        print(f"   Este modelo requiere {info['min_ram_gb']} GB. Podría cerrarse por Out-Of-Memory (OOM).")
+        print(
+            f"⚠️ AVISO PARA ANDROID: El dispositivo cuenta con {specs['avail_ram_gb']:.1f} GB de RAM libre."
+        )
+        print(
+            f"   Este modelo requiere {info['min_ram_gb']} GB. Podría cerrarse por Out-Of-Memory (OOM)."
+        )
         print("   Se sugiere cerrar apps en segundo plano o usar 'gaje_nano_1.5b'.\n")
 
     if force and os.path.exists(target_path):
@@ -484,7 +512,9 @@ Ejemplos de uso:
     if args.check_system:
         specs = get_system_specs()
         print("\n🧬 GAJE — TELEMETRÍA DEL SISTEMA")
-        print(f"• Entorno:       {'Android / Termux 📱' if specs['is_android'] else 'Linux Desktop / Servidor 💻'}")
+        print(
+            f"• Entorno:       {'Android / Termux 📱' if specs['is_android'] else 'Linux Desktop / Servidor 💻'}"
+        )
         print(f"• Arquitectura:  {specs['machine']} ({specs['platform']})")
         print(f"• RAM Total:     {specs['total_ram_gb']:.2f} GB")
         print(f"• RAM Libre:     {specs['avail_ram_gb']:.2f} GB")

@@ -18,6 +18,7 @@ FLAG_BPE = 0x0001
 FLAG_BYTE_FALLBACK = 0x0002
 FLAG_QUANTUM_GENOMIC = 0x0004
 
+
 def _bytes_to_unicode() -> Dict[int, str]:
     bs = (
         list(range(ord("!"), ord("~") + 1))
@@ -69,20 +70,30 @@ class GtokTokenizer:
     def from_bytes(cls, data: bytes) -> "GtokTokenizer":
         """Deserializa un tokenizador binario desde un bloque de bytes crudos."""
         if len(data) < 36:
-            raise ValueError("Buffer demasiado pequeño para ser un archivo .gtok válido")
+            raise ValueError(
+                "Buffer demasiado pequeño para ser un archivo .gtok válido"
+            )
 
         # 1. Cabecera (16 bytes)
-        magic, version, flags, vocab_size, merges_count = struct.unpack_from("<4sHHII", data, 0)
+        magic, version, flags, vocab_size, merges_count = struct.unpack_from(
+            "<4sHHII", data, 0
+        )
         if magic != GTOK_MAGIC:
-            raise ValueError(f"Firma mágica inválida: esperado {GTOK_MAGIC}, obtenido {magic}")
+            raise ValueError(
+                f"Firma mágica inválida: esperado {GTOK_MAGIC}, obtenido {magic}"
+            )
 
         offset = 16
 
         # 2. Tokens Especiales
-        bos_id, eos_id, unk_id, pad_id, extra_stops_count = struct.unpack_from("<IIIIH", data, offset)
+        bos_id, eos_id, unk_id, pad_id, extra_stops_count = struct.unpack_from(
+            "<IIIIH", data, offset
+        )
         offset += 18
 
-        extra_stop_ids = list(struct.unpack_from(f"<{extra_stops_count}I", data, offset))
+        extra_stop_ids = list(
+            struct.unpack_from(f"<{extra_stops_count}I", data, offset)
+        )
         offset += extra_stops_count * 4
 
         # 3. String Table (Offsets + UTF-8 Pool)
@@ -141,7 +152,9 @@ class GtokTokenizer:
         # 1. Cabecera
         vocab_size = len(self.vocab)
         merges_count = len(self.merges)
-        header = struct.pack("<4sHHII", GTOK_MAGIC, self.version, self.flags, vocab_size, merges_count)
+        header = struct.pack(
+            "<4sHHII", GTOK_MAGIC, self.version, self.flags, vocab_size, merges_count
+        )
         parts.append(header)
 
         # 2. Tokens Especiales
@@ -151,7 +164,9 @@ class GtokTokenizer:
         pad_id = self.special_tokens.get("pad", 0)
         extra_stops = self.additional_stop_ids
 
-        specials = struct.pack("<IIIIH", bos_id, eos_id, unk_id, pad_id, len(extra_stops))
+        specials = struct.pack(
+            "<IIIIH", bos_id, eos_id, unk_id, pad_id, len(extra_stops)
+        )
         parts.append(specials)
         if extra_stops:
             parts.append(struct.pack(f"<{len(extra_stops)}I", *extra_stops))
@@ -206,8 +221,13 @@ class GtokTokenizer:
             return []
 
         import re
+
         # Extraer tokens especiales si están presentes en el texto
-        special_keys = [re.escape(k) for k in self.token_to_id.keys() if k.startswith("<|") or k in ["<s>", "</s>", "<think>", "</think>"]]
+        special_keys = [
+            re.escape(k)
+            for k in self.token_to_id.keys()
+            if k.startswith("<|") or k in ["<s>", "</s>", "<think>", "</think>"]
+        ]
         if special_keys:
             pattern = re.compile("(" + "|".join(special_keys) + ")")
             chunks = pattern.split(text)
@@ -224,7 +244,12 @@ class GtokTokenizer:
 
             # Mapear bytes UTF-8 a caracteres estándar BPE (ej. '\n' -> 'Ċ', ' ' -> 'Ġ')
             chunk_bytes = chunk.encode("utf-8")
-            tokens = [self.token_to_id.get(_BYTE_ENCODER[b], self.special_tokens.get("unk", 0)) for b in chunk_bytes]
+            tokens = [
+                self.token_to_id.get(
+                    _BYTE_ENCODER[b], self.special_tokens.get("unk", 0)
+                )
+                for b in chunk_bytes
+            ]
 
             # Aplicar fusiones BPE iterativamente
             if len(tokens) > 1 and self.merges_dict:
@@ -250,7 +275,9 @@ class GtokTokenizer:
         return final_tokens
 
 
-def export_hf_tokenizer_to_gtok(hf_tokenizer_json_path: str, output_gtok_path: str) -> GtokTokenizer:
+def export_hf_tokenizer_to_gtok(
+    hf_tokenizer_json_path: str, output_gtok_path: str
+) -> GtokTokenizer:
     """Convierte un archivo tokenizer.json oficial de HuggingFace al formato binario nativo .gtok."""
     with open(hf_tokenizer_json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -286,18 +313,41 @@ def export_hf_tokenizer_to_gtok(hf_tokenizer_json_path: str, output_gtok_path: s
             if len(parts) == 2:
                 left_str, right_str = parts
                 merged_str = left_str + right_str
-                if left_str in vocab_map and right_str in vocab_map and merged_str in vocab_map:
-                    merges.append((vocab_map[left_str], vocab_map[right_str], vocab_map[merged_str]))
+                if (
+                    left_str in vocab_map
+                    and right_str in vocab_map
+                    and merged_str in vocab_map
+                ):
+                    merges.append(
+                        (
+                            vocab_map[left_str],
+                            vocab_map[right_str],
+                            vocab_map[merged_str],
+                        )
+                    )
         elif isinstance(merge_item, list) and len(merge_item) >= 2:
             left_str, right_str = merge_item[0], merge_item[1]
             merged_str = left_str + right_str
-            if left_str in vocab_map and right_str in vocab_map and merged_str in vocab_map:
-                merges.append((vocab_map[left_str], vocab_map[right_str], vocab_map[merged_str]))
+            if (
+                left_str in vocab_map
+                and right_str in vocab_map
+                and merged_str in vocab_map
+            ):
+                merges.append(
+                    (vocab_map[left_str], vocab_map[right_str], vocab_map[merged_str])
+                )
 
     # 3. Extraer Tokens Especiales
     special_tokens = {
-        "bos": vocab_map.get("<|im_start|>", vocab_map.get("<s>", vocab_map.get("<bos>", 0))),
-        "eos": vocab_map.get("<|im_end|>", vocab_map.get("</s>", vocab_map.get("<eos>", vocab_map.get("<|endoftext|>", 0)))),
+        "bos": vocab_map.get(
+            "<|im_start|>", vocab_map.get("<s>", vocab_map.get("<bos>", 0))
+        ),
+        "eos": vocab_map.get(
+            "<|im_end|>",
+            vocab_map.get(
+                "</s>", vocab_map.get("<eos>", vocab_map.get("<|endoftext|>", 0))
+            ),
+        ),
         "unk": vocab_map.get("<unk>", vocab_map.get("<|unk|>", 0)),
         "pad": vocab_map.get("<pad>", vocab_map.get("<|pad|>", 0)),
     }
@@ -320,7 +370,9 @@ def export_hf_tokenizer_to_gtok(hf_tokenizer_json_path: str, output_gtok_path: s
     return gtok
 
 
-def embed_gtok_into_flat(flat_path: str, gtok_source: Any, output_path: Optional[str] = None) -> str:
+def embed_gtok_into_flat(
+    flat_path: str, gtok_source: Any, output_path: Optional[str] = None
+) -> str:
     """Incrusta un tokenizador GTOK directamente en la cabecera binaria de un modelo .flat (Single-File LLM)."""
     if isinstance(gtok_source, str):
         if gtok_source.endswith(".json"):
@@ -336,7 +388,9 @@ def embed_gtok_into_flat(flat_path: str, gtok_source: Any, output_path: Optional
     elif isinstance(gtok_source, bytes):
         gtok_bytes = gtok_source
     else:
-        raise TypeError("gtok_source debe ser una ruta de archivo, GtokTokenizer o bytes crudos")
+        raise TypeError(
+            "gtok_source debe ser una ruta de archivo, GtokTokenizer o bytes crudos"
+        )
 
     target_file = output_path if output_path else flat_path
 
@@ -345,7 +399,9 @@ def embed_gtok_into_flat(flat_path: str, gtok_source: Any, output_path: Optional
         with open(flat_path, "r+b") as f:
             header = bytearray(f.read(4096))
             if header[:4] != b"GAJE":
-                raise ValueError("El archivo especificado no es un modelo binario plano .flat válido de GAJE")
+                raise ValueError(
+                    "El archivo especificado no es un modelo binario plano .flat válido de GAJE"
+                )
 
             f.seek(0, os.SEEK_END)
             gtok_offset = f.tell()
@@ -361,7 +417,9 @@ def embed_gtok_into_flat(flat_path: str, gtok_source: Any, output_path: Optional
             data = bytearray(f_in.read())
 
         if data[:4] != b"GAJE":
-            raise ValueError("El archivo especificado no es un modelo binario plano .flat válido de GAJE")
+            raise ValueError(
+                "El archivo especificado no es un modelo binario plano .flat válido de GAJE"
+            )
 
         gtok_offset = len(data)
         gtok_len = len(gtok_bytes)
@@ -404,4 +462,3 @@ def has_embedded_gtok(flat_path: str) -> bool:
             return gtok_len > 0
     except Exception:
         return False
-

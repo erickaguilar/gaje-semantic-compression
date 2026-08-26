@@ -1,3 +1,29 @@
+## [1.7.0-alpha] - 2026-08-24
+### Added
+- **Estandarización de Modelos Flat GAJE y Hub Oficial de Hugging Face**:
+  - Lanzamiento del transmutador unificado `scripts/transmute_qwen_models.py` para compilar y empaquetar pesos Qwen 2.5 en formato híbrido `.flat` v2 (`token_embd` y `lm_head` protegidos en FP32 y cuerpo cuantizado en Q4_0).
+  - Publicación y disponibilidad global en Hugging Face Hub (`https://huggingface.co/eaguilar/gaje-models`) de los 3 modelos estándar:
+    * `gaje_nano_1.5b.flat` (1.23 GB) — Optimizado para WebAssembly / Móvil / In-Browser.
+    * `gaje_prime_3b.flat` (2.24 GB) — Estándar equilibrado para WASM Desktop y Cloud.
+    * `gaje_ultra_7b.flat` (4.88 GB) — Modelo de razonamiento y contexto profundo.
+- **Web UI & Arquitectura Dual-Theme (Y2K Dark / Scandinavian Light)**:
+  - Tema Claro Nórdico (`y2k-light` / Scandinavian Minimalist 0px radius) configurado como tema por defecto en toda la aplicación (`index.html`, `docs.html`, `architecture.html`).
+  - Toolbar de chat modular dividido en 2 niveles: Fila 1 (controles principales, selector de modelo y menú) y Fila 2 (barra de telemetría y estado del motor colapsable/ocultable con persistencia en `localStorage`).
+  - Controles de ventana interactivos tipo macOS: botón de cerrar/reiniciar (`dot-close`), botón de minimizar (`dot-min`), maximizar a pantalla completa (`dot-max`) y borrado rápido (`btn-quick-clear-chat`).
+  - Desacoplamiento de mensajes del sistema del chat visual, preservándolos íntegros en el log de auditoría (`GajeDB.saveAuditLog()`) y en la exportación de bitácora Markdown (`.md`).
+- **Soporte WebAssembly In-Browser (Zero-Server) y Despliegue en Vercel**:
+  - Detección automática del entorno web estático (Vercel / Cloudflare Pages) con fallback inteligente a WebAssembly In-Browser y streaming local.
+  - Descarga directa de modelos desde el CDN oficial de Hugging Face.
+  - Cabeceras de aislamiento de memoria COOP/COEP (`Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`) en `vercel.json` y `_headers`.
+- **Optimización Integral Móvil y Corrección de Viewport (Pixel 9 / iOS / Android)**:
+  - Bloqueo completo del viewport (`100dvh`, `position: fixed; inset: 0; overscroll-behavior: none; touch-action: pan-y`) eliminando rebotes de pantalla (*pull-to-refresh*), desplazamientos 2D y franjas vacías en Android Chrome y Safari.
+  - Prevención del auto-zoom en iOS Safari mediante `font-size: 16px` en el área de entrada.
+  - Detección dinámica de hardware del cliente en tiempo real en la bitácora (`navigator.hardwareConcurrency`, `navigator.deviceMemory`, GPU WebGL/WebGPU y OS).
+
+### Changed
+- Actualización de la versión del proyecto a **`v1.7.0-alpha`** en todo el ecosistema GAJE.
+- Purga de más de 5 GB de modelos legacy obsoletos en disco local.
+
 ## [1.6.0-alpha] - 2026-08-22
 ### Changed
 - **Consolidación validación Fase 0-3**: completado ciclo empírico completo con gates de decisión verificados:
