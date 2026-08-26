@@ -290,20 +290,39 @@ impl GajeFlatFileReader {
         let head_dim = config.n_embd / config.n_head;
 
         let embd_dna = self.get_linear("token_embd", block_size)?;
-        let output_norm = self.get_f32_slice(
-            self.tensor_map.get("output_norm").unwrap().dna_off,
-            self.tensor_map.get("output_norm").unwrap().dna_len,
-        );
+        let output_norm_entry = self.tensor_map.get("output_norm").ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Tensor 'output_norm' no encontrado en el archivo .flat",
+            )
+        })?;
+        let output_norm = self.get_f32_slice(output_norm_entry.dna_off, output_norm_entry.dna_len);
         let lm_head = self.get_linear("lm_head", block_size)?;
 
         let mut blocks = Vec::with_capacity(config.n_blocks);
         for i in 0..config.n_blocks {
             let p = format!("blk.{}.", i);
 
-            let attn_norm_entry = self.tensor_map.get(&format!("{}attn_norm", p)).unwrap();
+            let attn_norm_entry =
+                self.tensor_map
+                    .get(&format!("{}attn_norm", p))
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            format!("Tensor '{}attn_norm' no encontrado", p),
+                        )
+                    })?;
             let attn_norm = self.get_f32_slice(attn_norm_entry.dna_off, attn_norm_entry.dna_len);
 
-            let ffn_norm_entry = self.tensor_map.get(&format!("{}ffn_norm", p)).unwrap();
+            let ffn_norm_entry =
+                self.tensor_map
+                    .get(&format!("{}ffn_norm", p))
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::NotFound,
+                            format!("Tensor '{}ffn_norm' no encontrado", p),
+                        )
+                    })?;
             let ffn_norm = self.get_f32_slice(ffn_norm_entry.dna_off, ffn_norm_entry.dna_len);
 
             let has_fused_qkv = self.tensor_map.contains_key(&format!("{}attn_qkv", p));

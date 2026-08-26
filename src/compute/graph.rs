@@ -110,11 +110,7 @@ impl StateGraph {
 
     /// Ejecuta el grafo desde `start` con el estado inicial. Devuelve el estado
     /// final y el numero de transiciones efectuadas.
-    pub fn run(
-        &self,
-        start: usize,
-        state: AgentState,
-    ) -> Result<(AgentState, u64), GraphError> {
+    pub fn run(&self, start: usize, state: AgentState) -> Result<(AgentState, u64), GraphError> {
         if start >= self.nodes.len() {
             return Err(GraphError::NodeIndex(start));
         }
@@ -128,10 +124,12 @@ impl StateGraph {
             }
             transitions += 1;
             let node = &self.nodes[current];
-            match node.process(st.clone()).map_err(|e| GraphError::NodeFailed {
-                node: current,
-                err: e,
-            })? {
+            match node
+                .process(st.clone())
+                .map_err(|e| GraphError::NodeFailed {
+                    node: current,
+                    err: e,
+                })? {
                 StepResult::End(s) => return Ok((s, transitions)),
                 StepResult::Next { next, state } => {
                     if next >= self.nodes.len() {
@@ -288,10 +286,12 @@ mod tests {
         }
         let mut g = StateGraph::new().with_max_steps(100);
         g.add_node(Arc::new(LoopNode));
-        assert!(matches!(g.run(0, AgentState::default()), Err(GraphError::MaxSteps(100))));
+        assert!(matches!(
+            g.run(0, AgentState::default()),
+            Err(GraphError::MaxSteps(100))
+        ));
     }
 }
-
 
 // --- Exposicion PyO3 (Fase 4a: micro-benchmark del gate H1) -----------------
 
@@ -332,8 +332,9 @@ pub fn graph_bench_native_py(chain_len: usize, iterations: u64) -> PyResult<Grap
     let t0 = Instant::now();
     let mut last_hops = 0u64;
     for _ in 0..iterations {
-        let (s, _) =
-            g.run(0, start_state.clone()).map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e:?}")))?;
+        let (s, _) = g
+            .run(0, start_state.clone())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e:?}")))?;
         last_hops = s.hops;
     }
     let total_ns = t0.elapsed().as_nanos() as f64;
