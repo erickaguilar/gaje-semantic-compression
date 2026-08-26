@@ -74,11 +74,13 @@ def build_smollm2_2bit_anchored(density=0.05):
         PROJECT_ROOT, "data", "models", "smollm2-135m-instruct-fp16.gguf"
     )
     output_path = os.path.join(
-        PROJECT_ROOT, "models", f"smollm2-135m-2bit-anchored-{int(density*100)}pct.gaje"
+        PROJECT_ROOT,
+        "models",
+        f"smollm2-135m-2bit-anchored-{int(density * 100)}pct.gaje",
     )
 
     print(
-        f"🧬 [gaje_diff] Generando SmolLM2 2-bit ({density*100:.1f}% Anchors) en: {output_path}..."
+        f"🧬 [gaje_diff] Generando SmolLM2 2-bit ({density * 100:.1f}% Anchors) en: {output_path}..."
     )
     cfg = ARCHITECTURES["llama"]
     old_attn = cfg.attn_bit_depth
@@ -95,7 +97,7 @@ def build_smollm2_2bit_anchored(density=0.05):
         llm = GenomicLLM(gguf_path)
         gc.collect()
         llm.save(output_path)
-        print(f"✅ Organismo 2-bit ({density*100:.1f}% Anchors) creado exitosamente.")
+        print(f"✅ Organismo 2-bit ({density * 100:.1f}% Anchors) creado exitosamente.")
     finally:
         cfg.attn_bit_depth = old_attn
         cfg.ffn_bit_depth = old_ffn
@@ -171,7 +173,7 @@ def run_gaje_diff():
         try:
             path_2bit = build_smollm2_2bit_anchored(density)
             print(
-                f"[*] Evaluando 2-bit con {density*100:.1f}% anclas..."
+                f"[*] Evaluando 2-bit con {density * 100:.1f}% anclas..."
                 if density >= 0
                 else "[*] Evaluando 2-bit puro (sin anclas)..."
             )
@@ -190,7 +192,7 @@ def run_gaje_diff():
             match = "✅ SÍ" if top1_2 == hf_top1 else "❌ NO"
             pred_tok = tokenizer.decode([top1_2])
 
-            name_str = "Puro (Sin Anclas)" if density < 0 else f"{density*100:.1f}%"
+            name_str = "Puro (Sin Anclas)" if density < 0 else f"{density * 100:.1f}%"
             results_2bit.append(
                 {
                     "density": name_str,
@@ -204,7 +206,7 @@ def run_gaje_diff():
             del llm_2bit
             gc.collect()
         except Exception as e:
-            print(f"❌ Error evaluando {density*100:.1f}%: {e}")
+            print(f"❌ Error evaluando {density * 100:.1f}%: {e}")
 
     print("\n=======================================================")
     print("GAJE Validation Report: Curva de Estabilidad 2-Bit")

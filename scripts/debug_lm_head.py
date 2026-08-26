@@ -66,5 +66,5 @@ for i in range(10):
     hf_tok = tokenizer.decode([int(hf_top10[i])])
     gaje_tok = tokenizer.decode([int(gaje_top10[i])])
     print(
-        f"Rank {i+1}: HF = '{hf_tok}' ({hf_top10[i]}) score={hf_logits[hf_top10[i]]:.2f} | GAJE = '{gaje_tok}' ({gaje_top10[i]}) score={gaje_logits[gaje_top10[i]]:.2f}"
+        f"Rank {i + 1}: HF = '{hf_tok}' ({hf_top10[i]}) score={hf_logits[hf_top10[i]]:.2f} | GAJE = '{gaje_tok}' ({gaje_top10[i]}) score={gaje_logits[gaje_top10[i]]:.2f}"
     )

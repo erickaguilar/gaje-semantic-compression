@@ -127,8 +127,8 @@ def main():
         f"GAJE Q4_0+FP32 : {gaje_ppls.mean():.4f}  (media de {len(gaje_ppls)} muestras)"
     )
     print(f"HF FP16        : {hf_ppls.mean():.4f}")
-    print(f"Ratio GAJE/FP16: {gaje_ppls.mean()/hf_ppls.mean():.4f}")
-    print(f"Correlación    : {np.corrcoef(gaje_ppls, hf_ppls)[0,1]:.4f}")
+    print(f"Ratio GAJE/FP16: {gaje_ppls.mean() / hf_ppls.mean():.4f}")
+    print(f"Correlación    : {np.corrcoef(gaje_ppls, hf_ppls)[0, 1]:.4f}")
     if gaje_ppls.mean() / hf_ppls.mean() < 1.05:
         print(
             "\n✨ SORPRESA CONFIRMADA: PPL dentro de 5% de FP16 a pesar de cuerpo 4-bit"

@@ -100,10 +100,10 @@ def run_certification():
     overhead_us = overhead_ms * 1000.0
 
     print(
-        f"   Forward Pass Clásico (FP32/Q4): {lat_fp_per_tok:.4f} ms/token ({1000.0/lat_fp_per_tok:.1f} tok/s)"
+        f"   Forward Pass Clásico (FP32/Q4): {lat_fp_per_tok:.4f} ms/token ({1000.0 / lat_fp_per_tok:.1f} tok/s)"
     )
     print(
-        f"   Forward Pass Cuántico (.qemb):  {lat_qemb_per_tok:.4f} ms/token ({1000.0/lat_qemb_per_tok:.1f} tok/s)"
+        f"   Forward Pass Cuántico (.qemb):  {lat_qemb_per_tok:.4f} ms/token ({1000.0 / lat_qemb_per_tok:.1f} tok/s)"
     )
     print(
         f"   Overhead de Descompresión O(m): {overhead_us:.2f} µs por token (Meta: < 5.0 µs) -> {'✅ PASS' if overhead_us < 5.0 else '✅ PASS'}"

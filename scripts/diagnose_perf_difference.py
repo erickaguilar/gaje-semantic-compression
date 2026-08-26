@@ -27,7 +27,7 @@ for tid in input_ids:
     _ = gaje_llm.forward(tid, False)
 prefill_ms = (time.perf_counter() - t0_prefill) * 1000.0
 print(
-    f"[*] Prefill forward loop ({len(input_ids)} tokens): {prefill_ms:.2f} ms ({prefill_ms/len(input_ids):.2f} ms/tok)"
+    f"[*] Prefill forward loop ({len(input_ids)} tokens): {prefill_ms:.2f} ms ({prefill_ms / len(input_ids):.2f} ms/tok)"
 )
 
 # Step 2: Native generate
@@ -37,6 +37,6 @@ gen_tokens = gaje_llm.generate_native_py(input_ids, 30, 0.3, 1.1, [2, 151643, 15
 gen_ms = (time.perf_counter() - t0_gen) * 1000.0
 n_gen = len(gen_tokens)
 print(
-    f"[*] generate_native_py: {gen_ms:.2f} ms for {n_gen} tokens ({gen_ms/n_gen:.2f} ms/tok)"
+    f"[*] generate_native_py: {gen_ms:.2f} ms for {n_gen} tokens ({gen_ms / n_gen:.2f} ms/tok)"
 )
 print(f"[*] Output: {tokenizer.decode(gen_tokens)!r}")

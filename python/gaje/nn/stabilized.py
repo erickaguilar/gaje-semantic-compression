@@ -1,8 +1,10 @@
 import gc
 import os
+import time
 import numpy as np
 import gaje.core._impl as dna_semantic_compression
 import gguf
+
 try:
     from transformers import AutoTokenizer
 except ImportError:

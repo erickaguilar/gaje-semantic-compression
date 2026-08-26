@@ -37,5 +37,5 @@ gen_tokens = gaje_llm.generate_native_py(input_ids, 30, 0.3, 1.1, [2, 151643, 15
 dt = (time.perf_counter() - t0) * 1000.0
 
 print(
-    f"[*] With HF FP32 warm-up: {dt:.2f} ms for {len(gen_tokens)} tokens ({dt/len(gen_tokens):.2f} ms/tok)"
+    f"[*] With HF FP32 warm-up: {dt:.2f} ms for {len(gen_tokens)} tokens ({dt / len(gen_tokens):.2f} ms/tok)"
 )

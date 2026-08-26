@@ -9,6 +9,7 @@ Uso:
     python scripts/benchmarks/ppl_unified.py [--max_tokens 2048]
     # luego llama-perplexity -m <gguf> -f unified_corpus.txt -c 8192 --seed 42
 """
+
 import os
 import sys
 import argparse
@@ -122,7 +123,7 @@ def main():
         print(f"HF FP16            : PPL={ppl_h:.3f}  tokens={n_h}")
 
     if args.which == "all":
-        print(f"Ratio GAJE/FP16    : {ppl_g/ppl_h:.3f}")
+        print(f"Ratio GAJE/FP16    : {ppl_g / ppl_h:.3f}")
 
 
 if __name__ == "__main__":

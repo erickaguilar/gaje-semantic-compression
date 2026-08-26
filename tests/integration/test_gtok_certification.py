@@ -88,7 +88,7 @@ class TestGtokCertification(unittest.TestCase):
             json_size = os.path.getsize(SAMPLE_JSON_TOKENIZER)
             savings_pct = (1.0 - (gtok_size / json_size)) * 100.0
             print(
-                f"\n[GTOK CERT 1] Tamaño JSON: {json_size/1024/1024:.2f} MB | GTOK: {gtok_size/1024/1024:.2f} MB (Ahorro: {savings_pct:.1f}%)"
+                f"\n[GTOK CERT 1] Tamaño JSON: {json_size / 1024 / 1024:.2f} MB | GTOK: {gtok_size / 1024 / 1024:.2f} MB (Ahorro: {savings_pct:.1f}%)"
             )
             self.assertGreater(
                 savings_pct,

@@ -23,8 +23,12 @@ class TestIslandMemoryManager(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_add_and_retrieve_memory(self):
-        self.mgr.add_memory("episodic", "El usuario prefiere respuestas en español técnico.")
-        self.mgr.add_memory("documental", "El motor GAJE utiliza compresión de 4 bits Q4_0.")
+        self.mgr.add_memory(
+            "episodic", "El usuario prefiere respuestas en español técnico."
+        )
+        self.mgr.add_memory(
+            "documental", "El motor GAJE utiliza compresión de 4 bits Q4_0."
+        )
         self.mgr.add_memory("conversational", "Usuario: Hola | Asistente: ¡Hola!")
 
         # Buscar por similitud
@@ -44,7 +48,9 @@ class TestIslandMemoryManager(unittest.TestCase):
         self.assertTrue(any("12345" in e.text for e in reloaded.entries))
 
     def test_prompt_injection_within_budget(self):
-        injection = self.mgr.format_memory_injection("cuéntame sobre la compresión Q4_0 y GAJE")
+        injection = self.mgr.format_memory_injection(
+            "cuéntame sobre la compresión Q4_0 y GAJE"
+        )
         self.assertIsNotNone(injection)
         self.assertIn("Memoria de Largo Plazo", injection)
 

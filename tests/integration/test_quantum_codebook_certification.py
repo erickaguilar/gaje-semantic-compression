@@ -52,7 +52,7 @@ class TestQuantumCodebookCertification(unittest.TestCase):
         qemb_size = os.path.getsize(self.qemb_path)
         savings_pct = (1.0 - (qemb_size / raw_size)) * 100.0
         print(
-            f"\n[QEMB CERT 1] Tamaño FP32: {raw_size/1024:.1f} KB | .qemb: {qemb_size/1024:.1f} KB (Ahorro: {savings_pct:.1f}%)"
+            f"\n[QEMB CERT 1] Tamaño FP32: {raw_size / 1024:.1f} KB | .qemb: {qemb_size / 1024:.1f} KB (Ahorro: {savings_pct:.1f}%)"
         )
         self.assertGreater(
             savings_pct,

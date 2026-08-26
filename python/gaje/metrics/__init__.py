@@ -1,4 +1,5 @@
 """GAJE Metrics Module."""
+
 from .benchmark import (
     calculate_lexical_diversity,
     calculate_keyword_recall,

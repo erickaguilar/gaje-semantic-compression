@@ -46,7 +46,7 @@ for name, attn_b, ffn_b, ffn_anchor in experiments:
     cfg.ffn_anchor_threshold = ffn_anchor
 
     out_file = os.path.join(
-        PROJECT_ROOT, "models", f"test_{attn_b}b_{ffn_b}b_a{int(ffn_anchor*100)}.gaje"
+        PROJECT_ROOT, "models", f"test_{attn_b}b_{ffn_b}b_a{int(ffn_anchor * 100)}.gaje"
     )
 
     llm = GenomicLLM(gguf_path)

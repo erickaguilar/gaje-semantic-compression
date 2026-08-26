@@ -53,7 +53,9 @@ class TestGtokTokenizer(unittest.TestCase):
         # 1. Crear un modelo .flat sintético válido (cabecera GAJE de 4096 bytes + weights dummy)
         header = bytearray(4096)
         header[:4] = b"GAJE"
-        struct.pack_into("<III", header, 4, 2, 0, 1)  # version=2, flags=0, num_tensors=1
+        struct.pack_into(
+            "<III", header, 4, 2, 0, 1
+        )  # version=2, flags=0, num_tensors=1
         dummy_weights = b"WEIGHTS_DUMMY_DATA_12345678"
 
         with tempfile.NamedTemporaryFile(suffix=".flat", delete=False) as tf:
