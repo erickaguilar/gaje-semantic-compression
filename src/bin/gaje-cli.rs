@@ -23,6 +23,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .expect("Error configurando el manejador de señales");
 
     let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && (args[1] == "download" || args[1] == "pull") {
+        return handle_download_command(&args[2..], running.clone());
+    }
     if args.len() > 1 && args[1] == "epoch" {
         return handle_epoch_command(&args[2..]);
     }
@@ -985,5 +988,65 @@ fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error
         }
     }
 
+    Ok(())
+}
+
+fn handle_download_command(
+    args: &[String],
+    running: Arc<AtomicBool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
+        println!("⚡ GAJE HELIX — Descargador Nativo Multi-Stream (DNF / hf_transfer)");
+        println!("Uso: gaje-cli download <MODELO_O_URL> [--out <DIR>] [--concurrency <N>] [--min-chunk <MB>]\n");
+        println!("Modelos Disponibles:");
+        println!("  pico  / gaje_pico_135m.flat   (471 MB)");
+        println!("  nano  / gaje_nano_1.5b.flat   (1.26 GB)");
+        println!("  prime / gaje_prime_3b.flat    (2.20 GB)");
+        println!("  ultra / gaje_ultra_7b.flat    (4.90 GB)");
+        println!("  <usuario>/<repo>              (Hugging Face)");
+        println!("  https://...                   (URL Directa)\n");
+        println!("Opciones:");
+        println!("  --out <DIR>          Directorio de destino (por defecto: models/)");
+        println!("  --concurrency <N>    Conexiones paralelas (por defecto: 8)");
+        println!("  --min-chunk <MB>     Tamaño mínimo por chunk en MB (por defecto: 2)");
+        return Ok(());
+    }
+
+    let model_target = &args[0];
+    let mut out_dir = "models".to_string();
+    let mut concurrency = 8usize;
+    let mut min_chunk_mb = 2u64;
+
+    let mut j = 1;
+    while j < args.len() {
+        if (args[j] == "--out" || args[j] == "-o" || args[j] == "--dir") && j + 1 < args.len() {
+            out_dir = args[j + 1].clone();
+            j += 2;
+        } else if (args[j] == "--concurrency" || args[j] == "-c" || args[j] == "--threads") && j + 1 < args.len() {
+            concurrency = args[j + 1].parse().unwrap_or(8);
+            j += 2;
+        } else if args[j] == "--min-chunk" && j + 1 < args.len() {
+            min_chunk_mb = args[j + 1].parse().unwrap_or(2);
+            j += 2;
+        } else {
+            j += 1;
+        }
+    }
+
+    let opts = _impl::io::downloader::DownloadOptions {
+        concurrency,
+        chunk_size_min: min_chunk_mb * 1024 * 1024,
+        user_agent: "GAJE-Helix-Engine/1.7.0 (Rust; Native-Downloader)".to_string(),
+    };
+
+    println!("⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}", model_target);
+    let stats = _impl::io::downloader::download_model(
+        model_target,
+        Some(Path::new(&out_dir)),
+        Some(opts),
+        Some(running),
+    )?;
+
+    println!("🎉 Descarga completada con éxito en {:?}", stats.destination);
     Ok(())
 }

@@ -2,6 +2,7 @@ pub mod arch;
 pub mod config;
 #[cfg(feature = "native")]
 pub mod db_loader;
+pub mod downloader;
 #[cfg(feature = "native")]
 pub mod ffi;
 pub mod flat_reader;

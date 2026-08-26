@@ -83,6 +83,7 @@ impl GajeFlatFileReader {
         }
 
         // Hint al kernel: readahead del mapeo completo (no bloquea).
+        #[cfg(unix)]
         let _ = mmap.advise(memmap2::Advice::WillNeed);
 
         let mmap = std::sync::Arc::clone(mmap);
