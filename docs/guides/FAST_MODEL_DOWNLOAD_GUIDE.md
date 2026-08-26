@@ -1,8 +1,8 @@
 # ⚡ Guía de Descarga Acelerada de Modelos desde Hugging Face
 
-**Fecha:** 26 de Agosto de 2026  
-**Módulos:** GAJE Core, CLI, Web UI, Hugging Face Hub, Edge Deployments  
-**Estado:** ✅ Aprobado y Certificado  
+**Fecha:** 26 de Agosto de 2026
+**Módulos:** GAJE Core, CLI, Web UI, Hugging Face Hub, Edge Deployments
+**Estado:** ✅ Aprobado y Certificado
 
 ---
 
