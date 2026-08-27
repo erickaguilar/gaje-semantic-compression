@@ -47,7 +47,7 @@ export HF_HUB_ENABLE_HF_TRANSFER=1
 
 # 2. Descargar modelo plano individual
 huggingface-cli download \
-  erickaguilar/gaje-models \
+  eaguilar/gaje-models \
   gaje_pico_135m.flat \
   --local-dir ./models/production \
   --local-dir-use-symlinks False
@@ -60,7 +60,7 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 from huggingface_hub import hf_hub_download
 
 model_path = hf_hub_download(
-    repo_id="erickaguilar/gaje-models",
+    repo_id="eaguilar/gaje-models",
     filename="gaje_pico_135m.flat",
     local_dir="./models/production"
 )
@@ -90,7 +90,7 @@ brew install aria2
 aria2c -x 16 -s 16 -k 1M -c \
   --dir=./models/production \
   --out=gaje_pico_135m.flat \
-  "https://huggingface.co/erickaguilar/gaje-models/resolve/main/gaje_pico_135m.flat"
+  "https://huggingface.co/eaguilar/gaje-models/resolve/main/gaje_pico_135m.flat"
 ```
 
 **Parámetros clave:**

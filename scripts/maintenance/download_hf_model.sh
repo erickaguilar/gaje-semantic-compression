@@ -6,7 +6,7 @@
 
 set -e
 
-REPO_ID="${REPO_ID:-erickaguilar/gaje-models}"
+REPO_ID="${REPO_ID:-eaguilar/gaje-models}"
 DEFAULT_OUT_DIR="./models/production"
 OUT_DIR="${2:-$DEFAULT_OUT_DIR}"
 MODEL_FILE="$1"

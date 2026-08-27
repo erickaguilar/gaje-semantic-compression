@@ -33,10 +33,10 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "size_mb": 520,
         "min_ram_gb": 1.5,
         "recommended_ram_gb": 3.0,
-        "hf_repo": "erickaguilar/gaje-models",
-        "url": "https://huggingface.co/erickaguilar/gaje-models/resolve/main/gaje_nano_1.5b.flat",
+        "hf_repo": "eaguilar/gaje-models",
+        "url": "https://huggingface.co/eaguilar/gaje-models/resolve/main/gaje_nano_1.5b.flat",
         "fallback_urls": [
-            "https://huggingface.co/erickaguilar/gaje-models/raw/main/gaje_nano_1.5b.flat",
+            "https://huggingface.co/eaguilar/gaje-models/raw/main/gaje_nano_1.5b.flat",
         ],
     },
     "gaje_prime_3b": {
@@ -45,8 +45,8 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "size_mb": 1400,
         "min_ram_gb": 3.0,
         "recommended_ram_gb": 6.0,
-        "hf_repo": "erickaguilar/gaje-models",
-        "url": "https://huggingface.co/erickaguilar/gaje-models/resolve/main/gaje_prime_3b.flat",
+        "hf_repo": "eaguilar/gaje-models",
+        "url": "https://huggingface.co/eaguilar/gaje-models/resolve/main/gaje_prime_3b.flat",
         "fallback_urls": [],
     },
     "gaje_ultra_7b": {
@@ -55,8 +55,8 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "size_mb": 3800,
         "min_ram_gb": 6.0,
         "recommended_ram_gb": 12.0,
-        "hf_repo": "erickaguilar/gaje-models",
-        "url": "https://huggingface.co/erickaguilar/gaje-models/resolve/main/gaje_ultra_7b.flat",
+        "hf_repo": "eaguilar/gaje-models",
+        "url": "https://huggingface.co/eaguilar/gaje-models/resolve/main/gaje_ultra_7b.flat",
         "fallback_urls": [],
     },
     "deepseek_r1_1.5b": {
@@ -65,8 +65,8 @@ MODEL_REGISTRY: Dict[str, Dict[str, Any]] = {
         "size_mb": 1254,
         "min_ram_gb": 2.0,
         "recommended_ram_gb": 4.0,
-        "hf_repo": "erickaguilar/gaje-models",
-        "url": "https://huggingface.co/erickaguilar/gaje-models/resolve/main/deepseek_r1_1_5b_q4_0.gaje.flat",
+        "hf_repo": "eaguilar/gaje-models",
+        "url": "https://huggingface.co/eaguilar/gaje-models/resolve/main/deepseek_r1_1_5b_q4_0.gaje.flat",
         "fallback_urls": [],
     },
     "smollm2_135m_gguf": {
