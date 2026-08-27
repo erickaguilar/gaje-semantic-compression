@@ -7,7 +7,7 @@ import os
 import sys
 import unittest
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SERVER_DIR = os.path.join(PROJECT_ROOT, "examples", "ui", "web_ui")
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 sys.path.insert(0, SERVER_DIR)

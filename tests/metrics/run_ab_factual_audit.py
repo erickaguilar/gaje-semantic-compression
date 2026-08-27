@@ -4,7 +4,7 @@ import time
 import json
 import subprocess
 
-PROJECT_ROOT = "/home/erickaguilar/Documentos/gaje-semantic-compression"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 # If we are in the subprocess:

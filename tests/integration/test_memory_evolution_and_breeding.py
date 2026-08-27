@@ -122,3 +122,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_memory_evolution_and_breeding():
+    main()

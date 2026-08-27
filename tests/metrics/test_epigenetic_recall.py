@@ -1,5 +1,5 @@
 import numpy as np
-from gaje.core import GajeIndex
+from gaje.core._impl import GajeIndex
 
 from gaje.utils.codebook import fast_kmeans_1d
 
