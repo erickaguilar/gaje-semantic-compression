@@ -66,6 +66,17 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
 1. **Compilación no equivale a éxito semántico:** Que el código compile no certifica la precisión de compresión. Las validaciones de Perplejidad (PPL) y distancia semántica deben verificarse formalmente.
 2. **Ciclo de Desarrollo:** Diseñar bajo SDD (especificaciones) -> BDD (escenarios *Given-When-Then*) -> TDD (tests unitarios/integración).
 
+### D. Procesos de Larga Duración y Conservación Estricta de Tokens
+1. **Naturaleza de Cómputo Intensivo:** Las tareas de este repositorio (compilaciones de Rust con `--release`, cuantización/exportación de pesos `.flat`, benchmarks de perplejidad/entropía y descargas de modelos) son operaciones pesadas que pueden tomar varios segundos o minutos según el hardware.
+2. **Prohibición Absoluta de Polling Activo (`manage_task status`):**
+   * Cada invocación a `manage_task` para consultar el estado de una tarea en curso consume tokens de salida (*tool call*) y tokens de entrada (*logs, stdout/stderr inyectados al contexto*).
+   * El polling en bucle agota prematuramente la ventana de contexto y los tokens disponibles de la sesión.
+3. **Patrón Reactivo Obligatorio (*Reactive Wakeup*):**
+   * Tras despachar un comando asíncrono con `run_command`, los agentes de IA **deben detener inmediatamente sus llamadas a herramientas** y ceder el turno al entorno.
+   * El sistema notifica y reactiva al agente de forma automática y reactiva en cuanto el proceso finaliza con su código de salida y resultado.
+4. **Parámetro `WaitMsBeforeAsync`:**
+   * Para operaciones pesadas, establecer `WaitMsBeforeAsync` adecuadamente (ej. 5000–10000 ms) y permitir que los procesos largos corran en segundo plano sin llamadas intermedias de sondeo.
+
 ---
 
 ## 4. Comandos Frecuentes de Desarrollo
