@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -45,8 +45,8 @@ jobs:
 
       - name: Install Playwright & Dependencies
         run: |
-          npm ci || npm install
+          npm install
           npx playwright install --with-deps chromium
 
       - name: Run Web UI E2E Test Suite
-        run: npx playwright test --config=tests/ui_e2e/playwright.config.js
+        run: npm run test:ui
