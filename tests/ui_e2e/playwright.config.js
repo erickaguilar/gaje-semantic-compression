@@ -27,10 +27,10 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: '.venv/bin/python3 examples/ui/web_ui/server.py',
+    command: 'python examples/ui/web_ui/server.py',
     url: 'http://127.0.0.1:8080',
     cwd: repoRoot,
-    reuseExistingServer: false,
+    reuseExistingServer: !process.env.CI,
     timeout: 20 * 1000,
     env: {
       GAJE_AUTO_LOAD_MODEL: 'false',
