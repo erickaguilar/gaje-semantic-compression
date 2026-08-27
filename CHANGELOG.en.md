@@ -1,55 +1,55 @@
-# 📋 Changelog / Registro de Cambios — GAJE Protocol
+# 📋 Changelog — GAJE Protocol
 
-[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
+[![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
 
 ## [1.7.0-alpha] - 2026-08-24
 ### Added
-- **Estandarización de Modelos Flat GAJE y Hub Oficial de Hugging Face**:
-  - Lanzamiento del transmutador unificado `scripts/transmute_qwen_models.py` para compilar y empaquetar pesos Qwen 2.5 en formato híbrido `.flat` v2 (`token_embd` y `lm_head` protegidos en FP32 y cuerpo cuantizado en Q4_0).
-  - Publicación y disponibilidad global en Hugging Face Hub (`https://huggingface.co/eaguilar/gaje-models`) de los 3 modelos estándar:
-    * `gaje_nano_1.5b.flat` (1.23 GB) — Optimizado para WebAssembly / Móvil / In-Browser.
-    * `gaje_prime_3b.flat` (2.24 GB) — Estándar equilibrado para WASM Desktop y Cloud.
-    * `gaje_ultra_7b.flat` (4.88 GB) — Modelo de razonamiento y contexto profundo.
-- **Web UI & Arquitectura Dual-Theme (Y2K Dark / Scandinavian Light)**:
-  - Tema Claro Nórdico (`y2k-light` / Scandinavian Minimalist 0px radius) configurado como tema por defecto en toda la aplicación (`index.html`, `docs.html`, `architecture.html`).
-  - Toolbar de chat modular dividido en 2 niveles: Fila 1 (controles principales, selector de modelo y menú) y Fila 2 (barra de telemetría y estado del motor colapsable/ocultable con persistencia en `localStorage`).
-  - Controles de ventana interactivos tipo macOS: botón de cerrar/reiniciar (`dot-close`), botón de minimizar (`dot-min`), maximizar a pantalla completa (`dot-max`) y borrado rápido (`btn-quick-clear-chat`).
-  - Desacoplamiento de mensajes del sistema del chat visual, preservándolos íntegros en el log de auditoría (`GajeDB.saveAuditLog()`) y en la exportación de bitácora Markdown (`.md`).
-- **Soporte WebAssembly In-Browser (Zero-Server) y Despliegue en Vercel**:
-  - Detección automática del entorno web estático (Vercel / Cloudflare Pages) con fallback inteligente a WebAssembly In-Browser y streaming local.
-  - Descarga directa de modelos desde el CDN oficial de Hugging Face.
-  - Cabeceras de aislamiento de memoria COOP/COEP (`Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`) en `vercel.json` y `_headers`.
-- **Optimización Integral Móvil y Corrección de Viewport (Pixel 9 / iOS / Android)**:
-  - Bloqueo completo del viewport (`100dvh`, `position: fixed; inset: 0; overscroll-behavior: none; touch-action: pan-y`) eliminando rebotes de pantalla (*pull-to-refresh*), desplazamientos 2D y franjas vacías en Android Chrome y Safari.
-  - Prevención del auto-zoom en iOS Safari mediante `font-size: 16px` en el área de entrada.
-  - Detección dinámica de hardware del cliente en tiempo real en la bitácora (`navigator.hardwareConcurrency`, `navigator.deviceMemory`, GPU WebGL/WebGPU y OS).
+- **Flat GAJE Model Standardization & Official Hugging Face Hub**:
+  - Released unified transmuted pipeline `scripts/transmute_qwen_models.py` to compile and package Qwen 2.5 weights in hybrid `.flat` v2 format (`token_embd` and `lm_head` protected in FP32 with transformer body quantized in Q4_0).
+  - Global release and availability on Hugging Face Hub (`https://huggingface.co/eaguilar/gaje-models`) of 3 standard models:
+    * `gaje_nano_1.5b.flat` (1.23 GB) — Optimized for WebAssembly / Mobile / In-Browser.
+    * `gaje_prime_3b.flat` (2.24 GB) — Balanced standard for WASM Desktop and Cloud.
+    * `gaje_ultra_7b.flat` (4.88 GB) — Deep reasoning and extended context model.
+- **Web UI & Dual-Theme Architecture (Y2K Dark / Scandinavian Light)**:
+  - Scandinavian Light Theme (`y2k-light` / Minimalist 0px radius) set as default application-wide (`index.html`, `docs.html`, `architecture.html`).
+  - Modular 2-tier chat toolbar: Tier 1 (core controls, model selector, menu) and Tier 2 (collapsible telemetry & engine HUD with `localStorage` persistence).
+  - macOS-style interactive window controls: close/reset (`dot-close`), minimize (`dot-min`), maximize/fullscreen (`dot-max`), and quick clear (`btn-quick-clear-chat`).
+  - Decoupled system prompts from visual chat bubbles, preserving full integrity in audit logs (`GajeDB.saveAuditLog()`) and Markdown export (`.md`).
+- **In-Browser WebAssembly (Zero-Server) Support & Vercel Deployment**:
+  - Automatic detection of static hosting environments (Vercel / Cloudflare Pages) with intelligent fallback to In-Browser WebAssembly and local streaming.
+  - Direct multi-stream model downloading from Hugging Face CDN.
+  - COOP/COEP isolation headers (`Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`) configured in `vercel.json` and `_headers`.
+- **Comprehensive Mobile & Viewport Optimization (Pixel 9 / iOS / Android)**:
+  - Full viewport lock (`100dvh`, `position: fixed; inset: 0; overscroll-behavior: none; touch-action: pan-y`) eliminating rubber-band pull-to-refresh, 2D drift, and white gutter bands in Chrome Android and Safari.
+  - Auto-zoom prevention on iOS Safari via `font-size: 16px` in inputs.
+  - Dynamic client hardware detection logged in telemetry (`navigator.hardwareConcurrency`, `navigator.deviceMemory`, GPU WebGL/WebGPU, and OS).
 
 ### Changed
-- Actualización de la versión del proyecto a **`v1.7.0-alpha`** en todo el ecosistema GAJE.
-- Purga de más de 5 GB de modelos legacy obsoletos en disco local.
+- Project version updated to **`v1.7.0-alpha`** across the entire GAJE ecosystem.
+- Purged over 5 GB of obsolete legacy models from local disks.
 
 ## [1.6.0-alpha] - 2026-08-22
 ### Changed
-- **Consolidación validación Fase 0-3**: completado ciclo empírico completo con gates de decisión verificados:
-  - Fase 0: H1 (2.24× speedup SPSA discreto vs mutación aleatoria) y H3 (21.56× currículo híbrido H3 confirmado)
-  - Fase 1: Módulo Rust `train-zero-order` operacional con ~21 tok/s throughput y <50 MB memoria adicional
-  - Fase 2: Arquitectura escalado Qwen2.5 32M→64M con `.flat` v2 autodescriptivo, PPL ~1.60 post-IQAT
-  - Fase 3: SPSA niche weights specialization en `.gmem` índices, needle_recall 1.0 mantenido en 3 epochs
-- **Reporte de hallazgos**: nuevo archivo `docs/findings_v1.6.0_phase_0_to_3.md` documentando el viaje completo de validación
-- **Benchmark SPSA**: `tests/benchmark_spsa_discrete.py` actualizado con mutaciones dirigidas (±1 codebook) y schedule temperatura 3→0.5
-- **Kernel optimizations**: `src/core/gtok.rs` (+183 insertions) y `src/wasm.rs` (+110 insertions) para compatibilidad y rendimiento
-- **Arquitectura Qwen2.5**: validador `ArchitectureDescriptor` en `.flat` v2 detecta automáticamente SwiGLU + RoPE completo
+- **Phase 0-3 Empirical Validation Consolidation**: Completed full empirical cycle with verified decision gates:
+  - Phase 0: H1 (2.24× SPSA speedup vs random mutation) and H3 (21.56× hybrid curriculum confirmed)
+  - Phase 1: Operational Rust `train-zero-order` module with ~21 tok/s throughput and <50 MB additional memory
+  - Phase 2: Qwen2.5 32M→64M scaling architecture with self-describing `.flat` v2, PPL ~1.60 post-IQAT
+  - Phase 3: SPSA niche weights specialization in `.gmem` indices, needle_recall 1.0 maintained over 3 epochs
+- **Findings Report**: New document `docs/findings_v1.6.0_phase_0_to_3.md` covering the full validation lifecycle.
+- **SPSA Benchmark**: `tests/benchmark_spsa_discrete.py` updated with directed mutations (±1 codebook) and temperature schedule 3→0.5.
+- **Kernel Optimizations**: `src/core/gtok.rs` and `src/wasm.rs` enhanced for cross-platform compatibility and throughput.
+- **Qwen2.5 Architecture**: `ArchitectureDescriptor` validator in `.flat` v2 automatically detects SwiGLU + full RoPE.
 
 ### Added
-- **Nuevo reporte de hallazgos**: `docs/findings_v1.6.0_phase_0_to_3.md` (8,855 bytes) con validación empírica Fase 0-3
-- **Validación de producción**: throughput certificado 19-32 tok/s vs 1.38 tok/s PyTorch FP32 (14-23× mejora)
-- **Formato `.gaje.flat` v2**: headers autodescriptivos eliminando bugs de alineación atención
-- **Memoria persistente `.gmem` v2**: lineage (epoch/parent_epoch), flags (seal/promote/consolidate), round-trip integrity
+- **Findings Report**: `docs/findings_v1.6.0_phase_0_to_3.md` detailing Phase 0-3 empirical validation.
+- **Production Validation**: Certified throughput of 19-32 tok/s vs 1.38 tok/s PyTorch FP32 (14-23× speedup).
+- **Format `.gaje.flat` v2**: Self-describing headers preventing attention alignment issues.
+- **Persistent Memory `.gmem` v2**: Lineage (epoch/parent_epoch), flags (seal/promote/consolidate), and round-trip integrity.
 
 ### Fixed
-- Alineación versión proyecto a `v1.6.0-alpha` consistente en README, CHANGELOG, `Cargo.toml` y `pyproject.toml`
-- Bug schedule temperatura SPSA: decay suave 3→0.5 (progress²) en lugar de schedule lineal
-- Corregido bug mutación aleatoria: perturbaciones vecinos dirigidas en lugar de reasignaciones aleatorias completas
+- Project version alignment to `v1.6.0-alpha` across README, CHANGELOG, `Cargo.toml`, and `pyproject.toml`.
+- SPSA temperature decay schedule: smooth progress² decay instead of linear schedule.
+- Random mutation bug: directed neighbor perturbations replacing arbitrary full reassignments.
 
 ### Added
 - **Contenido útil de `develop-local` extraído y normalizado a LF** (descartando el ruido CRLF de su commit de snapshot):

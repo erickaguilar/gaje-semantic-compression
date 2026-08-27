@@ -1,4 +1,4 @@
-# 🗺️ Índice Maestro: GAJE Semantic Compression (v1.6.0-alpha)
+# 🗺️ Índice Maestro: GAJE Semantic Compression (v1.7.0-alpha)
 
 Mapa central del repositorio consolidado. Define la estructura lógica actual, la documentación estratégica y la suite de validación.
 

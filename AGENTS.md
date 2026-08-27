@@ -1,5 +1,7 @@
 # 🧬 GAJE Semantic Compression — Protocolo Global de Desarrollo y Guía para Agentes
 
+[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](AGENTS.en.md)
+
 Este archivo define la **descripción global del proyecto**, la arquitectura del repositorio y los **estándares operativos y técnicos obligatorios** tanto para desarrolladores como para agentes de Inteligencia Artificial (Antigravity, Claude, Gemini, Copilot, etc.).
 
 ---
@@ -23,7 +25,7 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
   * `index.html`: Chat interactivo y HUD de telemetría de compresión.
   * `docs.html`: Centro de documentación interactiva.
   * `architecture.html`: Grafo y visualización del sistema.
-  * `server.py`: Servidor backend FastAPI para la Web UI.
+  * `server.py`: Servidor backend HTTP nativo (Python stdlib `http.server`) para la Web UI.
   * `static/`: Estilos (`css/base.css`, `css/chat.css`), scripts e iconos del sprite Y2K (`static/icons/y2k/sprite.svg`).
 * **`/docs`**: Documentación clasificada (`guides/`, `plans/`, `bdd/`, `reports/`, `meta/`, `research/`).
 * **`/tests`**: Pruebas unitarias, de integración y de métricas (`pytest`, `cargo test`).
@@ -92,7 +94,7 @@ cargo test
 pytest tests/
 
 # Iniciar servidor de la Web UI
-python -m uvicorn examples.ui.web_ui.server:app --reload --port 8000
+python examples/ui/web_ui/server.py --port 8080
 ```
 
 ---

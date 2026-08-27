@@ -117,7 +117,7 @@ $$\mathcal{L} = T - V$$
 
 ---
 
-## 📂 Organización del Repositorio (`v1.6.0-alpha`)
+## 📂 Organización del Repositorio (`v1.7.0-alpha`)
 
 ```text
 gaje-semantic-compression/
@@ -170,4 +170,4 @@ pytest tests/unit tests/integration tests/metrics
 Licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Ver [LICENSE](LICENSE) para más información.
 
 ---
-*Protocolo GAJE-Flow v1.6.0-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*
+*Protocolo GAJE-Flow v1.7.0-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*
