@@ -105,18 +105,45 @@ src/
 * Actualizar `Cargo.toml` para incluir `tiny_http = "0.12"` y `serde_json = "1.0"`.
 
 ### **Fase 2: Interfaz de Línea de Comandos (`gaje-cli`)**
-* Añadir el comando `Serve` a la estructura `Commands` en [`src/bin/gaje-cli.rs`](file:///E:/Desarrollos/develop/gaje-semantic-compression/src/bin/gaje-cli.rs):
+* Añadir el comando `serve` al CLI nativo con los siguientes argumentos:
   * `--port <PORT>`: Puerto de escucha (por defecto `8080`).
   * `--host <HOST>`: Interfaz de red (por defecto `127.0.0.1`).
   * `--models-dir <PATH>`: Ruta hacia la carpeta de modelos `.flat` (por defecto `./models`).
   * `--static-dir <PATH>`: Ruta hacia la carpeta de la Web UI (por defecto `./examples/ui/web_ui`).
   * `--model <NAME>`: Modelo inicial a precargar en RAM.
+  * `--chat-only`: **Modo Ultra-Ligero Móvil / Edge**. Desactiva la carga de documentación (`docs.html`) y grafos de arquitectura (`architecture.html`, `architecture_graph.json`), concentrando el 100% de los recursos en la SPA de Chat.
+
+---
+
+## 5.1 Modo Ultra-Ligero Móvil (`--chat-only`) y Compilación Condicional
+
+Para despliegues en dispositivos móviles (Android/iOS), micro-controladores o servidores Edge con memoria restringida, se incorporan dos niveles de optimización:
+
+### 1. Optimizaciones en Tiempo de Ejecución (`--chat-only`):
+* **Cero Carga de Grafos SVG:** Omite la lectura y el servicio del grafo pesado `architecture_graph.json` (>40 nodos, >60 aristas).
+* **Menú de Navegación Limpio:** Oculta los enlaces de *Documentación* y *Arquitectura*, presentando únicamente el Chat Sandbox y el botón de instalación PWA.
+* **Máxima Memoria para KV-Cache:** El 100% de la RAM del proceso se reserva para el modelo genómico y el contexto conversacional.
+
+### 2. Compilación Condicional en Rust (`Cargo.toml` Features):
+```toml
+[features]
+default = ["full-ui"]
+full-ui = []    # Embebe Chat + Docs + Diagrama de Arquitectura completo
+chat-only = []  # Embebe únicamente la SPA de Chat (< 120 KB de frontend)
+```
+* Compilación para móviles/edge:
+  ```bash
+  cargo build --release --no-default-features --features chat-only
+  ```
+
+---
 
 ### **Fase 3: Servicio de Archivos Estáticos y Seguridad**
 * Implementar `static_files.rs` con:
   * Resolución segura de rutas (bloqueo estricto de *path traversal* contra `..` o accesos fuera de `static_dir`).
   * Mapa determinista de tipos MIME sin dependencias externas (`.html` ➔ `text/html`, `.css` ➔ `text/css`, `.js` ➔ `application/javascript`, `.svg` ➔ `image/svg+xml`, `.wasm` ➔ `application/wasm`, `.json` ➔ `application/json`).
   * Entrega de `index.html` en la raíz `/`.
+  * Filtro condicional si `--chat-only` está activo (retorna 404 o redirige a `/` en rutas de docs/arquitectura).
 
 ### **Fase 4: Endpoints REST de Administración**
 * Implementar `api.rs`:
@@ -145,5 +172,6 @@ src/
 1. **Binario Único:** `cargo build --release` genera un ejecutable autocontenido `target/release/gaje-cli.exe` (o binario Unix).
 2. **Arranque Instantáneo:** El servidor responde a peticiones en menos de 50 milisegundos tras la ejecución.
 3. **Cero Python Runtime:** La Web UI y la inferencia funcionan de forma completa en un sistema sin Python instalado.
-4. **Paridad Total de la UI:** La Web UI modularizada (3 temas, telemetría HUD, selector de modelos, bitácora `.md`, pantalla completa) opera con 100% de compatibilidad.
-5. **Streaming Fluido:** Los tokens fluyen de forma continua y suave en el navegador a través de SSE sin bloqueos de búfer.
+4. **Modo Móvil Ultra-Ligero:** Con `--chat-only`, el binario opera con huella de memoria reducida, omitiendo vistas secundarias.
+5. **Paridad Total de la UI:** La Web UI modularizada (3 temas, telemetría HUD, selector de modelos, bitácora `.md`, pantalla completa) opera con 100% de compatibilidad.
+6. **Streaming Fluido:** Los tokens fluyen de forma continua y suave en el navegador a través de SSE sin bloqueos de búfer.
