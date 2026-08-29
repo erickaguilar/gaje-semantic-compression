@@ -3,7 +3,7 @@ use _impl::compute::kernels;
 use _impl::io::models_cmd;
 use _impl::nn::repl::{self, ReplConfig};
 use clap::{Args, Parser, Subcommand};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -45,6 +45,9 @@ struct Cli {
 enum Commands {
     /// Inicia una sesión interactiva REPL en la terminal
     Chat(ChatArgs),
+
+    /// Inicia el servidor HTTP nativo en Rust con streaming SSE y servicio de la Web UI
+    Serve(ServeArgs),
 
     /// Ejecuta diagnósticos de hardware, extensiones SIMD y ancho de banda
     Doctor,
@@ -88,6 +91,33 @@ struct ChatArgs {
     /// Prompt del sistema
     #[arg(long, default_value = "Eres GAJE AI, un asistente genómico soberano, conciso y útil.")]
     system: String,
+}
+
+#[derive(Args, Debug)]
+struct ServeArgs {
+    /// Dirección IP de enlace de red (por defecto: 127.0.0.1)
+    #[arg(short = 'H', long, default_value = "127.0.0.1")]
+    host: String,
+
+    /// Puerto TCP de escucha (por defecto: 8080)
+    #[arg(short, long, default_value_t = 8080)]
+    port: u16,
+
+    /// Directorio de modelos (.flat)
+    #[arg(long, default_value = "models")]
+    models_dir: String,
+
+    /// Directorio de recursos estáticos de la Web UI
+    #[arg(long, default_value = "examples/ui/web_ui")]
+    static_dir: String,
+
+    /// Modelo inicial a precargar en memoria
+    #[arg(short, long)]
+    model: Option<String>,
+
+    /// Modo ultra-ligero para móviles y edge (omite docs y grafos)
+    #[arg(long)]
+    chat_only: bool,
 }
 
 #[derive(Args, Debug)]
@@ -265,6 +295,18 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 Some(running),
             )?;
             println!("🎉 Descarga completada con éxito en {:?}", stats.destination);
+            Ok(())
+        }
+        Some(Commands::Serve(serve_args)) => {
+            let config = _impl::server::ServerConfig {
+                host: serve_args.host,
+                port: serve_args.port,
+                models_dir: PathBuf::from(serve_args.models_dir),
+                static_dir: PathBuf::from(serve_args.static_dir),
+                initial_model: serve_args.model,
+                chat_only: serve_args.chat_only,
+            };
+            _impl::server::run_server(config, running)?;
             Ok(())
         }
         Some(Commands::Chat(chat_args)) => {

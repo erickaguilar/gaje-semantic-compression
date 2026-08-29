@@ -43,6 +43,7 @@ libc = { version = "0.2", optional = true }
 indicatif = { version = "0.18.4", optional = true }
 ureq = { version = "2.10", features = ["tls"], optional = true }
 clap = { version = "4.5", features = ["derive", "cargo"], optional = true }
+tiny_http = { version = "0.12", optional = true }
 # Aceleración por GPU (Vulkan / WGPU)
 wgpu = { version = "24.0.0", optional = true }
 pollster = { version = "0.4", optional = true }
@@ -57,7 +58,7 @@ console_error_panic_hook = "0.1"
 
 [features]
 default = ["native", "gpu"]
-native = ["dep:tokenizers", "dep:memmap2", "dep:redb", "dep:ctrlc", "dep:libc", "dep:indicatif", "dep:ureq", "dep:clap"]
+native = ["dep:tokenizers", "dep:memmap2", "dep:redb", "dep:ctrlc", "dep:libc", "dep:indicatif", "dep:ureq", "dep:clap", "dep:tiny_http"]
 gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 wasm = ["dep:wasm-bindgen"]
 python = ["pyo3", "numpy", "pyo3/extension-module", "native", "gpu"]
