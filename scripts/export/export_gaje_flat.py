@@ -489,8 +489,12 @@ def export_gaje_flat():
     group_size = 32
     # GTOK Embedding (Born with GTOK)
     gtok_bytes = b""
-    qwen_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizers", "qwen2_5_tokenizer.gtok")
-    smol_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizers", "smollm2_tokenizer.gtok")
+    qwen_gtok = os.path.join(
+        PROJECT_ROOT, "models", "core", "tokenizers", "qwen2_5_tokenizer.gtok"
+    )
+    smol_gtok = os.path.join(
+        PROJECT_ROOT, "models", "core", "tokenizers", "smollm2_tokenizer.gtok"
+    )
     def_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizer.gtok")
 
     if arch_family in (3, 4) and os.path.exists(qwen_gtok):
@@ -547,7 +551,9 @@ def export_gaje_flat():
 
     print(f"\n✅ Exportación Flat Zero-Copy v0.9.8 Finalizada Exitosamente: {out_path}")
     if gtok_len > 0:
-        print(f"  - Tokenizador GTOK incrustado nativamente: {gtok_len / (1024 * 1024):.2f} MB")
+        print(
+            f"  - Tokenizador GTOK incrustado nativamente: {gtok_len / (1024 * 1024):.2f} MB"
+        )
     print(
         f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB"
     )

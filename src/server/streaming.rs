@@ -87,17 +87,26 @@ pub fn handle_chat_stream_request(
     if let Some(hist) = chat_req.history {
         for msg in hist.iter().rev().take(6).rev() {
             let role = msg.role.as_deref().unwrap_or("user");
-            let content = msg.content.as_deref().or(msg.message.as_deref()).unwrap_or("");
+            let content = msg
+                .content
+                .as_deref()
+                .or(msg.message.as_deref())
+                .unwrap_or("");
             full_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, content));
         }
     }
-    full_prompt.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", user_msg));
+    full_prompt.push_str(&format!(
+        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+        user_msg
+    ));
 
     let max_tokens = chat_req.max_tokens.unwrap_or(256);
     let temperature = chat_req.temperature.unwrap_or(0.4);
     let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
 
-    let prompt_tokens_u32 = tokenizer.encode(&full_prompt, false).map_err(|e| e.to_string())?;
+    let prompt_tokens_u32 = tokenizer
+        .encode(&full_prompt, false)
+        .map_err(|e| e.to_string())?;
     let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
     if prompt_tokens.is_empty() {
@@ -184,7 +193,9 @@ pub fn handle_chat_stream_request(
                 .map(|(idx, _)| idx)
                 .unwrap_or(0)
         } else {
-            sampler.sample_core(logits.clone(), temperature, chat_req.top_p.unwrap_or(0.9)).unwrap_or(0)
+            sampler
+                .sample_core(logits.clone(), temperature, chat_req.top_p.unwrap_or(0.9))
+                .unwrap_or(0)
         };
 
         if eos_ids.contains(&next_token) {
@@ -194,7 +205,9 @@ pub fn handle_chat_stream_request(
         generated_tokens.push(next_token);
         seen_tokens.insert(next_token);
 
-        let piece = tokenizer.decode(&[next_token as u32], true).unwrap_or_default();
+        let piece = tokenizer
+            .decode(&[next_token as u32], true)
+            .unwrap_or_default();
         let clean_piece = piece
             .replace("<|im_end|>", "")
             .replace("<|im_start|>", "")

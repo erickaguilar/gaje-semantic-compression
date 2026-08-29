@@ -30,7 +30,8 @@ pub fn list_models(search_dir: &Path) -> Result<Vec<ModelSummary>, String> {
 }
 
 fn scan_directory(dir: &Path, acc: &mut Vec<ModelSummary>) -> Result<(), String> {
-    let entries = fs::read_dir(dir).map_err(|e| format!("Error leyendo directorio {:?}: {}", dir, e))?;
+    let entries =
+        fs::read_dir(dir).map_err(|e| format!("Error leyendo directorio {:?}: {}", dir, e))?;
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -53,7 +54,8 @@ fn read_model_summary(path: &Path) -> Result<ModelSummary, String> {
     let size_mb = meta.len() as f64 / (1024.0 * 1024.0);
 
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
-    file.read_exact(&mut header_bytes).map_err(|e| e.to_string())?;
+    file.read_exact(&mut header_bytes)
+        .map_err(|e| e.to_string())?;
 
     let header = FlatHeaderV2::from_bytes(&header_bytes).map_err(|e| format!("{:?}", e))?;
 
@@ -72,7 +74,11 @@ fn read_model_summary(path: &Path) -> Result<ModelSummary, String> {
     .to_string();
 
     let has_gtok = header.gtok_len > 0;
-    let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let filename = path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
 
     Ok(ModelSummary {
         path: path.to_path_buf(),
@@ -97,10 +103,14 @@ pub fn print_models_table(models: &[ModelSummary]) {
         return;
     }
 
-    println!("{:<30} {:<15} {:<12} {:<10} {:<12} {:<8}", 
-        "ARCHIVO", "ARQUITECTURA", "CUANTIZACIÓN", "DIM/CAPAS", "TAMAÑO", "GTOK");
-    println!("{:-<30} {:-<15} {:-<12} {:-<10} {:-<12} {:-<8}", 
-        "", "", "", "", "", "");
+    println!(
+        "{:<30} {:<15} {:<12} {:<10} {:<12} {:<8}",
+        "ARCHIVO", "ARQUITECTURA", "CUANTIZACIÓN", "DIM/CAPAS", "TAMAÑO", "GTOK"
+    );
+    println!(
+        "{:-<30} {:-<15} {:-<12} {:-<10} {:-<12} {:-<8}",
+        "", "", "", "", "", ""
+    );
 
     for m in models {
         let dim_layers = if m.n_layers > 0 {
@@ -111,28 +121,40 @@ pub fn print_models_table(models: &[ModelSummary]) {
         let size_str = format!("{:.1} MB", m.size_mb);
         let gtok_badge = if m.has_gtok { "🟢 SÍ" } else { "⚪ NO" };
 
-        println!("{:<30} {:<15} {:<12} {:<10} {:<12} {:<8}",
-            m.filename, m.arch_name, m.quant_format, dim_layers, size_str, gtok_badge);
+        println!(
+            "{:<30} {:<15} {:<12} {:<10} {:<12} {:<8}",
+            m.filename, m.arch_name, m.quant_format, dim_layers, size_str, gtok_badge
+        );
     }
 
     println!("\nTotal de organismos registrados: {}\n", models.len());
 }
 
 pub fn inspect_model(file_path: &Path) -> Result<(), String> {
-    let mut file = File::open(file_path).map_err(|e| format!("Error abriendo {:?}: {}", file_path, e))?;
+    let mut file =
+        File::open(file_path).map_err(|e| format!("Error abriendo {:?}: {}", file_path, e))?;
     let meta = file.metadata().map_err(|e| e.to_string())?;
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
-    file.read_exact(&mut header_bytes).map_err(|e| e.to_string())?;
+    file.read_exact(&mut header_bytes)
+        .map_err(|e| e.to_string())?;
 
-    let header = FlatHeaderV2::from_bytes(&header_bytes).map_err(|e| format!("Cabecera inválida: {:?}", e))?;
+    let header = FlatHeaderV2::from_bytes(&header_bytes)
+        .map_err(|e| format!("Cabecera inválida: {:?}", e))?;
 
     println!("\n🔍 ========================================================");
     println!("🔬 Inspección Estructural: {:?}", file_path);
     println!("========================================================\n");
 
     println!("📄 Metadatos del Archivo:");
-    println!("   • Tamaño en Disco:     {:.2} MB ({} bytes)", meta.len() as f64 / (1024.0 * 1024.0), meta.len());
-    println!("   • Magic Bytes:         {:?}", std::str::from_utf8(&header.magic).unwrap_or("????"));
+    println!(
+        "   • Tamaño en Disco:     {:.2} MB ({} bytes)",
+        meta.len() as f64 / (1024.0 * 1024.0),
+        meta.len()
+    );
+    println!(
+        "   • Magic Bytes:         {:?}",
+        std::str::from_utf8(&header.magic).unwrap_or("????")
+    );
     println!("   • Versión de Formato:  v{}", header.version);
     println!("   • Número de Tensores:  {}", header.num_tensors);
 
@@ -152,7 +174,10 @@ pub fn inspect_model(file_path: &Path) -> Result<(), String> {
 
     println!("\n🎛️ Esquema de Cuantización:");
     println!("   • Formato:             {:?}", header.quantization_type());
-    println!("   • Tamaño de Grupo:     {} elementos", header.effective_group_size());
+    println!(
+        "   • Tamaño de Grupo:     {} elementos",
+        header.effective_group_size()
+    );
     println!("   • Offset de Pesos:     {} bytes", header.weights_offset);
     println!("   • Longitud de Pesos:   {} bytes", header.weights_len);
 
@@ -170,17 +195,26 @@ pub fn inspect_model(file_path: &Path) -> Result<(), String> {
 }
 
 pub fn verify_model(file_path: &Path) -> Result<(), String> {
-    println!("🔍 Verificando integridad estructural de {:?}...", file_path);
-    let mut file = File::open(file_path).map_err(|e| format!("Error abriendo {:?}: {}", file_path, e))?;
+    println!(
+        "🔍 Verificando integridad estructural de {:?}...",
+        file_path
+    );
+    let mut file =
+        File::open(file_path).map_err(|e| format!("Error abriendo {:?}: {}", file_path, e))?;
     let meta = file.metadata().map_err(|e| e.to_string())?;
 
     if meta.len() < FlatHeaderV2::SIZE as u64 {
-        return Err(format!("El archivo es demasiado pequeño (< {} bytes)", FlatHeaderV2::SIZE));
+        return Err(format!(
+            "El archivo es demasiado pequeño (< {} bytes)",
+            FlatHeaderV2::SIZE
+        ));
     }
 
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
-    file.read_exact(&mut header_bytes).map_err(|e| e.to_string())?;
-    let header = FlatHeaderV2::from_bytes(&header_bytes).map_err(|e| format!("Error en cabecera: {:?}", e))?;
+    file.read_exact(&mut header_bytes)
+        .map_err(|e| e.to_string())?;
+    let header = FlatHeaderV2::from_bytes(&header_bytes)
+        .map_err(|e| format!("Error en cabecera: {:?}", e))?;
 
     if header.weights_offset + header.weights_len > meta.len() {
         return Err(format!(
@@ -192,9 +226,15 @@ pub fn verify_model(file_path: &Path) -> Result<(), String> {
 
     println!("✅ Magic Bytes: OK");
     println!("✅ Offset y límites de tensores: OK");
-    println!("✅ Header V2: OK (Arquitectura: {:?}, Cuantización: {:?})", 
-        header.arch_family, header.quantization_type());
-    println!("🏆 VEREDICTO: El modelo {:?} es 100% íntegro y compatible.", file_path);
+    println!(
+        "✅ Header V2: OK (Arquitectura: {:?}, Cuantización: {:?})",
+        header.arch_family,
+        header.quantization_type()
+    );
+    println!(
+        "🏆 VEREDICTO: El modelo {:?} es 100% íntegro y compatible.",
+        file_path
+    );
     Ok(())
 }
 
@@ -213,8 +253,10 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
         .map_err(|e| format!("Error abriendo {:?}: {}", flat_path, e))?;
 
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
-    file.read_exact(&mut header_bytes).map_err(|e| e.to_string())?;
-    let mut header = FlatHeaderV2::from_bytes(&header_bytes).map_err(|e| format!("Error en cabecera: {:?}", e))?;
+    file.read_exact(&mut header_bytes)
+        .map_err(|e| e.to_string())?;
+    let mut header = FlatHeaderV2::from_bytes(&header_bytes)
+        .map_err(|e| format!("Error en cabecera: {:?}", e))?;
 
     let tok_path: PathBuf = if let Some(p) = tokenizer_path_opt {
         p.to_path_buf()
@@ -227,7 +269,9 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
                 if default_gtok.exists() {
                     default_gtok
                 } else {
-                    return Err("No se especificó tokenizador y no se pudo auto-detectar".to_string());
+                    return Err(
+                        "No se especificó tokenizador y no se pudo auto-detectar".to_string()
+                    );
                 }
             }
         }
@@ -237,7 +281,8 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
         return Err(format!("El tokenizador origen no existe: {:?}", tok_path));
     }
 
-    let gtok_bytes = std::fs::read(&tok_path).map_err(|e| format!("Error leyendo tokenizador {:?}: {}", tok_path, e))?;
+    let gtok_bytes = std::fs::read(&tok_path)
+        .map_err(|e| format!("Error leyendo tokenizador {:?}: {}", tok_path, e))?;
 
     let meta = file.metadata().map_err(|e| e.to_string())?;
     let gtok_offset = meta.len();
@@ -251,13 +296,21 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
 
     file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
     let updated_bytes: &[u8] = unsafe {
-        std::slice::from_raw_parts(&header as *const FlatHeaderV2 as *const u8, FlatHeaderV2::SIZE)
+        std::slice::from_raw_parts(
+            &header as *const FlatHeaderV2 as *const u8,
+            FlatHeaderV2::SIZE,
+        )
     };
     file.write_all(updated_bytes).map_err(|e| e.to_string())?;
     file.flush().map_err(|e| e.to_string())?;
 
-    println!("🎉 GTOK incrustado con éxito en {:?} desde {:?} ({:.2} MB en offset {})",
-        flat_path, tok_path, gtok_len as f64 / (1024.0 * 1024.0), gtok_offset);
+    println!(
+        "🎉 GTOK incrustado con éxito en {:?} desde {:?} ({:.2} MB en offset {})",
+        flat_path,
+        tok_path,
+        gtok_len as f64 / (1024.0 * 1024.0),
+        gtok_offset
+    );
     Ok(())
 }
 
@@ -272,7 +325,10 @@ pub fn inject_all_gtok(search_dir: &Path) -> Result<(), String> {
 
     for m in &models {
         if !m.has_gtok {
-            println!("📦 Inyectando GTOK en: {} (Arquitectura: {})...", m.filename, m.arch_name);
+            println!(
+                "📦 Inyectando GTOK en: {} (Arquitectura: {})...",
+                m.filename, m.arch_name
+            );
             match inject_gtok(&m.path, None) {
                 Ok(_) => modified += 1,
                 Err(e) => eprintln!("   ❌ Error: {}", e),
@@ -281,9 +337,15 @@ pub fn inject_all_gtok(search_dir: &Path) -> Result<(), String> {
     }
 
     if modified == 0 {
-        println!("✨ Todos los modelos en {:?} ya cuentan con GTOK incrustado.", search_dir);
+        println!(
+            "✨ Todos los modelos en {:?} ya cuentan con GTOK incrustado.",
+            search_dir
+        );
     } else {
-        println!("\n🏆 {} modelo(s) actualizados con GTOK nativo con éxito.\n", modified);
+        println!(
+            "\n🏆 {} modelo(s) actualizados con GTOK nativo con éxito.\n",
+            modified
+        );
     }
     Ok(())
 }

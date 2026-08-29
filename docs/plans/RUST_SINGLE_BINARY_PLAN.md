@@ -145,4 +145,3 @@ Para garantizar un binario completamente autocontenido y liviano que pueda distr
 | `scripts/` | ~130 | muchos | Subcomandos CLI + obsoletos |
 | `tests/` | mix | ~55 | Migrar a `cargo test` / subcomandos |
 | `benchmarks/` | decenas | muchos | Subcomando `benchmark`; investigación en Python |
-

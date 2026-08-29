@@ -35,7 +35,7 @@ pub fn get_mime_type(path: &Path) -> &'static str {
 pub fn serve_static_file(
     static_root: &Path,
     url_path: &str,
-    chat_only: bool,
+    _chat_only: bool,
 ) -> Option<Response<std::io::Cursor<Vec<u8>>>> {
     let clean_path = url_path.split('?').next().unwrap_or("/");
     let path_no_slash = clean_path.trim_start_matches('/');

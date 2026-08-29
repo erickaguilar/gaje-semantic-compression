@@ -32,15 +32,12 @@ pub fn run_doctor() -> DoctorReport {
 
     #[cfg(target_arch = "aarch64")]
     let (simd_avx2, simd_avx512f, simd_fma, simd_sse41, simd_neon) = (
-        false,
-        false,
-        false,
-        false,
-        true, // NEON siempre activo en aarch64
+        false, false, false, false, true, // NEON siempre activo en aarch64
     );
 
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-    let (simd_avx2, simd_avx512f, simd_fma, simd_sse41, simd_neon) = (false, false, false, false, false);
+    let (simd_avx2, simd_avx512f, simd_fma, simd_sse41, simd_neon) =
+        (false, false, false, false, false);
 
     // Detección de GPU
     let gpu_backend = {
@@ -95,20 +92,61 @@ pub fn print_doctor_report(report: &DoctorReport) {
     println!("========================================================\n");
 
     println!("💻 Sistema Operativo: {}", report.os_info);
-    println!("⚙️  Núcleos de CPU Disponibles: {} hilos lógicos\n", report.cpu_cores);
+    println!(
+        "⚙️  Núcleos de CPU Disponibles: {} hilos lógicos\n",
+        report.cpu_cores
+    );
 
     println!("⚡ Conjunto de Instrucciones SIMD:");
-    println!("   • AVX2 (256-bit):       {}", if report.simd_avx2 { "🟢 Soportado (Óptimo)" } else { "🔴 No detectado" });
-    println!("   • FMA (Fused Multiply): {}", if report.simd_fma { "🟢 Soportado (Aceleración gemv)" } else { "🔴 No detectado" });
-    println!("   • AVX-512F (512-bit):   {}", if report.simd_avx512f { "🟢 Soportado (Ultra)" } else { "⚪ No disponible (No requerido)" });
-    println!("   • SSE 4.1:              {}", if report.simd_sse41 { "🟢 Soportado" } else { "🔴 No detectado" });
-    println!("   • ARM NEON:             {}", if report.simd_neon { "🟢 Soportado" } else { "⚪ N/A (x86_64)" });
+    println!(
+        "   • AVX2 (256-bit):       {}",
+        if report.simd_avx2 {
+            "🟢 Soportado (Óptimo)"
+        } else {
+            "🔴 No detectado"
+        }
+    );
+    println!(
+        "   • FMA (Fused Multiply): {}",
+        if report.simd_fma {
+            "🟢 Soportado (Aceleración gemv)"
+        } else {
+            "🔴 No detectado"
+        }
+    );
+    println!(
+        "   • AVX-512F (512-bit):   {}",
+        if report.simd_avx512f {
+            "🟢 Soportado (Ultra)"
+        } else {
+            "⚪ No disponible (No requerido)"
+        }
+    );
+    println!(
+        "   • SSE 4.1:              {}",
+        if report.simd_sse41 {
+            "🟢 Soportado"
+        } else {
+            "🔴 No detectado"
+        }
+    );
+    println!(
+        "   • ARM NEON:             {}",
+        if report.simd_neon {
+            "🟢 Soportado"
+        } else {
+            "⚪ N/A (x86_64)"
+        }
+    );
 
     println!("\n🎮 Aceleración por Hardware:");
     println!("   • Backend GPU:          {}", report.gpu_backend);
 
     println!("\n🧠 Ancho de Banda de Memoria Zero-Copy:");
-    println!("   • Rendimiento Medido:   {:.2} GB/s", report.mmap_speed_gb_s);
+    println!(
+        "   • Rendimiento Medido:   {:.2} GB/s",
+        report.mmap_speed_gb_s
+    );
 
     println!("\n--------------------------------------------------------");
     if report.is_optimal {

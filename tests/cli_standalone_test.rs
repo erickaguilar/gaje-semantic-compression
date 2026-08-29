@@ -14,8 +14,16 @@ fn test_cli_dataset_build_roundtrip() {
     // 1. Crear archivo temporal de entrada con pares conversacionales
     {
         let mut f = File::create(tmp_input).expect("Error creando archivo temporal");
-        writeln!(f, "{{\"instruction\": \"Hola GAJE\", \"response\": \"Hola, soy el motor genómico.\"}}").unwrap();
-        writeln!(f, "{{\"user\": \"¿Qué es mmap?\", \"assistant\": \"Mapeo zero-copy de memoria.\"}}").unwrap();
+        writeln!(
+            f,
+            "{{\"instruction\": \"Hola GAJE\", \"response\": \"Hola, soy el motor genómico.\"}}"
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{{\"user\": \"¿Qué es mmap?\", \"assistant\": \"Mapeo zero-copy de memoria.\"}}"
+        )
+        .unwrap();
     }
 
     // 2. Invocar dataset_build_cmd directamente desde Rust

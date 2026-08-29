@@ -1,6 +1,6 @@
 # 🧬 Scripts & Workflow Directory — GAJE Semantic Compression
 
-> **IMPORTANTE — SOBERANÍA DEL NÚCLEO NATIVO (Rust Single Binary):**  
+> **IMPORTANTE — SOBERANÍA DEL NÚCLEO NATIVO (Rust Single Binary):**
 > A partir de la versión **GAJE Helix 1.7.0**, todos los flujos de trabajo de producción, descarga, inferencia, exportación, benchmarks, construcción de datasets y auditoría estructural han sido migrados a comandos nativos de alto rendimiento dentro de **`gaje-cli` (Rust)**.
 
 ---

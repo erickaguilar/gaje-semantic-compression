@@ -58,7 +58,8 @@ pub fn find_model_path(models_root: &Path, model_name: &str) -> Option<PathBuf> 
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_file() && path.file_name().map(|n| n == clean_name).unwrap_or(false) {
+                    if path.is_file() && path.file_name().map(|n| n == clean_name).unwrap_or(false)
+                    {
                         return Some(path);
                     }
                 }
@@ -80,7 +81,9 @@ pub fn run_server(
         }
     };
 
-    println!("\n🧬 ===============================================================================");
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("🌐 GAJE HELIX — Servidor HTTP Nativo de Producción (Zero-Python Runtime)");
     println!("===============================================================================");
     println!("🚀 Escuchando en:         http://{}", addr);
@@ -145,32 +148,59 @@ pub fn run_server(
         // 1. CORS Preflight
         if method == Method::Options {
             let mut resp = Response::empty(StatusCode(204));
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Methods"[..], &b"GET, POST, OPTIONS"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type"[..]).unwrap());
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(
+                    &b"Access-Control-Allow-Methods"[..],
+                    &b"GET, POST, OPTIONS"[..],
+                )
+                .unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Headers"[..], &b"Content-Type"[..])
+                    .unwrap(),
+            );
             let _ = request.respond(resp);
             continue;
         }
 
         // 2. Endpoints API
         if url == "/api/models" && method == Method::Get {
-            let active_name = active_model.read().unwrap().as_ref().map(|m| m.name.clone());
+            let active_name = active_model
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|m| m.name.clone());
             let json_val = api::get_available_models(&config.models_dir, active_name.as_deref());
             let body = json_val.to_string();
             let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
-            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            resp.add_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
             let _ = request.respond(resp);
             continue;
         }
 
         if url == "/api/info" && method == Method::Get {
-            let active_name = active_model.read().unwrap().as_ref().map(|m| m.name.clone());
+            let active_name = active_model
+                .read()
+                .unwrap()
+                .as_ref()
+                .map(|m| m.name.clone());
             let json_val = api::get_runtime_info(active_name.as_deref());
             let body = json_val.to_string();
             let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
-            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            resp.add_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
             let _ = request.respond(resp);
             continue;
         }
@@ -189,7 +219,11 @@ pub fn run_server(
                 println!("🧬 [Carga Dinámica] Cargando modelo: {:?}", model_path);
                 match load_model_and_tokenizer(&model_path.to_string_lossy()) {
                     Ok((llm, tokenizer)) => {
-                        let name = model_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let name = model_path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
                         *active_model.write().unwrap() = Some(LoadedModel {
                             name: name.clone(),
                             path: model_path,
@@ -197,22 +231,36 @@ pub fn run_server(
                             tokenizer,
                         });
                         let json_resp = serde_json::json!({ "status": "ok", "model": name });
-                        let mut resp = Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
-                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
-                        resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                        let mut resp = Response::from_string(json_resp.to_string())
+                            .with_status_code(StatusCode(200));
+                        resp.add_header(
+                            Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
+                                .unwrap(),
+                        );
+                        resp.add_header(
+                            Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                .unwrap(),
+                        );
                         let _ = req.respond(resp);
                     }
                     Err(e) => {
                         let err_json = serde_json::json!({ "error": format!("Error al cargar modelo: {}", e) });
-                        let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(500));
-                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                        let mut resp = Response::from_string(err_json.to_string())
+                            .with_status_code(StatusCode(500));
+                        resp.add_header(
+                            Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
+                                .unwrap(),
+                        );
                         let _ = req.respond(resp);
                     }
                 }
             } else {
                 let err_json = serde_json::json!({ "error": format!("Modelo '{}' no encontrado", requested_name) });
-                let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(404));
-                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                let mut resp =
+                    Response::from_string(err_json.to_string()).with_status_code(StatusCode(404));
+                resp.add_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
                 let _ = req.respond(resp);
             }
             continue;
@@ -221,38 +269,63 @@ pub fn run_server(
         if url == "/api/unload_model" && method == Method::Post {
             *active_model.write().unwrap() = None;
             let json_resp = serde_json::json!({ "status": "ok", "unloaded": true });
-            let mut resp = Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
-            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let mut resp =
+                Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
             let _ = request.respond(resp);
             continue;
         }
 
         // 3. Servir Modelos Binarios para Descarga o WASM (`/models/*`) con streaming zero-copy
         if url.starts_with("/models/") && method == Method::Get {
-            let rel_path = url.trim_start_matches("/models/").split('?').next().unwrap_or("");
+            let rel_path = url
+                .trim_start_matches("/models/")
+                .split('?')
+                .next()
+                .unwrap_or("");
             if let Some(target_path) = find_model_path(&config.models_dir, rel_path) {
                 if let Ok(f) = File::open(&target_path) {
                     let mut resp = Response::from_file(f).with_status_code(StatusCode(200));
-                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap());
-                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    resp.add_header(
+                        Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..])
+                            .unwrap(),
+                    );
+                    resp.add_header(
+                        Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+                    );
                     let _ = request.respond(resp);
                     continue;
                 }
             }
-            let resp = Response::from_string(format!("Modelo '{}' no encontrado", rel_path)).with_status_code(StatusCode(404));
+            let resp = Response::from_string(format!("Modelo '{}' no encontrado", rel_path))
+                .with_status_code(StatusCode(404));
             let _ = request.respond(resp);
             continue;
         }
 
-        if (url == "/api/chat/stream" || url.starts_with("/api/chat/stream")) && (method == Method::Post || method == Method::Get) {
+        if (url == "/api/chat/stream" || url.starts_with("/api/chat/stream"))
+            && (method == Method::Post || method == Method::Get)
+        {
             let mut guard = active_model.write().unwrap();
             if let Some(ref mut loaded) = *guard {
-                let _ = streaming::handle_chat_stream_request(request, &mut loaded.llm, &loaded.tokenizer);
+                let _ = streaming::handle_chat_stream_request(
+                    request,
+                    &mut loaded.llm,
+                    &loaded.tokenizer,
+                );
             } else {
-                let err_json = serde_json::json!({ "error": "No hay ningún modelo cargado en el servidor." });
-                let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(503));
-                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                let err_json =
+                    serde_json::json!({ "error": "No hay ningún modelo cargado en el servidor." });
+                let mut resp =
+                    Response::from_string(err_json.to_string()).with_status_code(StatusCode(503));
+                resp.add_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
                 let _ = request.respond(resp);
             }
             continue;
@@ -264,46 +337,76 @@ pub fn run_server(
                 let mut body = String::new();
                 let mut req = request;
                 let _ = req.as_reader().read_to_string(&mut body);
-                let chat_req: streaming::ChatRequest = serde_json::from_str(&body).unwrap_or(streaming::ChatRequest {
-                    message: Some(body),
-                    model: None,
-                    history: None,
-                    system_prompt: None,
-                    max_tokens: Some(256),
-                    temperature: Some(0.4),
-                    top_p: Some(0.9),
-                    repetition_penalty: Some(1.15),
-                });
+                let chat_req: streaming::ChatRequest =
+                    serde_json::from_str(&body).unwrap_or(streaming::ChatRequest {
+                        message: Some(body),
+                        model: None,
+                        history: None,
+                        system_prompt: None,
+                        max_tokens: Some(256),
+                        temperature: Some(0.4),
+                        top_p: Some(0.9),
+                        repetition_penalty: Some(1.15),
+                    });
 
                 let prompt = chat_req.message.unwrap_or_default();
-                let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
-                let prompt_tokens = loaded.tokenizer.encode(&chat_prompt, false).unwrap_or_default();
-                let prompt_tokens_usize: Vec<usize> = prompt_tokens.into_iter().map(|t| t as usize).collect();
+                let chat_prompt = format!(
+                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                    prompt
+                );
+                let prompt_tokens = loaded
+                    .tokenizer
+                    .encode(&chat_prompt, false)
+                    .unwrap_or_default();
+                let prompt_tokens_usize: Vec<usize> =
+                    prompt_tokens.into_iter().map(|t| t as usize).collect();
                 let eos_ids = vec![2, 0];
-                let gen = loaded.llm.generate_native_core(prompt_tokens_usize, chat_req.max_tokens.unwrap_or(256), chat_req.temperature.unwrap_or(0.4), chat_req.repetition_penalty.unwrap_or(1.15), eos_ids).unwrap_or_default();
+                let gen = loaded
+                    .llm
+                    .generate_native_core(
+                        prompt_tokens_usize,
+                        chat_req.max_tokens.unwrap_or(256),
+                        chat_req.temperature.unwrap_or(0.4),
+                        chat_req.repetition_penalty.unwrap_or(1.15),
+                        eos_ids,
+                    )
+                    .unwrap_or_default();
                 let gen_u32: Vec<u32> = gen.into_iter().map(|t| t as u32).collect();
                 let reply = loaded.tokenizer.decode(&gen_u32, true).unwrap_or_default();
-                let clean = reply.replace("<|im_end|>", "").replace("<|im_start|>", "").replace("<|endoftext|>", "").trim().to_string();
+                let clean = reply
+                    .replace("<|im_end|>", "")
+                    .replace("<|im_start|>", "")
+                    .replace("<|endoftext|>", "")
+                    .trim()
+                    .to_string();
 
                 let json_resp = serde_json::json!({
                     "response": clean,
                     "status": "ok",
                     "model": loaded.name
                 });
-                let mut resp = Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
-                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                let mut resp =
+                    Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
+                resp.add_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
                 let _ = req.respond(resp);
             } else {
                 let err_json = serde_json::json!({ "error": "No hay ningún modelo cargado." });
-                let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(503));
-                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                let mut resp =
+                    Response::from_string(err_json.to_string()).with_status_code(StatusCode(503));
+                resp.add_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
                 let _ = request.respond(resp);
             }
             continue;
         }
 
         // 4. Servir Archivos Estáticos de la Web UI
-        if let Some(resp) = static_files::serve_static_file(&config.static_dir, &url, config.chat_only) {
+        if let Some(resp) =
+            static_files::serve_static_file(&config.static_dir, &url, config.chat_only)
+        {
             let _ = request.respond(resp);
         } else {
             let resp = Response::from_string("404 Not Found").with_status_code(StatusCode(404));

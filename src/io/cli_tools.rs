@@ -19,7 +19,9 @@ pub fn export_flat_cmd(
     tokenizer_opt: Option<&str>,
     quant_format: u32,
 ) -> Result<(), String> {
-    println!("\n🧬 ===============================================================================");
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("📦 GAJE HELIX — Exportador de Modelos a Formato Plano Zero-Copy (.flat v2)");
     println!("===============================================================================\n");
     println!("📥 Modelo de Origen: {}", input_path);
@@ -30,7 +32,10 @@ pub fn export_flat_cmd(
     // 1. Cargar modelo base
     let (model, default_tok) = load_model_and_tokenizer(input_path)?;
     let load_time = t0.elapsed();
-    println!("✅ Modelo origen cargado en {:.2} ms", load_time.as_secs_f64() * 1000.0);
+    println!(
+        "✅ Modelo origen cargado en {:.2} ms",
+        load_time.as_secs_f64() * 1000.0
+    );
 
     // 2. Resolver tokenizador
     let tokenizer = if let Some(tok_path) = tokenizer_opt {
@@ -43,7 +48,11 @@ pub fn export_flat_cmd(
     // 3. Sintetizar ModelConfig
     let n_embd = model.embeddings.out_features;
     let n_head = model.blocks.first().map(|b| b.attn.n_head).unwrap_or(8);
-    let n_head_kv = model.blocks.first().map(|b| b.attn.n_head_kv).unwrap_or(n_head);
+    let n_head_kv = model
+        .blocks
+        .first()
+        .map(|b| b.attn.n_head_kv)
+        .unwrap_or(n_head);
     let n_blocks = model.blocks.len();
     let vocab_size = model.lm_head.out_features;
 
@@ -85,7 +94,10 @@ pub fn export_flat_cmd(
         println!("\n🎉 ¡Exportación completada exitosamente!");
         println!("   • Archivo generado:   {}", output_path);
         println!("   • Tamaño total:       {:.2} MB", size_mb);
-        println!("   • Tiempo de guardado: {:.2} ms", write_time.as_secs_f64() * 1000.0);
+        println!(
+            "   • Tiempo de guardado: {:.2} ms",
+            write_time.as_secs_f64() * 1000.0
+        );
         println!("   • Formato:            Q4_0 Híbrido v2 (Embeddings FP32 + Cuerpo Q4_0)");
         println!("   • GTOK Incrustado:    🟢 SÍ");
     }
@@ -101,7 +113,9 @@ pub fn benchmark_cmd(
     max_tokens: usize,
     corpus_opt: Option<&str>,
 ) -> Result<(), String> {
-    println!("\n🧬 ===============================================================================");
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("⏱️  GAJE HELIX — Suite de Rendimiento, Latencia y Perplejidad");
     println!("===============================================================================\n");
     println!("📦 Modelo Evaluado: {}", model_path);
@@ -112,19 +126,20 @@ pub fn benchmark_cmd(
     println!("   • Tiempo de Carga Mmap: {:.2} ms", load_time_ms);
 
     // 1. Inferencia Directa y Throughput
-    let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
-    let prompt_tokens_u32 = tokenizer.encode(&chat_prompt, false).map_err(|e| e.to_string())?;
+    let chat_prompt = format!(
+        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+        prompt
+    );
+    let prompt_tokens_u32 = tokenizer
+        .encode(&chat_prompt, false)
+        .map_err(|e| e.to_string())?;
     let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
     let gen_t0 = Instant::now();
     let eos_ids = vec![2, 0];
-    let generated_tokens = llm.generate_native_core(
-        prompt_tokens,
-        max_tokens,
-        0.0,
-        1.15,
-        eos_ids,
-    ).map_err(|e| format!("Error en generación: {}", e))?;
+    let generated_tokens = llm
+        .generate_native_core(prompt_tokens, max_tokens, 0.0, 1.15, eos_ids)
+        .map_err(|e| format!("Error en generación: {}", e))?;
     let gen_time = gen_t0.elapsed().as_secs_f64();
 
     let gen_u32: Vec<u32> = generated_tokens.into_iter().map(|t| t as u32).collect();
@@ -142,12 +157,21 @@ pub fn benchmark_cmd(
     println!("\n📊 Métricas de Decodificación:");
     println!("   • Tokens Generados:     {}", token_count);
     println!("   • Tiempo E2E:           {:.3} s", gen_time);
-    println!("   • Throughput (TPS):     \x1b[1;32m{:.2} tokens/s\x1b[0m", tps);
-    println!("   • Muestra de Respuesta: \"{}\"", clean.chars().take(80).collect::<String>());
+    println!(
+        "   • Throughput (TPS):     \x1b[1;32m{:.2} tokens/s\x1b[0m",
+        tps
+    );
+    println!(
+        "   • Muestra de Respuesta: \"{}\"",
+        clean.chars().take(80).collect::<String>()
+    );
 
     // 2. Evaluación de Perplejidad si se pasa un corpus
     if let Some(corpus_path) = corpus_opt {
-        println!("\n📖 Evaluando Perplejidad (PPL) en corpus: {}", corpus_path);
+        println!(
+            "\n📖 Evaluando Perplejidad (PPL) en corpus: {}",
+            corpus_path
+        );
         let file = File::open(corpus_path).map_err(|e| format!("Error abriendo corpus: {}", e))?;
         let reader = BufReader::new(file);
 
@@ -189,7 +213,9 @@ pub fn dataset_build_cmd(
     tokenizer_path_opt: Option<&str>,
     min_len: usize,
 ) -> Result<(), String> {
-    println!("\n🧬 ===============================================================================");
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("🏗️  GAJE HELIX — Constructor y Normalizador de Datasets");
     println!("===============================================================================\n");
     println!("📥 Archivos de Entrada: {:?}", inputs);
@@ -202,7 +228,8 @@ pub fn dataset_build_cmd(
         None
     };
 
-    let mut out_file = File::create(output_path).map_err(|e| format!("Error creando salida: {}", e))?;
+    let mut out_file =
+        File::create(output_path).map_err(|e| format!("Error creando salida: {}", e))?;
     let mut total_lines = 0usize;
     let mut valid_samples = 0usize;
     let mut total_tokens = 0usize;
@@ -284,18 +311,16 @@ pub fn dataset_build_cmd(
 }
 
 /// 🔬 Auditoría estructural, integridad de pesos y análisis de entropía de centroides
-pub fn audit_cmd(
-    model_path: &str,
-    entropy: bool,
-    check_nan: bool,
-) -> Result<(), String> {
-    println!("\n🧬 ===============================================================================");
+pub fn audit_cmd(model_path: &str, entropy: bool, check_nan: bool) -> Result<(), String> {
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("🔬 GAJE HELIX — Auditoría Matemática y de Integridad de Pesos");
     println!("===============================================================================\n");
     println!("📦 Modelo Auditado: {}", model_path);
 
-    let reader = GajeFlatFileReader::open(model_path)
-        .map_err(|e| format!("Error abriendo .flat: {}", e))?;
+    let reader =
+        GajeFlatFileReader::open(model_path).map_err(|e| format!("Error abriendo .flat: {}", e))?;
 
     let header = &reader.header;
     println!("📄 Cabecera y Arquitectura:");
@@ -314,17 +339,29 @@ pub fn audit_cmd(
         if entry.bit_depth == 32 {
             let raw_f32 = reader.get_f32_slice(entry.dna_off, entry.dna_len);
             for &val in &raw_f32 {
-                if val.is_nan() { nan_detected += 1; }
-                if val.is_infinite() { inf_detected += 1; }
+                if val.is_nan() {
+                    nan_detected += 1;
+                }
+                if val.is_infinite() {
+                    inf_detected += 1;
+                }
             }
         } else if let Ok(lin) = reader.get_linear(name, 32) {
             for &c in &lin.centroids {
-                if c.is_nan() { nan_detected += 1; }
-                if c.is_infinite() { inf_detected += 1; }
+                if c.is_nan() {
+                    nan_detected += 1;
+                }
+                if c.is_infinite() {
+                    inf_detected += 1;
+                }
             }
             for &b in &lin.bias {
-                if b.is_nan() { nan_detected += 1; }
-                if b.is_infinite() { inf_detected += 1; }
+                if b.is_nan() {
+                    nan_detected += 1;
+                }
+                if b.is_infinite() {
+                    inf_detected += 1;
+                }
             }
         }
     }
@@ -334,7 +371,10 @@ pub fn audit_cmd(
         if nan_detected == 0 && inf_detected == 0 {
             println!("   • Valores Anómalos: \x1b[1;32m0 NaN / 0 Inf (100% Limpio)\x1b[0m");
         } else {
-            println!("   • Valores Anómalos: \x1b[1;31m{} NaN / {} Inf (¡ALERTA DE CORRUPCIÓN!)\x1b[0m", nan_detected, inf_detected);
+            println!(
+                "   • Valores Anómalos: \x1b[1;31m{} NaN / {} Inf (¡ALERTA DE CORRUPCIÓN!)\x1b[0m",
+                nan_detected, inf_detected
+            );
         }
     }
 

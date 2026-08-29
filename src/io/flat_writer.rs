@@ -159,35 +159,101 @@ pub fn save_genomic_flat_q(
     let mut current_offset = 0usize;
 
     // 1. Registrar todos los tensores y computar offsets
-    add_linear("token_embd", &model.embeddings, &mut tasks, &mut current_offset);
+    add_linear(
+        "token_embd",
+        &model.embeddings,
+        &mut tasks,
+        &mut current_offset,
+    );
     for (i, blk) in model.blocks.iter().enumerate() {
         let p = format!("blk.{i}.");
-        add_raw_f32(&format!("{}attn_norm", p), &blk.attn.rmsnorm_weight, &mut tasks, &mut current_offset);
-        add_raw_f32(&format!("{}ffn_norm", p), &blk.ffn_norm, &mut tasks, &mut current_offset);
+        add_raw_f32(
+            &format!("{}attn_norm", p),
+            &blk.attn.rmsnorm_weight,
+            &mut tasks,
+            &mut current_offset,
+        );
+        add_raw_f32(
+            &format!("{}ffn_norm", p),
+            &blk.ffn_norm,
+            &mut tasks,
+            &mut current_offset,
+        );
         if let Some(qkv) = &blk.fused_qkv {
-            add_linear(&format!("{}attn_qkv", p), qkv, &mut tasks, &mut current_offset);
+            add_linear(
+                &format!("{}attn_qkv", p),
+                qkv,
+                &mut tasks,
+                &mut current_offset,
+            );
         } else {
-            add_linear(&format!("{}attn_q", p), &blk.q_gen, &mut tasks, &mut current_offset);
-            add_linear(&format!("{}attn_k", p), &blk.k_gen, &mut tasks, &mut current_offset);
-            add_linear(&format!("{}attn_v", p), &blk.v_gen, &mut tasks, &mut current_offset);
+            add_linear(
+                &format!("{}attn_q", p),
+                &blk.q_gen,
+                &mut tasks,
+                &mut current_offset,
+            );
+            add_linear(
+                &format!("{}attn_k", p),
+                &blk.k_gen,
+                &mut tasks,
+                &mut current_offset,
+            );
+            add_linear(
+                &format!("{}attn_v", p),
+                &blk.v_gen,
+                &mut tasks,
+                &mut current_offset,
+            );
         }
-        add_linear(&format!("{}attn_output", p), &blk.w_o, &mut tasks, &mut current_offset);
+        add_linear(
+            &format!("{}attn_output", p),
+            &blk.w_o,
+            &mut tasks,
+            &mut current_offset,
+        );
         if let Some(gu) = &blk.fused_gate_up {
-            add_linear(&format!("{}ffn_gate_up", p), gu, &mut tasks, &mut current_offset);
+            add_linear(
+                &format!("{}ffn_gate_up", p),
+                gu,
+                &mut tasks,
+                &mut current_offset,
+            );
         } else {
-            add_linear(&format!("{}ffn_gate", p), &blk.gate_gen, &mut tasks, &mut current_offset);
-            add_linear(&format!("{}ffn_up", p), &blk.up_gen, &mut tasks, &mut current_offset);
+            add_linear(
+                &format!("{}ffn_gate", p),
+                &blk.gate_gen,
+                &mut tasks,
+                &mut current_offset,
+            );
+            add_linear(
+                &format!("{}ffn_up", p),
+                &blk.up_gen,
+                &mut tasks,
+                &mut current_offset,
+            );
         }
-        add_linear(&format!("{}ffn_down", p), &blk.w_down, &mut tasks, &mut current_offset);
+        add_linear(
+            &format!("{}ffn_down", p),
+            &blk.w_down,
+            &mut tasks,
+            &mut current_offset,
+        );
     }
     add_linear("lm_head", &model.lm_head, &mut tasks, &mut current_offset);
-    add_raw_f32("output_norm", &model.output_norm, &mut tasks, &mut current_offset);
+    add_raw_f32(
+        "output_norm",
+        &model.output_norm,
+        &mut tasks,
+        &mut current_offset,
+    );
 
     let total_weights_len = current_offset;
     let dir: Vec<FlatTensorEntry> = tasks.iter().map(|t| t.entry.clone()).collect();
 
     // 2. Metadatos JSON y Directorio
-    let mut meta: serde_json::Value = serde_json::to_value(config).map_err(std::io::Error::other)?;
+    let mut meta: serde_json::Value =
+        serde_json::to_value(config).map_err(std::io::Error::other)?;
     if let Some(tok) = tokenizer {
         if let Some(obj) = meta.as_object_mut() {
             if let Ok(tok_str) = tok.to_string(true) {
@@ -228,7 +294,11 @@ pub fn save_genomic_flat_q(
     // Detectar familia de arquitectura
     let arch_family = if config.n_embd == 576 {
         2 // SmolLM
-    } else if config.n_embd == 896 || config.n_embd == 1536 || config.n_embd == 2048 || config.n_embd == 3584 {
+    } else if config.n_embd == 896
+        || config.n_embd == 1536
+        || config.n_embd == 2048
+        || config.n_embd == 3584
+    {
         4 // Qwen2_5
     } else {
         1 // Llama / Genérico

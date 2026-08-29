@@ -23,7 +23,8 @@ impl Default for ReplConfig {
             temperature: 0.4,
             repetition_penalty: 1.15,
             max_tokens: 256,
-            system_prompt: "Eres GAJE AI, un asistente genómico soberano, conciso y útil.".to_string(),
+            system_prompt: "Eres GAJE AI, un asistente genómico soberano, conciso y útil."
+                .to_string(),
         }
     }
 }
@@ -38,18 +39,26 @@ pub fn load_model_and_tokenizer(model_path: &str) -> Result<(GenomicLLM, GajeTok
     }
 
     if let Ok(reader) = crate::io::flat_reader::GajeFlatFileReader::open(model_path) {
-        let model = reader.load_genomic().map_err(|e| format!("Error cargando LLM: {}", e))?;
+        let model = reader
+            .load_genomic()
+            .map_err(|e| format!("Error cargando LLM: {}", e))?;
         let tokenizer = if let Some(gtok) = reader.get_embedded_gtok() {
             GajeTokenizer::from_gtok(gtok)
         } else {
-            let local_tok = path.parent().unwrap_or(Path::new("")).join("tokenizer.json");
+            let local_tok = path
+                .parent()
+                .unwrap_or(Path::new(""))
+                .join("tokenizer.json");
             let core_tok = Path::new("models/core/tokenizer.json");
             if local_tok.exists() {
                 GajeTokenizer::from_file(local_tok).map_err(|e| e.to_string())?
             } else if core_tok.exists() {
                 GajeTokenizer::from_file(core_tok).map_err(|e| e.to_string())?
             } else {
-                return Err("No se encontró tokenizador GTOK incrustado ni archivo tokenizer.json".to_string());
+                return Err(
+                    "No se encontró tokenizador GTOK incrustado ni archivo tokenizer.json"
+                        .to_string(),
+                );
             }
         };
         return Ok((model, tokenizer));
@@ -68,8 +77,13 @@ pub fn load_model_and_tokenizer(model_path: &str) -> Result<(GenomicLLM, GajeTok
     }
 }
 
-pub fn run_repl(config: ReplConfig, running: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("\n🧬 ===============================================================================");
+pub fn run_repl(
+    config: ReplConfig,
+    running: Arc<AtomicBool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    println!(
+        "\n🧬 ==============================================================================="
+    );
     println!("💬 GAJE HELIX — Terminal REPL Interactivo (Inferencia Soberana Zero-Server)");
     println!("===============================================================================\n");
     println!("📦 Cargando organismo: {}...", config.model_path);
@@ -78,7 +92,10 @@ pub fn run_repl(config: ReplConfig, running: Arc<AtomicBool>) -> Result<(), Box<
     let (mut llm, tokenizer) = load_model_and_tokenizer(&config.model_path)?;
     let load_time = t0.elapsed();
 
-    println!("✅ Modelo listo en {:.2} ms (Memoria mmap zero-copy activa)\n", load_time.as_secs_f64() * 1000.0);
+    println!(
+        "✅ Modelo listo en {:.2} ms (Memoria mmap zero-copy activa)\n",
+        load_time.as_secs_f64() * 1000.0
+    );
     println!("Comandos disponibles:");
     println!("  /reset   - Limpia el historial de conversación y el KV-Cache");
     println!("  /stats   - Muestra las estadísticas de memoria y configuración");
@@ -136,14 +153,22 @@ pub fn run_repl(config: ReplConfig, running: Arc<AtomicBool>) -> Result<(), Box<
         // Construir prompt con ChatML
         let mut full_prompt = format!("<|im_start|>system\n{}<|im_end|>\n", config.system_prompt);
         for (u, a) in history.iter().rev().take(3).rev() {
-            full_prompt.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>\n", u, a));
+            full_prompt.push_str(&format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>\n",
+                u, a
+            ));
         }
-        full_prompt.push_str(&format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", input_trimmed));
+        full_prompt.push_str(&format!(
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            input_trimmed
+        ));
 
         print!("\n🧬 GAJE: ");
         io::stdout().flush()?;
 
-        let prompt_tokens_u32 = tokenizer.encode(&full_prompt, false).map_err(|e| e.to_string())?;
+        let prompt_tokens_u32 = tokenizer
+            .encode(&full_prompt, false)
+            .map_err(|e| e.to_string())?;
         let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
         let gen_t0 = Instant::now();

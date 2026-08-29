@@ -45,7 +45,10 @@ pub fn get_runtime_info(loaded_model_name: Option<&str>) -> serde_json::Value {
     })
 }
 
-pub fn get_available_models(models_dir: &Path, loaded_model_name: Option<&str>) -> serde_json::Value {
+pub fn get_available_models(
+    models_dir: &Path,
+    loaded_model_name: Option<&str>,
+) -> serde_json::Value {
     let models_res = models_cmd::list_models(models_dir).unwrap_or_default();
 
     let mut model_list = Vec::new();
