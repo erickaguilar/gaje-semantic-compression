@@ -16,7 +16,7 @@ import argparse
 import subprocess
 import urllib.request
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MODELS_ROOT = os.path.join(PROJECT_ROOT, "models", "production")
 TEMP_DIR = os.path.join(PROJECT_ROOT, "models", "source")
 
@@ -41,6 +41,13 @@ MODELS_CATALOG = {
         "gguf_name": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
         "output_flat": "gaje_coder_1.5b.flat",
         "tokenizer": "Qwen/Qwen2.5-Coder-1.5B-Instruct",
+    },
+    "coder_3b": {
+        "title": "GAJE Coder Prime (Qwen 2.5 Coder 3B Instruct)",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+        "gguf_name": "qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+        "output_flat": "gaje_coder_3b.flat",
+        "tokenizer": "Qwen/Qwen2.5-Coder-3B-Instruct",
     },
     "coder_7b": {
         "title": "GAJE Coder Ultra (Qwen 2.5 Coder 7B Instruct)",
@@ -114,7 +121,7 @@ def transmute_model(key, keep_source=False):
         print(f"⚡ Archivo fuente ya presente en caché: {gguf_file}")
 
     # 2. Transmutación a .flat
-    exporter_script = os.path.join(PROJECT_ROOT, "scripts", "export_gaje_flat.py")
+    exporter_script = os.path.join(PROJECT_ROOT, "scripts", "export", "export_gaje_flat.py")
     cmd = [
         sys.executable,
         exporter_script,
@@ -138,7 +145,7 @@ def transmute_model(key, keep_source=False):
     # 2.5 GATE DE NACIMIENTO (Mandato de Verdad Empírica): un organismo con
     # pesos corruptos NO llega a producción. Si falla, se conserva el GGUF
     # fuente para poder re-exportar tras corregir el exportador.
-    validator = os.path.join(PROJECT_ROOT, "scripts", "validate_flat_birth.py")
+    validator = os.path.join(PROJECT_ROOT, "scripts", "debug", "validate_flat_birth.py")
     print("\n🚪 Gate de Nacimiento: validando coherencia factual greedy...")
     gate = subprocess.run([sys.executable, validator, flat_file])
     if gate.returncode != 0:
@@ -166,7 +173,7 @@ def main():
     parser = argparse.ArgumentParser(description="Master Transmuter de Modelos GAJE")
     parser.add_argument(
         "model",
-        choices=["qwen_1.5b", "qwen_7b", "coder_1.5b", "coder_7b", "all"],
+        choices=["qwen_1.5b", "qwen_7b", "coder_1.5b", "coder_3b", "coder_7b", "all"],
         help="Modelo a transmutar ('all' para generar todos)",
     )
     parser.add_argument(
