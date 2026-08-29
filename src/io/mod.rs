@@ -16,4 +16,6 @@ pub mod gmem;
 pub mod header;
 pub mod loader;
 #[cfg(feature = "native")]
+pub mod models_cmd;
+#[cfg(feature = "native")]
 pub mod smg1;

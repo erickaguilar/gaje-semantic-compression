@@ -5,6 +5,8 @@ pub mod iqat;
 pub mod linear;
 pub mod llm;
 pub mod merger;
+#[cfg(feature = "native")]
+pub mod repl;
 pub mod spiking;
 pub mod trainer;
 

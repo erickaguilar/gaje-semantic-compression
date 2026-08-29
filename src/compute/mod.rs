@@ -1,4 +1,6 @@
 pub mod diagnostics;
+#[cfg(feature = "native")]
+pub mod doctor;
 pub mod epoch_manager;
 pub mod event_queue;
 pub mod gpu;

@@ -1,19 +1,200 @@
+use _impl::compute::doctor;
 use _impl::compute::kernels;
-use _impl::core::tokenizer::GajeTokenizer;
-use _impl::io::loader::NativeLoader;
-use _impl::nn::llm::GenomicLLM;
-use std::env;
-use std::io::{self, Write};
+use _impl::io::models_cmd;
+use _impl::nn::repl::{self, ReplConfig};
+use clap::{Args, Parser, Subcommand};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
+
+#[derive(Parser, Debug)]
+#[command(
+    name = "gaje-cli",
+    author = "Erick Aguilar",
+    version = "1.7.0-alpha",
+    about = "🧬 GAJE HELIX — Motor de Compresión Semántica Genómica y Ejecución Nativa",
+    long_about = "Framework soberano de inferencia ultrarrápida, memoria genética mmap zero-copy y compresión neuronal híbrida."
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
+    /// Ruta al modelo binario (.flat o .gaje) para modo directo
+    #[arg(long, global = true)]
+    model: Option<String>,
+
+    /// Ejecutar inferencia de un solo disparo con un prompt
+    #[arg(long, global = true)]
+    prompt: Option<String>,
+
+    /// Temperatura de muestreo [0.0 - 2.0]
+    #[arg(long, global = true, default_value_t = 0.4)]
+    temperature: f32,
+
+    /// Penalización de repetición [1.0 - 2.0]
+    #[arg(long, global = true, default_value_t = 1.15)]
+    repetition_penalty: f32,
+
+    /// Límite máximo de nuevos tokens generados
+    #[arg(long, global = true, default_value_t = 256)]
+    max_tokens: usize,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Inicia una sesión interactiva REPL en la terminal
+    Chat(ChatArgs),
+
+    /// Ejecuta diagnósticos de hardware, extensiones SIMD y ancho de banda
+    Doctor,
+
+    /// Catálogo e inspección estructural de modelos planos (.flat)
+    Models(ModelsArgs),
+
+    /// Descarga automatizada de modelos mediante motor nativo multi-stream
+    #[command(alias = "download")]
+    Pull(PullArgs),
+
+    /// Benchmark estandarizado de latencia (TTFT), velocidad y memoria
+    Bench(BenchArgs),
+
+    /// Gestión de épocas de memoria asociativa (.gmem v2)
+    Epoch(EpochArgs),
+}
+
+#[derive(Args, Debug)]
+struct ChatArgs {
+    /// Archivo del modelo a ejecutar (.flat)
+    #[arg(short, long)]
+    model: Option<String>,
+
+    /// Prompt para inferencia directa (no interactiva)
+    #[arg(short, long)]
+    prompt: Option<String>,
+
+    /// Temperatura de muestreo
+    #[arg(short, long, default_value_t = 0.4)]
+    temperature: f32,
+
+    /// Penalización por repetición
+    #[arg(short, long, default_value_t = 1.15)]
+    repetition_penalty: f32,
+
+    /// Tokens máximos a generar
+    #[arg(short, long, default_value_t = 256)]
+    max_tokens: usize,
+
+    /// Prompt del sistema
+    #[arg(long, default_value = "Eres GAJE AI, un asistente genómico soberano, conciso y útil.")]
+    system: String,
+}
+
+#[derive(Args, Debug)]
+struct ModelsArgs {
+    #[command(subcommand)]
+    action: Option<ModelsSubcommand>,
+}
+
+#[derive(Subcommand, Debug)]
+enum ModelsSubcommand {
+    /// Lista todos los modelos disponibles en el directorio
+    List {
+        /// Directorio de búsqueda (por defecto: models/)
+        #[arg(default_value = "models")]
+        dir: String,
+    },
+    /// Muestra la cabecera y estructura interna de un archivo .flat
+    Inspect {
+        /// Ruta al archivo .flat
+        file: String,
+    },
+    /// Verifica la integridad estructural y magic bytes de un modelo
+    Verify {
+        /// Ruta al archivo .flat
+        file: String,
+    },
+}
+
+#[derive(Args, Debug)]
+struct PullArgs {
+    /// Identificador del modelo (pico, nano, prime, ultra, repo HF o URL)
+    target: String,
+
+    /// Directorio de destino
+    #[arg(short, long, default_value = "models")]
+    out: String,
+
+    /// Número de conexiones concurrentes
+    #[arg(short, long, default_value_t = 8)]
+    concurrency: usize,
+
+    /// Tamaño mínimo por fragmento en MB
+    #[arg(long, default_value_t = 2)]
+    min_chunk: u64,
+}
+
+#[derive(Args, Debug)]
+struct BenchArgs {
+    /// Archivo del modelo a evaluar
+    #[arg(short, long)]
+    model: Option<String>,
+
+    /// Prompt de evaluación
+    #[arg(short, long, default_value = "Explica en pocas palabras qué es la compresión semántica genómica.")]
+    prompt: String,
+
+    /// Número de tokens a generar
+    #[arg(short, long, default_value_t = 64)]
+    tokens: usize,
+}
+
+#[derive(Args, Debug)]
+struct EpochArgs {
+    /// Subcomando de época: list, rollback, merge, evolve
+    action: String,
+
+    /// Identificador del organismo
+    #[arg(long, default_value = "default")]
+    organism: String,
+
+    /// Ruta al archivo de memoria .gmem
+    #[arg(long, default_value = "data/memory/default.gmem")]
+    path: String,
+
+    /// ID de época para rollback
+    #[arg(long, default_value_t = 0)]
+    epoch_id: u64,
+
+    /// ID de época origen (para merge)
+    #[arg(long, default_value_t = 0)]
+    source_epoch_id: u64,
+}
+
+fn resolve_default_model(model_opt: Option<String>) -> String {
+    if let Some(m) = model_opt {
+        return m;
+    }
+    // Buscar en rutas comunes
+    let candidates = [
+        "models/production/gaje_pico_135m.flat",
+        "models/production/gaje_nano_1.5b.flat",
+        "models/gaje_pico_135m.flat",
+        "models/gaje_nano_1.5b.flat",
+    ];
+    for c in &candidates {
+        if Path::new(c).exists() {
+            return c.to_string();
+        }
+    }
+    "models/production/gaje_pico_135m.flat".to_string()
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     unsafe {
         kernels::init_shuffle_table();
     }
 
-    // Manejador de interrupción (Graceful Shutdown)
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
@@ -22,1039 +203,215 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     })
     .expect("Error configurando el manejador de señales");
 
-    let args: Vec<String> = env::args().collect();
-    if args.len() > 1 && (args[1] == "download" || args[1] == "pull") {
-        return handle_download_command(&args[2..], running.clone());
-    }
-    if args.len() > 1 && args[1] == "epoch" {
-        return handle_epoch_command(&args[2..]);
-    }
-    let mut model_path = String::new();
-    let mut prompt_arg = None;
-    let mut i = 1;
-    let mut evolve_target = None;
-    let mut train_target = None;
-    let mut generations = 2000;
-    let mut train_epochs = 10;
-    let mut scale = 0.02;
-    let mut resonance_weight = 0.05;
-    let mut save_path: Option<String> = None;
-    let mut init_path: Option<String> = None;
-    let mut import_path: Option<String> = None;
-    let mut output_path: Option<String> = None;
-    let mut init_preset = "default".to_string();
-    let mut tokenize_text: Option<String> = None;
-    let mut eval_corpus: Option<String> = None;
-    let mut inspect_model = false;
-    let mut dni_path: Option<String> = None;
-    let mut dni_intensity = 0.01;
-    let mut dni_pop = 16;
-    let mut anchor_threshold_arg = 0.1;
-    let mut target_layers_arg = Vec::new();
-    let mut is_ingest_mode = false;
-    let mut teacher_path = None;
-    let mut teacher_tok_path = None;
-    let mut do_iqat = false;
-    let mut iqat_lr = 0.001;
-    let mut is_zero_order = false;
-    let mut zero_order_k = 32;
+    let cli = Cli::parse();
 
-    while i < args.len() {
-        if args[i] == "ingest" {
-            is_ingest_mode = true;
-            i += 1;
-        } else if args[i] == "--zero-order" || args[i] == "--spsa" {
-            is_zero_order = true;
-            i += 1;
-        } else if (args[i] == "--k-coords" || args[i] == "--zero-order-k") && i + 1 < args.len() {
-            zero_order_k = args[i + 1].parse().unwrap_or(32);
-            i += 2;
-        } else if args[i] == "--model" && i + 1 < args.len() {
-            model_path = args[i + 1].clone();
-            i += 2;
-        } else if args[i] == "--eval" && i + 1 < args.len() {
-            eval_corpus = Some(args[i + 1].clone());
-            i += 2;
-        } else if (args[i] == "--file" || args[i] == "--dni-ingest") && i + 1 < args.len() {
-            dni_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--teacher" && i + 1 < args.len() {
-            teacher_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--teacher-tok" && i + 1 < args.len() {
-            teacher_tok_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--iqat" {
-            do_iqat = true;
-            i += 1;
-        } else if args[i] == "--iqat-lr" && i + 1 < args.len() {
-            iqat_lr = args[i + 1].parse().unwrap_or(0.001);
-            i += 2;
-        } else if (args[i] == "REMOVED") && i + 1 < args.len() {
-            save_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--import" && i + 1 < args.len() {
-            import_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--threshold" && i + 1 < args.len() {
-            anchor_threshold_arg = args[i + 1].parse().unwrap_or(0.1);
-            i += 2;
-        } else if args[i] == "--preset" && i + 1 < args.len() {
-            init_preset = args[i + 1].clone();
-            i += 2;
-        } else if args[i] == "--output" && i + 1 < args.len() {
-            output_path = Some(args[i + 1].clone());
-            save_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--save" && i + 1 < args.len() {
-            save_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--inspect" {
-            inspect_model = true;
-            i += 1;
-        } else if args[i] == "--init" && i + 1 < args.len() {
-            init_path = Some(args[i + 1].clone());
-            i += 2;
-        } else if (args[i] == "--intensity" || args[i] == "--dni-intensity") && i + 1 < args.len() {
-            dni_intensity = args[i + 1].parse().unwrap_or(0.01);
-            i += 2;
-        } else if (args[i] == "--pop" || args[i] == "--dni-pop") && i + 1 < args.len() {
-            dni_pop = args[i + 1].parse().unwrap_or(16);
-            i += 2;
-        } else if args[i] == "--target-layers" && i + 1 < args.len() {
-            target_layers_arg = args[i + 1].split(',').map(|s| s.to_string()).collect();
-            i += 2;
-        } else if args[i] == "--tokenize" && i + 1 < args.len() {
-            tokenize_text = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--prompt" && i + 1 < args.len() {
-            prompt_arg = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--evolve" && i + 1 < args.len() {
-            evolve_target = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--train" && i + 1 < args.len() {
-            train_target = Some(args[i + 1].clone());
-            i += 2;
-        } else if args[i] == "--epochs" && i + 1 < args.len() {
-            train_epochs = args[i + 1].parse().unwrap_or(10);
-            i += 2;
-        } else if args[i] == "--gens" && i + 1 < args.len() {
-            generations = args[i + 1].parse().unwrap_or(2000);
-            i += 2;
-        } else if args[i] == "--scale" && i + 1 < args.len() {
-            scale = args[i + 1].parse().unwrap_or(0.02);
-            i += 2;
-        } else if args[i] == "--resonance" && i + 1 < args.len() {
-            resonance_weight = args[i + 1].parse().unwrap_or(0.05);
-            i += 2;
-        } else if model_path.is_empty() {
-            if !args[i].starts_with("--") {
-                model_path = args[i].clone();
-            }
-            i += 1;
-        } else {
-            i += 1;
+    match cli.command {
+        Some(Commands::Doctor) => {
+            let report = doctor::run_doctor();
+            doctor::print_doctor_report(&report);
+            Ok(())
         }
-    }
-
-    if let Some(path) = init_path {
-        println!(
-            "[*] Creando nuevo organismo genómico 100% nativo en: {} (Preset: {})",
-            path, init_preset
-        );
-        let (n_embd, n_blocks, n_head, vocab_size) = match init_preset.as_str() {
-            "gold_embryo" => (384, 8, 6, 49152),
-            "micro_organism" => (128, 2, 4, 32768),
-            "embryo_5m" => (256, 4, 4, 32768),
-            "silver_fetus" => (512, 12, 8, 32768),
-            "silver_adult" => (512, 12, 8, 32768), // Fase 5.5: 10MB Circular
-            "silver_adult_32m" => (512, 8, 8, 32768), // 32MB Toroidal (67M parameters)
-            "platinum" => (768, 24, 12, 32768),    // Fase 5.8: 20-25MB Platinum
-            "titan" => (1024, 36, 16, 49152),      // Fase 6.0: 50MB Toroidal (Titan)
-            _ => (768, 6, 12, 49152),
-        };
-        let mut config = _impl::io::loader::ModelConfig {
-            config: _impl::io::loader::ArchConfig {
-                name: format!("GAJE-{}-Organism", init_preset),
-                version: "1.0.0-alpha".to_string(),
-                tokenizer_id: "tokenizer".to_string(),
-                rope_base: 1000000.0,
-                ffn_act: "swiglu".to_string(),
-                use_genomic_norm: true,
-                rope_style: "split".to_string(),
-                anchor_threshold: 0.1,
-                ffn_anchor_threshold: 0.1,
-                rna_threshold: 0.5,
-                unpermute_weights: false,
-                apply_smollm_rope_patch: false,
-                tie_word_embeddings: false,
-                dni: String::new(), // Se generará automáticamente
-                state: "born".to_string(),
-            },
-            n_embd,
-            n_head,
-            n_head_kv: n_head,
-            n_blocks,
-            vocab_size: Some(vocab_size),
-            eps: 1e-6,
-        };
-        // Forzar generación de DNI
-        config.config.dni = _impl::io::loader::py_new_dni();
-        let model = _impl::io::loader::init_born_genomic_model(&path, config.clone(), vocab_size)?;
-        if Path::new("models/core/tokenizer.json").exists() {
-            let tok = GajeTokenizer::from_file("models/core/tokenizer.json")
-                .map_err(|e| e.to_string())?;
-            if path.ends_with(".flat") {
-                _impl::io::loader::save_genomic_flat(&path, &model, &config, Some(&tok))?;
-            } else {
-                _impl::io::loader::save_genomic_model(&path, &model, &config, Some(&tok))?;
-            }
-            println!("[+] Tokenizador 'models/core/tokenizer.json' integrado en el organismo.");
-        }
-        println!("[+] Nuevo organismo inicializado exitosamente.");
-        return Ok(());
-    }
-
-    if let Some(path) = import_path {
-        let out = output_path.ok_or("Debe especificar --output <path.gaje> al importar")?;
-        println!(
-            "[*] Importando modelo GGUF a formato GAJE nativo (Threshold: {})...",
-            anchor_threshold_arg
-        );
-        let loader = _impl::io::loader::GGUFLoader::new(&path)?;
-        let config = loader.infer_config()?;
-        let model = loader.load_genomic_llm(config.clone(), anchor_threshold_arg)?;
-        let mut tokenizer = None;
-        let tokenizer_path = Path::new(&path).parent().unwrap().join("tokenizer.json");
-        if tokenizer_path.exists() {
-            tokenizer = Some(GajeTokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?);
-            println!("[+] Tokenizador detectado e integrado.");
-        }
-        _impl::io::loader::save_genomic_model(&out, &model, &config, tokenizer.as_ref())?;
-        println!("[+] Importación completada exitosamente.");
-        return Ok(());
-    }
-
-    if is_ingest_mode && (dni_path.is_none() || model_path.is_empty()) {
-        println!("Usage: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>] [--intensity 0.01] [--pop 16] [--gens 2000]");
-        return Ok(());
-    }
-
-    if model_path.is_empty() {
-        println!("Usage: gaje-cli <model_path> [--prompt \"...\"] [--evolve \"target\"] [--train \"dataset.txt\"] [--save output.gaje] [--init new.gaje] [--inspect] [--import path.gguf --output path.gaje]");
-        println!(
-            "Or: gaje-cli ingest --model <model_path> --file <doc.txt> [--output <output.gaje>]"
-        );
-        return Ok(());
-    }
-
-    if inspect_model {
-        let loader = NativeLoader::new(&model_path)?;
-        let config = loader.load_config()?;
-        println!("--- Metadata for {} ---", model_path);
-        println!("{}", serde_json::to_string_pretty(&config).unwrap());
-        return Ok(());
-    }
-
-    println!("🧬 GAJE Native Runtime (v1.0.0-alpha)");
-
-    let (mut model, tokenizer, config) = if model_path.ends_with(".gguf") {
-        let loader = _impl::io::loader::GGUFLoader::new(&model_path)?;
-        let config = loader.infer_config()?;
-        let model = loader.load_genomic_llm(config.clone(), -1.0)?;
-        let tokenizer_path = Path::new(&model_path)
-            .parent()
-            .unwrap()
-            .join("tokenizer.json");
-        let tokenizer = if tokenizer_path.exists() {
-            GajeTokenizer::from_file(tokenizer_path).map_err(|e| e.to_string())?
-        } else {
-            return Err("tokenizer.json not found".to_string().into());
-        };
-        (model, tokenizer, config)
-    } else {
-        let loader = NativeLoader::new(&model_path)?;
-        let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
-        let config = loader.load_config()?;
-        let model = loader.load_llm()?;
-        (model, tokenizer, config)
-    };
-
-    println!("[*] Model & Tokenizer loaded.");
-
-    if let Some(text) = tokenize_text {
-        println!("[*] Tokenizando texto de forma nativa: \"{}\"", text);
-        let ids = tokenizer.encode(&text, true).map_err(|e| e.to_string())?;
-        println!("    IDs de Tokens: {:?}", ids);
-        for &id in &ids {
-            let piece = tokenizer.decode(&[id], true).map_err(|e| e.to_string())?;
-            println!("      [{:>6}] -> \"{}\"", id, piece);
-        }
-        return Ok(());
-    }
-
-    if let Some(ref target_text) = evolve_target {
-        println!(
-            "[*] Iniciando Crianza por Integración de Caminos (Poblacional) para: '{}'",
-            target_text
-        );
-        let tokens = tokenizer
-            .encode(target_text, false)
-            .map_err(|e| e.to_string())?;
-        if tokens.len() < 2 {
-            return Err("Target text too short for evolution".into());
-        }
-        let evaluate = |m: &mut GenomicLLM, tokens: &[u32]| -> f32 {
-            m.clear_cache_core();
-            let mut total_log_prob = 0.0f32;
-            for i in 0..tokens.len() - 1 {
-                let logits = m.forward_core(tokens[i] as usize, false).unwrap();
-                let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-                let mut sum_exp = 0.0f32;
-                for &l in &logits {
-                    sum_exp += (l - max_l).exp();
-                }
-                let prob = (logits[tokens[i + 1] as usize] - max_l).exp() / (sum_exp + 1e-12);
-                total_log_prob += (prob + 1e-12).ln();
-            }
-            total_log_prob
-        };
-
-        let mut best_fitness = evaluate(&mut model, &tokens);
-        println!("[Gen 0] Log-Fitness Inicial: {:.4}", best_fitness);
-        let mut layers = vec!["lm_head".to_string()];
-        if !model.blocks.is_empty() {
-            let last = model.blocks.len() - 1;
-            layers.push(format!("blk.{}.attn_output", last));
-            layers.push(format!("blk.{}.ffn_down", last));
-        }
-
-        use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
-
-        for gen in 1..=generations {
-            if !running.load(Ordering::SeqCst) {
-                println!("    [!] Evolución interrumpida por el usuario.");
-                break;
-            }
-
-            let layer_name = layers.choose(&mut rng).unwrap();
-            let current_scale = (scale * (1.0 - (gen as f32 / generations as f32))).max(1e-5);
-            let mut candidate_model = model.clone();
-            if candidate_model
-                .mutate_layer_core(layer_name, current_scale)
-                .is_ok()
-            {
-                let fitness = evaluate(&mut candidate_model, &tokens);
-                if fitness > best_fitness {
-                    model = candidate_model;
-                    best_fitness = fitness;
-                    if gen % 10 == 0 || best_fitness > -10.0 {
-                        println!(
-                            "[Gen {}] Mejora en {}: Fitness = {:.4}",
-                            gen, layer_name, best_fitness
-                        );
-                    }
-                }
-            }
-            if best_fitness > -0.05 {
-                println!("🔥 ¡Propagador de Inteligencia Alcanzado!");
-                break;
-            }
-        }
-    }
-
-    if let Some(path) = dni_path.clone() {
-        println!(
-            "[*] Iniciando Direct Neural Ingestion (DNI) Scalable: {}",
-            path
-        );
-        let paths = if Path::new(&path).is_dir() {
-            std::fs::read_dir(&path)?
-                .filter_map(|e| e.ok())
-                .map(|e| e.path())
-                .filter(|p| p.is_file())
-                .collect::<Vec<_>>()
-        } else {
-            vec![Path::new(&path).to_path_buf()]
-        };
-
-        use _impl::core::dni::{DNIEngine, SemanticNiche};
-        let mut engine = DNIEngine {
-            model: model.clone(),
-            tokenizer: Arc::new(tokenizer.clone()),
-            council: None,
-            intensity: dni_intensity,
-            target_layers: target_layers_arg,
-            validation_tokens: Vec::new(),
-            original_dna_hash: Vec::new(),
-            niche: SemanticNiche::General,
-        };
-        engine.initialize_original_hash();
-        engine.set_validation_text(
-            "Hola, soy una inteligencia artificial basada en GAJE. ¿En qué puedo ayudarte?"
-                .to_string(),
-        );
-
-        let start = std::time::Instant::now();
-        for p in paths {
-            println!("  [+] Inyectando: {:?}", p);
-            if let Ok(content) = std::fs::read_to_string(&p) {
-                match engine.ingest_document(content, generations, dni_pop) {
-                    Ok(fitness) => println!("    - Completado. Fitness Final: {:.4}", fitness),
-                    Err(e) => println!("    [!] Error en {:?}: {}", p, e),
-                }
-            }
-        }
-
-        model = engine.model;
-        println!("[+] Proceso DNI finalizado en {:?}.", start.elapsed());
-    }
-
-    if do_iqat {
-        let t_path = teacher_path.ok_or("Debe especificar --teacher <path.gguf> para IQAT")?;
-        let t_tok =
-            teacher_tok_path.ok_or("Debe especificar --teacher-tok <tokenizer.json> para IQAT")?;
-        let teacher =
-            _impl::nn::distiller::Teacher::new("Master".to_string(), &t_path, &t_tok, &tokenizer)
-                .map_err(|e| e.to_string())?;
-
-        println!("[*] Iniciando Refinamiento IQAT (Activation Drift) bloque a bloque...");
-        let texts = if let Some(ref d_path) = dni_path {
-            if Path::new(d_path).is_file() {
-                vec![std::fs::read_to_string(d_path).unwrap_or_default()]
-            } else {
-                vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
-            }
-        } else {
-            vec!["El lenguaje es la geodésica del pensamiento.".to_string()]
-        };
-
-        let iqat = _impl::nn::iqat::IQATEngine::new(iqat_lr);
-        iqat.run_iqat_cycle(&mut model, &teacher, &texts, train_epochs)
-            .map_err(|e| e.to_string())?;
-    }
-
-    if let Some(ref dataset_path) = train_target {
-        println!(
-            "[*] Iniciando Entrenamiento Born-Genomic Nativo (Resonancia: {:.3})",
-            resonance_weight
-        );
-        let text = std::fs::read_to_string(dataset_path).unwrap_or_else(|_| dataset_path.clone());
-        let dataset: Vec<Vec<usize>> = text
-            .lines()
-            .map(|l| l.trim())
-            .filter(|l| l.len() > 5)
-            .map(|l| {
-                tokenizer
-                    .encode(l, false)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|id| id as usize)
-                    .collect()
-            })
-            .filter(|tokens: &Vec<usize>| tokens.len() >= 2)
-            .collect();
-        if dataset.is_empty() {
-            return Err("Dataset empty or too short".into());
-        }
-
-        let trainer = _impl::nn::trainer::GenomicTrainerCore::new(scale, resonance_weight);
-        let mut current_config = config.clone();
-
-        if is_zero_order {
-            println!(
-                "[*] Modo de Optimización: Orden Cero (SPSA Discreto, {} épocas, k={})",
-                train_epochs, zero_order_k
-            );
-            trainer.fit_zero_order(&mut model, &dataset, train_epochs, zero_order_k)?;
-            if let Some(ref path) = save_path {
-                _impl::io::loader::save_genomic_model(
-                    path,
-                    &model,
-                    &current_config,
-                    Some(&tokenizer),
-                )?;
-                println!("    [Checkpoint SPSA] Guardado exitosamente en {}", path);
-            }
-            return Ok(());
-        }
-
-        let p1_end = (train_epochs as f32 * 0.2) as usize;
-        let p2_end = (train_epochs as f32 * 0.7) as usize;
-
-        // Recuperar el paso guardado de los metadatos DNI
-        let mut start_step: usize = config.config.dni.parse().unwrap_or(0);
-
-        'epoch_loop: for epoch in 0..train_epochs {
-            if !running.load(Ordering::SeqCst) {
-                println!(
-                    "    [!] Entrenamiento interrumpido por el usuario antes de la época {}.",
-                    epoch + 1
-                );
-                break 'epoch_loop;
-            }
-
-            let phase = if epoch < p1_end {
-                1
-            } else if epoch < p2_end {
-                2
-            } else {
-                3
-            };
-
-            // Entrenar época con callback de guardado intra-época (cada 100 muestras)
-            let s_path = save_path.clone();
-            let tok = tokenizer.clone();
-            let run_flag = running.clone();
-            let mut epoch_config = current_config.clone();
-
-            let res = trainer.fit_epoch(
-                &mut model,
-                &dataset,
-                epoch,
-                train_epochs,
-                phase,
-                start_step,
-                |m, count, loss| {
-                    if !run_flag.load(Ordering::SeqCst) {
-                        return Err("INTERRUPTED".to_string());
-                    }
-
-                    if let Some(ref path) = s_path {
-                        // Actualizar el marcador de paso en la config antes de guardar
-                        epoch_config.config.dni = count.to_string();
-                        _impl::io::loader::save_genomic_model(path, m, &epoch_config, Some(&tok))
-                            .map_err(|e| e.to_string())?;
-                        println!(
-                            "      [Intra-Epoch Checkpoint] Muestra #{} | Loss: {:.4}",
-                            count, loss
-                        );
-                    }
+        Some(Commands::Models(models_args)) => {
+            match models_args.action.unwrap_or(ModelsSubcommand::List { dir: "models".to_string() }) {
+                ModelsSubcommand::List { dir } => {
+                    let models = models_cmd::list_models(Path::new(&dir))?;
+                    models_cmd::print_models_table(&models);
                     Ok(())
-                },
-            );
-
-            // Después de una época completa, reiniciamos el marcador para la siguiente
-            start_step = 0;
-            current_config.config.dni = "0".to_string();
-
-            if let Err(e) = res {
-                if e == "INTERRUPTED" {
-                    println!("    [!] Abortando época {} por interrupción.", epoch + 1);
-                    break 'epoch_loop;
-                } else {
-                    return Err(e.into());
+                }
+                ModelsSubcommand::Inspect { file } => {
+                    models_cmd::inspect_model(Path::new(&file))?;
+                    Ok(())
+                }
+                ModelsSubcommand::Verify { file } => {
+                    models_cmd::verify_model(Path::new(&file))?;
+                    Ok(())
                 }
             }
-
-            // Checkpoint final de época
-            if let Some(ref path) = save_path {
-                _impl::io::loader::save_genomic_model(
-                    path,
-                    &model,
-                    &current_config,
-                    Some(&tokenizer),
-                )?;
-                println!(
-                    "    [Final-Epoch Checkpoint] Época {} completada y guardada.",
-                    epoch + 1
-                );
-            }
         }
-        println!("[+] Ciclo de entrenamiento finalizado.");
-    }
-
-    // Guardado final (por si no se guardó en el bucle o para confirmar éxito total)
-    if let Some(ref path) = save_path {
-        println!("[*] Ejecutando guardado final de seguridad en: {}", path);
-        _impl::io::loader::save_genomic_model(path, &model, &config, Some(&tokenizer))?;
-        println!("[+] Proceso completado exitosamente.");
-    }
-
-    if let Some(corpus_path) = eval_corpus {
-        println!("[*] Evaluando perplejidad nativa sobre: {}", corpus_path);
-        let text = std::fs::read_to_string(&corpus_path)
-            .map_err(|e| format!("No se pudo leer el corpus: {}", e))?;
-
-        let lines: Vec<&str> = text
-            .lines()
-            .map(|l| l.trim())
-            .filter(|l| l.len() > 5)
-            .collect();
-
-        if lines.is_empty() {
-            return Err("Corpus vacío o sin líneas válidas".into());
-        }
-
-        let mut total_log_prob = 0.0f32;
-        let mut total_tokens = 0usize;
-        let mut skipped = 0usize;
-
-        for (idx, line) in lines.iter().enumerate() {
-            let tokens = match tokenizer.encode(line, false) {
-                Ok(t) if t.len() >= 2 => t,
-                _ => {
-                    skipped += 1;
-                    continue;
-                }
+        Some(Commands::Pull(pull_args)) => {
+            let opts = _impl::io::downloader::DownloadOptions {
+                concurrency: pull_args.concurrency,
+                chunk_size_min: pull_args.min_chunk * 1024 * 1024,
+                user_agent: "GAJE-Helix-Engine/1.7.0 (Rust; Native-Downloader)".to_string(),
             };
-
-            model.clear_cache_core();
-            let mut line_log_prob = 0.0f32;
-
-            for i in 0..tokens.len() - 1 {
-                let logits = model
-                    .forward_core(tokens[i] as usize, false)
-                    .map_err(|e| format!("Error en forward pass línea {}: {}", idx, e))?;
-
-                let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
-                let sum_exp: f32 = logits.iter().map(|&l| (l - max_l).exp()).sum();
-                let prob = (logits[tokens[i + 1] as usize] - max_l).exp() / (sum_exp + 1e-12);
-                line_log_prob += (prob + 1e-12).ln();
-            }
-
-            total_log_prob += line_log_prob;
-            total_tokens += tokens.len() - 1;
-
-            if idx % 50 == 0 {
-                let ppl_parcial = (-(total_log_prob / total_tokens as f32)).exp();
-                println!(
-                    "  [Línea {:>4}/{}] PPL parcial: {:.4}",
-                    idx + 1,
-                    lines.len(),
-                    ppl_parcial
-                );
-            }
+            println!("⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}", pull_args.target);
+            let stats = _impl::io::downloader::download_model(
+                &pull_args.target,
+                Some(Path::new(&pull_args.out)),
+                Some(opts),
+                Some(running),
+            )?;
+            println!("🎉 Descarga completada con éxito en {:?}", stats.destination);
+            Ok(())
         }
-
-        if total_tokens == 0 {
-            return Err("No se procesaron tokens válidos".into());
+        Some(Commands::Chat(chat_args)) => {
+            let model_path = resolve_default_model(chat_args.model);
+            if let Some(prompt) = chat_args.prompt {
+                run_single_prompt(&model_path, &prompt, chat_args.temperature, chat_args.repetition_penalty, chat_args.max_tokens)?;
+            } else {
+                let config = ReplConfig {
+                    model_path,
+                    temperature: chat_args.temperature,
+                    repetition_penalty: chat_args.repetition_penalty,
+                    max_tokens: chat_args.max_tokens,
+                    system_prompt: chat_args.system,
+                };
+                repl::run_repl(config, running)?;
+            }
+            Ok(())
         }
-
-        let ppl = (-(total_log_prob / total_tokens as f32)).exp();
-
-        println!("\n╔══════════════════════════════════════╗");
-        println!("║  RESULTADO — EVALUACIÓN NATIVA       ║");
-        println!("╠══════════════════════════════════════╣");
-        println!("║  Modelo  : {}", corpus_path);
-        println!(
-            "║  Líneas  : {} procesadas, {} omitidas",
-            lines.len() - skipped,
-            skipped
-        );
-        println!("║  Tokens  : {}", total_tokens);
-        println!("║  PPL     : {:.4}", ppl);
-        println!("║  Log-P   : {:.4}", total_log_prob);
-        println!("╚══════════════════════════════════════╝");
-
-        return Ok(());
+        Some(Commands::Bench(bench_args)) => {
+            let model_path = resolve_default_model(bench_args.model);
+            run_benchmark(&model_path, &bench_args.prompt, bench_args.tokens)?;
+            Ok(())
+        }
+        Some(Commands::Epoch(epoch_args)) => {
+            handle_epoch(&epoch_args)
+        }
+        None => {
+            // Si el usuario pasó --model y --prompt directamente
+            if let Some(prompt) = cli.prompt {
+                let model_path = resolve_default_model(cli.model);
+                run_single_prompt(&model_path, &prompt, cli.temperature, cli.repetition_penalty, cli.max_tokens)?;
+            } else {
+                // Iniciar REPL por defecto
+                let model_path = resolve_default_model(cli.model);
+                let config = ReplConfig {
+                    model_path,
+                    temperature: cli.temperature,
+                    repetition_penalty: cli.repetition_penalty,
+                    max_tokens: cli.max_tokens,
+                    ..Default::default()
+                };
+                repl::run_repl(config, running)?;
+            }
+            Ok(())
+        }
     }
+}
 
-    if let Some(prompt) = prompt_arg {
-        generate(&mut model, &tokenizer, &prompt, 50)?;
-    } else if evolve_target.is_none() && train_target.is_none() {
-        println!("\n[!] Modo interactivo no disponible en TTY reducido. Use --prompt.");
-    }
+fn run_single_prompt(
+    model_path: &str,
+    prompt: &str,
+    temperature: f32,
+    repetition_penalty: f32,
+    max_tokens: usize,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    println!("📦 Cargando modelo: {}...", model_path);
+    let t0 = Instant::now();
+    let (mut llm, tokenizer) = repl::load_model_and_tokenizer(model_path)?;
+    let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    println!("✅ Modelo listo en {:.2} ms\n", load_ms);
 
+    let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
+    let prompt_tokens_u32 = tokenizer.encode(&chat_prompt, false).map_err(|e| e.to_string())?;
+    let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
+
+    let gen_t0 = Instant::now();
+    let eos_ids = vec![2, 0];
+    let generated_tokens = llm.generate_native_core(
+        prompt_tokens,
+        max_tokens,
+        temperature,
+        repetition_penalty,
+        eos_ids,
+    ).map_err(|e| format!("Error en inferencia: {}", e))?;
+
+    let gen_u32: Vec<u32> = generated_tokens.into_iter().map(|t| t as u32).collect();
+    let raw_reply = tokenizer.decode(&gen_u32, true).unwrap_or_default();
+
+    let clean = raw_reply
+        .replace("<|im_end|>", "")
+        .replace("<|im_start|>", "")
+        .replace("<|endoftext|>", "")
+        .trim()
+        .to_string();
+
+    println!("{}\n", clean);
+    let gen_time = gen_t0.elapsed().as_secs_f64();
+    let tok_count = gen_u32.len();
+    println!("\x1b[90m[{:.1} tok/s · {} tokens · {:.2}s]\x1b[0m", 
+        tok_count as f64 / gen_time.max(0.001), tok_count, gen_time);
     Ok(())
 }
 
-fn generate(
-    model: &mut GenomicLLM,
-    tokenizer: &GajeTokenizer,
+fn run_benchmark(
+    model_path: &str,
     prompt: &str,
     max_tokens: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let tokens = tokenizer.encode(prompt, false).map_err(|e| e.to_string())?;
-    model.clear_cache_core();
-    let mut logits = Vec::new();
-    for &tid in &tokens {
-        logits = model
-            .forward_core(tid as usize, false)
-            .map_err(|e| e.to_string())?;
-    }
+    println!("\n🧬 ========================================================");
+    println!("⏱️  GAJE HELIX — Benchmark de Inferencia y Rendimiento");
+    println!("========================================================\n");
+    println!("📦 Modelo Evaluado: {}", model_path);
 
-    let mut generated_history = Vec::new();
-    let penalty = 1.5f32; // Penalización fuerte para romper bucles en Android
+    let t0 = Instant::now();
+    let (mut llm, tokenizer) = repl::load_model_and_tokenizer(model_path)?;
+    let load_time_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
-    println!("\n[*] Generando con Repetition Penalty (Anti-Loop)...");
-    for _ in 0..max_tokens {
-        // 1. Aplicar penalización a los logits basados en la historia
-        for &past_token in &generated_history {
-            if logits[past_token] > 0.0 {
-                logits[past_token] /= penalty;
-            } else {
-                logits[past_token] *= penalty;
-            }
-        }
+    println!("   • Tiempo de Carga Mmap: {:.2} ms", load_time_ms);
 
-        let mut indexed_logits: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
-        indexed_logits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
+    let prompt_tokens_u32 = tokenizer.encode(&chat_prompt, false).map_err(|e| e.to_string())?;
+    let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
-        /*
-        println!("[Debug] Top-5 candidates:");
-        for k in 0..5 {
-            let (tid, score) = indexed_logits[k];
-            let word = tokenizer.decode(&[tid as u32], true).unwrap_or("???".to_string());
-            println!("   {}. [{:>5}] {:<15} score: {:.4}", k+1, tid, word, score);
-        }
-        */
+    let gen_t0 = Instant::now();
+    let eos_ids = vec![2, 0];
+    let generated_tokens = llm.generate_native_core(
+        prompt_tokens,
+        max_tokens,
+        0.0,
+        1.15,
+        eos_ids,
+    ).map_err(|e| format!("Error en benchmark: {}", e))?;
+    let gen_time = gen_t0.elapsed().as_secs_f64();
 
-        let next_token = indexed_logits[0].0;
-        generated_history.push(next_token);
+    let gen_u32: Vec<u32> = generated_tokens.into_iter().map(|t| t as u32).collect();
+    let raw_reply = tokenizer.decode(&gen_u32, true).unwrap_or_default();
 
-        if next_token == 0 || next_token == 151643 {
-            break;
-        }
-        let decoded = tokenizer
-            .decode(&[next_token as u32], true)
-            .map_err(|e| e.to_string())?;
-        print!("{}", decoded);
-        io::stdout().flush()?;
+    let clean = raw_reply
+        .replace("<|im_end|>", "")
+        .replace("<|im_start|>", "")
+        .replace("<|endoftext|>", "")
+        .trim()
+        .to_string();
 
-        logits = model
-            .forward_core(next_token, false)
-            .map_err(|e| e.to_string())?;
-    }
-    println!();
+    let token_count = gen_u32.len();
+    let tps = token_count as f64 / gen_time.max(0.001);
+
+    println!("   • Tokens Generados:     {}", token_count);
+    println!("   • Tiempo de Generación: {:.3} s", gen_time);
+    println!("   • Throughput (TPS):     \x1b[1;32m{:.2} tokens/s\x1b[0m", tps);
+    println!("   • Muestra de Salida:    \"{}\"", clean.chars().take(80).collect::<String>());
+    println!("\n========================================================\n");
     Ok(())
 }
 
-fn handle_epoch_command(args: &[String]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if args.is_empty() {
-        println!("🏛️ GAJE HELIX — Gestor de Épocas de Memoria CLI (.gmem v2)");
-        println!("Uso: gaje-cli epoch <subcomando> [opciones]\n");
-        println!("Subcomandos disponibles:");
-        println!("  list       --organism <NOMBRE> [--root <DIR>]");
-        println!("  snapshot   --organism <NOMBRE> --comment <TEXTO> [--dim <DIM>] [--root <DIR>]");
-        println!("  rollback   --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
-        println!("  promote    --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
-        println!("  seal       --organism <NOMBRE> --epoch <ID> [--root <DIR>]");
-        println!("  evaluate   --organism <NOMBRE> --candidate <ID> [--root <DIR>]");
-        println!("  consolidate --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
-        println!("  merge      --organism <DESTINO> --from-organism <DONANTE> [--dim <DIM>] [--root <DIR>]");
-        println!("  evolve     --organism <NOMBRE> [--dim <DIM>] [--root <DIR>]");
-        return Ok(());
-    }
-
-    let subcmd = &args[0];
-    let mut root_dir = "models/memory_epochs".to_string();
-    let mut organism = String::new();
-    let mut from_organism = String::new();
-    let mut comment = "Snapshot CLI".to_string();
-    let mut epoch_id = 0u64;
-    let mut candidate_id = 0u64;
-    let mut dim = 576u32;
-
-    let mut j = 1;
-    while j < args.len() {
-        if args[j] == "--root" && j + 1 < args.len() {
-            root_dir = args[j + 1].clone();
-            j += 2;
-        } else if args[j] == "--organism" && j + 1 < args.len() {
-            organism = args[j + 1].clone();
-            j += 2;
-        } else if args[j] == "--from-organism" && j + 1 < args.len() {
-            from_organism = args[j + 1].clone();
-            j += 2;
-        } else if args[j] == "--comment" && j + 1 < args.len() {
-            comment = args[j + 1].clone();
-            j += 2;
-        } else if args[j] == "--epoch" && j + 1 < args.len() {
-            epoch_id = args[j + 1].parse().unwrap_or(0);
-            j += 2;
-        } else if args[j] == "--candidate" && j + 1 < args.len() {
-            candidate_id = args[j + 1].parse().unwrap_or(0);
-            j += 2;
-        } else if args[j] == "--dim" && j + 1 < args.len() {
-            dim = args[j + 1].parse().unwrap_or(576);
-            j += 2;
-        } else {
-            j += 1;
-        }
-    }
-
-    if organism.is_empty() {
-        eprintln!("Error: Se requiere el argumento --organism <NOMBRE>");
-        return Ok(());
-    }
-
-    let mut mgr = _impl::compute::epoch_manager::EpochManager::new(&root_dir, &organism, dim)
-        .map_err(|e| format!("Error en EpochManager: {}", e))?;
-
-    match subcmd.as_str() {
-        "list" => {
-            let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
-            println!(
-                "================================================================================"
-            );
-            println!("🏛️ GAJE HELIX: ÁRBOL DE LINAJE Y ÉPOCAS DE MEMORIA (.gmem v2)");
-            println!(
-                "Organismo: {} | Época Activa: {}",
-                organism, mgr.active_epoch_id
-            );
-            println!(
-                "--------------------------------------------------------------------------------"
-            );
-            println!(
-                "{:<8} {:<8} {:<12} {:<10} {:<24} COMENTARIO",
-                "EPOCH", "PADRE", "ESTADO", "ENTRADAS", "FECHA UTC"
-            );
-            println!(
-                "--------------------------------------------------------------------------------"
-            );
-            for ep in epochs {
-                let active_marker = if ep.epoch_id == mgr.active_epoch_id {
-                    "*"
-                } else {
-                    " "
-                };
-                println!(
-                    "{}{:<7} {:<8} {:<12} {:<10} {:<24} {}",
-                    active_marker,
-                    ep.epoch_id,
-                    ep.parent_epoch,
-                    ep.verdict,
-                    ep.entries_count,
-                    ep.created_at.chars().take(19).collect::<String>(),
-                    ep.comment
-                );
-            }
-            println!(
-                "================================================================================"
-            );
-        }
-        "snapshot" => {
-            let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
-            let new_id = mgr
-                .create_snapshot(&mut orch, &comment, None)
-                .map_err(|e| e.to_string())?;
-            println!(
-                "✅ Snapshot creado exitosamente: Época ID {} (Comentario: '{}')",
-                new_id, comment
-            );
-        }
-        "rollback" => {
-            if epoch_id == 0 {
-                eprintln!("Error: Especifique --epoch <ID>");
-                return Ok(());
-            }
-            let _orch = mgr.rollback_to(epoch_id).map_err(|e| e.to_string())?;
-            println!(
-                "⚡ Rollback instantáneo completado exitosamente: Época activa ahora es ID {}",
-                epoch_id
-            );
-        }
-        "promote" => {
-            if epoch_id == 0 {
-                eprintln!("Error: Especifique --epoch <ID>");
-                return Ok(());
-            }
-            mgr.promote_epoch(epoch_id).map_err(|e| e.to_string())?;
-            println!("🏆 Época {} promovida canónicamente como activa.", epoch_id);
-        }
-        "seal" => {
-            if epoch_id == 0 {
-                eprintln!("Error: Especifique --epoch <ID>");
-                return Ok(());
-            }
-            mgr.seal_epoch(epoch_id).map_err(|e| e.to_string())?;
-            println!("🔒 Época {} sellada inmutablemente.", epoch_id);
-        }
-        "evaluate" => {
-            if candidate_id == 0 {
-                eprintln!("Error: Especifique --candidate <ID>");
-                return Ok(());
-            }
-            println!(
-                "🔬 Evaluando Gate de Promoción para Época Candidata {}...",
-                candidate_id
-            );
-            let dummy_vec = vec![1.0; dim as usize];
-            let golden = vec![(dummy_vec, 1u64)];
-            let verdict = mgr
-                .evaluate_and_gate(candidate_id, &golden)
-                .map_err(|e| e.to_string())?;
-            println!(
-                "--------------------------------------------------------------------------------"
-            );
-            println!("Gate Superado: {}", verdict.passed);
-            println!("Acción Ejecutada: {}", verdict.action_taken);
-            println!("Detalle: {}", verdict.reason);
-            println!(
-                "--------------------------------------------------------------------------------"
-            );
-        }
-        "consolidate" => {
-            println!(
-                "💤 Iniciando Ciclo de Consolidación Autonómica para '{}'...",
-                organism
-            );
-            let mut orch = mgr
-                .rollback_to(mgr.active_epoch_id)
-                .map_err(|e| e.to_string())?;
-            let stats = orch.consolidate_memory(0.95);
-            let new_epoch_id = mgr
-                .create_snapshot(&mut orch, "Consolidación Autonómica (Ciclo de Sueño)", None)
-                .map_err(|e| e.to_string())?;
-            println!(
-                "✅ Consolidación completada exitosamente: Creada Época ID {}",
-                new_epoch_id
-            );
-            println!(
-                "   • Recuerdos episódicos consolidados: {}",
-                stats.episodic_transferred
-            );
-            println!(
-                "   • Recuerdos conversacionales consolidados: {}",
-                stats.conversational_transferred
-            );
-            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
-            println!(
-                "   • Total entradas documentales: {}",
-                stats.total_documental_entries
-            );
-        }
-        "merge" => {
-            if from_organism.is_empty() {
-                eprintln!("Error: Se requiere --from-organism <DONANTE>");
-                return Ok(());
-            }
-            println!(
-                "🧬 Fusionando memoria de linaje: '{}' (Donante) -> '{}' (Receptor)...",
-                from_organism, organism
-            );
-            let mut donor_mgr =
-                _impl::compute::epoch_manager::EpochManager::new(&root_dir, &from_organism, dim)
-                    .map_err(|e| e.to_string())?;
-            let donor_orch = donor_mgr
-                .rollback_to(donor_mgr.active_epoch_id)
-                .map_err(|e| e.to_string())?;
-            let mut target_orch = mgr
-                .rollback_to(mgr.active_epoch_id)
-                .map_err(|e| e.to_string())?;
-
-            let stats = mgr.merge_memory_islands(&mut target_orch, &donor_orch, 0.95);
-            let new_epoch_id = mgr
-                .create_snapshot(
-                    &mut target_orch,
-                    &format!("Cross-Breeding con {}", from_organism),
-                    None,
-                )
-                .map_err(|e| e.to_string())?;
-
-            println!(
-                "✅ Fusión completada exitosamente: Creada Época ID {}",
-                new_epoch_id
-            );
-            println!(
-                "   • Recuerdos documentales transferidos: {}",
-                stats.episodic_transferred
-            );
-            println!("   • Duplicados podados: {}", stats.duplicates_pruned);
-            println!(
-                "   • Total entradas documentales receptor: {}",
-                stats.total_documental_entries
-            );
-        }
-        "evolve" => {
-            println!(
-                "🧬 Ejecutando Evolución de Capa de Memoria DNI para '{}'...",
-                organism
-            );
-            let mut orch = mgr
-                .rollback_to(mgr.active_epoch_id)
-                .map_err(|e| e.to_string())?;
-            let dummy_vec = vec![1.0; dim as usize];
-            let golden = vec![(dummy_vec, 1u64)];
-            let (weights, fit) = mgr.evolve_memory_niche_weights(&mut orch, &golden, 50, 16, 0.25);
-            let new_epoch_id = mgr
-                .create_snapshot(
-                    &mut orch,
-                    &format!("Evolución DNI (Fitness: {:.4})", fit),
-                    None,
-                )
-                .map_err(|e| e.to_string())?;
-            println!(
-                "🏆 Evolución completada: Época ID {} (Fitness: {:.4})",
-                new_epoch_id, fit
-            );
-            println!("   • Pesos de Nicho Óptimos: {:?}", weights);
-        }
-        _ => {
-            eprintln!("Subcomando de época desconocido: '{}'", subcmd);
-        }
-    }
-
-    Ok(())
-}
-
-fn handle_download_command(
-    args: &[String],
-    running: Arc<AtomicBool>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
-        println!("⚡ GAJE HELIX — Descargador Nativo Multi-Stream (DNF / hf_transfer)");
-        println!("Uso: gaje-cli download <MODELO_O_URL> [--out <DIR>] [--concurrency <N>] [--min-chunk <MB>]\n");
-        println!("Modelos Disponibles:");
-        println!("  pico  / gaje_pico_135m.flat   (471 MB)");
-        println!("  nano  / gaje_nano_1.5b.flat   (1.26 GB)");
-        println!("  prime / gaje_prime_3b.flat    (2.20 GB)");
-        println!("  ultra / gaje_ultra_7b.flat    (4.90 GB)");
-        println!("  <usuario>/<repo>              (Hugging Face)");
-        println!("  https://...                   (URL Directa)\n");
-        println!("Opciones:");
-        println!("  --out <DIR>          Directorio de destino (por defecto: models/)");
-        println!("  --concurrency <N>    Conexiones paralelas (por defecto: 8)");
-        println!("  --min-chunk <MB>     Tamaño mínimo por chunk en MB (por defecto: 2)");
-        return Ok(());
-    }
-
-    let model_target = &args[0];
-    let mut out_dir = "models".to_string();
-    let mut concurrency = 8usize;
-    let mut min_chunk_mb = 2u64;
-
-    let mut j = 1;
-    while j < args.len() {
-        if (args[j] == "--out" || args[j] == "-o" || args[j] == "--dir") && j + 1 < args.len() {
-            out_dir = args[j + 1].clone();
-            j += 2;
-        } else if (args[j] == "--concurrency" || args[j] == "-c" || args[j] == "--threads")
-            && j + 1 < args.len()
-        {
-            concurrency = args[j + 1].parse().unwrap_or(8);
-            j += 2;
-        } else if args[j] == "--min-chunk" && j + 1 < args.len() {
-            min_chunk_mb = args[j + 1].parse().unwrap_or(2);
-            j += 2;
-        } else {
-            j += 1;
-        }
-    }
-
-    let opts = _impl::io::downloader::DownloadOptions {
-        concurrency,
-        chunk_size_min: min_chunk_mb * 1024 * 1024,
-        user_agent: "GAJE-Helix-Engine/1.7.0 (Rust; Native-Downloader)".to_string(),
+fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let mut mgr = match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, 512) {
+        Ok(m) => m,
+        Err(e) => return Err(format!("Error abriendo gestor de épocas: {}", e).into()),
     };
 
-    println!(
-        "⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}",
-        model_target
-    );
-    let stats = _impl::io::downloader::download_model(
-        model_target,
-        Some(Path::new(&out_dir)),
-        Some(opts),
-        Some(running),
-    )?;
-
-    println!(
-        "🎉 Descarga completada con éxito en {:?}",
-        stats.destination
-    );
+    match args.action.as_str() {
+        "list" => {
+            println!("📚 Épocas registradas para '{}':", args.organism);
+            let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
+            for ep in epochs {
+                println!(
+                    "  • Época #{}: {} (Fecha: {}, Padre: #{}, Estado: {})",
+                    ep.epoch_id, ep.comment, ep.created_at, ep.parent_epoch, ep.verdict
+                );
+            }
+        }
+        "rollback" => {
+            println!("⏪ Realizando rollback a la época #{}...", args.epoch_id);
+            mgr.rollback_to(args.epoch_id).map_err(|e| e.to_string())?;
+            println!("✅ Rollback exitoso.");
+        }
+        _ => {
+            println!("Acción de época '{}' no reconocida. Usa 'list' o 'rollback'.", args.action);
+        }
+    }
     Ok(())
 }
