@@ -51,6 +51,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 *   **[SEMANTIC_ENRICHMENT_GUIDE.md](docs/guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes y Roadmap (`docs/plans/`)
+*   **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](docs/plans/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: **OPTIMIZACIÓN DE EMBUDOS.** Resolución de 4 cuellos de botella críticos (Multi-Stream WASM, Exportación paralela en Rust, Sincronización Delta zchunk y Arranque On-Demand).
 *   **[GPU_ACCELERATION_BACKEND_PLAN.md](docs/plans/GPU_ACCELERATION_BACKEND_PLAN.md)**: **PLAN DE BACKEND DE ACELERACIÓN GPU (Vulkan / WGPU)** — Offload masivo paralelo de capas lineales y SwiGLU para AMD Radeon / GPUs integradas y discretas.
 *   **[QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md](docs/plans/QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md)**: **PLAN DE INTEGRACIÓN END-TO-END DEL LOOP CUÁNTICO** — Integración nativa de `.qemb` en `GenomicLLM` con lookup SIMD $< 0.1\ \mu\text{s}$ y reducción del 91.1% de RAM.
 *   **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](docs/plans/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: **PLAN DE CODEBOOK CUÁNTICO (8,192 Meta-Tokens)** — Compresión de tablas de embeddings del 94.4% mediante superposición dispersa.
