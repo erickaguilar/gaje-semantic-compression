@@ -43,6 +43,8 @@ impl RustGenomicBlock {
             topology: None,
             fused_qkv: None,
             fused_gate_up: None,
+            mla: None,
+            moe: None,
         }
     }
 

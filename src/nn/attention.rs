@@ -345,3 +345,235 @@ impl GenomicAttention {
         Ok(())
     }
 }
+
+/// Tipo de Atención Soportada en GAJE (GQA o MLA)
+#[derive(Clone)]
+pub enum AttentionKind {
+    Gqa(GenomicAttention),
+    Mla(MlaAttention),
+}
+
+/// Capa de Atención Latente Multi-Head (MLA - Multi-Head Latent Attention)
+/// Arquitectura nativa para DeepSeek V2/V3/R1.
+/// Comprime la memoria KV en un vector latente de baja dimensión `c_kv`,
+/// reduciendo el consumo de VRAM/RAM hasta un 93% en inferencia larga.
+#[derive(Clone)]
+pub struct MlaAttention {
+    pub n_head: usize,
+    pub q_lora_rank: usize,
+    pub kv_lora_rank: usize,
+    pub qk_nope_head_dim: usize,
+    pub qk_rope_head_dim: usize,
+    pub v_head_dim: usize,
+    pub rmsnorm_weight: Vec<f32>,
+    pub eps: f32,
+    pub rope_base: f32,
+    pub rope_style: String,
+    /// Caché latente KV: [seq_len, kv_lora_rank]
+    pub kv_latent_cache: Vec<Vec<f32>>,
+    /// Caché de claves desacopladas RoPE: [seq_len, qk_rope_head_dim]
+    pub k_rope_cache: Vec<Vec<f32>>,
+    /// Matriz de descompresión de claves NoPE: [kv_lora_rank, n_head * qk_nope_head_dim] (opcional si precalculada)
+    pub w_uk: Option<Vec<f32>>,
+    /// Matriz de descompresión de valores: [kv_lora_rank, n_head * v_head_dim] (opcional si precalculada)
+    pub w_uv: Option<Vec<f32>>,
+}
+
+impl MlaAttention {
+    pub fn new(
+        n_head: usize,
+        q_lora_rank: usize,
+        kv_lora_rank: usize,
+        qk_nope_head_dim: usize,
+        qk_rope_head_dim: usize,
+        v_head_dim: usize,
+        rmsnorm_weight: Vec<f32>,
+        eps: f32,
+        rope_base: f32,
+        rope_style: String,
+    ) -> Self {
+        Self {
+            n_head,
+            q_lora_rank,
+            kv_lora_rank,
+            qk_nope_head_dim,
+            qk_rope_head_dim,
+            v_head_dim,
+            rmsnorm_weight,
+            eps,
+            rope_base,
+            rope_style,
+            kv_latent_cache: Vec::new(),
+            k_rope_cache: Vec::new(),
+            w_uk: None,
+            w_uv: None,
+        }
+    }
+
+    pub fn clear_cache(&mut self) {
+        self.kv_latent_cache.clear();
+        self.k_rope_cache.clear();
+    }
+
+    pub fn cache_len(&self) -> usize {
+        self.kv_latent_cache.len()
+    }
+
+    /// Forward principal de MLA:
+    /// - `q_nope`: queries desacopladas no-rotativas [n_head * qk_nope_head_dim]
+    /// - `q_rope`: queries desacopladas rotativas [n_head * qk_rope_head_dim]
+    /// - `kv_latent`: vector latente comprimido c_kv [kv_lora_rank]
+    /// - `k_rope`: clave rotativa desacoplada [qk_rope_head_dim]
+    /// - `pos`: posición del token actual en la secuencia
+    pub fn forward_mla_core(
+        &mut self,
+        q_nope: &[f32],
+        q_rope: &[f32],
+        kv_latent: Vec<f32>,
+        mut k_rope: Vec<f32>,
+        pos: usize,
+    ) -> Result<Vec<f32>, String> {
+        let n_head = self.n_head;
+        let nope_dim = self.qk_nope_head_dim;
+        let rope_dim = self.qk_rope_head_dim;
+        let v_dim = self.v_head_dim;
+        let total_q_dim = nope_dim + rope_dim;
+        let scale = 1.0 / (total_q_dim as f32).sqrt();
+
+        // 1. Asegurar dimensiones y aplicar RoPE a q_rope y k_rope
+        let mut q_nope_buf = q_nope.to_vec();
+        if q_nope_buf.len() < n_head * nope_dim {
+            q_nope_buf.resize(n_head * nope_dim, 0.0);
+        }
+
+        let mut q_rope_rot = q_rope.to_vec();
+        if q_rope_rot.len() < n_head * rope_dim {
+            q_rope_rot.resize(n_head * rope_dim, 0.0);
+        }
+
+        if k_rope.len() < rope_dim {
+            k_rope.resize(rope_dim, 0.0);
+        }
+
+        let rope_base = self.rope_base;
+        let is_split = self.rope_style == "split";
+
+        // Rotar queries rope por cabeza
+        for h in 0..n_head {
+            let h_start = h * rope_dim;
+            for i in 0..(rope_dim / 2) {
+                let freq = 1.0 / (rope_base.powf((2.0 * i as f32) / rope_dim as f32));
+                let theta = pos as f32 * freq;
+                let (sin, cos) = theta.sin_cos();
+                if is_split {
+                    let v0 = q_rope_rot[h_start + i];
+                    let v1 = q_rope_rot[h_start + i + rope_dim / 2];
+                    q_rope_rot[h_start + i] = v0 * cos - v1 * sin;
+                    q_rope_rot[h_start + i + rope_dim / 2] = v0 * sin + v1 * cos;
+                } else {
+                    let v0 = q_rope_rot[h_start + 2 * i];
+                    let v1 = q_rope_rot[h_start + 2 * i + 1];
+                    q_rope_rot[h_start + 2 * i] = v0 * cos - v1 * sin;
+                    q_rope_rot[h_start + 2 * i + 1] = v0 * sin + v1 * cos;
+                }
+            }
+        }
+
+        // Rotar k_rope (compartido entre todas las cabezas)
+        for i in 0..(rope_dim / 2) {
+            let freq = 1.0 / (rope_base.powf((2.0 * i as f32) / rope_dim as f32));
+            let theta = pos as f32 * freq;
+            let (sin, cos) = theta.sin_cos();
+            if is_split {
+                let v0 = k_rope[i];
+                let v1 = k_rope[i + rope_dim / 2];
+                k_rope[i] = v0 * cos - v1 * sin;
+                k_rope[i + rope_dim / 2] = v0 * sin + v1 * cos;
+            } else {
+                let v0 = k_rope[2 * i];
+                let v1 = k_rope[2 * i + 1];
+                k_rope[2 * i] = v0 * cos - v1 * sin;
+                k_rope[2 * i + 1] = v0 * sin + v1 * cos;
+            }
+        }
+
+        // 2. Guardar en caché latente (zero-copy / mínimo consumo)
+        self.kv_latent_cache.push(kv_latent);
+        self.k_rope_cache.push(k_rope);
+        let seq_len = self.kv_latent_cache.len();
+
+        // 3. Cómputo de atención paralela por cabeza
+        let heads_out: Vec<Vec<f32>> = (0..n_head)
+            .into_par_iter()
+            .map(|h| {
+                let q_nope_slice = &q_nope_buf[h * nope_dim..(h + 1) * nope_dim];
+                let q_rope_slice = &q_rope_rot[h * rope_dim..(h + 1) * rope_dim];
+
+                let mut scores = vec![0.0f32; seq_len];
+                let mut max_s = -f32::INFINITY;
+
+                for t in 0..seq_len {
+                    let s_rope = unsafe { dot_product(q_rope_slice, &self.k_rope_cache[t]) };
+                    
+                    let s_nope = if let Some(ref w_uk) = self.w_uk {
+                        let mut k_nope_head = vec![0.0f32; nope_dim];
+                        let c_kv = &self.kv_latent_cache[t];
+                        for d in 0..nope_dim {
+                            let mut dot = 0.0f32;
+                            for r in 0..self.kv_lora_rank {
+                                let w_idx = r * (n_head * nope_dim) + (h * nope_dim + d);
+                                dot += c_kv[r] * w_uk[w_idx];
+                            }
+                            k_nope_head[d] = dot;
+                        }
+                        unsafe { dot_product(q_nope_slice, &k_nope_head) }
+                    } else {
+                        0.0f32
+                    };
+
+                    let s = (s_nope + s_rope) * scale;
+                    scores[t] = s;
+                    if s > max_s {
+                        max_s = s;
+                    }
+                }
+
+                // Softmax
+                let mut sum_e = 0.0f32;
+                for t in 0..seq_len {
+                    scores[t] = (scores[t] - max_s).exp();
+                    sum_e += scores[t];
+                }
+                let inv_s = 1.0 / (sum_e + 1e-12);
+
+                // Agregación de valores V
+                let mut head_out = vec![0.0f32; v_dim];
+                for t in 0..seq_len {
+                    let w = scores[t] * inv_s;
+                    if let Some(ref w_uv) = self.w_uv {
+                        let c_kv = &self.kv_latent_cache[t];
+                        for d in 0..v_dim {
+                            let mut v_val = 0.0f32;
+                            for r in 0..self.kv_lora_rank {
+                                let w_idx = r * (n_head * v_dim) + (h * v_dim + d);
+                                v_val += c_kv[r] * w_uv[w_idx];
+                            }
+                            head_out[d] += w * v_val;
+                        }
+                    }
+                }
+                head_out
+            })
+            .collect();
+
+        // 4. Concatenar salida de todas las cabezas
+        let mut attn_out = vec![0.0f32; n_head * v_dim];
+        for h in 0..n_head {
+            let start = h * v_dim;
+            attn_out[start..start + v_dim].copy_from_slice(&heads_out[h]);
+        }
+
+        Ok(attn_out)
+    }
+}
+

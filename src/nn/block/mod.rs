@@ -72,6 +72,8 @@ pub struct RustGenomicBlock {
     pub fused_qkv: Option<GenomicLinear>,
     #[pyo3(get, set)]
     pub fused_gate_up: Option<GenomicLinear>,
+    pub mla: Option<crate::nn::attention::MlaAttention>,
+    pub moe: Option<crate::nn::moe::MoeRouter>,
 }
 
 #[cfg(not(feature = "python"))]
@@ -96,6 +98,8 @@ pub struct RustGenomicBlock {
     pub topology: Option<Arc<CentroidGraph>>,
     pub fused_qkv: Option<GenomicLinear>,
     pub fused_gate_up: Option<GenomicLinear>,
+    pub mla: Option<crate::nn::attention::MlaAttention>,
+    pub moe: Option<crate::nn::moe::MoeRouter>,
 }
 
 pub use crate::nn::block::cache::*;

@@ -57,26 +57,37 @@ impl RustGenomicBlock {
             (2, None)
         };
 
-        let (q, k, v) = if let Some(ref qkv_gen) = self.fused_qkv {
-            let qkv_out = qkv_gen.forward_core(x_norm, modulation, activate_rna)?;
-            let q_dim = self.attn.n_head * self.attn.head_dim;
-            let kv_dim = self.attn.n_head_kv * self.attn.head_dim;
-            let q = qkv_out[0..q_dim].to_vec();
-            let k = qkv_out[q_dim..q_dim + kv_dim].to_vec();
-            let v = qkv_out[q_dim + kv_dim..q_dim + 2 * kv_dim].to_vec();
-            (q, k, v)
+        let projected_attn = if let Some(ref mut mla) = self.mla {
+            let q = self.q_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+            let kv_latent = self.k_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+            let k_rope = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
+            let nope_total = mla.n_head * mla.qk_nope_head_dim;
+            let q_nope = &q[0..nope_total.min(q.len())];
+            let q_rope = if q.len() > nope_total { &q[nope_total..] } else { &[] };
+            let attn_out = mla.forward_mla_core(q_nope, q_rope, kv_latent, k_rope, pos)?;
+            self.w_o.forward_core(attn_out, modulation, activate_rna)?
         } else {
-            GenomicLinear::forward_fused_3(
-                &self.q_gen,
-                &self.k_gen,
-                &self.v_gen,
-                &x_norm,
-                modulation,
-            )?
-        };
+            let (q, k, v) = if let Some(ref qkv_gen) = self.fused_qkv {
+                let qkv_out = qkv_gen.forward_core(x_norm, modulation, activate_rna)?;
+                let q_dim = self.attn.n_head * self.attn.head_dim;
+                let kv_dim = self.attn.n_head_kv * self.attn.head_dim;
+                let q = qkv_out[0..q_dim].to_vec();
+                let k = qkv_out[q_dim..q_dim + kv_dim].to_vec();
+                let v = qkv_out[q_dim + kv_dim..q_dim + 2 * kv_dim].to_vec();
+                (q, k, v)
+            } else {
+                GenomicLinear::forward_fused_3(
+                    &self.q_gen,
+                    &self.k_gen,
+                    &self.v_gen,
+                    &x_norm,
+                    modulation,
+                )?
+            };
 
-        let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
-        let projected_attn = self.w_o.forward_core(attn_out, modulation, activate_rna)?;
+            let attn_out = self.attn.forward_attention_core(q, k, v, pos)?;
+            self.w_o.forward_core(attn_out, modulation, activate_rna)?
+        };
 
         let mut x_post = x;
         x_post
@@ -87,52 +98,55 @@ impl RustGenomicBlock {
         let x_ffn_n =
             unsafe { crate::compute::kernels::rms_norm_offset(&x_post, &self.ffn_norm, self.eps, norm_offset) };
 
-        let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
-            let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
-            let ffn_dim = gate_up_out.len() / 2;
-            let gate = gate_up_out[0..ffn_dim].to_vec();
-            let up = gate_up_out[ffn_dim..2 * ffn_dim].to_vec();
-            (gate, up)
+        let projected_ffn = if let Some(ref moe) = self.moe {
+            moe.forward_moe(&x_ffn_n, modulation, activate_rna, &self.act_fn, self.h_scale)?
         } else {
-            GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
-        };
+            let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
+                let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
+                let ffn_dim = gate_up_out.len() / 2;
+                let gate = gate_up_out[0..ffn_dim].to_vec();
+                let up = gate_up_out[ffn_dim..2 * ffn_dim].to_vec();
+                (gate, up)
+            } else {
+                GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, &x_ffn_n, modulation)?
+            };
 
-        #[cfg(debug_assertions)]
-        if up.iter().any(|v| v.is_nan()) {
-            return Err("NaN in up".into());
-        }
-
-        let mut ffn_out = if self.act_fn == "geglu" {
-            let mut out = vec![0.0f32; gate.len()];
-            crate::compute::kernels::geglu(&gate, &up, &mut out);
-            out
-        } else if self.act_fn == "reluglu" || self.act_fn == "relu_glu" {
-            let mut out = vec![0.0f32; gate.len()];
-            crate::compute::kernels::relu_glu(&gate, &up, &mut out);
-            out
-        } else {
-            let mut out = vec![0.0f32; gate.len()];
-            crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
-            out
-        };
-
-        #[cfg(debug_assertions)]
-        if ffn_out.iter().any(|v| v.is_nan()) {
-            return Err("NaN in ffn_out".into());
-        }
-
-        if self.use_genomic_norm {
-            let rms = (ffn_out.par_iter().map(|&v| v * v).sum::<f32>() / ffn_out.len() as f32
-                + self.eps)
-                .sqrt();
-            if rms > self.h_scale {
-                let s = self.h_scale / rms;
-                ffn_out.par_iter_mut().for_each(|out| *out *= s);
+            #[cfg(debug_assertions)]
+            if up.iter().any(|v| v.is_nan()) {
+                return Err("NaN in up".into());
             }
-        }
-        let projected_ffn = self
-            .w_down
-            .forward_core(ffn_out, modulation, activate_rna)?;
+
+            let mut ffn_out = if self.act_fn == "geglu" {
+                let mut out = vec![0.0f32; gate.len()];
+                crate::compute::kernels::geglu(&gate, &up, &mut out);
+                out
+            } else if self.act_fn == "reluglu" || self.act_fn == "relu_glu" {
+                let mut out = vec![0.0f32; gate.len()];
+                crate::compute::kernels::relu_glu(&gate, &up, &mut out);
+                out
+            } else {
+                let mut out = vec![0.0f32; gate.len()];
+                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
+                out
+            };
+
+            #[cfg(debug_assertions)]
+            if ffn_out.iter().any(|v| v.is_nan()) {
+                return Err("NaN in ffn_out".into());
+            }
+
+            if self.use_genomic_norm {
+                let rms = (ffn_out.par_iter().map(|&v| v * v).sum::<f32>() / ffn_out.len() as f32
+                    + self.eps)
+                    .sqrt();
+                if rms > self.h_scale {
+                    let s = self.h_scale / rms;
+                    ffn_out.par_iter_mut().for_each(|out| *out *= s);
+                }
+            }
+            self.w_down
+                .forward_core(ffn_out, modulation, activate_rna)?
+        };
 
         #[cfg(debug_assertions)]
         if projected_ffn.iter().any(|v| v.is_nan()) {
