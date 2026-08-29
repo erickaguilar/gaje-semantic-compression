@@ -3,61 +3,140 @@ use crate::io::config::ModelConfig;
 use crate::io::flat_reader::FlatTensorEntry;
 use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-fn align64(v: &mut Vec<u8>) {
-    let pad = (64 - (v.len() % 64)) % 64;
-    v.resize(v.len() + pad, 0);
+fn align64_size(len: usize) -> usize {
+    let pad = (64 - (len % 64)) % 64;
+    len + pad
 }
 
 fn f32_u8(d: &[f32]) -> &[u8] {
     unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, d.len() * 4) }
 }
 
-fn push_tensor(
-    dir: &mut Vec<FlatTensorEntry>,
-    blob: &mut Vec<u8>,
-    name: String,
-    bit_depth: usize,
-    out: usize,
-    inn: usize,
-    dna: &[u8],
-    centroids: &[f32],
-    anchors: &[u8],
-    bias: &[f32],
+fn write_at_offset(file: &std::fs::File, data: &[u8], offset: u64) -> std::io::Result<()> {
+    if data.is_empty() {
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt;
+        file.write_all_at(data, offset)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::FileExt;
+        let mut written = 0;
+        while written < data.len() {
+            let n = file.seek_write(&data[written..], offset + written as u64)?;
+            if n == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::WriteZero,
+                    "Error de escritura en archivo",
+                ));
+            }
+            written += n;
+        }
+        Ok(())
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        use std::io::{Seek, SeekFrom, Write};
+        let mut f = file.try_clone()?;
+        f.seek(SeekFrom::Start(offset))?;
+        f.write_all(data)?;
+        Ok(())
+    }
+}
+
+struct TensorWriteTask {
+    entry: FlatTensorEntry,
+    dna_data: Vec<u8>,
+    c_data: Vec<u8>,
+    anc_data: Vec<u8>,
+    bias_data: Vec<u8>,
+}
+
+fn add_linear(
+    name: &str,
+    l: &GenomicLinear,
+    tasks: &mut Vec<TensorWriteTask>,
+    current_offset: &mut usize,
 ) {
-    let dna_off = blob.len();
-    blob.extend_from_slice(dna);
-    align64(blob);
-    let c_off = blob.len();
-    blob.extend_from_slice(f32_u8(centroids));
-    align64(blob);
-    let anc_off = blob.len();
-    blob.extend_from_slice(anchors);
-    align64(blob);
-    let bias_off = blob.len();
-    blob.extend_from_slice(f32_u8(bias));
-    align64(blob);
-    dir.push(FlatTensorEntry {
-        name,
-        bit_depth,
-        out_features: out,
-        in_features: inn,
-        dna_off,
-        dna_len: dna.len(),
-        c_off,
-        c_len: centroids.len() * 4,
-        anc_off,
-        anc_len: anchors.len(),
-        bias_off,
-        bias_len: bias.len() * 4,
+    let dna = l.database_ref().to_vec();
+    let centroids = f32_u8(&l.centroids).to_vec();
+    let anchors = l.anchors_sparse_buffer().to_vec();
+    let bias = f32_u8(&l.bias).to_vec();
+
+    let dna_off = *current_offset;
+    *current_offset = align64_size(dna_off + dna.len());
+
+    let c_off = *current_offset;
+    *current_offset = align64_size(c_off + centroids.len());
+
+    let anc_off = *current_offset;
+    *current_offset = align64_size(anc_off + anchors.len());
+
+    let bias_off = *current_offset;
+    *current_offset = align64_size(bias_off + bias.len());
+
+    tasks.push(TensorWriteTask {
+        entry: FlatTensorEntry {
+            name: name.to_string(),
+            bit_depth: l.bit_depth() as usize,
+            out_features: l.out_features,
+            in_features: l.in_features,
+            dna_off,
+            dna_len: dna.len(),
+            c_off,
+            c_len: centroids.len(),
+            anc_off,
+            anc_len: anchors.len(),
+            bias_off,
+            bias_len: bias.len(),
+        },
+        dna_data: dna,
+        c_data: centroids,
+        anc_data: anchors,
+        bias_data: bias,
     });
 }
 
-/// Escribe el modelo en el **formato mmap plano `GAJE`** (magic `GAJE`, zero-copy),
-/// el mismo que produce `scripts/export_gaje_flat.py` y que carga el Web UI con
-/// `load_genomic_auto` sin pasar por redb. Los tensores se escriben con el layout
-/// **separado** (attn_q/k/v, ffn_gate/up), que el reader detecta con
-/// `has_fused_qkv=false`/`has_fused_gate_up=false`.
+fn add_raw_f32(
+    name: &str,
+    f32_data: &[f32],
+    tasks: &mut Vec<TensorWriteTask>,
+    current_offset: &mut usize,
+) {
+    let bytes = f32_u8(f32_data).to_vec();
+    let dna_off = *current_offset;
+    *current_offset = align64_size(dna_off + bytes.len());
+
+    tasks.push(TensorWriteTask {
+        entry: FlatTensorEntry {
+            name: name.to_string(),
+            bit_depth: 32,
+            out_features: f32_data.len(),
+            in_features: 1,
+            dna_off,
+            dna_len: bytes.len(),
+            c_off: *current_offset,
+            c_len: 0,
+            anc_off: *current_offset,
+            anc_len: 0,
+            bias_off: *current_offset,
+            bias_len: 0,
+        },
+        dna_data: bytes,
+        c_data: Vec::new(),
+        anc_data: Vec::new(),
+        bias_data: Vec::new(),
+    });
+}
+
+/// Escribe el modelo en el **formato mmap plano `GAJE`** (magic `GAJE`, zero-copy).
 pub fn save_genomic_flat(
     path: &str,
     model: &GenomicLLM,
@@ -67,9 +146,8 @@ pub fn save_genomic_flat(
     save_genomic_flat_q(path, model, config, tokenizer, 1)
 }
 
-/// Variante de `save_genomic_flat` que fija el `quant_format` de la cabecera
-/// (1 = Q4_0, 3 = Q2_0). Los tensores se escriben con el layout separado
-/// (attn_q/k/v, ffn_gate/up) y cada entrada lleva su propio `bit_depth`.
+/// Variante de `save_genomic_flat` que pre-asigna el archivo con `file.set_len()`
+/// y escribe los tensores en paralelo mediante Rayon (`pwrite` / `write_all_at`).
 pub fn save_genomic_flat_q(
     path: &str,
     model: &GenomicLLM,
@@ -77,99 +155,44 @@ pub fn save_genomic_flat_q(
     tokenizer: Option<&GajeTokenizer>,
     quant_format: u32,
 ) -> std::io::Result<()> {
-    let mut blob: Vec<u8> = Vec::new();
-    let mut dir: Vec<FlatTensorEntry> = Vec::new();
+    let mut tasks: Vec<TensorWriteTask> = Vec::new();
+    let mut current_offset = 0usize;
 
-    let mut write_l =
-        |blob: &mut Vec<u8>, dir: &mut Vec<FlatTensorEntry>, p: &str, l: &GenomicLinear| {
-            push_tensor(
-                dir,
-                blob,
-                p.to_string(),
-                l.bit_depth() as usize,
-                l.out_features,
-                l.in_features,
-                l.database_ref(),
-                &l.centroids,
-                &l.anchors_sparse_buffer(),
-                &l.bias,
-            );
-        };
-
-    write_l(&mut blob, &mut dir, "token_embd", &model.embeddings);
+    // 1. Registrar todos los tensores y computar offsets
+    add_linear("token_embd", &model.embeddings, &mut tasks, &mut current_offset);
     for (i, blk) in model.blocks.iter().enumerate() {
         let p = format!("blk.{i}.");
-        push_tensor(
-            &mut dir,
-            &mut blob,
-            format!("{}attn_norm", p),
-            32,
-            blk.attn.rmsnorm_weight.len(),
-            1,
-            f32_u8(&blk.attn.rmsnorm_weight),
-            &[],
-            &[],
-            &[],
-        );
-        push_tensor(
-            &mut dir,
-            &mut blob,
-            format!("{}ffn_norm", p),
-            32,
-            blk.ffn_norm.len(),
-            1,
-            f32_u8(&blk.ffn_norm),
-            &[],
-            &[],
-            &[],
-        );
+        add_raw_f32(&format!("{}attn_norm", p), &blk.attn.rmsnorm_weight, &mut tasks, &mut current_offset);
+        add_raw_f32(&format!("{}ffn_norm", p), &blk.ffn_norm, &mut tasks, &mut current_offset);
         if let Some(qkv) = &blk.fused_qkv {
-            write_l(&mut blob, &mut dir, &format!("{}attn_qkv", p), qkv);
+            add_linear(&format!("{}attn_qkv", p), qkv, &mut tasks, &mut current_offset);
         } else {
-            write_l(&mut blob, &mut dir, &format!("{}attn_q", p), &blk.q_gen);
-            write_l(&mut blob, &mut dir, &format!("{}attn_k", p), &blk.k_gen);
-            write_l(&mut blob, &mut dir, &format!("{}attn_v", p), &blk.v_gen);
+            add_linear(&format!("{}attn_q", p), &blk.q_gen, &mut tasks, &mut current_offset);
+            add_linear(&format!("{}attn_k", p), &blk.k_gen, &mut tasks, &mut current_offset);
+            add_linear(&format!("{}attn_v", p), &blk.v_gen, &mut tasks, &mut current_offset);
         }
-        write_l(&mut blob, &mut dir, &format!("{}attn_output", p), &blk.w_o);
+        add_linear(&format!("{}attn_output", p), &blk.w_o, &mut tasks, &mut current_offset);
         if let Some(gu) = &blk.fused_gate_up {
-            write_l(&mut blob, &mut dir, &format!("{}ffn_gate_up", p), gu);
+            add_linear(&format!("{}ffn_gate_up", p), gu, &mut tasks, &mut current_offset);
         } else {
-            write_l(
-                &mut blob,
-                &mut dir,
-                &format!("{}ffn_gate", p),
-                &blk.gate_gen,
-            );
-            write_l(&mut blob, &mut dir, &format!("{}ffn_up", p), &blk.up_gen);
+            add_linear(&format!("{}ffn_gate", p), &blk.gate_gen, &mut tasks, &mut current_offset);
+            add_linear(&format!("{}ffn_up", p), &blk.up_gen, &mut tasks, &mut current_offset);
         }
-        write_l(&mut blob, &mut dir, &format!("{}ffn_down", p), &blk.w_down);
+        add_linear(&format!("{}ffn_down", p), &blk.w_down, &mut tasks, &mut current_offset);
     }
-    write_l(&mut blob, &mut dir, "lm_head", &model.lm_head);
-    push_tensor(
-        &mut dir,
-        &mut blob,
-        "output_norm".to_string(),
-        32,
-        model.output_norm.len(),
-        1,
-        f32_u8(&model.output_norm),
-        &[],
-        &[],
-        &[],
-    );
+    add_linear("lm_head", &model.lm_head, &mut tasks, &mut current_offset);
+    add_raw_f32("output_norm", &model.output_norm, &mut tasks, &mut current_offset);
 
-    let mut meta: serde_json::Value =
-        serde_json::to_value(config).map_err(std::io::Error::other)?;
+    let total_weights_len = current_offset;
+    let dir: Vec<FlatTensorEntry> = tasks.iter().map(|t| t.entry.clone()).collect();
+
+    // 2. Metadatos JSON y Directorio
+    let mut meta: serde_json::Value = serde_json::to_value(config).map_err(std::io::Error::other)?;
     if let Some(tok) = tokenizer {
         if let Some(obj) = meta.as_object_mut() {
-            obj.insert(
-                "tokenizer".to_string(),
-                serde_json::Value::String(
-                    tok.to_string(true).map_err(|e| {
-                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                    })?,
-                ),
-            );
+            if let Ok(tok_str) = tok.to_string(true) {
+                obj.insert("tokenizer".to_string(), serde_json::Value::String(tok_str));
+            }
         }
     }
     let metadata_json = serde_json::to_vec(&meta).map_err(std::io::Error::other)?;
@@ -181,6 +204,37 @@ pub fn save_genomic_flat_q(
         weights_offset = ((weights_offset / 4096) + 1) * 4096;
     }
 
+    // 3. Obtener GTOK binario para incrustación automática
+    let gtok_bytes: Vec<u8> = {
+        let qwen_gtok = PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok");
+        let smol_gtok = PathBuf::from("models/core/tokenizers/smollm2_tokenizer.gtok");
+        let def_gtok = PathBuf::from("models/core/tokenizer.gtok");
+
+        if config.n_embd >= 1536 && qwen_gtok.exists() {
+            std::fs::read(qwen_gtok).unwrap_or_default()
+        } else if smol_gtok.exists() {
+            std::fs::read(smol_gtok).unwrap_or_default()
+        } else if def_gtok.exists() {
+            std::fs::read(def_gtok).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    };
+
+    let gtok_offset = (weights_offset + total_weights_len) as u64;
+    let gtok_len = gtok_bytes.len() as u64;
+    let total_file_size = (weights_offset + total_weights_len + gtok_bytes.len()) as u64;
+
+    // Detectar familia de arquitectura
+    let arch_family = if config.n_embd == 576 {
+        2 // SmolLM
+    } else if config.n_embd == 896 || config.n_embd == 1536 || config.n_embd == 2048 || config.n_embd == 3584 {
+        4 // Qwen2_5
+    } else {
+        1 // Llama / Genérico
+    };
+
+    // 4. Construir Cabecera FlatHeaderV2
     let header = FlatHeaderV2 {
         magic: *b"GAJE",
         version: 0x000908,
@@ -189,17 +243,17 @@ pub fn save_genomic_flat_q(
         meta_len: metadata_json.len() as u64,
         dir_len: dir_json.len() as u64,
         weights_offset: weights_offset as u64,
-        weights_len: blob.len() as u64,
+        weights_len: total_weights_len as u64,
         group_size: 32,
         quant_format,
-        arch_family: 0,
-        arch_n_embd: 0,
-        arch_n_head: 0,
-        arch_n_head_kv: 0,
-        arch_n_blocks: 0,
+        arch_family,
+        arch_n_embd: config.n_embd as u32,
+        arch_n_head: config.n_head as u32,
+        arch_n_head_kv: config.n_head_kv as u32,
+        arch_n_blocks: config.n_blocks as u32,
         arch_qk_permute: 0,
-        gtok_offset: 0,
-        gtok_len: 0,
+        gtok_offset: if gtok_len > 0 { gtok_offset } else { 0 },
+        gtok_len,
         reserved: [0u8; 4000],
     };
 
@@ -208,17 +262,46 @@ pub fn save_genomic_flat_q(
         std::ptr::write(header_bin.as_mut_ptr() as *mut FlatHeaderV2, header);
     }
 
-    use std::io::Write;
-    let mut f = std::fs::File::create(path)?;
-    f.write_all(&header_bin)?;
-    f.write_all(&metadata_json)?;
-    f.write_all(&dir_json)?;
-    let current_pos = 4096 + metadata_json.len() + dir_json.len();
-    if weights_offset > current_pos {
-        f.write_all(&vec![0u8; weights_offset - current_pos])?;
+    // 5. Pre-asignar archivo con set_len (Zero fragmentation, instantáneo)
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)?;
+    file.set_len(total_file_size)?;
+
+    let file_arc = Arc::new(file);
+
+    // Escribir cabecera, metadatos y directorio al inicio
+    write_at_offset(&file_arc, &header_bin, 0)?;
+    write_at_offset(&file_arc, &metadata_json, 4096)?;
+    write_at_offset(&file_arc, &dir_json, 4096 + metadata_json.len() as u64)?;
+
+    // 6. Escritura masiva en paralelo de tensores usando Rayon
+    let base_weights = weights_offset as u64;
+    tasks.into_par_iter().for_each(|task| {
+        let e = &task.entry;
+        if !task.dna_data.is_empty() {
+            let _ = write_at_offset(&file_arc, &task.dna_data, base_weights + e.dna_off as u64);
+        }
+        if !task.c_data.is_empty() {
+            let _ = write_at_offset(&file_arc, &task.c_data, base_weights + e.c_off as u64);
+        }
+        if !task.anc_data.is_empty() {
+            let _ = write_at_offset(&file_arc, &task.anc_data, base_weights + e.anc_off as u64);
+        }
+        if !task.bias_data.is_empty() {
+            let _ = write_at_offset(&file_arc, &task.bias_data, base_weights + e.bias_off as u64);
+        }
+    });
+
+    // 7. Escribir GTOK si está presente
+    if !gtok_bytes.is_empty() {
+        write_at_offset(&file_arc, &gtok_bytes, gtok_offset)?;
     }
-    f.write_all(&blob)?;
-    f.flush()?;
+
+    file_arc.sync_all()?;
     Ok(())
 }
 
@@ -234,9 +317,9 @@ pub fn save_genomic_model(
         .write_metadata("config", &serde_json::to_string(config).unwrap())
         .unwrap();
     if let Some(tok) = tokenizer {
-        batch
-            .write_metadata("tokenizer", &tok.to_string(true).unwrap())
-            .unwrap();
+        if let Ok(tok_str) = tok.to_string(true) {
+            batch.write_metadata("tokenizer", &tok_str).unwrap();
+        }
     }
     let compress = |d: &[u8]| lz4_flex::compress_prepend_size(d);
     let f32_u8 =
@@ -293,29 +376,6 @@ pub fn init_born_genomic_model(
     config: ModelConfig,
     vocab_size: usize,
 ) -> std::io::Result<GenomicLLM> {
-    let b_s = 32;
-
-    // Intento cargar centroides algebraicos (OpenAI Insight - Fase 5.0)
-    let algebraic_c = if let Ok(f) = std::fs::File::open("models/core/algebraic_codebook.json") {
-        let val: serde_json::Value = serde_json::from_reader(f).unwrap_or(serde_json::Value::Null);
-        val.get("centroids")
-            .and_then(|c| c.as_array())
-            .and_then(|arr| {
-                if arr.len() == 4 {
-                    Some([
-                        arr[0].as_f64()? as f32,
-                        arr[1].as_f64()? as f32,
-                        arr[2].as_f64()? as f32,
-                        arr[3].as_f64()? as f32,
-                    ])
-                } else {
-                    None
-                }
-            })
-    } else {
-        None
-    };
-
     let init_l = |i: usize, o: usize| {
         use rand::Rng;
         let mut rng = rand::thread_rng();
@@ -355,7 +415,7 @@ pub fn init_born_genomic_model(
             Vec::new(),
             Vec::new(),
             Vec::new(),
-            4, // 4-bit Q4_0 nativo
+            4,
         )
     };
     let embeddings = init_l(config.n_embd, vocab_size);
