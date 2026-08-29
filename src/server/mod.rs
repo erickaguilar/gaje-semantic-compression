@@ -183,6 +183,9 @@ pub fn run_server(
             let requested_name = req_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
 
             if let Some(model_path) = find_model_path(&config.models_dir, requested_name) {
+                // Liberar el modelo previo antes de abrir el nuevo para evitar solapamiento de memoria en RAM
+                *active_model.write().unwrap() = None;
+
                 println!("🧬 [Carga Dinámica] Cargando modelo: {:?}", model_path);
                 match load_model_and_tokenizer(&model_path.to_string_lossy()) {
                     Ok((llm, tokenizer)) => {
@@ -225,19 +228,16 @@ pub fn run_server(
             continue;
         }
 
-        // 3. Servir Modelos Binarios para Descarga o WASM (`/models/*`)
+        // 3. Servir Modelos Binarios para Descarga o WASM (`/models/*`) con streaming zero-copy
         if url.starts_with("/models/") && method == Method::Get {
             let rel_path = url.trim_start_matches("/models/").split('?').next().unwrap_or("");
             if let Some(target_path) = find_model_path(&config.models_dir, rel_path) {
-                if let Ok(mut f) = File::open(&target_path) {
-                    let mut buffer = Vec::new();
-                    if f.read_to_end(&mut buffer).is_ok() {
-                        let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
-                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap());
-                        resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-                        let _ = request.respond(resp);
-                        continue;
-                    }
+                if let Ok(f) = File::open(&target_path) {
+                    let mut resp = Response::from_file(f).with_status_code(StatusCode(200));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = request.respond(resp);
+                    continue;
                 }
             }
             let resp = Response::from_string(format!("Modelo '{}' no encontrado", rel_path)).with_status_code(StatusCode(404));
