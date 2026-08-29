@@ -66,6 +66,9 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
         "gaje_pico_135m.flat" | "gaje_pico_135m" | "pico" => {
             ("erickaguilar/gaje-pico-135m", "gaje_pico_135m.flat")
         }
+        "gaje_nano_0_5b.flat" | "gaje_nano_0_5b" | "nano_0_5b" | "qwen_0_5b" | "0.5b" | "qwen2.5-0.5b" => {
+            ("eaguilar/gaje-nano-0.5b", "gaje_nano_0_5b.flat")
+        }
         "gaje_nano_1.5b.flat" | "gaje_nano_1.5b" | "nano" => {
             ("erickaguilar/gaje-nano-1.5b", "gaje_nano_1.5b.flat")
         }

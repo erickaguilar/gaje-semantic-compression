@@ -487,6 +487,7 @@ def export_gaje_flat():
     weights_len = len(blob_bytes)
 
     group_size = 32
+    quant_format = 1 if embed_bit_depth == 32 else 2
     # GTOK Embedding (Born with GTOK)
     gtok_bytes = b""
     qwen_gtok = os.path.join(
