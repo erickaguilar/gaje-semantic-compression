@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use _impl::compute::graph::{
-    AgentNode, AgentState, GmemRetrievalNode, RuleRouterNode,
-    StateGraph, StepResult, ToolNode,
+    AgentNode, AgentState, GmemRetrievalNode, RoutingDecision, RuleRouterNode,
+    StateGraph, StepResult, SwarmExecutor, SwarmIntent, SwarmRouterNode, ToolNode,
 };
 use _impl::compute::island::{IslandNiche, IslandOrchestrator};
 
@@ -18,7 +18,7 @@ fn test_agentic_swarm_multi_node_execution() {
 
     let mut graph = StateGraph::new();
 
-    // Declarar primero el nodo terminal para conocer su índice
+    // Node 0: Synthesizer (terminal)
     struct SynthesizerNode;
     impl AgentNode for SynthesizerNode {
         fn name(&self) -> &str {
@@ -37,8 +37,6 @@ fn test_agentic_swarm_multi_node_execution() {
             Ok(StepResult::End(state))
         }
     }
-
-    // Node 0: Synthesizer (terminal)
     let synth_idx = graph.add_node(Arc::new(SynthesizerNode));
 
     // Node 1: RAG Specialist -> Synthesizer (synth_idx = 0)
@@ -134,4 +132,69 @@ fn test_agentic_swarm_fork_and_merge() {
     let (res, transitions) = graph.run(d_idx, AgentState::with_query("paralelo")).unwrap();
     assert_eq!(transitions, 1);
     assert_eq!(res.tool_outputs.len(), 2);
+}
+
+#[test]
+fn test_swarm_router_and_executor_batch() {
+    let mut graph = StateGraph::new();
+
+    // Node 0: Factual Specialist
+    struct FactualSpecialist;
+    impl AgentNode for FactualSpecialist {
+        fn name(&self) -> &str { "factual_specialist" }
+        fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+            state.touch();
+            state.response = Some(format!("Respuesta fáctica directa para: {}", state.user_query));
+            Ok(StepResult::End(state))
+        }
+    }
+    let factual_idx = graph.add_node(Arc::new(FactualSpecialist));
+
+    // Node 1: Deep Reasoning Specialist (3B Synthesizer)
+    struct DeepReasoningSpecialist;
+    impl AgentNode for DeepReasoningSpecialist {
+        fn name(&self) -> &str { "deep_reasoning_specialist" }
+        fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+            state.touch();
+            state.response = Some(format!("Razonamiento profundo multi-paso para: {}", state.user_query));
+            Ok(StepResult::End(state))
+        }
+    }
+    let deep_idx = graph.add_node(Arc::new(DeepReasoningSpecialist));
+
+    // Node 2: SwarmRouterNode
+    let router = SwarmRouterNode::new("swarm_router", factual_idx, deep_idx, 0.70)
+        .add_intent_route(vec!["simple".to_string(), "capital".to_string()], SwarmIntent::DirectFactual, factual_idx);
+    let router_idx = graph.add_node(Arc::new(router));
+
+    let executor = SwarmExecutor::new(Arc::new(graph));
+
+    // 1. Consulta simple -> Factual Specialist
+    let (st_simple, hops_s, elapsed_s) = executor
+        .execute_profiled(router_idx, AgentState::with_query("capital de Francia"))
+        .unwrap();
+    assert!(hops_s >= 2);
+    assert!(elapsed_s >= 0.0);
+    assert!(st_simple.response.as_ref().unwrap().contains("Respuesta fáctica directa"));
+
+    // 2. Consulta compleja larga -> Deep Reasoning
+    let long_query = "Explica detalladamente la relación entre la teoría de la relatividad general, la mecánica cuántica y la transducción sintergial de Jacobo Grinberg en 500 palabras estructuradas paso a paso.";
+    let (st_deep, hops_d, _) = executor
+        .execute_profiled(router_idx, AgentState::with_query(long_query))
+        .unwrap();
+    assert!(hops_d >= 2);
+    assert!(st_deep.response.as_ref().unwrap().contains("Razonamiento profundo multi-paso"));
+
+    // 3. Batch masivo concurrente con Rayon
+    let batch_queries = vec![
+        "capital de Italia".to_string(),
+        "simple query 1".to_string(),
+        "simple query 2".to_string(),
+        long_query.to_string(),
+    ];
+    let batch_results = executor.execute_batch(router_idx, batch_queries);
+    assert_eq!(batch_results.len(), 4);
+    for res in batch_results {
+        assert!(res.is_ok());
+    }
 }

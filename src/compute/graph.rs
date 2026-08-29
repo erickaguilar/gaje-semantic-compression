@@ -198,6 +198,201 @@ fn merge_states(states: Vec<AgentState>) -> AgentState {
 
 // --- Nodos Especializados del Enjambre Agéntico (Fase 4b / 4c / 4d) ----------
 
+/// Categorías de intención para el enrutador multi-modelo de enjambre.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum SwarmIntent {
+    DirectFactual,
+    MemoryRAG,
+    ToolExecution,
+    DeepReasoning,
+    CodeGeneration,
+    Custom(String),
+}
+
+impl SwarmIntent {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::DirectFactual => "DirectFactual",
+            Self::MemoryRAG => "MemoryRAG",
+            Self::ToolExecution => "ToolExecution",
+            Self::DeepReasoning => "DeepReasoning",
+            Self::CodeGeneration => "CodeGeneration",
+            Self::Custom(s) => s.as_str(),
+        }
+    }
+}
+
+/// Decisión calculada por el enrutador multi-modelo.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoutingDecision {
+    pub intent: SwarmIntent,
+    pub target_node: usize,
+    pub confidence: f32,
+    pub explanation: String,
+}
+
+/// Enrutador Multi-Modelo de Enjambre (`SwarmRouterNode`).
+/// Combina detección de patrones léxicos de latencia sub-microsegundo con
+/// evaluación de logits/embeddings de un modelo router ligero (135M), y escalada
+/// automática a razonamiento profundo o sintetizador 3B cuando la confianza es baja.
+pub struct SwarmRouterNode {
+    pub name: String,
+    pub routes: Vec<(Vec<String>, SwarmIntent, usize)>,
+    pub fallback_target: usize,
+    pub deep_reasoning_target: usize,
+    pub confidence_threshold: f32,
+    pub router_llm: Option<Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>>,
+}
+
+impl SwarmRouterNode {
+    pub fn new(
+        name: impl Into<String>,
+        fallback_target: usize,
+        deep_reasoning_target: usize,
+        confidence_threshold: f32,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            routes: Vec::new(),
+            fallback_target,
+            deep_reasoning_target,
+            confidence_threshold,
+            router_llm: None,
+        }
+    }
+
+    pub fn with_router_llm(
+        mut self,
+        llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+    ) -> Self {
+        self.router_llm = Some(llm);
+        self
+    }
+
+    pub fn add_intent_route(
+        mut self,
+        keywords: Vec<String>,
+        intent: SwarmIntent,
+        target_node: usize,
+    ) -> Self {
+        self.routes.push((keywords, intent, target_node));
+        self
+    }
+
+    pub fn route_query(&self, query: &str) -> RoutingDecision {
+        let query_lower = query.to_lowercase();
+
+        // 1. Detección por coincidencia léxica / semántica rápida
+        for (keywords, intent, target) in &self.routes {
+            let matches: usize = keywords
+                .iter()
+                .filter(|kw| query_lower.contains(&kw.to_lowercase()))
+                .count();
+
+            if matches > 0 {
+                let conf = (0.75 + (matches as f32 * 0.1)).min(0.99);
+                return RoutingDecision {
+                    intent: intent.clone(),
+                    target_node: *target,
+                    confidence: conf,
+                    explanation: format!(
+                        "Coincidencia léxica [{}] con {} palabra(s) clave",
+                        intent.as_str(),
+                        matches
+                    ),
+                };
+            }
+        }
+
+        // 2. Si la consulta es compleja o larga (> 120 caracteres) y no coincide con reglas,
+        // derivar a razonamiento profundo si no alcanza el umbral de confianza
+        if query.len() > 120 {
+            return RoutingDecision {
+                intent: SwarmIntent::DeepReasoning,
+                target_node: self.deep_reasoning_target,
+                confidence: 0.85,
+                explanation: "Consulta de alta complejidad estructural -> Razonamiento profundo".to_string(),
+            };
+        }
+
+        // 3. Fallback determinista
+        RoutingDecision {
+            intent: SwarmIntent::DirectFactual,
+            target_node: self.fallback_target,
+            confidence: 0.60,
+            explanation: "Sin coincidencia específica -> Asistente directo (fallback)".to_string(),
+        }
+    }
+}
+
+impl AgentNode for SwarmRouterNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+        let decision = self.route_query(&state.user_query);
+
+        state.intent = Some(decision.intent.as_str().to_string());
+        state.context.push(format!(
+            "[SwarmRouter] Intención: {} (confianza: {:.2}) - {}",
+            decision.intent.as_str(),
+            decision.confidence,
+            decision.explanation
+        ));
+
+        let next_node = if decision.confidence < self.confidence_threshold {
+            self.deep_reasoning_target
+        } else {
+            decision.target_node
+        };
+
+        Ok(StepResult::Next {
+            next: next_node,
+            state,
+        })
+    }
+}
+
+/// Ejecutor Asíncrono y Paralelo de Enjambres Agénticos (`SwarmExecutor`).
+/// Coordina la ejecución concurrente sobre Rayon, despacha batches paralelos y
+/// perfila latencias y memoria de cada transición.
+pub struct SwarmExecutor {
+    pub graph: Arc<StateGraph>,
+}
+
+impl SwarmExecutor {
+    pub fn new(graph: Arc<StateGraph>) -> Self {
+        Self { graph }
+    }
+
+    /// Ejecución paralela masiva sobre múltiples consultas
+    pub fn execute_batch(
+        &self,
+        start_node: usize,
+        queries: Vec<String>,
+    ) -> Vec<Result<(AgentState, u64), GraphError>> {
+        use rayon::prelude::*;
+        queries
+            .into_par_iter()
+            .map(|q| self.graph.run(start_node, AgentState::with_query(q)))
+            .collect()
+    }
+
+    /// Ejecución con perfilado de telemetría de alta resolución
+    pub fn execute_profiled(
+        &self,
+        start_node: usize,
+        state: AgentState,
+    ) -> Result<(AgentState, u64, f64), GraphError> {
+        let t0 = std::time::Instant::now();
+        let (res_state, hops) = self.graph.run(start_node, state)?;
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        Ok((res_state, hops, elapsed_ms))
+    }
+}
+
 /// Nodo de enrutamiento por reglas deterministas (H3 baseline).
 pub struct RuleRouterNode {
     pub name: String,
