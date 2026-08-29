@@ -133,8 +133,9 @@ pub fn run_server(
     let server_arc = Arc::new(server);
 
     while running.load(Ordering::SeqCst) {
-        let request = match server_arc.recv() {
-            Ok(rq) => rq,
+        let request = match server_arc.recv_timeout(std::time::Duration::from_millis(200)) {
+            Ok(Some(rq)) => rq,
+            Ok(None) => continue, // Timeout cada 200ms para chequear la señal de terminación (Ctrl+C)
             Err(_) => break,
         };
 
@@ -310,5 +311,6 @@ pub fn run_server(
         }
     }
 
+    println!("\n🛑 [GAJE-SERVER] Servidor HTTP finalizado de forma limpia.");
     Ok(())
 }
