@@ -56,22 +56,25 @@ pub fn serve_static_file(
     }
 
     if !target_path.exists() || target_path.is_dir() {
-        // Si no existe, intentar index.html como SPA fallback
-        let fallback_index = static_root.join("index.html");
-        if fallback_index.exists() {
-            if let Ok(mut f) = File::open(&fallback_index) {
-                let mut buffer = Vec::new();
-                if f.read_to_end(&mut buffer).is_ok() {
-                    let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
-                    resp.add_header(
-                        Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
-                            .unwrap(),
-                    );
-                    resp.add_header(
-                        Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
-                            .unwrap(),
-                    );
-                    return Some(resp);
+        // Solo aplicar SPA fallback si NO tiene extensión de archivo
+        let has_extension = target_path.extension().is_some();
+        if !has_extension {
+            let fallback_index = static_root.join("index.html");
+            if fallback_index.exists() {
+                if let Ok(mut f) = File::open(&fallback_index) {
+                    let mut buffer = Vec::new();
+                    if f.read_to_end(&mut buffer).is_ok() {
+                        let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
+                        resp.add_header(
+                            Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
+                                .unwrap(),
+                        );
+                        resp.add_header(
+                            Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                .unwrap(),
+                        );
+                        return Some(resp);
+                    }
                 }
             }
         }
@@ -92,7 +95,7 @@ pub fn serve_static_file(
     let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
     resp.add_header(Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap());
     resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-    resp.add_header(Header::from_bytes(&b"Cache-Control"[..], &b"public, max-age=3600"[..]).unwrap());
+    resp.add_header(Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..]).unwrap());
 
     Some(resp)
 }

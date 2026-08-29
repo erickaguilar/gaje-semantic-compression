@@ -5,6 +5,8 @@ pub mod streaming;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::llm::GenomicLLM;
 use crate::nn::repl::load_model_and_tokenizer;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -34,8 +36,36 @@ impl Default for ServerConfig {
 
 pub struct LoadedModel {
     pub name: String,
+    pub path: PathBuf,
     pub llm: GenomicLLM,
     pub tokenizer: GajeTokenizer,
+}
+
+pub fn find_model_path(models_root: &Path, model_name: &str) -> Option<PathBuf> {
+    let clean_name = Path::new(model_name).file_name()?.to_str()?;
+    let search_dirs = [
+        models_root.join("production"),
+        models_root.join("born"),
+        models_root.to_path_buf(),
+    ];
+
+    for dir in &search_dirs {
+        if dir.exists() {
+            let candidate = dir.join(clean_name);
+            if candidate.exists() && candidate.is_file() {
+                return Some(candidate);
+            }
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().map(|n| n == clean_name).unwrap_or(false) {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn run_server(
@@ -86,6 +116,7 @@ pub fn run_server(
                     .to_string();
                 *active_model.write().unwrap() = Some(LoadedModel {
                     name,
+                    path: PathBuf::from(&model_to_load),
                     llm,
                     tokenizer,
                 });
@@ -139,6 +170,76 @@ pub fn run_server(
             let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
             resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
             resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = request.respond(resp);
+            continue;
+        }
+
+        if url == "/api/load_model" && method == Method::Post {
+            let mut body = String::new();
+            let mut req = request;
+            let _ = req.as_reader().read_to_string(&mut body);
+            let req_data: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+            let requested_name = req_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
+
+            if let Some(model_path) = find_model_path(&config.models_dir, requested_name) {
+                println!("🧬 [Carga Dinámica] Cargando modelo: {:?}", model_path);
+                match load_model_and_tokenizer(&model_path.to_string_lossy()) {
+                    Ok((llm, tokenizer)) => {
+                        let name = model_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                        *active_model.write().unwrap() = Some(LoadedModel {
+                            name: name.clone(),
+                            path: model_path,
+                            llm,
+                            tokenizer,
+                        });
+                        let json_resp = serde_json::json!({ "status": "ok", "model": name });
+                        let mut resp = Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
+                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                        resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                        let _ = req.respond(resp);
+                    }
+                    Err(e) => {
+                        let err_json = serde_json::json!({ "error": format!("Error al cargar modelo: {}", e) });
+                        let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(500));
+                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                        let _ = req.respond(resp);
+                    }
+                }
+            } else {
+                let err_json = serde_json::json!({ "error": format!("Modelo '{}' no encontrado", requested_name) });
+                let mut resp = Response::from_string(err_json.to_string()).with_status_code(StatusCode(404));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                let _ = req.respond(resp);
+            }
+            continue;
+        }
+
+        if url == "/api/unload_model" && method == Method::Post {
+            *active_model.write().unwrap() = None;
+            let json_resp = serde_json::json!({ "status": "ok", "unloaded": true });
+            let mut resp = Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = request.respond(resp);
+            continue;
+        }
+
+        // 3. Servir Modelos Binarios para Descarga o WASM (`/models/*`)
+        if url.starts_with("/models/") && method == Method::Get {
+            let rel_path = url.trim_start_matches("/models/").split('?').next().unwrap_or("");
+            if let Some(target_path) = find_model_path(&config.models_dir, rel_path) {
+                if let Ok(mut f) = File::open(&target_path) {
+                    let mut buffer = Vec::new();
+                    if f.read_to_end(&mut buffer).is_ok() {
+                        let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
+                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/octet-stream"[..]).unwrap());
+                        resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                        let _ = request.respond(resp);
+                        continue;
+                    }
+                }
+            }
+            let resp = Response::from_string(format!("Modelo '{}' no encontrado", rel_path)).with_status_code(StatusCode(404));
             let _ = request.respond(resp);
             continue;
         }
@@ -200,7 +301,7 @@ pub fn run_server(
             continue;
         }
 
-        // 3. Servir Archivos Estáticos de la Web UI
+        // 4. Servir Archivos Estáticos de la Web UI
         if let Some(resp) = static_files::serve_static_file(&config.static_dir, &url, config.chat_only) {
             let _ = request.respond(resp);
         } else {
