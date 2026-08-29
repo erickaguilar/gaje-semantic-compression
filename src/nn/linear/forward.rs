@@ -151,6 +151,16 @@ impl GenomicLinear {
         Ok(results)
     }
 
+    /// Intenta ejecutar la proyección lineal en GPU (WGPU / Vulkan) si los pesos están disponibles en FP32
+    pub fn forward_gpu(&self, input: &[f32]) -> Option<Vec<f32>> {
+        if let WeightDatabase::GenomicF32(ref w) = self.weight_db {
+            crate::compute::gpu::pipeline::gpu_gemv_f32(w, input, self.out_features, self.in_features)
+        } else {
+            None
+        }
+    }
+
+
     pub fn forward_fused_3(
         l1: &GenomicLinear,
         l2: &GenomicLinear,

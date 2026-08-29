@@ -28,6 +28,8 @@ impl GenomicLLM {
             k_wta_ratio: 0.50,
             topology: None,
             quantum_embeddings: None,
+            gpu_layers: 0,
+            use_gpu: false,
         }
     }
 
@@ -197,4 +199,24 @@ impl GenomicLLM {
         self.quantum_embeddings = None;
         Ok(())
     }
+
+    pub fn set_gpu_layers(&mut self, layers: usize) -> PyResult<()> {
+        self.set_gpu_layers(layers);
+        Ok(())
+    }
+
+    #[getter]
+    pub fn gpu_layers(&self) -> usize {
+        self.get_gpu_layers()
+    }
+
+    pub fn is_gpu_active(&self) -> bool {
+        self.is_gpu_active()
+    }
+
+    pub fn offload_to_gpu(&mut self, layers: usize) -> PyResult<usize> {
+        self.offload_to_gpu(layers)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
 }
+

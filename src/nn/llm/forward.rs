@@ -30,6 +30,25 @@ impl GenomicLLM {
         Ok(())
     }
 
+    pub fn set_gpu_layers(&mut self, layers: usize) {
+        self.gpu_layers = layers;
+        self.use_gpu = layers > 0;
+    }
+
+    pub fn get_gpu_layers(&self) -> usize {
+        self.gpu_layers
+    }
+
+    pub fn is_gpu_active(&self) -> bool {
+        self.use_gpu && self.gpu_layers > 0
+    }
+
+    pub fn offload_to_gpu(&mut self, layers: usize) -> Result<usize, String> {
+        let actual_layers = layers.min(self.blocks.len());
+        self.set_gpu_layers(actual_layers);
+        Ok(actual_layers)
+    }
+
     pub fn forward_core(&mut self, token_id: usize, clear_cache: bool) -> Result<Vec<f32>, String> {
         if clear_cache {
             self.clear_cache_core();
@@ -52,7 +71,15 @@ impl GenomicLLM {
         for block in &mut self.blocks {
             h = block.forward_core(h, pos)?;
         }
-        let h_norm = unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
+        let h_norm = if self.is_gpu_active() {
+            if let Some(gpu_norm) = crate::compute::gpu::pipeline::gpu_rms_norm(&h, &self.output_norm, self.eps) {
+                gpu_norm
+            } else {
+                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) }
+            }
+        } else {
+            unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) }
+        };
         #[cfg(not(target_arch = "wasm32"))]
         let blocks_ms = t_blocks_start.elapsed().as_secs_f32() * 1000.0;
 
@@ -70,9 +97,15 @@ impl GenomicLLM {
 
         #[cfg(not(target_arch = "wasm32"))]
         let t_head_start = std::time::Instant::now();
-        let mut logits = self
-            .lm_head
-            .forward_core(h_norm, modulation, activate_rna)?;
+        let mut logits = if self.is_gpu_active() {
+            if let Some(gpu_logits) = self.lm_head.forward_gpu(&h_norm) {
+                gpu_logits
+            } else {
+                self.lm_head.forward_core(h_norm, modulation, activate_rna)?
+            }
+        } else {
+            self.lm_head.forward_core(h_norm, modulation, activate_rna)?
+        };
         #[cfg(not(target_arch = "wasm32"))]
         let head_ms = t_head_start.elapsed().as_secs_f32() * 1000.0;
 

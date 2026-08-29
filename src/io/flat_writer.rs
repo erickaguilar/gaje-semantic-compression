@@ -528,6 +528,8 @@ pub fn init_born_genomic_model(
         k_wta_ratio: 0.50,
         topology: None,
         quantum_embeddings: None,
+        gpu_layers: 0,
+        use_gpu: false,
     };
     if path.ends_with(".flat") {
         save_genomic_flat(path, &model, &config, None)?;

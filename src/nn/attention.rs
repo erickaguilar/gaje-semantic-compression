@@ -58,7 +58,18 @@ impl GenomicAttention {
         let rope_base = self.rope_base;
         let is_split = self.rope_style == "split";
         let mut q_rope = q;
+        if q_rope.len() < n_head * head_dim {
+            q_rope.resize(n_head * head_dim, 0.0);
+        }
         let mut k_rope = k;
+        if k_rope.len() < n_head_kv * head_dim {
+            k_rope.resize(n_head_kv * head_dim, 0.0);
+        }
+        let mut v_buf = v;
+        if v_buf.len() < n_head_kv * head_dim {
+            v_buf.resize(n_head_kv * head_dim, 0.0);
+        }
+
         let apply_rope = |vec: &mut [f32], heads: usize| {
             for h in 0..heads {
                 let h_start = h * head_dim;
@@ -83,7 +94,7 @@ impl GenomicAttention {
         apply_rope(&mut q_rope, n_head);
         apply_rope(&mut k_rope, n_head_kv);
         self.k_cache.push(k_rope);
-        self.v_cache.push(v);
+        self.v_cache.push(v_buf);
         let seq_len = self.k_cache.len();
         let heads_out: Vec<Vec<f32>> = (0..n_head)
             .into_par_iter()

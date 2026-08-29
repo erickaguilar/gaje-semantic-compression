@@ -170,6 +170,8 @@ impl GGUFLoader {
             k_wta_ratio: 0.50,
             topology: None,
             quantum_embeddings: None,
+            gpu_layers: 0,
+            use_gpu: false,
         })
     }
 }

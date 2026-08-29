@@ -49,6 +49,10 @@ pub struct GenomicLLM {
     pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
     pub quantum_embeddings: Option<Arc<QuantumEmbeddingTableNative>>,
+    #[pyo3(get, set)]
+    pub gpu_layers: usize,
+    #[pyo3(get, set)]
+    pub use_gpu: bool,
 }
 
 #[cfg(not(feature = "python"))]
@@ -62,6 +66,8 @@ pub struct GenomicLLM {
     pub k_wta_ratio: f32,
     pub topology: Option<Arc<CentroidGraph>>,
     pub quantum_embeddings: Option<Arc<QuantumEmbeddingTableNative>>,
+    pub gpu_layers: usize,
+    pub use_gpu: bool,
 }
 
 pub use crate::nn::llm::forward::*;
