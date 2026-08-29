@@ -482,11 +482,28 @@ def export_gaje_flat():
     weights_len = len(blob_bytes)
 
     group_size = 32
-    quant_format = 1  # 1 = Q4_0
+    # GTOK Embedding (Born with GTOK)
+    gtok_bytes = b""
+    qwen_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizers", "qwen2_5_tokenizer.gtok")
+    smol_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizers", "smollm2_tokenizer.gtok")
+    def_gtok = os.path.join(PROJECT_ROOT, "models", "core", "tokenizer.gtok")
+
+    if arch_family in (3, 4) and os.path.exists(qwen_gtok):
+        with open(qwen_gtok, "rb") as gf:
+            gtok_bytes = gf.read()
+    elif arch_family == 2 and os.path.exists(smol_gtok):
+        with open(smol_gtok, "rb") as gf:
+            gtok_bytes = gf.read()
+    elif os.path.exists(def_gtok):
+        with open(def_gtok, "rb") as gf:
+            gtok_bytes = gf.read()
+
+    gtok_offset = (weights_offset + weights_len) if len(gtok_bytes) > 0 else 0
+    gtok_len = len(gtok_bytes)
 
     header_bin = bytearray(4096)
     struct.pack_into(
-        "<4sIIIQQQQIIIIIIII",
+        "<4sIIIQQQQIIIIIIIIQQ",
         header_bin,
         0,
         magic,
@@ -505,6 +522,8 @@ def export_gaje_flat():
         n_head_kv,
         n_blocks,
         1 if qk_permute else 0,
+        gtok_offset,
+        gtok_len,
     )
 
     with open(out_path, "wb") as f:
@@ -518,8 +537,12 @@ def export_gaje_flat():
             f.write(b"\x00" * padding_needed)
 
         f.write(blob_bytes)
+        if len(gtok_bytes) > 0:
+            f.write(gtok_bytes)
 
     print(f"\n✅ Exportación Flat Zero-Copy v0.9.8 Finalizada Exitosamente: {out_path}")
+    if gtok_len > 0:
+        print(f"  - Tokenizador GTOK incrustado nativamente: {gtok_len / (1024 * 1024):.2f} MB")
     print(
         f"  - Tamaño Total Archivo: {os.path.getsize(out_path) / (1024 * 1024):.2f} MB"
     )
