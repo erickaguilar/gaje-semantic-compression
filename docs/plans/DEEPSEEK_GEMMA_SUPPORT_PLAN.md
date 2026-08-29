@@ -1,10 +1,8 @@
 # Plan: Soporte de arquitectura DeepSeek (MLA/MoE) y Google Gemma
 
-> **Estado:** propuesto (no implementado).
-> **Contexto:** `gaje-cli` hoy solo soporta arquitecturas **GQA densas** (Llama,
-> Qwen2/Qwen2.5, SmolLM). DeepScaleR/DeepSeek usan **MLA + MoE**; Gemma usa
-> **GQA con RoPE interleaved** y (Gemma2) FFN alternado. Este plan dimensiona el
-> trabajo para habilitar ambas familias.
+> **Estado:** 🟡 EN PROGRESO — Habilitado soporte nativo para **Google Gemma / Gemma-2** (GeGLU, RMSNorm offset, RoPE interleaved) y **DeepSeek-R1 Distill** (`.flat` v2).
+> **Contexto:** `gaje-cli` soporta arquitecturas **GQA densas** (Llama, Qwen2/Qwen2.5, SmolLM, DeepSeek-R1 Distill, Gemma-2).
+> deepseek nativo completo requiere **MLA + MoE** (Fases 1 y 2).
 
 ## 1. Diagnóstico del estado actual (verificado)
 

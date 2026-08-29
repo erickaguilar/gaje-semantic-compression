@@ -125,7 +125,7 @@ impl FlatHeaderV2 {
             ),
             crate::io::arch::ModelFamily::Gemma => (
                 10000.0f32,
-                "split".to_string(),
+                "interleaved".to_string(),
                 "geglu".to_string(),
                 "gemma".to_string(),
             ),

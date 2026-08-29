@@ -75,6 +75,15 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
         "gaje_ultra_7b.flat" | "gaje_ultra_7b" | "ultra" => {
             ("erickaguilar/gaje-ultra-7b", "gaje_ultra_7b.flat")
         }
+        "deepseek_r1_1.5b.flat" | "deepseek_r1_1.5b" | "deepseek-r1" | "r1" | "r1-1.5b" => {
+            ("eaguilar/gaje-models", "deepseek_r1_distill_qwen_1.5b.flat")
+        }
+        "deepseek_r1_7b.flat" | "deepseek_r1_7b" | "deepseek-r1-7b" | "r1-7b" => {
+            ("eaguilar/gaje-models", "deepseek_r1_distill_qwen_7b.flat")
+        }
+        "gaje_gemma_2b.flat" | "gaje_gemma_2b" | "gemma_2b" | "gemma-2b" | "gemma-2" | "gemma" => {
+            ("eaguilar/gaje-models", "gaje_gemma_2b.flat")
+        }
         custom => {
             if custom.contains('/') {
                 let parts: Vec<&str> = custom.split('/').collect();

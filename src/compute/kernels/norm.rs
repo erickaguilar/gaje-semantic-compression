@@ -130,6 +130,24 @@ pub unsafe fn rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Vec<f32> {
     out
 }
 
+/// Normalización RMS con offset (Gemma aplica `(1.0 + weight)`).
+/// # Safety
+/// Ver `rms_norm`.
+#[inline(always)]
+pub unsafe fn rms_norm_offset(x: &[f32], weight: &[f32], eps: f32, offset: f32) -> Vec<f32> {
+    if offset == 0.0 {
+        return rms_norm(x, weight, eps);
+    }
+    let n = x.len();
+    let sum_sq: f32 = x.iter().map(|&v| v * v).sum();
+    let inv_rms = 1.0 / (sum_sq / n as f32 + eps).max(1e-5).sqrt();
+    let mut out = vec![0.0f32; n];
+    for i in 0..n {
+        out[i] = x[i] * inv_rms * (offset + weight[i]);
+    }
+    out
+}
+
 // Alias para compatibilidad con rama windows
 /// # Safety
 /// Ver `rms_norm`.

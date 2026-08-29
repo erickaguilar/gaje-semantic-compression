@@ -91,7 +91,7 @@ impl ArchitectureDescriptor {
         n_blocks: usize,
     ) -> Self {
         let name_lower = name.to_lowercase();
-        let (family, rope_base, qk_permute, chat_template, rope_style) =
+        let (family, rope_base, qk_permute, chat_template, rope_style, ffn_act) =
             if name_lower.contains("qwen2.5") {
                 (
                     ModelFamily::Qwen2_5,
@@ -99,6 +99,7 @@ impl ArchitectureDescriptor {
                     false,
                     "chatml".to_string(),
                     "split".to_string(),
+                    "swiglu".to_string(),
                 )
             } else if name_lower.contains("qwen2") {
                 (
@@ -107,22 +108,25 @@ impl ArchitectureDescriptor {
                     false,
                     "chatml".to_string(),
                     "split".to_string(),
+                    "swiglu".to_string(),
                 )
-            } else if name_lower.contains("smollm2") {
+            } else if name_lower.contains("deepseek") || name_lower.contains("r1") {
+                (
+                    ModelFamily::Qwen2_5,
+                    1000000.0,
+                    false,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                    "swiglu".to_string(),
+                )
+            } else if name_lower.contains("smollm2") || name_lower.contains("smollm") {
                 (
                     ModelFamily::SmolLM,
                     100000.0,
                     true,
                     "chatml".to_string(),
                     "split".to_string(),
-                )
-            } else if name_lower.contains("smollm") {
-                (
-                    ModelFamily::SmolLM,
-                    100000.0,
-                    true,
-                    "chatml".to_string(),
-                    "split".to_string(),
+                    "swiglu".to_string(),
                 )
             } else if name_lower.contains("gemma") {
                 (
@@ -130,7 +134,8 @@ impl ArchitectureDescriptor {
                     10000.0,
                     false,
                     "gemma".to_string(),
-                    "split".to_string(),
+                    "interleaved".to_string(),
+                    "geglu".to_string(),
                 )
             } else if name_lower.contains("llama") {
                 (
@@ -139,6 +144,7 @@ impl ArchitectureDescriptor {
                     true,
                     "llama".to_string(),
                     "split".to_string(),
+                    "swiglu".to_string(),
                 )
             } else {
                 (
@@ -147,6 +153,7 @@ impl ArchitectureDescriptor {
                     false,
                     "standard".to_string(),
                     "split".to_string(),
+                    "swiglu".to_string(),
                 )
             };
 
@@ -161,7 +168,7 @@ impl ArchitectureDescriptor {
             head_dim,
             rope_base,
             rope_style,
-            ffn_act: "swiglu".to_string(),
+            ffn_act,
             qk_permute,
             chat_template,
         }

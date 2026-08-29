@@ -15,9 +15,12 @@ impl RustGenomicBlock {
         let entropy = crate::compute::math::calculate_activation_entropy(&x);
         let activate_rna = crate::compute::math::should_activate_rna(entropy, self.rna_threshold);
 
+        let is_gemma = self.act_fn == "geglu";
+        let norm_offset = if is_gemma { 1.0 } else { 0.0 };
+
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() {
             let res = unsafe {
-                crate::compute::kernels::rms_norm(&x, &self.attn.rmsnorm_weight, self.attn.eps)
+                crate::compute::kernels::rms_norm_offset(&x, &self.attn.rmsnorm_weight, self.attn.eps, norm_offset)
             };
             if res.iter().any(|v| v.is_nan()) {
                 return Err("NaN after attn rms_norm".into());
@@ -82,7 +85,7 @@ impl RustGenomicBlock {
             .for_each(|(xi, &ai)| *xi += ai);
 
         let x_ffn_n =
-            unsafe { crate::compute::kernels::rms_norm(&x_post, &self.ffn_norm, self.eps) };
+            unsafe { crate::compute::kernels::rms_norm_offset(&x_post, &self.ffn_norm, self.eps, norm_offset) };
 
         let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
             let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;
@@ -99,19 +102,14 @@ impl RustGenomicBlock {
             return Err("NaN in up".into());
         }
 
-        let mut ffn_out = if std::env::var("GAJE_ENABLE_GPU")
-            .map(|v| v == "1")
-            .unwrap_or(false)
-        {
-            if let Some(gpu_out) =
-                crate::compute::gpu::pipeline::gpu_swiglu(&gate, &up, self.h_scale)
-            {
-                gpu_out
-            } else {
-                let mut out = vec![0.0f32; gate.len()];
-                crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
-                out
-            }
+        let mut ffn_out = if self.act_fn == "geglu" {
+            let mut out = vec![0.0f32; gate.len()];
+            crate::compute::kernels::geglu(&gate, &up, &mut out);
+            out
+        } else if self.act_fn == "reluglu" || self.act_fn == "relu_glu" {
+            let mut out = vec![0.0f32; gate.len()];
+            crate::compute::kernels::relu_glu(&gate, &up, &mut out);
+            out
         } else {
             let mut out = vec![0.0f32; gate.len()];
             crate::compute::kernels::swiglu_balanced(&gate, &up, &mut out, self.h_scale);
