@@ -1022,7 +1022,9 @@ fn handle_download_command(
         if (args[j] == "--out" || args[j] == "-o" || args[j] == "--dir") && j + 1 < args.len() {
             out_dir = args[j + 1].clone();
             j += 2;
-        } else if (args[j] == "--concurrency" || args[j] == "-c" || args[j] == "--threads") && j + 1 < args.len() {
+        } else if (args[j] == "--concurrency" || args[j] == "-c" || args[j] == "--threads")
+            && j + 1 < args.len()
+        {
             concurrency = args[j + 1].parse().unwrap_or(8);
             j += 2;
         } else if args[j] == "--min-chunk" && j + 1 < args.len() {
@@ -1039,7 +1041,10 @@ fn handle_download_command(
         user_agent: "GAJE-Helix-Engine/1.7.0 (Rust; Native-Downloader)".to_string(),
     };
 
-    println!("⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}", model_target);
+    println!(
+        "⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}",
+        model_target
+    );
     let stats = _impl::io::downloader::download_model(
         model_target,
         Some(Path::new(&out_dir)),
@@ -1047,6 +1052,9 @@ fn handle_download_command(
         Some(running),
     )?;
 
-    println!("🎉 Descarga completada con éxito en {:?}", stats.destination);
+    println!(
+        "🎉 Descarga completada con éxito en {:?}",
+        stats.destination
+    );
     Ok(())
 }

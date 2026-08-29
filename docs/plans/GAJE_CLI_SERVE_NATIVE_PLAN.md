@@ -1,9 +1,9 @@
 # 🧬 Plan de Implementación: `gaje-cli serve` (Servidor HTTP Nativo en Rust)
 
-**Fecha de creación:** 2026-08-27  
-**Estado:** Aprobado / En Planificación  
-**Versión de consolidación:** `1.7.0-alpha`  
-**Enfoque:** Opción B — Mínimas Dependencias (`tiny_http` + multihilo síncrono nativo)  
+**Fecha de creación:** 2026-08-27
+**Estado:** Aprobado / En Planificación
+**Versión de consolidación:** `1.7.0-alpha`
+**Enfoque:** Opción B — Mínimas Dependencias (`tiny_http` + multihilo síncrono nativo)
 **Objetivo principal:** Eliminar la dependencia del runtime de Python (`server.py`) y proporcionar un binario único ejecutable autónomo y portable (`gaje-cli serve`) con inferencia streaming SSE nativa y servicio de la Web UI.
 
 ---

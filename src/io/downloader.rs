@@ -9,6 +9,8 @@
 //! - Descarga atómica con archivo temporal `.part` y reemplazo atómico para evitar corrupción.
 
 #[cfg(feature = "native")]
+use indicatif::{ProgressBar, ProgressStyle};
+#[cfg(feature = "native")]
 use std::fs::{File, OpenOptions};
 #[cfg(feature = "native")]
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -20,8 +22,6 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "native")]
 use std::time::Instant;
-#[cfg(feature = "native")]
-use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Debug, Clone)]
 pub struct DownloadOptions {
@@ -92,12 +92,18 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
                     "model.flat"
                 };
                 let repo = format!("erickaguilar/{}", custom.trim_end_matches(".flat"));
-                return (format!("https://huggingface.co/{}/resolve/main/{}", repo, fname), fname.to_string());
+                return (
+                    format!("https://huggingface.co/{}/resolve/main/{}", repo, fname),
+                    fname.to_string(),
+                );
             }
         }
     };
 
-    let url = format!("https://huggingface.co/{}/resolve/main/{}", repo_id, filename);
+    let url = format!(
+        "https://huggingface.co/{}/resolve/main/{}",
+        repo_id, filename
+    );
     (url, filename.to_string())
 }
 
@@ -137,10 +143,12 @@ pub fn download_file_direct(
     let head_resp = agent.head(url).call();
     let (content_length, supports_range) = match head_resp {
         Ok(resp) => {
-            let len = resp.header("content-length")
+            let len = resp
+                .header("content-length")
                 .and_then(|v| v.parse::<u64>().ok())
                 .unwrap_or(0);
-            let accept_ranges = resp.header("accept-ranges")
+            let accept_ranges = resp
+                .header("accept-ranges")
                 .map(|v| v.to_lowercase().contains("bytes"))
                 .unwrap_or(false);
             (len, accept_ranges)
@@ -150,14 +158,17 @@ pub fn download_file_direct(
             let probe = agent.get(url).set("Range", "bytes=0-0").call();
             match probe {
                 Ok(resp) => {
-                    let len = resp.header("content-range")
+                    let len = resp
+                        .header("content-range")
                         .and_then(|cr| cr.split('/').last())
                         .and_then(|v| v.parse::<u64>().ok())
                         .unwrap_or(0);
                     let is_partial = resp.status() == 206;
                     (len, is_partial)
                 }
-                Err(e) => return Err(format!("Error conectando con el servidor remoto: {}", e).into()),
+                Err(e) => {
+                    return Err(format!("Error conectando con el servidor remoto: {}", e).into())
+                }
             }
         }
     };
@@ -172,7 +183,11 @@ pub fn download_file_direct(
     println!(
         "📦 [GAJE-Downloader] Tamaño: {:.2} MB | Range HTTP 206: {}",
         content_length as f64 / (1024.0 * 1024.0),
-        if supports_range { "Soportado (Multi-Stream Activo)" } else { "No soportado (1 Stream Lineal)" }
+        if supports_range {
+            "Soportado (Multi-Stream Activo)"
+        } else {
+            "No soportado (1 Stream Lineal)"
+        }
     );
 
     // 2. Si no soporta Range, el archivo es < 4 MB o concurrency es 1 -> Descarga lineal
@@ -199,7 +214,9 @@ pub fn download_file_direct(
                 }
             }
             let n = reader.read(&mut buf)?;
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             file.write_all(&buf[..n])?;
             downloaded += n as u64;
             pb.set_position(downloaded);
@@ -218,7 +235,9 @@ pub fn download_file_direct(
         file.set_len(content_length)?;
         drop(file);
 
-        let num_workers = opts.concurrency.min((content_length / opts.chunk_size_min).max(1) as usize);
+        let num_workers = opts
+            .concurrency
+            .min((content_length / opts.chunk_size_min).max(1) as usize);
         let chunk_size = (content_length + num_workers as u64 - 1) / num_workers as u64;
 
         let pb = ProgressBar::new(content_length);
@@ -234,52 +253,64 @@ pub fn download_file_direct(
         let downloaded_bytes = Arc::new(AtomicU64::new(0));
 
         use rayon::prelude::*;
-        let chunks: Vec<(usize, u64, u64)> = (0..num_workers).map(|i| {
-            let start = i as u64 * chunk_size;
-            let end = (start + chunk_size - 1).min(content_length - 1);
-            (i, start, end)
-        }).collect();
+        let chunks: Vec<(usize, u64, u64)> = (0..num_workers)
+            .map(|i| {
+                let start = i as u64 * chunk_size;
+                let end = (start + chunk_size - 1).min(content_length - 1);
+                (i, start, end)
+            })
+            .collect();
 
-        let errors: Vec<_> = chunks.into_par_iter().map(|(_worker_id, start, end)| -> Result<(), String> {
-            let mut chunk_file = OpenOptions::new()
-                .write(true)
-                .open(&part_file_path)
-                .map_err(|e| format!("Error abriendo archivo parcial: {}", e))?;
+        let errors: Vec<_> = chunks
+            .into_par_iter()
+            .map(|(_worker_id, start, end)| -> Result<(), String> {
+                let mut chunk_file = OpenOptions::new()
+                    .write(true)
+                    .open(&part_file_path)
+                    .map_err(|e| format!("Error abriendo archivo parcial: {}", e))?;
 
-            chunk_file.seek(SeekFrom::Start(start))
-                .map_err(|e| format!("Error en seek: {}", e))?;
+                chunk_file
+                    .seek(SeekFrom::Start(start))
+                    .map_err(|e| format!("Error en seek: {}", e))?;
 
-            let range_header = format!("bytes={}-{}", start, end);
-            let resp = agent.get(url)
-                .set("Range", &range_header)
-                .call()
-                .map_err(|e| format!("Error en petición Range {}: {}", range_header, e))?;
+                let range_header = format!("bytes={}-{}", start, end);
+                let resp = agent
+                    .get(url)
+                    .set("Range", &range_header)
+                    .call()
+                    .map_err(|e| format!("Error en petición Range {}: {}", range_header, e))?;
 
-            let mut reader = resp.into_reader();
-            let mut buf = vec![0u8; 128 * 1024]; // Buffer de 128 KB
-            let mut remaining = end - start + 1;
+                let mut reader = resp.into_reader();
+                let mut buf = vec![0u8; 128 * 1024]; // Buffer de 128 KB
+                let mut remaining = end - start + 1;
 
-            while remaining > 0 {
-                if let Some(ref r) = running {
-                    if !r.load(Ordering::Relaxed) {
-                        return Err("Descarga cancelada".into());
+                while remaining > 0 {
+                    if let Some(ref r) = running {
+                        if !r.load(Ordering::Relaxed) {
+                            return Err("Descarga cancelada".into());
+                        }
                     }
+                    let to_read = (buf.len() as u64).min(remaining) as usize;
+                    let n = reader
+                        .read(&mut buf[..to_read])
+                        .map_err(|e| format!("Error leyendo socket: {}", e))?;
+                    if n == 0 {
+                        break;
+                    }
+
+                    chunk_file
+                        .write_all(&buf[..n])
+                        .map_err(|e| format!("Error escribiendo a disco: {}", e))?;
+
+                    remaining -= n as u64;
+                    downloaded_bytes.fetch_add(n as u64, Ordering::Relaxed);
+                    pb_arc.inc(n as u64);
                 }
-                let to_read = (buf.len() as u64).min(remaining) as usize;
-                let n = reader.read(&mut buf[..to_read])
-                    .map_err(|e| format!("Error leyendo socket: {}", e))?;
-                if n == 0 { break; }
 
-                chunk_file.write_all(&buf[..n])
-                    .map_err(|e| format!("Error escribiendo a disco: {}", e))?;
-
-                remaining -= n as u64;
-                downloaded_bytes.fetch_add(n as u64, Ordering::Relaxed);
-                pb_arc.inc(n as u64);
-            }
-
-            Ok(())
-        }).filter_map(|r| r.err()).collect();
+                Ok(())
+            })
+            .filter_map(|r| r.err())
+            .collect();
 
         if !errors.is_empty() {
             let _ = std::fs::remove_file(&part_file_path);

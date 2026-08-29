@@ -1,9 +1,9 @@
 # 🌵 Aprendizajes y Oportunidades de Cactus Needle para GAJE
 
-**Fecha:** 2026-08-27  
-**Estado:** Propuesta Técnica y Análisis Comparativo  
-**Versión de consolidación:** `1.7.0-alpha`  
-**Referencia:** [Cactus Compute — Needle 2 (github.com/cactus-compute/needle)](https://github.com/cactus-compute/needle)  
+**Fecha:** 2026-08-27
+**Estado:** Propuesta Técnica y Análisis Comparativo
+**Versión de consolidación:** `1.7.0-alpha`
+**Referencia:** [Cactus Compute — Needle 2 (github.com/cactus-compute/needle)](https://github.com/cactus-compute/needle)
 **Ámbitos:** Inferencia en el Dispositivo (*On-Device AI*) · Decodificación Estructurada · Enrutamiento Híbrido (*Confidence Gating*) · Modelos Sub-50M
 
 ---

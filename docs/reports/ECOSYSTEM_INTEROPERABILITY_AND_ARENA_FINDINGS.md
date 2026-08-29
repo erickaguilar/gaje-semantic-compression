@@ -1,8 +1,8 @@
 # 📑 Reporte de Hallazgos: Interoperabilidad del Ecosistema, Chatbot Arena y Dimensionamiento de Modelos
 
-**Fecha:** 2026-08-28  
-**Estado:** Documento Consolidado de Hallazgos Técnicos y Estratégicos  
-**Versión de consolidación:** `1.7.0-alpha`  
+**Fecha:** 2026-08-28
+**Estado:** Documento Consolidado de Hallazgos Técnicos y Estratégicos
+**Versión de consolidación:** `1.7.0-alpha`
 **Ámbitos:** Evaluación Global (LMSYS Arena) · Formato `.flat` vs GGUF/Ollama · Dimensionamiento de Hardware (GAJE 3B) · Ventajas Propietarias de GAJE
 
 ---
@@ -22,7 +22,7 @@ Abarca cuatro dimensiones críticas:
 ## 2. Hallazgos: Integración en LMSYS Chatbot Arena (Battle Arena)
 
 ### 2.1 Protocolo de Conexión
-LMSYS Chatbot Arena ([arena.lmsys.org](https://arena.lmsys.org) / [lmarena.ai](https://lmarena.ai)) permite evaluar modelos en batallas a ciegas A/B evaluadas por humanos. 
+LMSYS Chatbot Arena ([arena.lmsys.org](https://arena.lmsys.org) / [lmarena.ai](https://lmarena.ai)) permite evaluar modelos en batallas a ciegas A/B evaluadas por humanos.
 
 * **Mecanismo Oficial:** Requiere exponer un **Endpoint HTTP compatible con la API de OpenAI** (`POST /v1/chat/completions`) con soporte de streaming SSE (`stream: true`) protegido por API Key bajo HTTPS público.
 * **Flujo de Peticiones:** Los servidores de LMSYS (FastChat) envían el prompt al endpoint de GAJE y reciben los tokens en tiempo real, mostrándolos de forma anónima a los usuarios para votación.

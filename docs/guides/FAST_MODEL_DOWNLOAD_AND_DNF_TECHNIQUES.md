@@ -142,7 +142,7 @@ async function downloadModelMultipart(url, totalBytes, parts = 4) {
     for (let i = 0; i < parts; i++) {
         const start = i * chunkSize;
         const end = Math.min(start + chunkSize - 1, totalBytes - 1);
-        
+
         promises.push(
             fetch(url, {
                 headers: { 'Range': `bytes=${start}-${end}` }
@@ -151,7 +151,7 @@ async function downloadModelMultipart(url, totalBytes, parts = 4) {
     }
 
     const buffers = await Promise.all(promises);
-    
+
     // Unir chunks en un solo ArrayBuffer continuo
     const combined = new Uint8Array(totalBytes);
     let offset = 0;
@@ -159,7 +159,7 @@ async function downloadModelMultipart(url, totalBytes, parts = 4) {
         combined.set(new Uint8Array(buf), offset);
         offset += buf.byteLength;
     }
-    
+
     return combined;
 }
 ```

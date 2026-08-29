@@ -1,15 +1,15 @@
 # 🛠️ Plan Estratégico de Mejoras: `gaje-cli` (Núcleo CLI en Rust)
 
-**Fecha:** 2026-08-27  
-**Estado:** Propuesta Técnica / En Planificación  
-**Versión objetivo:** `1.7.0-alpha`  
+**Fecha:** 2026-08-27
+**Estado:** Propuesta Técnica / En Planificación
+**Versión objetivo:** `1.7.0-alpha`
 **Ámbito:** Soberanía nativa en Rust, usabilidad de terminal, diagnóstico de hardware, cuantización y servidor integrado.
 
 ---
 
 ## 1. Visión y Objetivos
 
-El ejecutable `gaje-cli` es el punto de entrada administrativo y de computación nativa del framework **GAJE (Genetic Adaptive Joint Embedding / DNA Semantic Compression)**. 
+El ejecutable `gaje-cli` es el punto de entrada administrativo y de computación nativa del framework **GAJE (Genetic Adaptive Joint Embedding / DNA Semantic Compression)**.
 
 El objetivo de este plan es consolidar `gaje-cli` como una herramienta CLI autónoma, robusta y ergonómica de grado industrial, eliminando la necesidad de scripts desechables en Python y centralizando la gestión de modelos, inferencia en terminal, benchmarks y despliegues.
 

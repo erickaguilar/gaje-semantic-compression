@@ -1,8 +1,8 @@
 # 🚀 Oportunidades Estratégicas y Próximos Pasos de Alto Rendimiento
 
-**Fecha:** 2026-08-27  
-**Estado:** Propuesta Técnica y Análisis de Arquitectura  
-**Versión de consolidación:** `1.7.0-alpha`  
+**Fecha:** 2026-08-27
+**Estado:** Propuesta Técnica y Análisis de Arquitectura
+**Versión de consolidación:** `1.7.0-alpha`
 **Ámbitos:** Aceleración de Hardware (GPU/NPU) · Cuantización Sub-4-bit · Compatibilidad de Ecosistema (OpenAI API)
 
 ---

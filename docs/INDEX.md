@@ -9,124 +9,150 @@ Mapa central del repositorio consolidado. Define la estructura lógica actual, l
 La documentación se organiza por función. La **investigación exploratoria** y las **versiones heredadas** se conservan íntegramente en `docs/archive/`.
 
 ### ⚖️ Gobernanza y Verdad Empírica (`docs/meta/`)
-*   **[EMPIRICAL_TRUTH_STATE.md](docs/meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Estado real que contrasta código vs. resultados empíricos.
-*   **[VALIDATION_PROTOCOLS.md](docs/meta/VALIDATION_PROTOCOLS.md)**: Protocolos de validación y gates de certificación.
-*   **[CONSTITUTION_OF_BIRTH.md](docs/meta/vision/CONSTITUTION_OF_BIRTH.md)**: Principios éticos y técnicos del protocolo.
-*   **[RESPONSIBLE_POLICY_AND_GOVERNANCE.md](docs/meta/RESPONSIBLE_POLICY_AND_GOVERNANCE.md)**: Posicionamiento de IA Constitucional Local.
-*   **[FINDINGS_AND_DIAGNOSTICS_2026.md](docs/meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de éxitos y fracasos del motor.
-*   **[LIFECYCLE_FLOW.md](docs/meta/LIFECYCLE_FLOW.md)**: Ciclo de vida del organismo y gates de certificación.
-*   **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](docs/meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
+* **[EMPIRICAL_TRUTH_STATE.md](meta/EMPIRICAL_TRUTH_STATE.md)**: **DOCUMENTO CRÍTICO.** Estado real que contrasta código vs. resultados empíricos.
+* **[VALIDATION_PROTOCOLS.md](meta/VALIDATION_PROTOCOLS.md)**: Protocolos de validación y gates de certificación.
+* **[CONSTITUTION_OF_BIRTH.md](meta/vision/CONSTITUTION_OF_BIRTH.md)**: Principios éticos y técnicos del protocolo.
+* **[RESPONSIBLE_POLICY_AND_GOVERNANCE.md](meta/RESPONSIBLE_POLICY_AND_GOVERNANCE.md)**: Posicionamiento de IA Constitucional Local.
+* **[FINDINGS_AND_DIAGNOSTICS_2026.md](meta/FINDINGS_AND_DIAGNOSTICS_2026.md)**: Registro de éxitos y fracasos del motor.
+* **[LIFECYCLE_FLOW.md](meta/LIFECYCLE_FLOW.md)**: Ciclo de vida del organismo y gates de certificación.
+* **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
-*   **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](docs/research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
-*   **[FROZEN_BODY_CAUSAL_AB_PROTOCOL.md](docs/research/FROZEN_BODY_CAUSAL_AB_PROTOCOL.md)**: Protocolo A/B causal del cuerpo congelado — aislamiento de causas sobre por qué los cuerpos cuantizados no deben recibir QAT post-cuantización.
-*   **[CE_VS_GENERATION.md](docs/research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
-*   **[BODY_QAT_06B_PROTOCOL.md](docs/research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
-*   **[temporal_4bit_fase1_test.py](docs/research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
+* **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
+* **[FROZEN_BODY_CAUSAL_AB_PROTOCOL.md](research/FROZEN_BODY_CAUSAL_AB_PROTOCOL.md)**: Protocolo A/B causal del cuerpo congelado — aislamiento de causas sobre por qué los cuerpos cuantizados no deben recibir QAT post-cuantización.
+* **[CE_VS_GENERATION.md](research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
+* **[BODY_QAT_06B_PROTOCOL.md](research/BODY_QAT_06B_PROTOCOL.md)**: Protocolo Técnica A vs B en Qwen2-0.5B — el QAT del cuerpo Q4_0 destruye la generación (100%/95% degeneradas vs 0% base); el punto dulce de SmolLM2 no transfiere.
+* **[temporal_4bit_fase1_test.py](research/temporal_4bit_fase1_test.py)**: Fase 1 del plan de emulación temporal 2-bit→4-bit — refutación numérica: el Enfoque 1 almacena 4 bits (sin ahorro, doble latencia) y el Enfoque 2 (2-bit real) no recupera la precisión perdida.
+* **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)**.
 
 ### 📊 Resultados y Certificaciones Oficiales (`docs/reports/` y `docs/certifications/`)
-*   **[GPU_ACCELERATION_CERTIFICATION.md](docs/certifications/GPU_ACCELERATION_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE ACELERACIÓN GPU (Vulkan / WGPU)** — Despacho masivo de capas tensoriales sobre AMD Radeon Vega con memoria unificada (UMA) y concordancia matemática exacta.
-*   **[QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE INFERENCIA CUÁNTICA (.qemb)** — Cero regresión semántica y reducción del 91.1% en RAM.
-*   **[BENCHMARK_OFFICIAL_v1_6.md](docs/reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
-*   **[GTOK_CERTIFICATION_REPORT.md](docs/reports/GTOK_CERTIFICATION_REPORT.md)**: **CERTIFICACIÓN OFICIAL GTOK v1.0** — Formato binario nativo de tokenización zero-dependency, incrustable en cabecera `.flat`.
-*   **[QUANTUM_CODEBOOK_BENCHMARK.md](docs/reports/QUANTUM_CODEBOOK_BENCHMARK.md)**: **BENCHMARK OFICIAL DE CODEBOOK CUÁNTICO (.qemb)** — 94.4% de reducción en tablas de embeddings de vocabulario masivo mediante superposición dispersa.
-*   **[QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md](docs/reports/QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md)**: **INFORME DE PROTOTIPO CUÁNTICO-GENÓMICO** — Estados de superposición, pureza $\gamma=1.0$ y colapso contextual vía regla de Born.
-*   **[BENCHMARKS.md](docs/reports/BENCHMARKS.md)**: Benchmark histórico de compresión, memoria, velocidad y PPL por modelo.
-*   **[SCIENTIFIC_BENCHMARK_v097.md](docs/reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
-*   **[session_findings_v1.6.0_phase_3.1.md](docs/reports/session_findings_v1.6.0_phase_3.1.md)**: Hallazgos de la fase 3.1 (formato `.flat`).
-*   **[session_findings_v1.6.0_phase_3.2.md](docs/reports/session_findings_v1.6.0_phase_3.2.md)**: Hallazgos de la fase 3.2.
-*   **[factual_audit_phase_3.3.md](docs/reports/factual_audit_phase_3.3.md)**: Auditoría factual de la fase 3.3.
-*   **[smollm2_fp32_parity.md](docs/reports/smollm2_fp32_parity.md)**: Paridad SmolLM2 FP32.
-*   **[qwen2_distillation_report.md](docs/reports/qwen2_distillation_report.md)**: Reporte de destilación Qwen2.
+* **[GPU_ACCELERATION_CERTIFICATION.md](certifications/GPU_ACCELERATION_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE ACELERACIÓN GPU (Vulkan / WGPU)** — Despacho masivo de capas tensoriales sobre AMD Radeon Vega con memoria unificada (UMA) y concordancia matemática exacta.
+* **[QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE INFERENCIA CUÁNTICA (.qemb)** — Cero regresión semántica y reducción del 91.1% en RAM.
+* **[BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
+* **[GTOK_CERTIFICATION_REPORT.md](reports/GTOK_CERTIFICATION_REPORT.md)**: **CERTIFICACIÓN OFICIAL GTOK v1.0** — Formato binario nativo de tokenización zero-dependency, incrustable en cabecera `.flat`.
+* **[QUANTUM_CODEBOOK_BENCHMARK.md](reports/QUANTUM_CODEBOOK_BENCHMARK.md)**: **BENCHMARK OFICIAL DE CODEBOOK CUÁNTICO (.qemb)** — 94.4% de reducción en tablas de embeddings de vocabulario masivo mediante superposición dispersa.
+* **[QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md](reports/QUANTUM_GENOMIC_TOKENIZER_PROTOTYPE.md)**: **INFORME DE PROTOTIPO CUÁNTICO-GENÓMICO** — Estados de superposición, pureza $\gamma=1.0$ y colapso contextual vía regla de Born.
+* **[ECOSYSTEM_INTEROPERABILITY_AND_ARENA_FINDINGS.md](reports/ECOSYSTEM_INTEROPERABILITY_AND_ARENA_FINDINGS.md)**: **HALLAZGOS DE ARENA E INTEROPERABILIDAD** — Comparativa con Ollama, llama.cpp y vLLM.
+* **[GRADIENT_DYNAMICS_AND_FLOW_MODULATION.md](reports/GRADIENT_DYNAMICS_AND_FLOW_MODULATION.md)**: Dinámica de gradientes en flujos de compresión.
+* **[HNSW_STEP2_SPIKE_FINDINGS.md](reports/HNSW_STEP2_SPIKE_FINDINGS.md)**: Hallazgos de indexación vectorial aproximada con HNSW.
+* **[BENCHMARKS.md](reports/BENCHMARKS.md)**: Benchmark histórico de compresión, memoria, velocidad y PPL por modelo.
+* **[SCIENTIFIC_BENCHMARK_v097.md](reports/SCIENTIFIC_BENCHMARK_v097.md)**: Benchmark científico de rendimiento y paridad.
+* **[findings_v1.6.0_phase_0_to_3.md](reports/findings_v1.6.0_phase_0_to_3.md)**: Reporte consolidado de hallazgos de las fases 0 a 3.
+* **[session_findings_v1.6.0_phase_3.1.md](reports/session_findings_v1.6.0_phase_3.1.md)**: Hallazgos de la fase 3.1 (formato `.flat`).
+* **[session_findings_v1.6.0_phase_3.2.md](reports/session_findings_v1.6.0_phase_3.2.md)**: Hallazgos de la fase 3.2.
+* **[factual_audit_phase_3.3.md](reports/factual_audit_phase_3.3.md)**: Auditoría factual de la fase 3.3.
+* **[smollm2_fp32_parity.md](reports/smollm2_fp32_parity.md)**: Paridad SmolLM2 FP32.
+* **[qwen2_distillation_report.md](reports/qwen2_distillation_report.md)**: Reporte de destilación Qwen2.
+* **[SPEED_AND_ARCHITECTURE_BREAKTHROUGH_2026.md](reports/SPEED_AND_ARCHITECTURE_BREAKTHROUGH_2026.md)**: Hitos de velocidad y arquitectura 2026.
+* **[STEEL_SOUL_MVP_CREATION.md](reports/STEEL_SOUL_MVP_CREATION.md)**: Registro de creación del MVP Steel Soul.
 
 ### 🛠️ Guías Operativas (`docs/guides/`)
-*   **[FAST_MODEL_DOWNLOAD_GUIDE.md](docs/guides/FAST_MODEL_DOWNLOAD_GUIDE.md)**: **DESCARGAS ACELERADAS.** Protocolo multi-hilo con `hf_transfer` y `aria2c` a 100-500 MB/s.
-*   **[AUTOMATION_SUITE_GUIDE.md](docs/guides/AUTOMATION_SUITE_GUIDE.md)**: Manual de ejecución de la suite de pruebas automatizada de regresión e integración continua.
-*   **[GAJE_CLI_GUIDE.md](docs/guides/GAJE_CLI_GUIDE.md)**: **MANUAL PRINCIPAL.** Comandos y parámetros del motor nativo Rust.
-*   **[ARCHITECTURE.md](docs/guides/ARCHITECTURE.md)**: Arquitectura del motor.
-*   **[OPERATIONAL_WORKFLOWS_V1.1.0.md](docs/guides/OPERATIONAL_WORKFLOWS_V1.1.0.md)**: Flujos de trabajo del protocolo GAJE-Flow.
-*   **[USER_GUIDE.md](docs/guides/USER_GUIDE.md)**: Manual de usuario del ecosistema.
-*   **[BREEDING_AND_BORN_GUIDE.md](docs/guides/BREEDING_AND_BORN_GUIDE.md)**: Guía de crianza y generación.
-*   **[GAJE_PUBLISHING_GUIDE.md](docs/guides/GAJE_PUBLISHING_GUIDE.md)**: Guía de publicación.
-*   **[SEMANTIC_ENRICHMENT_GUIDE.md](docs/guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
+* **[FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md](guides/FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md)**: **TÉCNICAS DNF Y MULTI-STREAM.** Protocolo de aceleración de red estilo Fedora librepo / hf_transfer.
+* **[FAST_MODEL_DOWNLOAD_GUIDE.md](guides/FAST_MODEL_DOWNLOAD_GUIDE.md)**: Guía práctica de descarga acelerada de modelos desde Hugging Face Hub.
+* **[HYBRID_DEPLOYMENT_AND_MODEL_DISTRIBUTION.md](guides/HYBRID_DEPLOYMENT_AND_MODEL_DISTRIBUTION.md)**: Estrategia de despliegue híbrido dual (Edge WASM + Cloud Service) y distribución.
+* **[GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)**: **MANUAL PRINCIPAL.** Comandos y parámetros del motor nativo Rust.
+* **[GAJE_CLI_CAPABILITIES_AND_LIMITS.md](guides/GAJE_CLI_CAPABILITIES_AND_LIMITS.md)**: Capacidades operativas y límites del CLI nativo.
+* **[GAJE_MODEL_CAPABILITIES_AND_LIMITS.md](guides/GAJE_MODEL_CAPABILITIES_AND_LIMITS.md)**: Matriz de capacidades por familia de modelos genómicos.
+* **[AUTOMATION_SUITE_GUIDE.md](guides/AUTOMATION_SUITE_GUIDE.md)**: Manual de ejecución de la suite de pruebas automatizada de regresión e integración continua.
+* **[ARCHITECTURE.md](guides/ARCHITECTURE.md)**: Arquitectura global del motor.
+* **[OPERATIONAL_WORKFLOWS_V1.1.0.md](guides/OPERATIONAL_WORKFLOWS_V1.1.0.md)**: Flujos de trabajo del protocolo GAJE-Flow.
+* **[UNIX_TIME_ARCHITECTURE.md](guides/UNIX_TIME_ARCHITECTURE.md)**: Estándar y arquitectura de marcas de tiempo Unix POSIX.
+* **[USER_GUIDE.md](guides/USER_GUIDE.md)**: Manual de usuario del ecosistema.
+* **[BREEDING_AND_BORN_GUIDE.md](guides/BREEDING_AND_BORN_GUIDE.md)**: Guía de crianza y generación.
+* **[GAJE_PUBLISHING_GUIDE.md](guides/GAJE_PUBLISHING_GUIDE.md)**: Guía de publicación.
+* **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes y Roadmap (`docs/plans/`)
-*   **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](docs/plans/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: **OPTIMIZACIÓN DE EMBUDOS.** Resolución de 4 cuellos de botella críticos (Multi-Stream WASM, Exportación paralela en Rust, Sincronización Delta zchunk y Arranque On-Demand).
-*   **[GPU_ACCELERATION_BACKEND_PLAN.md](docs/plans/GPU_ACCELERATION_BACKEND_PLAN.md)**: **PLAN DE BACKEND DE ACELERACIÓN GPU (Vulkan / WGPU)** — Offload masivo paralelo de capas lineales y SwiGLU para AMD Radeon / GPUs integradas y discretas.
-*   **[QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md](docs/plans/QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md)**: **PLAN DE INTEGRACIÓN END-TO-END DEL LOOP CUÁNTICO** — Integración nativa de `.qemb` en `GenomicLLM` con lookup SIMD $< 0.1\ \mu\text{s}$ y reducción del 91.1% de RAM.
-*   **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](docs/plans/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: **PLAN DE CODEBOOK CUÁNTICO (8,192 Meta-Tokens)** — Compresión de tablas de embeddings del 94.4% mediante superposición dispersa.
-*   **[WASM_BRAINSTEM_PLAN.md](docs/plans/WASM_BRAINSTEM_PLAN.md)**: GAJE-WASM — El motor como tronco encefálico (build WASM + API sensorio-motora).
-*   **[MEMORY_EPOCHS_PLAN.md](docs/plans/MEMORY_EPOCHS_PLAN.md)**: Épocas de memoria — conocimiento flexible versionado sobre cuerpo congelado (`.gmem` v2).
-*   **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](docs/plans/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo de orden cero — SPSA discreto sobre centroides.
-*   **[TESTING_AND_VERIFICATION_PLAN.md](docs/plans/TESTING_AND_VERIFICATION_PLAN.md)**: Plan maestro de pruebas, verificación de hardware, SSE y purga de memoria.
-*   **[GAJE_BENCHMARK_SUITE_PLAN.md](docs/plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite de benchmarks y dataset estandarizado de evaluación.
-*   **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](docs/plans/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Especificación del formato binario nativo GTOK y roadmap de 4 fases.
-*   **[MASTER_ROADMAP_2026.md](docs/plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
-*   **[NEXT_STEPS_2026.md](docs/plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos.
-*   **[NATIVE_SEMANTIC_RAG_PLAN.md](docs/plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
-*   **[OPERATION_REBIRTH.md](docs/plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
-*   **[DOCUMENTATION_CONSOLIDATION_PLAN.md](docs/plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
-*   **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento completo de cuantización espacial por bloque a 2 bits/peso (Q2_0) vs Q4_0.
-*   **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](docs/research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)**.
+* **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](plans/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: **OPTIMIZACIÓN DE EMBUDOS.** Resolución de 4 cuellos de botella críticos (Multi-Stream WASM, Exportación paralela en Rust, Sincronización Delta zchunk y Arranque On-Demand).
+* **[GAJE_CLI_SERVE_NATIVE_PLAN.md](plans/GAJE_CLI_SERVE_NATIVE_PLAN.md)**: **PLAN DE SERVIDOR NATIVO RUST.** Implementación de `gaje-serve` con SSE, API compatible OpenAI y cero dependencias de Python.
+* **[RUST_SINGLE_BINARY_PLAN.md](plans/RUST_SINGLE_BINARY_PLAN.md)**: **PLAN DE BINARIO ÚNICO AUTOCONTENIDO.** Empaquetado soberano con Web UI incrustada (`rust-embed`).
+* **[DEEPSEEK_GEMMA_SUPPORT_PLAN.md](plans/DEEPSEEK_GEMMA_SUPPORT_PLAN.md)**: **SOPORTE DE ARQUITECTURAS MULTI-MODELO.** Soporte nativo para DeepSeek y Gemma.
+* **[STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md](plans/STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md)**: Oportunidades estratégicas de alto rendimiento (WebGPU, sub-4bit y ecosistema).
+* **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
+* **[GAJE_CLI_IMPROVEMENTS_PLAN.md](plans/GAJE_CLI_IMPROVEMENTS_PLAN.md)**: Plan maestro de mejoras para la CLI nativa (`clap` v4, REPL interactivo, doctor).
+* **[GPU_ACCELERATION_BACKEND_PLAN.md](plans/GPU_ACCELERATION_BACKEND_PLAN.md)**: Plan de backend de aceleración GPU (Vulkan / WGPU).
+* **[QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md](plans/QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md)**: Integración end-to-end del loop cuántico (.qemb).
+* **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](plans/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: Codebook cuántico de 8,192 Meta-Tokens.
+* **[WASM_BRAINSTEM_PLAN.md](plans/WASM_BRAINSTEM_PLAN.md)**: GAJE-WASM — El motor como tronco encefálico.
+* **[MEMORY_EPOCHS_PLAN.md](plans/MEMORY_EPOCHS_PLAN.md)**: Épocas de memoria — conocimiento flexible versionado sobre cuerpo congelado (`.gmem` v2).
+* **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](plans/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo de orden cero — SPSA discreto sobre centroides.
+* **[TESTING_AND_VERIFICATION_PLAN.md](plans/TESTING_AND_VERIFICATION_PLAN.md)**: Plan maestro de pruebas, verificación de hardware, SSE y purga de memoria.
+* **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite de benchmarks.
+* **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](plans/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Especificación del formato binario nativo GTOK.
+* **[GGUF_WRITER_PLAN.md](plans/GGUF_WRITER_PLAN.md)**: Especificación de exportación a formato GGUF.
+* **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos de 32 MB.
+* **[WEB_UI_IMPROVEMENT_PLAN.md](plans/WEB_UI_IMPROVEMENT_PLAN.md)**: Plan de mejoras y evolución de la Web UI.
+* **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
+* **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos.
+* **[NATIVE_SEMANTIC_RAG_PLAN.md](plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
+* **[OPERATION_REBIRTH.md](plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
+* **[DOCUMENTATION_CONSOLIDATION_PLAN.md](plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
+* **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento de cuantización espacial por bloque a 2 bits/peso (Q2_0).
 
 ### 🏷️ Registro y Nomenclatura (`docs/registry/`)
-*   **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](docs/registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).
-*   **[MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md](docs/registry/MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md)**: Recetas de reproducción y registro de modelos en producción.
+* **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).
+* **[MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md](registry/MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md)**: Recetas de reproducción y registro de modelos en producción.
 
 ### 🏛️ Especificaciones Técnicas (`docs/sdd/` y `docs/bdd/`)
-*   **[docs/sdd/ARCHITECTURE_CORE.md](docs/sdd/ARCHITECTURE_CORE.md)**: Arquitectura del núcleo.
-*   **[docs/sdd/QAT_IMPLEMENTATION_DETAILS.md](docs/sdd/QAT_IMPLEMENTATION_DETAILS.md)**: Detalles de QAT.
-*   **[docs/sdd/MIXED_BIT_ARCHITECTURE.md](docs/sdd/MIXED_BIT_ARCHITECTURE.md)**: Arquitectura de bits mixtos.
-*   **[docs/bdd/BORN_GENOMIC_FLOW.md](docs/bdd/BORN_GENOMIC_FLOW.md)**: Flujo genómico.
-*   **[docs/certifications/CERTIFICATION_REPORT_V1.5.md](docs/certifications/CERTIFICATION_REPORT_V1.5.md)**: Reporte de certificación.
-*   **[docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](docs/certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN DE INFERENCIA CUÁNTICA (.qemb)** — Validación de compresión del 98.9%, descompresión SIMD y pruebas end-to-end.
+* **[ARCHITECTURE_CORE.md](sdd/ARCHITECTURE_CORE.md)**: Arquitectura del núcleo.
+* **[QAT_IMPLEMENTATION_DETAILS.md](sdd/QAT_IMPLEMENTATION_DETAILS.md)**: Detalles de QAT.
+* **[MIXED_BIT_ARCHITECTURE.md](sdd/MIXED_BIT_ARCHITECTURE.md)**: Arquitectura de bits mixtos.
+* **[BORN_GENOMIC_FLOW.md](bdd/BORN_GENOMIC_FLOW.md)**: Flujo genómico.
+* **[CERTIFICATION_REPORT_V1.5.md](certifications/CERTIFICATION_REPORT_V1.5.md)**: Reporte de certificación.
+* **[QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN DE INFERENCIA CUÁNTICA (.qemb)** — Validación de compresión del 98.9%, descompresión SIMD y pruebas end-to-end.
 
 ---
 
 ## 🧪 2. Suite de Validación (`tests/`)
-Estructura compatible con `pytest` para asegurar la integridad del motor.
+Estructura compatible con `pytest` y `cargo test` para asegurar la integridad del motor.
 
-*   **`tests/unit/`**: Pruebas de bajo nivel (kernels Rust vs NumPy, alineación RoPE, normas, redb, swiglu drift).
-*   **`tests/integration/`**: Flujos completos de sistema (integración GajeIndex ADC + inferencia LLM, RAG nativo).
-*   **`tests/metrics/`**: Evaluación de calidad (perplexity, precisión, coherencia, DNI interference, HNSW).
-*   **`tests/training/`**: Convergencia de entrenamiento (IQAT, balanceo de pesos sinápticos).
-*   **`tests/fixtures/`**: Datos de prueba compartidos (ej. `small_corpus.txt`).
+* **`tests/unit/`**: Pruebas de bajo nivel (kernels Rust vs NumPy, alineación RoPE, normas, redb, swiglu drift).
+* **`tests/integration/`**: Flujos completos de sistema (integración GajeIndex ADC + inferencia LLM, RAG nativo, épocas de memoria).
+* **`tests/metrics/`**: Evaluación de calidad (perplexity, precisión, coherencia, DNI interference, HNSW).
+* **`tests/training/`**: Convergencia de entrenamiento (IQAT, balanceo de pesos sinápticos).
+* **`tests/ui_e2e/`**: Pruebas end-to-end de interfaz web con Playwright.
+* **`tests/fixtures/`**: Datos de prueba compartidos (ej. `small_corpus.txt`).
 
 ---
 
 ## 🧬 3. Gestión de Modelos (`models/`)
-*   **`models/production/`**: Modelos soberanos y estables (Qwen2 0.5B, SmolLM2 135M).
-*   **`models/research/`**: Experimentos activos.
-*   **`models/gguf/`**: Modelos maestros de referencia.
-*   **`models/archive/`**: Histórico de versiones experimentales.
-*   *Nota:* estos artefactos son binarios grandes y no se versionan en git (ver `.gitignore`).
+* **`models/production/`**: Modelos soberanos y estables (Qwen2 0.5B, SmolLM2 135M).
+* **`models/research/`**: Experimentos activos.
+* **`models/gguf/`**: Modelos maestros de referencia.
+* **`models/archive/`**: Histórico de versiones experimentales.
+* *Nota:* estos artefactos son binarios grandes y no se versionan en git (ver `.gitignore`).
 
 ---
 
 ## 🛠️ 4. Ecosistema de Herramientas (`scripts/`)
-*   **`scripts/maintenance/`**: Respaldo, consolidación de datasets y limpieza.
-*   **`scripts/data_processing/`**: Generación de datasets sintéticos y balanceo semántico.
-*   **`scripts/benchmarks/`**: Suite de evaluación de rendimiento y recuperación (Needle Test).
+* **`scripts/maintenance/`**: Respaldo, escaneo de modelos y sincronización con Hugging Face.
+* **`scripts/data_processing/`**: Generación de datasets sintéticos y balanceo semántico.
+* **`scripts/benchmarks/`**: Suite de evaluación de rendimiento y recuperación (Needle Test).
+* **`scripts/export/`**: Transmutación y empaquetado de modelos binarios planos `.flat` y `.qemb`.
+* **`scripts/debug/`**: Trazas tensoriales capa por capa y auditoría de paridad.
+* **`scripts/training/`**: Destilación genómica y entrenamiento de centroides.
+
+---
 
 ## 📊 5. Benchmarks de Rendimiento (`benchmarks/`)
-*   **`benchmarks/performance/bench_decode.py`**: Benchmark de decode por fase y tendencia KV-cache.
-*   **`benchmarks/performance/gaje_flat_benchmark.py`**: Benchmark del formato `.flat`.
-*   **`benchmarks/FINDINGS_WSL2_BENCHMARK_2026.md`**: Hallazgos de benchmarks WSL2.
-*   **`benchmarks/research/`** y **`benchmarks/logs/`**: experimentos exploratorios y resultados serializados.
+* **`benchmarks/performance/bench_decode.py`**: Benchmark de decode por fase y tendencia KV-cache.
+* **`benchmarks/performance/gaje_flat_benchmark.py`**: Benchmark del formato `.flat`.
+* **`benchmarks/FINDINGS_WSL2_BENCHMARK_2026.md`**: Hallazgos de benchmarks WSL2.
+* **`benchmarks/research/`** y **`benchmarks/logs/`**: experimentos exploratorios y resultados serializados.
 
 ---
 
 ## 🧬 6. Código Nativo (`src/` y `python/`)
-*   **`src/`**: Núcleo en Rust (kernels SIMD, LLM Engine, KV-Cache, Mmap Loader, Island Model). Solo se compila el CLI principal (`gaje-cli`) por defecto.
-*   **`python/gaje/`**: Puente PyO3 y wrappers de inferencia nativos.
+* **`src/`**: Núcleo en Rust (kernels SIMD, LLM Engine, KV-Cache, Mmap Loader, Downloader multi-stream, Island Model). Solo se compila el CLI principal (`gaje-cli`) por defecto.
+* **`python/gaje/`**: Puente PyO3 y wrappers de inferencia nativos.
 
 ---
 
 ## 📦 7. Contenido Archivado (`legacy/` y `docs/archive/`)
-*   **`legacy/archive/rust_bins/`**: Bins Rust exploratorios (trainers, breeders, MCTS) conservados como referencia.
-*   **`legacy/archive/scripts/`** y **`legacy/archive/scratch/`**: Scripts de prueba transitorios.
-*   **`docs/archive/research/`**: Notas de investigación exploratoria.
-*   **`docs/archive/legacy_versions/`**, **`docs/archive/plans/`** y **`docs/archive/reports/`**: Documentación de etapas previas (incluye `PLAN_2BIT_ANCHORED_QUANTIZATION.md`, frente 2-bit congelado).
+* **`legacy/archive/rust_bins/`**: Bins Rust exploratorios (trainers, breeders, MCTS) conservados como referencia.
+* **`legacy/archive/scripts/`** y **`legacy/archive/scratch/`**: Scripts de prueba transitorios.
+* **`docs/archive/research/`**: Notas de investigación exploratoria.
+* **`docs/archive/legacy_versions/`**, **`docs/archive/plans/`** y **`docs/archive/reports/`**: Documentación de etapas previas (incluye `PLAN_2BIT_ANCHORED_QUANTIZATION.md`, frente 2-bit congelado).
 
 ---
 *Documento consolidado bajo el protocolo GAJE-Flow (Agosto 2026).*

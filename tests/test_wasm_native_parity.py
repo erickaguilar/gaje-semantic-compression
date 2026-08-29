@@ -1,5 +1,4 @@
 import os
-import sys
 import subprocess
 import json
 import pytest
@@ -60,8 +59,12 @@ console.log(JSON.stringify(Array.from(genIds)));
     except (subprocess.SubprocessError, FileNotFoundError):
         pytest.skip("NodeJS no disponible o fallo en ejecución de WebAssembly.")
 
-    assert len(native_tokens) == len(wasm_tokens), f"Longitud dispar: {len(native_tokens)} vs {len(wasm_tokens)}"
-    assert native_tokens == wasm_tokens, f"Discrepancia de tokens: {native_tokens} vs {wasm_tokens}"
+    assert len(native_tokens) == len(
+        wasm_tokens
+    ), f"Longitud dispar: {len(native_tokens)} vs {len(wasm_tokens)}"
+    assert (
+        native_tokens == wasm_tokens
+    ), f"Discrepancia de tokens: {native_tokens} vs {wasm_tokens}"
 
 
 if __name__ == "__main__":
