@@ -9,7 +9,7 @@
 
 ## 1. Visión General y Resumen Ejecutivo
 
-El framework **GAJE (Genetic Adaptive Joint Embedding / DNA Semantic Compression)** procesa matrices tensoriales densas, pesos genómicos `.flat` (400 MB – 3.8 GB) y estados de memoria episódica `.gmem`. 
+El framework **GAJE (Genetic Adaptive Joint Embedding / DNA Semantic Compression)** procesa matrices tensoriales densas, pesos genómicos `.flat` (400 MB – 3.8 GB) y estados de memoria episódica `.gmem`.
 
 Tras auditar los puntos de fricción del sistema, se identificaron **4 cuellos de botella (embudos) críticos** en I/O, red y persistencia. Este plan define la resolución de dichos cuellos de botella trasladando los principios de diseño de **DNF5 / `librepo` (Fedora)** y **`hf_transfer`**:
 
