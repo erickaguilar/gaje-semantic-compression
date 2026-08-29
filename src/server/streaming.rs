@@ -101,8 +101,8 @@ pub fn handle_chat_stream_request(
     ));
 
     let max_tokens = chat_req.max_tokens.unwrap_or(256);
-    let temperature = chat_req.temperature.unwrap_or(0.4);
-    let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
+    let temperature = chat_req.temperature.unwrap_or(0.6);
+    let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.05);
 
     let prompt_tokens_u32 = tokenizer
         .encode(&full_prompt, false)
@@ -162,8 +162,6 @@ pub fn handle_chat_stream_request(
     let mut generated_text = String::new();
     let mut seen_tokens: HashSet<usize> = HashSet::new();
 
-    let mut sampler = ToroidalSampler::new_core(0.5, 0.1);
-
     // 2. Bucle Generativo Token-por-Token en Tiempo Real
     for _ in 0..max_tokens {
         if last_logits.is_empty() {
@@ -185,18 +183,7 @@ pub fn handle_chat_stream_request(
             }
         }
 
-        let next_token = if temperature <= 0.01 {
-            logits
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-                .map(|(idx, _)| idx)
-                .unwrap_or(0)
-        } else {
-            sampler
-                .sample_core(logits.clone(), temperature, chat_req.top_p.unwrap_or(0.9))
-                .unwrap_or(0)
-        };
+        let next_token = crate::compute::sampler::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
 
         if eos_ids.contains(&next_token) {
             break;
@@ -205,17 +192,18 @@ pub fn handle_chat_stream_request(
         generated_tokens.push(next_token);
         seen_tokens.insert(next_token);
 
-        let piece = tokenizer
-            .decode(&[next_token as u32], true)
+        let full_curr = tokenizer
+            .decode(&generated_tokens.iter().map(|&t| t as u32).collect::<Vec<_>>(), false)
             .unwrap_or_default();
-        let clean_piece = piece
+        let clean_full = full_curr
             .replace("<|im_end|>", "")
             .replace("<|im_start|>", "")
             .replace("<|endoftext|>", "");
 
-        if !clean_piece.is_empty() {
-            generated_text.push_str(&clean_piece);
-            let sse_event = format!("data: {}\n\n", json!(clean_piece));
+        if clean_full.len() > generated_text.len() {
+            let piece = &clean_full[generated_text.len()..];
+            let sse_event = format!("data: {}\n\n", json!(piece));
+            generated_text = clean_full;
             if tx.send(sse_event.into_bytes()).is_err() {
                 // Cliente desconectado / abortado
                 break;

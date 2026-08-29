@@ -1011,7 +1011,8 @@ class GenomicLLM:
         max_new_tokens=20,
         temperature=0.7,
         top_p=0.9,
-        repetition_penalty=1.0,
+        min_p=0.05,
+        repetition_penalty=1.05,
         use_spiking=False,
         spiking_steps=24,
         spiking_threshold=0.5,
@@ -1048,8 +1049,15 @@ class GenomicLLM:
                 repetition_penalty,
                 eos_ids,
             )
+            accumulated_ids = []
+            prev_text = ""
             for gid in gen_ids:
-                yield self.tokenizer.decode([gid])
+                accumulated_ids.append(gid)
+                curr_text = self.tokenizer.decode(accumulated_ids, skip_special_tokens=False)
+                if len(curr_text) > len(prev_text):
+                    delta = curr_text[len(prev_text):]
+                    prev_text = curr_text
+                    yield delta
             return
 
         # Inicializar Sampler Toroidal si se solicita

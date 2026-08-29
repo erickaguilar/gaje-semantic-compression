@@ -838,45 +838,7 @@ impl GenomicLLM {
                 }
             }
 
-            let next_tok = if temperature <= 1e-5 {
-                let mut max_idx = 0;
-                let mut max_val = f32::NEG_INFINITY;
-                for (idx, &val) in logits.iter().enumerate() {
-                    if val > max_val {
-                        max_val = val;
-                        max_idx = idx;
-                    }
-                }
-                max_idx
-            } else {
-                let mut max_l = f32::NEG_INFINITY;
-                for &val in &logits {
-                    if val > max_l {
-                        max_l = val;
-                    }
-                }
-                let mut probs = vec![0.0f32; logits.len()];
-                let mut sum_exp = 0.0f32;
-                for (idx, &val) in logits.iter().enumerate() {
-                    let p = ((val - max_l) / temperature).exp();
-                    probs[idx] = p;
-                    sum_exp += p;
-                }
-
-                use rand::Rng;
-                let mut rng = rand::thread_rng();
-                let r = rng.gen::<f32>() * sum_exp;
-                let mut cumulative_sum = 0.0f32;
-                let mut chosen_idx = 0;
-                for (idx, &p) in probs.iter().enumerate() {
-                    cumulative_sum += p;
-                    if r <= cumulative_sum {
-                        chosen_idx = idx;
-                        break;
-                    }
-                }
-                chosen_idx
-            };
+            let next_tok = crate::compute::sampler::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
 
             generated.push(next_tok);
 
