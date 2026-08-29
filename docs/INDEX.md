@@ -63,32 +63,37 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[GAJE_PUBLISHING_GUIDE.md](guides/GAJE_PUBLISHING_GUIDE.md)**: Guía de publicación.
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
-### 🗺️ Planes y Roadmap (`docs/plans/`)
-* **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](plans/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: **OPTIMIZACIÓN DE EMBUDOS.** Resolución de 4 cuellos de botella críticos (Multi-Stream WASM, Exportación paralela en Rust, Sincronización Delta zchunk y Arranque On-Demand).
-* **[GAJE_CLI_SERVE_NATIVE_PLAN.md](plans/GAJE_CLI_SERVE_NATIVE_PLAN.md)**: **PLAN DE SERVIDOR NATIVO RUST.** Implementación de `gaje-serve` con SSE, API compatible OpenAI y cero dependencias de Python.
-* **[RUST_SINGLE_BINARY_PLAN.md](plans/RUST_SINGLE_BINARY_PLAN.md)**: **PLAN DE BINARIO ÚNICO AUTOCONTENIDO.** Empaquetado soberano con Web UI incrustada (`rust-embed`).
-* **[DEEPSEEK_GEMMA_SUPPORT_PLAN.md](plans/DEEPSEEK_GEMMA_SUPPORT_PLAN.md)**: **SOPORTE DE ARQUITECTURAS MULTI-MODELO.** Soporte nativo para DeepSeek y Gemma.
+### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo y arquitectura del motor.
+* **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro de ejecución de grafos agénticos soberanos en Rust.
+* **[AGENTIC_GRAPH_RUST.md](plans/AGENTIC_GRAPH_RUST.md)**: Tipos `AgentState`, `AgentNode` y orquestación cíclica sin dependencias externas.
+* **[DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md](plans/DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md)**: Estrategia de destilación y transferencia de conocimiento desde maestros Qwen2.5 / DeepSeek / Gemma.
+* **[NATIVE_SEMANTIC_RAG_PLAN.md](plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo e indexación HNSW zero-copy.
+* **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos ultra-ligeros de 32 MB.
 * **[STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md](plans/STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md)**: Oportunidades estratégicas de alto rendimiento (WebGPU, sub-4bit y ecosistema).
 * **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
-* **[GAJE_CLI_IMPROVEMENTS_PLAN.md](plans/GAJE_CLI_IMPROVEMENTS_PLAN.md)**: Plan maestro de mejoras para la CLI nativa (`clap` v4, REPL interactivo, doctor).
-* **[GPU_ACCELERATION_BACKEND_PLAN.md](plans/GPU_ACCELERATION_BACKEND_PLAN.md)**: Plan de backend de aceleración GPU (Vulkan / WGPU).
-* **[QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md](plans/QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md)**: Integración end-to-end del loop cuántico (.qemb).
-* **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](plans/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: Codebook cuántico de 8,192 Meta-Tokens.
-* **[WASM_BRAINSTEM_PLAN.md](plans/WASM_BRAINSTEM_PLAN.md)**: GAJE-WASM — El motor como tronco encefálico.
-* **[MEMORY_EPOCHS_PLAN.md](plans/MEMORY_EPOCHS_PLAN.md)**: Épocas de memoria — conocimiento flexible versionado sobre cuerpo congelado (`.gmem` v2).
-* **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](plans/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo de orden cero — SPSA discreto sobre centroides.
-* **[TESTING_AND_VERIFICATION_PLAN.md](plans/TESTING_AND_VERIFICATION_PLAN.md)**: Plan maestro de pruebas, verificación de hardware, SSE y purga de memoria.
-* **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite de benchmarks.
-* **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](plans/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Especificación del formato binario nativo GTOK.
-* **[GGUF_WRITER_PLAN.md](plans/GGUF_WRITER_PLAN.md)**: Especificación de exportación a formato GGUF.
-* **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos de 32 MB.
-* **[WEB_UI_IMPROVEMENT_PLAN.md](plans/WEB_UI_IMPROVEMENT_PLAN.md)**: Plan de mejoras y evolución de la Web UI.
-* **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo.
-* **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos.
-* **[NATIVE_SEMANTIC_RAG_PLAN.md](plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo.
-* **[OPERATION_REBIRTH.md](plans/OPERATION_REBIRTH.md)**: Metodología de transmutación.
-* **[DOCUMENTATION_CONSOLIDATION_PLAN.md](plans/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Sincronización documental.
-* **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: Experimento de cuantización espacial por bloque a 2 bits/peso (Q2_0).
+* **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite continua de benchmarks.
+* **[QUALITY_EVAL_PROTOCOL.md](plans/QUALITY_EVAL_PROTOCOL.md)**: Protocolo de evaluación de calidad semántica y perplejidad.
+* **[QUALITY_EXPORT_PLAN.md](plans/QUALITY_EXPORT_PLAN.md)**: Plan de exportación calibrada con preservación de gradientes.
+* **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos del ciclo de desarrollo.
+
+### ✅ Planes Implementados y Certificados (`docs/plans/completed/`)
+* **[GAJE_CLI_IMPROVEMENTS_PLAN.md](plans/completed/GAJE_CLI_IMPROVEMENTS_PLAN.md)**: `clap` v4, REPL interactivo y herramienta `gaje-cli doctor`.
+* **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](plans/completed/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: Multi-Stream WASM, exportación tensorial paralela en Rust y zero-copy mmap.
+* **[GAJE_CLI_SERVE_NATIVE_PLAN.md](plans/completed/GAJE_CLI_SERVE_NATIVE_PLAN.md)**: Servidor HTTP nativo en Rust con SSE y compatibilidad API OpenAI.
+* **[RUST_SINGLE_BINARY_PLAN.md](plans/completed/RUST_SINGLE_BINARY_PLAN.md)**: Binario único autocontenido con Web UI incrustada vía `rust-embed`.
+* **[DEEPSEEK_GEMMA_SUPPORT_PLAN.md](plans/completed/DEEPSEEK_GEMMA_SUPPORT_PLAN.md)**: Soporte nativo para DeepSeek (MLA/MoE), Gemma y Qwen2.5.
+* **[GGUF_WRITER_PLAN.md](plans/completed/GGUF_WRITER_PLAN.md)**: Serializador binario GGUF v3 nativo para compatibilidad con Ollama y `llama.cpp`.
+* **[MEMORY_EPOCHS_PLAN.md](plans/completed/MEMORY_EPOCHS_PLAN.md)**: Épocas `.gmem` v2, rollback determinista bit a bit (0.10 ms) y snapshots.
+* **[GPU_ACCELERATION_BACKEND_PLAN.md](plans/completed/GPU_ACCELERATION_BACKEND_PLAN.md)**: Backend GPU Vulkan / WGPU, shaders WGSL, layer offloading y telemetría en UI.
+* **[QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md](plans/completed/QUANTUM_INFERENCE_LOOP_INTEGRATION_PLAN.md)**: Loop de inferencia de embeddings cuánticos `.qemb` (>98% ahorro RAM).
+* **[QUANTUM_META_TOKEN_CODEBOOK_PLAN.md](plans/completed/QUANTUM_META_TOKEN_CODEBOOK_PLAN.md)**: Codebook cuántico de 8,192 meta-tokens con amplitudes en esfera unitaria.
+* **[ZERO_ORDER_NATIVE_TRAINING_PLAN.md](plans/completed/ZERO_ORDER_NATIVE_TRAINING_PLAN.md)**: Entrenamiento nativo SPSA discreto sobre centroides (speedup 2.24× y nichos 21.56×).
+* **[GTOK_BINARY_TOKENIZER_SPEC_PLAN.md](plans/completed/GTOK_BINARY_TOKENIZER_SPEC_PLAN.md)**: Formato binario nativo GTOK incrustable en `.flat`.
+* **[WASM_BRAINSTEM_PLAN.md](plans/completed/WASM_BRAINSTEM_PLAN.md)**: Motor WASM client-side como tronco encefálico soberano offline.
+* **[WEB_UI_IMPROVEMENT_PLAN.md](plans/completed/WEB_UI_IMPROVEMENT_PLAN.md)**: Plataforma Web UI dual Y2K/Zen, telemetría HUD, streaming SSE y OPFS cache.
+* **[TESTING_AND_VERIFICATION_PLAN.md](plans/completed/TESTING_AND_VERIFICATION_PLAN.md)**: Suite de pruebas de regresión, certificación de hardware y purga de memoria.
+* **[DOCUMENTATION_CONSOLIDATION_PLAN.md](plans/completed/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Consolidación y sincronización documental global.
 
 ### 🏷️ Registro y Nomenclatura (`docs/registry/`)
 * **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).
