@@ -99,7 +99,10 @@ struct ChatArgs {
     max_tokens: usize,
 
     /// Prompt del sistema
-    #[arg(long, default_value = "Eres GAJE AI, un asistente genómico soberano, conciso y útil.")]
+    #[arg(
+        long,
+        default_value = "Eres GAJE AI, un asistente genómico soberano, conciso y útil."
+    )]
     system: String,
 }
 
@@ -195,7 +198,11 @@ struct BenchArgs {
     model: Option<String>,
 
     /// Prompt de evaluación
-    #[arg(short, long, default_value = "Explica en pocas palabras qué es la compresión semántica genómica.")]
+    #[arg(
+        short,
+        long,
+        default_value = "Explica en pocas palabras qué es la compresión semántica genómica."
+    )]
     prompt: String,
 
     /// Número de tokens a generar
@@ -259,24 +266,32 @@ struct AuditArgs {
 
 #[derive(Args, Debug)]
 struct EpochArgs {
-    /// Subcomando de época: list, rollback, merge, evolve
+    /// Subcomando de época: list, snapshot, rollback, promote, seal, merge, evolve
     action: String,
 
     /// Identificador del organismo
     #[arg(long, default_value = "default")]
     organism: String,
 
-    /// Ruta al archivo de memoria .gmem
-    #[arg(long, default_value = "data/memory/default.gmem")]
+    /// Ruta o directorio raíz de memoria .gmem
+    #[arg(long, alias = "root", default_value = "data/memory")]
     path: String,
 
-    /// ID de época para rollback
-    #[arg(long, default_value_t = 0)]
+    /// Dimensión vectorial del organismo
+    #[arg(long, default_value_t = 512)]
+    dim: usize,
+
+    /// ID de época para rollback, promote o seal
+    #[arg(long, alias = "epoch", default_value_t = 0)]
     epoch_id: u64,
 
     /// ID de época origen (para merge)
     #[arg(long, default_value_t = 0)]
     source_epoch_id: u64,
+
+    /// Comentario descriptivo para snapshot
+    #[arg(long, default_value = "Snapshot manual CLI")]
+    comment: String,
 }
 
 fn resolve_default_model(model_opt: Option<String>) -> String {
@@ -320,7 +335,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::Models(models_args)) => {
-            match models_args.action.unwrap_or(ModelsSubcommand::List { dir: "models".to_string() }) {
+            match models_args.action.unwrap_or(ModelsSubcommand::List {
+                dir: "models".to_string(),
+            }) {
                 ModelsSubcommand::List { dir } => {
                     let models = models_cmd::list_models(Path::new(&dir))?;
                     models_cmd::print_models_table(&models);
@@ -351,14 +368,20 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 chunk_size_min: pull_args.min_chunk * 1024 * 1024,
                 user_agent: "GAJE-Helix-Engine/1.7.0 (Rust; Native-Downloader)".to_string(),
             };
-            println!("⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}", pull_args.target);
+            println!(
+                "⚡ [GAJE CLI] Iniciando descarga nativa acelerada para: {}",
+                pull_args.target
+            );
             let stats = _impl::io::downloader::download_model(
                 &pull_args.target,
                 Some(Path::new(&pull_args.out)),
                 Some(opts),
                 Some(running),
             )?;
-            println!("🎉 Descarga completada con éxito en {:?}", stats.destination);
+            println!(
+                "🎉 Descarga completada con éxito en {:?}",
+                stats.destination
+            );
             Ok(())
         }
         Some(Commands::Serve(serve_args)) => {
@@ -376,7 +399,13 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(Commands::Chat(chat_args)) => {
             let model_path = resolve_default_model(chat_args.model);
             if let Some(prompt) = chat_args.prompt {
-                run_single_prompt(&model_path, &prompt, chat_args.temperature, chat_args.repetition_penalty, chat_args.max_tokens)?;
+                run_single_prompt(
+                    &model_path,
+                    &prompt,
+                    chat_args.temperature,
+                    chat_args.repetition_penalty,
+                    chat_args.max_tokens,
+                )?;
             } else {
                 let config = ReplConfig {
                     model_path,
@@ -425,14 +454,18 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             )?;
             Ok(())
         }
-        Some(Commands::Epoch(epoch_args)) => {
-            handle_epoch(&epoch_args)
-        }
+        Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
                 let model_path = resolve_default_model(cli.model);
-                run_single_prompt(&model_path, &prompt, cli.temperature, cli.repetition_penalty, cli.max_tokens)?;
+                run_single_prompt(
+                    &model_path,
+                    &prompt,
+                    cli.temperature,
+                    cli.repetition_penalty,
+                    cli.max_tokens,
+                )?;
             } else {
                 // Iniciar REPL por defecto
                 let model_path = resolve_default_model(cli.model);
@@ -463,19 +496,26 @@ fn run_single_prompt(
     let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
     println!("✅ Modelo listo en {:.2} ms\n", load_ms);
 
-    let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
-    let prompt_tokens_u32 = tokenizer.encode(&chat_prompt, false).map_err(|e| e.to_string())?;
+    let chat_prompt = format!(
+        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+        prompt
+    );
+    let prompt_tokens_u32 = tokenizer
+        .encode(&chat_prompt, false)
+        .map_err(|e| e.to_string())?;
     let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
     let gen_t0 = Instant::now();
     let eos_ids = vec![2, 0];
-    let generated_tokens = llm.generate_native_core(
-        prompt_tokens,
-        max_tokens,
-        temperature,
-        repetition_penalty,
-        eos_ids,
-    ).map_err(|e| format!("Error en inferencia: {}", e))?;
+    let generated_tokens = llm
+        .generate_native_core(
+            prompt_tokens,
+            max_tokens,
+            temperature,
+            repetition_penalty,
+            eos_ids,
+        )
+        .map_err(|e| format!("Error en inferencia: {}", e))?;
 
     let gen_u32: Vec<u32> = generated_tokens.into_iter().map(|t| t as u32).collect();
     let raw_reply = tokenizer.decode(&gen_u32, true).unwrap_or_default();
@@ -490,37 +530,58 @@ fn run_single_prompt(
     println!("{}\n", clean);
     let gen_time = gen_t0.elapsed().as_secs_f64();
     let tok_count = gen_u32.len();
-    println!("\x1b[90m[{:.1} tok/s · {} tokens · {:.2}s]\x1b[0m", 
-        tok_count as f64 / gen_time.max(0.001), tok_count, gen_time);
+    println!(
+        "\x1b[90m[{:.1} tok/s · {} tokens · {:.2}s]\x1b[0m",
+        tok_count as f64 / gen_time.max(0.001),
+        tok_count,
+        gen_time
+    );
     Ok(())
 }
 
-
-
 fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut mgr = match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, 512) {
+    let dim = args.dim as u32;
+    let mut mgr = match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, dim) {
         Ok(m) => m,
         Err(e) => return Err(format!("Error abriendo gestor de épocas: {}", e).into()),
     };
 
     match args.action.as_str() {
         "list" => {
-            println!("📚 Épocas registradas para '{}':", args.organism);
             let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
+            let active = mgr.active_epoch_id;
+            println!("📚 Épocas registradas para '{}': (Época Activa: {})", args.organism, active);
             for ep in epochs {
+                let star = if ep.epoch_id == active { format!("*{}", ep.epoch_id) } else { format!(" {}", ep.epoch_id) };
                 println!(
-                    "  • Época #{}: {} (Fecha: {}, Padre: #{}, Estado: {})",
-                    ep.epoch_id, ep.comment, ep.created_at, ep.parent_epoch, ep.verdict
+                    "  {} Época #{}: {} (Fecha: {}, Padre: #{}, Estado: {:?})",
+                    star, ep.epoch_id, ep.comment, ep.created_at, ep.parent_epoch, ep.verdict
                 );
             }
+        }
+        "snapshot" => {
+            let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
+            let new_id = mgr.create_snapshot(&mut orch, &args.comment, None).map_err(|e| e.to_string())?;
+            println!("✅ Creado snapshot: Época ID {}", new_id);
         }
         "rollback" => {
             println!("⏪ Realizando rollback a la época #{}...", args.epoch_id);
             mgr.rollback_to(args.epoch_id).map_err(|e| e.to_string())?;
-            println!("✅ Rollback exitoso.");
+            println!("✅ Rollback exitoso. Época activa ahora es ID {}", args.epoch_id);
+        }
+        "promote" => {
+            mgr.promote_epoch(args.epoch_id).map_err(|e| e.to_string())?;
+            println!("✅ Época ID {} promovida a activa.", args.epoch_id);
+        }
+        "seal" => {
+            mgr.seal_epoch(args.epoch_id).map_err(|e| e.to_string())?;
+            println!("✅ Época ID {} SELLADA (SEALED).", args.epoch_id);
         }
         _ => {
-            println!("Acción de época '{}' no reconocida. Usa 'list' o 'rollback'.", args.action);
+            println!(
+                "Acción de época '{}' no reconocida. Usa 'list', 'snapshot', 'rollback', 'promote' o 'seal'.",
+                args.action
+            );
         }
     }
     Ok(())
