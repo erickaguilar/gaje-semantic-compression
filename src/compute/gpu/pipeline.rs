@@ -326,6 +326,130 @@ impl GpuComputePipelines {
 
         Ok(result)
     }
+
+    /// Normalización RMS en GPU
+    pub fn execute_rms_norm(
+        &self,
+        x: &[f32],
+        weight: &[f32],
+        eps: f32,
+    ) -> Result<Vec<f32>, String> {
+        let len = x.len();
+        if len != weight.len() {
+            return Err("Input and Weight vector length mismatch in RMSNorm".to_string());
+        }
+
+        let device = &self.ctx.device;
+        let queue = &self.ctx.queue;
+
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+        struct RmsUniforms {
+            len: u32,
+            eps: f32,
+            _pad: [u32; 2],
+        }
+
+        let uniforms = RmsUniforms {
+            len: len as u32,
+            eps,
+            _pad: [0, 0],
+        };
+
+        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("RMSNorm Uniform Buffer"),
+            contents: bytemuck::bytes_of(&uniforms),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let x_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("RMSNorm X Buffer"),
+            contents: bytemuck::cast_slice(x),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let weight_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("RMSNorm Weight Buffer"),
+            contents: bytemuck::cast_slice(weight),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
+        let output_byte_size = (len * std::mem::size_of::<f32>()) as u64;
+        let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("RMSNorm Output Buffer"),
+            size: output_byte_size,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("RMSNorm Readback Buffer"),
+            size: output_byte_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bind_group_layout = self.rms_norm_pipeline.get_bind_group_layout(0);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("RMSNorm Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: x_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: weight_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: output_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("RMSNorm Command Encoder"),
+        });
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("RMSNorm Compute Pass"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.rms_norm_pipeline);
+            compute_pass.set_bind_group(0, &bind_group, &[]);
+            compute_pass.dispatch_workgroups(1, 1, 1);
+        }
+
+        encoder.copy_buffer_to_buffer(&output_buf, 0, &readback_buf, 0, output_byte_size);
+        queue.submit(Some(encoder.finish()));
+
+        // Readback
+        let slice = readback_buf.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = sender.send(res);
+        });
+        device.poll(wgpu::Maintain::Wait);
+
+        receiver
+            .recv()
+            .map_err(|e| format!("Failed to receive map event: {:?}", e))?
+            .map_err(|e| format!("Failed to map buffer: {:?}", e))?;
+
+        let data = slice.get_mapped_range();
+        let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
+        drop(data);
+        readback_buf.unmap();
+
+        Ok(result)
+    }
 }
 
 // Global Singleton Pipelines
@@ -368,6 +492,20 @@ pub fn gpu_gemv_f32(weights: &[f32], x: &[f32], rows: usize, cols: usize) -> Opt
         GLOBAL_GPU_PIPELINES
             .as_ref()
             .and_then(|p| p.execute_gemv_f32(weights, x, rows, cols).ok())
+    }
+    #[cfg(not(feature = "gpu"))]
+    {
+        None
+    }
+}
+
+/// Helper para ejecutar RMSNorm en GPU si está disponible
+pub fn gpu_rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Option<Vec<f32>> {
+    #[cfg(feature = "gpu")]
+    {
+        GLOBAL_GPU_PIPELINES
+            .as_ref()
+            .and_then(|p| p.execute_rms_norm(x, weight, eps).ok())
     }
     #[cfg(not(feature = "gpu"))]
     {

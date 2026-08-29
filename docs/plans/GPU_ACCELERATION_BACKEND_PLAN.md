@@ -1,6 +1,7 @@
 # 🚀 Plan de Implementación: Backend de Aceleración GPU para GAJE Helix (Vulkan / WGPU)
 
-**Objetivo:** Desarrollar e integrar un backend de cómputo paralelo masivo para GPU (AMD Radeon / Vulkan / WGPU) en Rust, permitiendo offload de operaciones matriciales críticas (`GenomicLinear`, SwiGLU y `lm_head`), multiplicando el rendimiento de inferencia en modelos de 0.5B a 3B+.
+> **Estado:** 🟡 EN PROGRESO — Fase 1 (Infraestructura WGPU/Vulkan Context), Fase 2 (Shaders WGSL GEMV FP32, SwiGLU, RMSNorm) y Despachadores de Pipeline en Rust completados.
+> **Objetivo:** Desarrollar e integrar un backend de cómputo paralelo masivo para GPU (AMD Radeon / Vulkan / WGPU) en Rust, permitiendo offload de operaciones matriciales críticas (`GenomicLinear`, SwiGLU y `lm_head`), multiplicando el rendimiento de inferencia en modelos de 0.5B a 3B+.
 
 ---
 

@@ -43,11 +43,15 @@ pub fn run_doctor() -> DoctorReport {
     let gpu_backend = {
         #[cfg(feature = "gpu")]
         {
-            "WGPU / Vulkan / Direct3D (Activo)".to_string()
+            if let Some(ref ctx) = *crate::compute::gpu::context::GLOBAL_GPU_CONTEXT {
+                format!("{} ({})", ctx.info.device_name, ctx.info.backend)
+            } else {
+                "WGPU / Vulkan (Sin adaptador detectado)".to_string()
+            }
         }
         #[cfg(not(feature = "gpu"))]
         {
-            "Modo CPU Soberano".to_string()
+            "Modo CPU Soberano (SIMD AVX2/NEON)".to_string()
         }
     };
 
