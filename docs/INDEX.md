@@ -47,6 +47,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[STEEL_SOUL_MVP_CREATION.md](reports/STEEL_SOUL_MVP_CREATION.md)**: Registro de creación del MVP Steel Soul.
 
 ### 🛠️ Guías Operativas (`docs/guides/`)
+* **[GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)**: **DESPLIEGUE EN PRODUCCIÓN (7B ULTRA).** Guía oficial para Hugging Face Spaces (Docker), VPS Cloud y Túneles Cloudflare.
 * **[FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md](guides/FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md)**: **TÉCNICAS DNF Y MULTI-STREAM.** Protocolo de aceleración de red estilo Fedora librepo / hf_transfer.
 * **[FAST_MODEL_DOWNLOAD_GUIDE.md](guides/FAST_MODEL_DOWNLOAD_GUIDE.md)**: Guía práctica de descarga acelerada de modelos desde Hugging Face Hub.
 * **[HYBRID_DEPLOYMENT_AND_MODEL_DISTRIBUTION.md](guides/HYBRID_DEPLOYMENT_AND_MODEL_DISTRIBUTION.md)**: Estrategia de despliegue híbrido dual (Edge WASM + Cloud Service) y distribución.
