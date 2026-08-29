@@ -1,6 +1,25 @@
 # 📋 Changelog / Registro de Cambios — GAJE Protocol
 
-[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
+[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
+
+## [1.7.1-alpha] - 2026-08-29
+### Added
+- **Binario Único Soberano en Rust (`gaje-cli`) y Web UI Embebida**:
+  - Integración de `rust-embed` para empaquetar de forma autónoma `index.html` (7.2 KB) y assets estáticos en la memoria `.rodata` del ejecutable, eliminando dependencias de archivos externos en disco.
+  - Servidor HTTP nativo (`gaje-cli serve`) con despacho híbrido: lectura directa de memoria RAM en standalone y recarga en caliente en entorno local.
+- **Nuevos Subcomandos CLI de Utilidad y Operación**:
+  - `gaje-cli export-flat`: Exportador zero-copy con serialización paralela Rayon y alineación SIMD a 64 bytes hacia formato `.flat` v2 con GTOK incrustado.
+  - `gaje-cli benchmark` (alias: `bench`): Suite de rendimiento para latencia mmap, TTFT, throughput (tokens/s) y cálculo de Perplejidad (PPL) / Cross-Entropy sobre corpus JSONL/texto.
+  - `gaje-cli dataset-build`: Normalizador multiformato de datasets conversacionales (pares instrucción/respuesta y usuario/asistente) hacia JSONL estándar.
+  - `gaje-cli audit`: Auditoría matemática exhaustiva de pesos, verificación de `0 NaN / 0 Inf` y análisis de entropía de centroides.
+- **Suite de Validación Soberana y Guía de Migración**:
+  - Nuevo test de integración nativo en Rust `tests/cli_standalone_test.rs` con validación de comandos del CLI sin runtime de Python.
+  - Publicación de `scripts/README.md` con la matriz integral de correspondencia entre scripts legacy y subcomandos nativos de `gaje-cli`.
+  - Documentación del binario único y comandos CLI en `README.md`.
+
+### Changed
+- Exclusión selectiva de páginas pesadas/auxiliares (`docs.html`, `architecture.html`) del paquete embebido para mantener una huella ultraligera (<500 KB).
+- Modularización de `index.html` reduciendo su tamaño de 22.5 KB a 7.2 KB mediante carga diferida (*lazy loading*) del modal de telemetría.
 
 ## [1.7.0-alpha] - 2026-08-24
 ### Added

@@ -5,6 +5,8 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/reports/session_findings_v1.6.0_phase_3.1.md)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
+[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](README.en.md)
+[![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
 **GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano **`.gaje.flat` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
 
@@ -143,25 +145,50 @@ gaje-semantic-compression/
 
 ---
 
-## ⚡ Guía de Inicio Rápido y Despliegue Web UI
+## ⚡ Guía de Inicio Rápido — Binario Único Soberano (`gaje-cli`)
 
-### 1. Instalación y Compilación Nativa (PyO3)
+GAJE Helix se distribuye y ejecuta como un **ejecutable nativo autónomo en Rust** sin dependencias externas ni necesidad de Python en producción.
+
+### 1. Compilación del Ejecutable Nativo
 ```bash
-# Compilar motor nativo Rust optimizado (OBLIGATORIO --release: debug es ~100x más lento)
-uv venv && source .venv/bin/activate
-maturin develop --release --features python
+# Compilar binario de producción optimizado
+cargo build --release --bin gaje-cli
 ```
 
-### 2. Ejecutar la Web UI Interactiva
-```bash
-python examples/ui/web_ui/server.py
-```
-Abre en tu navegador `http://localhost:8080` y selecciona dinámicamente tu modelo `.flat` optimizado.
+### 2. Comandos Principales de `gaje-cli`
 
-### 3. Ejecutar Suite de Validación Nativa
 ```bash
-# Ejecutar la suite de pruebas de Python (unitaria, integración y métricas)
-pytest tests/unit tests/integration tests/metrics
+# Iniciar servidor HTTP con streaming SSE y Web UI de Chat embebida en memoria
+./target/release/gaje-cli serve --port 8080
+
+# Sesión interactiva de Chat REPL en terminal
+./target/release/gaje-cli chat --model models/production/gaje_pico_135m.flat
+
+# Descargar modelos directamente desde Hugging Face
+./target/release/gaje-cli pull pico
+
+# Catálogo e inspección estructural de modelos locales
+./target/release/gaje-cli models list
+./target/release/gaje-cli models inspect models/production/gaje_pico_135m.flat
+
+# Exportar cualquier modelo (.gguf, .gaje, .flat) a formato plano zero-copy v2
+./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.flat
+
+# Benchmark de latencia (TTFT), Throughput (TPS) y Perplejidad (PPL)
+./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.flat --tokens 64
+
+# Auditoría matemática de tensores (chequeo de 0 NaNs/Infs y entropía de centroides)
+./target/release/gaje-cli audit models/production/gaje_pico_135m.flat
+
+# Diagnóstico de extensiones de hardware (AVX2, AVX512, NEON, FMA)
+./target/release/gaje-cli doctor
+```
+
+### 3. Suite de Validación y Pruebas
+```bash
+# Ejecutar suite nativa completa en Rust
+cargo test --lib
+cargo test --test cli_standalone_test
 ```
 
 ---

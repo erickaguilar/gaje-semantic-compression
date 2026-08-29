@@ -5,6 +5,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](README.md)
+[![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
 **GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), instant memory-mapped file loading (**`.gaje.flat` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
 
@@ -22,16 +23,16 @@ Official pre-packaged models are available at the [Official Hugging Face Hub (`e
 
 ---
 
-## 🔬 Empirical Status & Scientific Diagnosis (v1.7.0-alpha)
+## 🔬 Empirical Status & Scientific Diagnosis (v1.7.1-alpha)
 
-Following the principle of **Empirical Truth** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/docs/meta/EMPIRICAL_TRUTH_STATE.md)), the system presents the following certified functional state:
+Following the principle of **Empirical Truth** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](docs/meta/EMPIRICAL_TRUTH_STATE.md)), the system presents the following certified functional state:
 
 ### 🏆 1. A/B Parity Control Experiment (GAJE Q4_0 vs. HuggingFace PyTorch FP32)
 
 We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0.5B-Instruct`) in **PyTorch** against the native **GAJE 4-bit `.gaje.flat`** engine on an **AMD Ryzen 7 5800H** CPU:
 
 | Inference Engine | Format / Precision | Exact Generated Response | Real E2E Throughput | RAM Consumption |
-| :--- | :---: | :--- | :---: | :---: |
+| :--- | :---: | :--- | :---: | :--- |
 | **HuggingFace PyTorch** | **FP32 Original (Alibaba)** | *"El planeta más grande del Sistema Solar es la Tierra, con una"* | **`1.38 tok/s`** | $1,980\text{ MB}$ |
 | **GAJE Native Engine (`.flat`)** | **4-bit Genomic Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
 
@@ -57,6 +58,53 @@ The system integrates contextual memory persistence through 64-byte aligned flat
 * **Vector Retrieval Latency (RAG)**: **`0.75 ms`** ($750\text{ µs}$) per multi-niche query.
 * **Cold Start Latency (`.gmem`)**: **`0.12 ms`** ($120\text{ µs}$) from file.
 * **Context Budget**: Automatic injection of $128\text{ tokens}$ of high resonance ($\text{CosSim} = 0.9998$).
+
+---
+
+## ⚡ Quick Start Guide — Sovereign Single-Binary (`gaje-cli`)
+
+GAJE Helix runs as a **self-contained standalone native Rust executable** requiring zero external dependencies or Python runtime in production.
+
+### 1. Build the Release Binary
+```bash
+cargo build --release --bin gaje-cli
+```
+
+### 2. Core `gaje-cli` Commands
+
+```bash
+# Run HTTP SSE streaming server with embedded in-memory Web UI
+./target/release/gaje-cli serve --port 8080
+
+# Interactive Chat REPL session
+./target/release/gaje-cli chat --model models/production/gaje_pico_135m.flat
+
+# Pull models directly from Hugging Face
+./target/release/gaje-cli pull pico
+
+# Inspect and verify local models catalog
+./target/release/gaje-cli models list
+./target/release/gaje-cli models inspect models/production/gaje_pico_135m.flat
+
+# Export any model (.gguf, .gaje, .flat) to zero-copy flat v2
+./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.flat
+
+# Throughput (TPS), TTFT and Perplexity (PPL) benchmark suite
+./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.flat --tokens 64
+
+# Audit tensor weights (zero NaN / zero Inf certificate)
+./target/release/gaje-cli audit models/production/gaje_pico_135m.flat
+
+# Diagnostic hardware extensions (AVX2, AVX512, NEON, FMA)
+./target/release/gaje-cli doctor
+```
+
+### 3. Native Test Suites
+```bash
+# Run native Rust unit & integration test suites
+cargo test --lib
+cargo test --test cli_standalone_test
+```
 
 ---
 

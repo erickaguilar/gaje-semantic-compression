@@ -53,8 +53,12 @@ echo -e "📂 Destino local:   ${GREEN}${TARGET_PATH}${NC}"
 echo -e "🌐 Repositorio HF:  ${GREEN}${REPO_ID}${NC}"
 echo ""
 
-# Detección del método más rápido
-if command -v aria2c &> /dev/null; then
+# Detección del método más rápido (Prioridad: gaje-cli nativo Rust)
+if [ -f "./target/release/gaje-cli" ]; then
+    echo -e "${GREEN}⚡ Usando motor nativo soberano: gaje-cli pull...${NC}"
+    ./target/release/gaje-cli pull "${REPO_ID}/${MODEL_FILE}" --out "$OUT_DIR"
+
+elif command -v aria2c &> /dev/null; then
     echo -e "${GREEN}⚡ Usando aria2c (16 conexiones paralelas concurrentes)...${NC}"
     aria2c -x 16 -s 16 -k 1M -c \
         --dir="$OUT_DIR" \
@@ -79,14 +83,14 @@ elif command -v wget &> /dev/null; then
     wget -c -O "$TARGET_PATH" "$HF_URL"
 
 else
-    echo -e "${RED}❌ No se encontró ninguna herramienta de descarga (aria2c, python hf_transfer, curl, wget).${NC}"
+    echo -e "${RED}❌ No se encontró ninguna herramienta de descarga (gaje-cli, aria2c, python hf_transfer, curl, wget).${NC}"
     exit 1
 fi
 
 echo ""
 echo -e "${GREEN}✅ ¡Descarga completada con éxito!${NC}"
 echo -e "Archivo guardado en: ${CYAN}${TARGET_PATH}${NC}"
-ls -lh "$TARGET_PATH"
+ls -lh "$TARGET_PATH" 2>/dev/null || true
 echo ""
 echo -e "Para ejecutar inferencia inmediata con GAJE CLI:"
-echo -e "  ${CYAN}cargo run --release -p gaje-cli -- chat --model \"${TARGET_PATH}\" --prompt \"Hola\"${NC}"
+echo -e "  ${CYAN}./target/release/gaje-cli chat --model \"${TARGET_PATH}\"${NC}"

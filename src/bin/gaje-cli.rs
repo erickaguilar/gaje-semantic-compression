@@ -60,7 +60,17 @@ enum Commands {
     Pull(PullArgs),
 
     /// Benchmark estandarizado de latencia (TTFT), velocidad y memoria
-    Bench(BenchArgs),
+    #[command(alias = "bench")]
+    Benchmark(BenchArgs),
+
+    /// Exporta modelos (.gaje, .gguf, .flat) al formato plano de producción .flat v2
+    ExportFlat(ExportFlatArgs),
+
+    /// Construye y normaliza datasets de texto/JSONL para entrenamiento o DNI
+    DatasetBuild(DatasetBuildArgs),
+
+    /// Auditoría matemática de integridad, ausencia de NaNs y entropía de pesos
+    Audit(AuditArgs),
 
     /// Gestión de épocas de memoria asociativa (.gmem v2)
     Epoch(EpochArgs),
@@ -180,7 +190,7 @@ struct PullArgs {
 
 #[derive(Args, Debug)]
 struct BenchArgs {
-    /// Archivo del modelo a evaluar
+    /// Archivo del modelo a evaluar (.flat o .gaje)
     #[arg(short, long)]
     model: Option<String>,
 
@@ -191,6 +201,60 @@ struct BenchArgs {
     /// Número de tokens a generar
     #[arg(short, long, default_value_t = 64)]
     tokens: usize,
+
+    /// Archivo de texto o JSONL para cálculo de perplejidad
+    #[arg(long)]
+    corpus: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct ExportFlatArgs {
+    /// Archivo de entrada (.gaje, .gguf o .flat)
+    input: String,
+
+    /// Archivo de salida (.flat)
+    #[arg(short, long)]
+    output: String,
+
+    /// Tokenizador a incrustar (opcional)
+    #[arg(short, long)]
+    tokenizer: Option<String>,
+
+    /// Esquema de cuantización: 1=Q4_0 (default), 2=Q8_0, 3=Q2_0
+    #[arg(long, default_value_t = 1)]
+    quant_format: u32,
+}
+
+#[derive(Args, Debug)]
+struct DatasetBuildArgs {
+    /// Archivos de texto o jsonl de entrada
+    inputs: Vec<String>,
+
+    /// Archivo de salida normalizado
+    #[arg(short, long)]
+    output: String,
+
+    /// Tokenizador para validación y filtrado (opcional)
+    #[arg(short, long)]
+    tokenizer: Option<String>,
+
+    /// Longitud mínima de texto por línea
+    #[arg(long, default_value_t = 10)]
+    min_len: usize,
+}
+
+#[derive(Args, Debug)]
+struct AuditArgs {
+    /// Archivo del modelo a auditar (.flat)
+    model: String,
+
+    /// Auditar entropía y distribución de centroides
+    #[arg(long, default_value_t = true)]
+    entropy: bool,
+
+    /// Verificar presencia de valores anómalos (NaN/Inf)
+    #[arg(long, default_value_t = true)]
+    check_nan: bool,
 }
 
 #[derive(Args, Debug)]
@@ -325,9 +389,40 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
             Ok(())
         }
-        Some(Commands::Bench(bench_args)) => {
+        Some(Commands::Benchmark(bench_args)) => {
             let model_path = resolve_default_model(bench_args.model);
-            run_benchmark(&model_path, &bench_args.prompt, bench_args.tokens)?;
+            _impl::io::cli_tools::benchmark_cmd(
+                &model_path,
+                &bench_args.prompt,
+                bench_args.tokens,
+                bench_args.corpus.as_deref(),
+            )?;
+            Ok(())
+        }
+        Some(Commands::ExportFlat(export_args)) => {
+            _impl::io::cli_tools::export_flat_cmd(
+                &export_args.input,
+                &export_args.output,
+                export_args.tokenizer.as_deref(),
+                export_args.quant_format,
+            )?;
+            Ok(())
+        }
+        Some(Commands::DatasetBuild(dataset_args)) => {
+            _impl::io::cli_tools::dataset_build_cmd(
+                &dataset_args.inputs,
+                &dataset_args.output,
+                dataset_args.tokenizer.as_deref(),
+                dataset_args.min_len,
+            )?;
+            Ok(())
+        }
+        Some(Commands::Audit(audit_args)) => {
+            _impl::io::cli_tools::audit_cmd(
+                &audit_args.model,
+                audit_args.entropy,
+                audit_args.check_nan,
+            )?;
             Ok(())
         }
         Some(Commands::Epoch(epoch_args)) => {
@@ -400,57 +495,7 @@ fn run_single_prompt(
     Ok(())
 }
 
-fn run_benchmark(
-    model_path: &str,
-    prompt: &str,
-    max_tokens: usize,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    println!("\n🧬 ========================================================");
-    println!("⏱️  GAJE HELIX — Benchmark de Inferencia y Rendimiento");
-    println!("========================================================\n");
-    println!("📦 Modelo Evaluado: {}", model_path);
 
-    let t0 = Instant::now();
-    let (mut llm, tokenizer) = repl::load_model_and_tokenizer(model_path)?;
-    let load_time_ms = t0.elapsed().as_secs_f64() * 1000.0;
-
-    println!("   • Tiempo de Carga Mmap: {:.2} ms", load_time_ms);
-
-    let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", prompt);
-    let prompt_tokens_u32 = tokenizer.encode(&chat_prompt, false).map_err(|e| e.to_string())?;
-    let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
-
-    let gen_t0 = Instant::now();
-    let eos_ids = vec![2, 0];
-    let generated_tokens = llm.generate_native_core(
-        prompt_tokens,
-        max_tokens,
-        0.0,
-        1.15,
-        eos_ids,
-    ).map_err(|e| format!("Error en benchmark: {}", e))?;
-    let gen_time = gen_t0.elapsed().as_secs_f64();
-
-    let gen_u32: Vec<u32> = generated_tokens.into_iter().map(|t| t as u32).collect();
-    let raw_reply = tokenizer.decode(&gen_u32, true).unwrap_or_default();
-
-    let clean = raw_reply
-        .replace("<|im_end|>", "")
-        .replace("<|im_start|>", "")
-        .replace("<|endoftext|>", "")
-        .trim()
-        .to_string();
-
-    let token_count = gen_u32.len();
-    let tps = token_count as f64 / gen_time.max(0.001);
-
-    println!("   • Tokens Generados:     {}", token_count);
-    println!("   • Tiempo de Generación: {:.3} s", gen_time);
-    println!("   • Throughput (TPS):     \x1b[1;32m{:.2} tokens/s\x1b[0m", tps);
-    println!("   • Muestra de Salida:    \"{}\"", clean.chars().take(80).collect::<String>());
-    println!("\n========================================================\n");
-    Ok(())
-}
 
 fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut mgr = match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, 512) {

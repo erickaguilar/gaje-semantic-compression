@@ -1,6 +1,6 @@
 # 🧬 GAJE Semantic Compression — Protocolo Global de Desarrollo y Guía para Agentes
 
-[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](AGENTS.en.md)
+[![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](AGENTS.en.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](AGENTS.zh.md)
 
 Este archivo define la **descripción global del proyecto**, la arquitectura del repositorio y los **estándares operativos y técnicos obligatorios** tanto para desarrolladores como para agentes de Inteligencia Artificial (Antigravity, Claude, Gemini, Copilot, etc.).
 

@@ -1,6 +1,6 @@
 # 🧬 GAJE Semantic Compression — Global Development Protocol & AI Agent Guide
 
-[![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](AGENTS.md)
+[![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](AGENTS.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](AGENTS.zh.md)
 
 This document defines the **global project description**, repository architecture, and the **mandatory operational and technical standards** for human developers and Artificial Intelligence agents (Antigravity, Claude, Gemini, Copilot, etc.).
 

@@ -48,15 +48,13 @@ que hoy orquestan los `.py` más importantes. Estructura CLI objetivo:
 
 ```text
 gaje-cli
-├── <model.gaje|.gguf> --prompt "..."        # inferencia/generación (ya existe)
-├── --import <gguf> --output <out.gaje>      # import GGUF (ya existe)
-├── --inspect <model>                        # metadatos (ya existe)
-├── --eval <corpus>                          # perplejidad (ya existe)
-├── --tokenize <text>                        # tokenizar (ya existe)
-├── --evolve "<target>" --gens N             # evolución (ya existe)
-├── --train <dataset> --epochs N             # entrenamiento (ya existe)
-├── ingest --model <m> --file <doc>          # DNI ingest (ya existe)
-├── --iqat --teacher <gguf> --teacher-tok <tok>  # IQAT (ya existe)
+├── chat                                     # REPL interactivo en terminal (ya existe)
+├── serve [--port 8080]                      # Servidor HTTP nativo con Web UI Chat embebida (Zero-Disk)
+├── doctor                                   # Diagnóstico de hardware y SIMD (ya existe)
+├── models [--inspect <m>]                   # Catálogo e inspección estructural (ya existe)
+├── pull <model>                             # Descarga nativa multi-stream (ya existe)
+├── bench                                    # Benchmark TTFT y velocidad (ya existe)
+├── epoch                                    # Gestión de épocas .gmem v2 (ya existe)
 │
 └── (NUEVO) subcomandos de utilidad para reemplazar scripts clave:
     ├── export-flat <model> --output <out.flat>   # reemplaza export_*.py
@@ -65,59 +63,86 @@ gaje-cli
     └── audit <model> [--coherence] [--entropy]   # reemplaza los *audit*.py / check_*.py
 ```
 
-## 4. Fases y esfuerzo estimado
+## 4. Arquitectura de Web UI Embebida (Chat Exclusivo)
 
-### Fase 1 — Verificar/consolidar el single-binary (esfuerzo BAJO, ~0.5-1 día)
-- Confirmar `cargo build --release --bin gaje-cli` y ejecutar el flujo end-to-end
-  (import GGUF → generar → evaluar) sin Python.
-- `cargo test --lib` (26 tests) + `cargo check --features python` como regresión.
-- Documentar el binario como única pieza de producción.
+Para garantizar un binario completamente autocontenido y liviano que pueda distribuirse y ejecutarse en cualquier entorno sin requerir carpetas externas de assets:
 
-### Fase 2 — Subcomandos de utilidad (esfuerzo MEDIO, ~2-4 días)
-- Añadir al CLI: `export-flat`, `benchmark`, `dataset-build`, `audit`.
-- Reutilizar lógica ya existente en Rust:
-  - Export flat: `io/flat_writer.rs` (`save_genomic_model` / `GajeFlatFileWriter`).
-  - Benchmark/PPL: lógica ya en `gaje-cli.rs` (eval) y `compute/metrics`.
-  - Dataset: tokenizar + normalizar texto (crédito a `GajeTokenizer`).
-  - Audit: `compute/math` (entropías, MSE, similitud) y `core/index`.
-- Implementar un dispatcher de subcomandos simple (sin crate nuevo, `match` sobre args).
+### 4.1 Alcance del Asset Embedding:
+* **Incluido (Core Chat):**
+  * `index.html` (interfaz principal de chat, HUD de telemetría y configuración).
+  * `manifest.json` y `sw.js` (PWA / Service Worker).
+  * `static/css/` (estilos base, chat, temas Y2K / Scandinavian).
+  * `static/js/` (lógica de streaming, chat y renderizado de telemetría).
+  * `static/icons/` (sprites SVG y favicon).
+  * `static/wasm/` (runtimes WebAssembly livianos si aplica).
+* **Excluido explícitamente (Reducción de huella y separación de responsabilidades):**
+  * `docs.html` (centro de documentación interactiva).
+  * `architecture.html` y `architecture_graph.json` (visualizador de grafos).
+  * Scripts Python del servidor backend heredado (`server.py`, `model_manager.py`, etc.).
+  * Próximas páginas auxiliares o herramientas de análisis exploratorio.
 
-### Fase 3 — Sustituir los `.py` de flujo de trabajo (esfuerzo MEDIO-ALTO, ~1 semana)
-- Mapear los `.py` de `scripts/` a subcomandos CLI; marcar como obsoletos los
-  cubiertos.
-- `scripts/*.sh` existentes se reescriben para llamar solo a `gaje-cli` en vez de
-  `python train_*.py`.
+### 4.2 Mecanismo de Despacho Híbrido (`src/server/static_files.rs`):
+1. **Modo Producción / Autónomo (Memoria Directa):**
+   * Se compila con `rust-embed` filtrando los archivos de `examples/ui/web_ui/` permitidos.
+   * Si no se especifica `--static-dir` o la ruta física no existe, el servidor despacha los recursos directamente desde la memoria (`.rodata`), con latencia cero y sin dependencias de disco.
+2. **Modo Desarrollo (Disco Local):**
+   * Si se proporciona una ruta válida en `--static-dir` (o se detecta el entorno local de desarrollo), el servidor prioriza la lectura desde el sistema de archivos para permitir recarga en vivo de estilos y scripts.
+3. **Restricción de Rutas:**
+   * Cualquier petición a `/docs`, `/architecture` o recursos excluidos devolverá `404 Not Found` en el servidor embebido estándar de producción.
 
-### Fase 4 — Migrar la suite de validación (esfuerzo ALTO, continuo)
-- `tests/*.py` y `benchmarks/*.py` (55 que importan `_impl`) se migran a:
-  - `cargo test` (tests Rust), o
-  - subcomandos `benchmark`/`audit` del binario.
-- Los experimentos de investigación que usan PyO3 (MCTS, Monte Carlo, topología)
-  **se conservan en Python** como herramientas opcionales, documentadas como tal.
+---
 
-## 5. Criterio de "hecho" (Definition of Done)
-- [ ] `gaje-cli` (release) ejecuta los flujos de producción sin Python presente.
-- [ ] `python/` y `scripts/` ya no son requisito para build/export/validación core.
-- [ ] La suite de validación principal es `cargo test` + subcomandos `benchmark`/`audit`.
-- [ ] README/INDEX documentan `gaje-cli` como la pieza única de producción y a los
-      `.py` restantes como herramientas opcionales de investigación.
+## 5. Fases y esfuerzo estimado
 
-## 6. Riesgos y mitigaciones
-- **Regresión de paridad:** los `.py` de benchmark comparan contra HF/torch.
-  Mitigación: mantener esos como referencia mientras se valida el subcomando
-  `benchmark` contra los mismos umbrales.
-- **Funcionalidad no cubierta por el CLI:** algunos scripts hacen tareas muy
-  específicas (download HF, topología). Mitigación: conservarlos en Python y
-  documentarlos, no bloquear la migración core.
-- **Boundary de I/O:** los scripts leen/escriben `.flat`, `.gaje`, gguf, bases redb.
-  Mitigación: todos esos formatos ya tienen lectores/escritores Rust
-  (`io/`), solo falta exponerlos vía subcomandos.
+### Fase 1 — Servidor Autónomo y Web UI Embebida de Chat (✅ COMPLETADA)
+- [x] Integrar `rust-embed` en `src/server/` con inclusión del Chat (`index.html`, `static/`, PWA).
+- [x] Adaptar `src/server/static_files.rs` para servir desde memoria con fallback transparente a disco.
+- [x] Probar ejecución de `gaje-cli serve` en un directorio aislado sin carpetas de assets (`HTTP 200 OK` en memoria, `HTTP 404` en `/docs`).
 
-## 7. Anexo: inventario rápido
+### Fase 2 — Subcomandos de utilidad CLI (✅ COMPLETADA)
+- [x] Añadir al CLI: `export-flat`, `benchmark`, `dataset-build`, `audit`.
+- [x] Reutilizar lógica nativa en Rust:
+  - `export-flat`: serializador zero-copy mmap SIMD 64B (`src/io/flat_writer.rs`).
+  - `benchmark`: cálculo de TTFT, TPS y Perplejidad PPL sobre corpus de texto/jsonl (`src/io/cli_tools.rs`).
+  - `dataset-build`: normalizador de pares conversacionales/instrucciones con tokenización GTOK (`src/io/cli_tools.rs`).
+  - `audit`: verificación exhaustiva de 0 NaNs/Infs, consistencia estructural y entropía (`src/io/cli_tools.rs`).
+- [x] Implementar dispatcher y argumentos clap tipados en `src/bin/gaje-cli.rs`.
+
+### Fase 3 — Sustituir los `.py` de flujo de trabajo (✅ COMPLETADA)
+- [x] Mapear los `.py` de `scripts/` a subcomandos CLI (`export-flat`, `pull`, `models`, `benchmark`, `dataset-build`, `audit`, `doctor`).
+- [x] Crear `scripts/README.md` con la matriz integral de equivalencias y marcar scripts obsoletos con avisos de deprecación.
+- [x] `scripts/*.sh` (ej. `download_hf_model.sh`) actualizados para priorizar el motor nativo `gaje-cli`.
+
+### Fase 4 — Migrar la suite de validación (✅ COMPLETADA)
+- [x] Implementar tests de integración nativos en Rust (`tests/cli_standalone_test.rs`) para validar CLI, dataset-build, doctor y models.
+- [x] Reemplazar validaciones de producción dependientes de Python por `gaje-cli benchmark` y `gaje-cli audit`.
+- [x] Documentar `gaje-cli` en `README.md` y `scripts/README.md` como el artefacto y punto de entrada soberano y único de producción.
+
+---
+
+## 6. Criterio de "hecho" (Definition of Done) — 100% Cumplido
+- [x] `gaje-cli serve` levanta la Web UI de Chat en cualquier máquina/directorio sin requerir archivos externos en disco.
+- [x] `docs.html`, `architecture.html` y páginas pesadas quedan excluidas del empaquetado del binario.
+- [x] `gaje-cli` (release) ejecuta los flujos de producción e inferencia sin Python presente.
+- [x] `python/` y `scripts/` ya no son requisito para build/export/validación core (reemplazados por `gaje-cli`).
+- [x] README/INDEX documentan `gaje-cli` como la pieza única de producción.
+
+---
+
+## 7. Riesgos y mitigaciones
+- **Tamaño del binario:** Al excluir `docs.html`, `architecture.html` y datasets JSON de grafos, el incremento en el tamaño del ejecutable por embeber el chat es mínimo (< 500 KB).
+- **Regresión de paridad:** Los `.py` de benchmark comparan contra HF/torch. Mitigación: mantener esos como referencia mientras se valida el subcomando `benchmark`.
+- **Boundary de I/O:** Todos los formatos binarios (`.flat`, `.gaje`, gguf, `.gmem`) ya tienen lectores/escritores Rust en `src/io/`.
+
+---
+
+## 8. Anexo: inventario rápido
 | Área | # scripts | Depende de `_impl` | Acción propuesta |
 |---|---|---|---|
 | `src/` (motor) | — | no | Ya Rust, sin cambios |
+| `src/server/` (Web UI Chat) | — | no | Embebido en binario (`rust-embed`) |
 | `python/` | 23 | mayormente | Migrar flujo; investigar en Python |
 | `scripts/` | ~130 | muchos | Subcomandos CLI + obsoletos |
 | `tests/` | mix | ~55 | Migrar a `cargo test` / subcomandos |
 | `benchmarks/` | decenas | muchos | Subcomando `benchmark`; investigación en Python |
+

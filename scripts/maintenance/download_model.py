@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-🧬 GAJE — Script CLI de Descarga Inteligente de Modelos (Optimizado para Android / Termux)
-
-Uso:
-  python scripts/download_model.py --list
-  python scripts/download_model.py nano
-  python scripts/download_model.py prime
-  python scripts/download_model.py --check-system
+⚠️ OBSOLETO / DEPRECATED: Usa `gaje-cli pull` (Descargador Nativo Multi-Stream en Rust)
+Ejemplos:
+  gaje-cli pull pico
+  gaje-cli pull nano
+  gaje-cli pull prime
+  gaje-cli pull ultra
 """
 
 import sys

@@ -1,3 +1,8 @@
+# =============================================================================
+# ⚠️ OBSOLETO / DEPRECATED: Usa `gaje-cli export-flat` (Rust Nativo Soberano)
+# Ejemplo: gaje-cli export-flat modelo.gguf -o modelo.flat
+# =============================================================================
+
 import os
 import sys
 import gc

@@ -1,6 +1,25 @@
 # 📋 Changelog — GAJE Protocol
 
-[![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
+[![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
+
+## [1.7.1-alpha] - 2026-08-29
+### Added
+- **Sovereign Rust Single-Binary (`gaje-cli`) & Embedded Web UI**:
+  - `rust-embed` integrated to package lightweight `index.html` (7.2 KB) and assets into executable `.rodata` memory, removing external disk runtime dependencies.
+  - Native HTTP server (`gaje-cli serve`) with hybrid dispatch: direct zero-disk memory serving in production and live hot-reloading in local development.
+- **New Sovereign CLI Subcommands**:
+  - `gaje-cli export-flat`: Zero-copy exporter with Rayon multithreading and SIMD 64-byte alignment into `.flat` v2 format with embedded GTOK tokenizer.
+  - `gaje-cli benchmark` (alias: `bench`): Performance suite measuring mmap cold-start latency, TTFT, throughput (tokens/s), and computing Perplexity (PPL) / Cross-Entropy over text/JSONL evaluation corpora.
+  - `gaje-cli dataset-build`: Multi-format conversation and instruction dataset builder (instruction/response, user/assistant) exporting clean JSONL.
+  - `gaje-cli audit`: Deep mathematical tensor auditing certifying `0 NaN / 0 Inf` and centroid entropy health.
+- **Native Rust Validation Suite & Migration Reference**:
+  - Added new integration test `tests/cli_standalone_test.rs` validating all CLI commands without Python dependencies.
+  - Created `scripts/README.md` containing the migration matrix mapping legacy Python scripts to native `gaje-cli` subcommands.
+  - Updated `README.md` with quickstart guides for `gaje-cli`.
+
+### Changed
+- Excluded auxiliary pages (`docs.html`, `architecture.html`) from binary bundle to preserve ultra-lightweight footprint (<500 KB asset payload).
+- Modularized `index.html` from 22.5 KB down to 7.2 KB via lazy-loaded metrics monitor modal.
 
 ## [1.7.0-alpha] - 2026-08-24
 ### Added
