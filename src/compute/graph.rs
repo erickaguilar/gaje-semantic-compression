@@ -55,8 +55,11 @@ impl AgentState {
 pub enum StepResult {
     /// Continua hacia el nodo indice `next` con el estado transformado.
     Next { next: usize, state: AgentState },
-    /// Ejecuta varios nodos en paralelo sobre estados derivados y recombina.
-    Fork(Vec<(usize, AgentState)>),
+    /// Ejecuta varios nodos en paralelo sobre estados derivados y recombina hacia `next` (o termina si es None).
+    Fork {
+        branches: Vec<(usize, AgentState)>,
+        next: Option<usize>,
+    },
     /// Termina la ejecucion del grafo.
     End(AgentState),
 }
@@ -138,9 +141,8 @@ impl StateGraph {
                     st = state;
                     current = next;
                 }
-                StepResult::Fork(branches) => {
-                    // Ejecucion paralela real de ramas; los estados resultantes
-                    // se fusionan en orden (join/reduce trivial en 4a).
+                StepResult::Fork { branches, next } => {
+                    // Ejecución paralela de ramas con Rayon
                     use rayon::prelude::*;
                     let merged: Vec<AgentState> = branches
                         .into_par_iter()
@@ -148,6 +150,9 @@ impl StateGraph {
                             let mut cur = node_idx;
                             let mut s = s;
                             for _ in 0..64 {
+                                if cur >= self.nodes.len() {
+                                    break;
+                                }
                                 match self.nodes[cur].process(s.clone()) {
                                     Ok(StepResult::End(done)) => return done,
                                     Ok(StepResult::Next { next, state }) => {
@@ -161,7 +166,16 @@ impl StateGraph {
                         })
                         .collect();
                     st = merge_states(merged);
-                    // permanece en el nodo actual despues del join
+
+                    match next {
+                        Some(nxt) => {
+                            if nxt >= self.nodes.len() {
+                                return Err(GraphError::NodeIndex(nxt));
+                            }
+                            current = nxt;
+                        }
+                        None => return Ok((st, transitions)),
+                    }
                 }
             }
             st.touch();
@@ -182,6 +196,218 @@ fn merge_states(states: Vec<AgentState>) -> AgentState {
     out
 }
 
+// --- Nodos Especializados del Enjambre Agéntico (Fase 4b / 4c / 4d) ----------
+
+/// Nodo de enrutamiento por reglas deterministas (H3 baseline).
+pub struct RuleRouterNode {
+    pub name: String,
+    pub routes: Vec<(Vec<String>, usize)>, // (Keywords, Destino)
+    pub default_next: usize,
+}
+
+impl RuleRouterNode {
+    pub fn new(name: impl Into<String>, default_next: usize) -> Self {
+        Self {
+            name: name.into(),
+            routes: Vec::new(),
+            default_next,
+        }
+    }
+
+    pub fn add_route(mut self, keywords: Vec<String>, target_node: usize) -> Self {
+        self.routes.push((keywords, target_node));
+        self
+    }
+}
+
+impl AgentNode for RuleRouterNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+        let query_lower = state.user_query.to_lowercase();
+
+        for (keywords, target) in &self.routes {
+            if keywords.iter().any(|kw| query_lower.contains(&kw.to_lowercase())) {
+                state.intent = Some(self.name.clone());
+                return Ok(StepResult::Next {
+                    next: *target,
+                    state,
+                });
+            }
+        }
+
+        Ok(StepResult::Next {
+            next: self.default_next,
+            state,
+        })
+    }
+}
+
+/// Nodo de recuperación contextual sobre el Island Model (.gmem).
+pub struct GmemRetrievalNode {
+    pub name: String,
+    pub orchestrator: Arc<std::sync::RwLock<crate::compute::island::IslandOrchestrator>>,
+    pub top_k: usize,
+    pub next: usize,
+}
+
+impl GmemRetrievalNode {
+    pub fn new(
+        name: impl Into<String>,
+        orchestrator: Arc<std::sync::RwLock<crate::compute::island::IslandOrchestrator>>,
+        top_k: usize,
+        next: usize,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            orchestrator,
+            top_k,
+            next,
+        }
+    }
+}
+
+impl AgentNode for GmemRetrievalNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+        let orch = self.orchestrator.read().map_err(|e| e.to_string())?;
+
+        // Generar vector hash pseudo-semántico rápido para la consulta
+        let dim = orch.dim as usize;
+        let mut query_vec = vec![0.0f32; dim];
+        for (i, b) in state.user_query.bytes().enumerate() {
+            query_vec[i % dim] += (b as f32) / 255.0;
+        }
+
+        let results = orch.retrieve_context(&query_vec, self.top_k);
+        for res in results {
+            state.context.push(format!("[{}] {}", res.niche.as_str(), res.text));
+        }
+
+        Ok(StepResult::Next {
+            next: self.next,
+            state,
+        })
+    }
+}
+
+/// Nodo de ejecución de herramientas nativas Rust registradas (Tool Calling seguro).
+pub struct ToolNode {
+    pub name: String,
+    pub handler: Arc<dyn Fn(&AgentState) -> Result<String, String> + Send + Sync>,
+    pub next: usize,
+}
+
+impl ToolNode {
+    pub fn new<F>(name: impl Into<String>, next: usize, handler: F) -> Self
+    where
+        F: Fn(&AgentState) -> Result<String, String> + Send + Sync + 'static,
+    {
+        Self {
+            name: name.into(),
+            handler: Arc::new(handler),
+            next,
+        }
+    }
+}
+
+impl AgentNode for ToolNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+        let output = (self.handler)(&state)?;
+        state.tool_outputs.push((self.name.clone(), output));
+
+        Ok(StepResult::Next {
+            next: self.next,
+            state,
+        })
+    }
+}
+
+/// Nodo que invoca un modelo genómico (`GenomicLLM`) compartido zero-copy.
+pub struct GajeModelNode {
+    pub name: String,
+    pub llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+    pub prompt_role: String,
+    pub max_tokens: usize,
+    pub temperature: f32,
+    pub next: Option<usize>, // None si es el sintetizador final
+}
+
+impl GajeModelNode {
+    pub fn new(
+        name: impl Into<String>,
+        llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+        prompt_role: impl Into<String>,
+        max_tokens: usize,
+        temperature: f32,
+        next: Option<usize>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            llm,
+            prompt_role: prompt_role.into(),
+            max_tokens,
+            temperature,
+            next,
+        }
+    }
+}
+
+impl AgentNode for GajeModelNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+
+        let mut prompt_tokens: Vec<usize> = state
+            .user_query
+            .bytes()
+            .take(64)
+            .map(|b| (b % 128) as usize)
+            .collect();
+
+        if prompt_tokens.is_empty() {
+            prompt_tokens = vec![1];
+        }
+
+        let mut llm_guard = self.llm.write().map_err(|e| e.to_string())?;
+        let eos_ids = vec![0, 2];
+        let gen_res = llm_guard.generate_native_core(
+            prompt_tokens,
+            self.max_tokens,
+            self.temperature,
+            1.05,
+            eos_ids,
+        );
+
+        let generated_text = match gen_res {
+            Ok(toks) => format!("[{}] Síntesis completada con {} tokens.", self.name, toks.len()),
+            Err(e) => format!("[{}] Error: {}", self.name, e),
+        };
+
+        state.response = Some(generated_text);
+
+        match self.next {
+            Some(n) => Ok(StepResult::Next { next: n, state }),
+            None => Ok(StepResult::End(state)),
+        }
+    }
+}
+
 // --- Nodos dummy para benchmarks y tests (trabajo CPU minimo real) ----------
 
 /// Nodo que toca el estado y avanza al siguiente indice (o termina en el ultimo).
@@ -193,11 +419,10 @@ pub struct ChainNode {
 
 impl AgentNode for ChainNode {
     fn name(&self) -> &str {
-        &self.label
+        &self.name_str()
     }
     fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
         state.touch();
-        // Convencion de cadena: next == idx marca el nodo terminal.
         if self.next == self.idx {
             Ok(StepResult::End(state))
         } else {
@@ -206,6 +431,12 @@ impl AgentNode for ChainNode {
                 state,
             })
         }
+    }
+}
+
+impl ChainNode {
+    fn name_str(&self) -> &str {
+        &self.label
     }
 }
 
@@ -290,6 +521,56 @@ mod tests {
             g.run(0, AgentState::default()),
             Err(GraphError::MaxSteps(100))
         ));
+    }
+
+    #[test]
+    fn test_rule_router_and_tool_node_pipeline() {
+        let mut g = StateGraph::new();
+        // Node 0: Echo (terminal / fallback)
+        let echo_node = EchoNode { next: None };
+        let echo_idx = g.add_node(Arc::new(echo_node));
+
+        // Node 1: Tool (calc) -> Echo (echo_idx = 0)
+        let tool_node = ToolNode::new("calculator", echo_idx, |st| {
+            Ok(format!("computed({})", st.user_query))
+        });
+        let tool_idx = g.add_node(Arc::new(tool_node));
+
+        // Node 2: Router
+        let router = RuleRouterNode::new("intent_router", echo_idx)
+            .add_route(vec!["calcular".to_string(), "sumar".to_string()], tool_idx);
+        let router_idx = g.add_node(Arc::new(router));
+
+        // 1. Query que coincide con regla
+        let (st1, _) = g.run(router_idx, AgentState::with_query("por favor calcular 2+2")).unwrap();
+        assert_eq!(st1.tool_outputs.len(), 1);
+        assert_eq!(st1.tool_outputs[0].0, "calculator");
+        assert!(st1.tool_outputs[0].1.contains("computed(por favor calcular 2+2)"));
+
+        // 2. Query que cae en default
+        let (st2, _) = g.run(router_idx, AgentState::with_query("hola mundo")).unwrap();
+        assert_eq!(st2.tool_outputs.len(), 0);
+        assert_eq!(st2.context.len(), 1);
+        assert_eq!(st2.context[0], "echo:hola mundo");
+    }
+
+    #[test]
+    fn test_gmem_retrieval_node_execution() {
+        use crate::compute::island::{IslandNiche, IslandOrchestrator};
+        let mut orch = IslandOrchestrator::new(16);
+        orch.add_memory(IslandNiche::Episodic, 1, vec![0.5; 16], "Memoria alfa".to_string());
+        let orch_arc = Arc::new(std::sync::RwLock::new(orch));
+
+        let mut g = StateGraph::new();
+        let ret_node = GmemRetrievalNode::new("rag_node", orch_arc, 2, 1);
+        let echo_node = EchoNode { next: None };
+
+        let ret_idx = g.add_node(Arc::new(ret_node));
+        let _echo_idx = g.add_node(Arc::new(echo_node));
+
+        let (st, _) = g.run(ret_idx, AgentState::with_query("consulta semantica")).unwrap();
+        assert!(!st.context.is_empty());
+        assert!(st.context[0].contains("Memoria alfa"));
     }
 }
 
