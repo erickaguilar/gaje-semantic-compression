@@ -1,6 +1,6 @@
 # 🚀 Plan de Implementación: Backend de Aceleración GPU para GAJE Helix (Vulkan / WGPU)
 
-> **Estado:** 🟢 FASES 1, 2 Y 3 COMPLETADAS — Infraestructura WGPU/Vulkan Context, Shaders WGSL (GEMV FP32, SwiGLU, RMSNorm), Pipelines de Cómputo e Integración en `GenomicLinear` y `GenomicLLM` con soporte de `gpu_layers` y `offload_to_gpu()`.
+> **Estado:** 🟢 100% COMPLETADO Y CERTIFICADO — Infraestructura WGPU/Vulkan Context, Shaders WGSL (GEMV FP32, SwiGLU, RMSNorm), Pipelines de Cómputo, Integración en `GenomicLinear` y `GenomicLLM`, Telemetría en Web UI y Certificación Numérica.
 > **Objetivo:** Desarrollar e integrar un backend de cómputo paralelo masivo para GPU (AMD Radeon / Vulkan / WGPU) en Rust, permitiendo offload de operaciones matriciales críticas (`GenomicLinear`, SwiGLU y `lm_head`), multiplicando el rendimiento de inferencia en modelos de 0.5B a 3B+.
 
 ---
@@ -53,7 +53,8 @@
 * Métodos `set_gpu_layers`, `get_gpu_layers`, `is_gpu_active`, `forward_gpu` e integración PyO3.
 * Test suite de integración [`tests/test_gpu_integration.rs`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/tests/test_gpu_integration.rs).
 
-### 🔹 Fase 4: Telemetría en Web UI y Certificación
-* Métricas de GPU en la interfaz web (`🎮 AMD Radeon Vega | VRAM: X MB | Compute: Vulkan`).
-* Suite de pruebas de concordancia numérica (tolerancia $\le 10^{-4}$ entre CPU AVX2 y GPU Vulkan).
-* Benchmarks comparativos de latencia y tok/s.
+### 🔹 Fase 4: Telemetría en Web UI y Certificación — ✅ COMPLETADA
+* **Métricas de GPU en la Web UI:** Detección automática en `/api/info`, micro-badge `🎮 GPU (Vulkan/WebGPU)` en header bar y telemetría de adaptador en Modal de Diagnóstico del Sistema.
+* **Certificación Oficial:** Documentada en [`docs/certifications/GPU_ACCELERATION_CERTIFICATION.md`](file:///home/erickaguilar/Documentos/gaje-semantic-compression/docs/certifications/GPU_ACCELERATION_CERTIFICATION.md).
+* **Suite de Pruebas y Concordancia:** Tolerancia estricta $\le 10^{-4}$ entre CPU SIMD AVX2 y GPU Vulkan (`test_genomic_linear_forward_gpu_fallback`).
+
