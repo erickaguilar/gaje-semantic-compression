@@ -47,15 +47,18 @@ pub fn serve_static_file(
     };
 
     // Bloquear scripts de backend y rutas no públicas
-    if relative_path.ends_with(".py") || relative_path.ends_with(".pyc") || relative_path.contains("eggs") || relative_path.contains("legacy_web") {
+    if relative_path.ends_with(".py")
+        || relative_path.ends_with(".pyc")
+        || relative_path.contains("eggs")
+        || relative_path.contains("legacy_web")
+    {
         return Some(
-            Response::from_string("Recurso no permitido")
-                .with_status_code(StatusCode(403)),
+            Response::from_string("Recurso no permitido").with_status_code(StatusCode(403)),
         );
     }
 
     // Restringir páginas secundarias excluidas en el binario autónomo
-    if (chat_only || true) && (relative_path.contains("docs") || relative_path.contains("architecture")) {
+    if relative_path.contains("docs") || relative_path.contains("architecture") {
         // Solo servir si existe explícitamente en el disco (modo dev)
         if !static_root.join(relative_path).exists() {
             return Some(
@@ -81,9 +84,15 @@ pub fn serve_static_file(
                 if file.read_to_end(&mut buffer).is_ok() {
                     let mime = get_mime_type(&target_path);
                     let mut resp = Response::from_data(buffer).with_status_code(StatusCode(200));
-                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap());
-                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-                    resp.add_header(Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..]).unwrap());
+                    resp.add_header(
+                        Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap(),
+                    );
+                    resp.add_header(
+                        Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+                    );
+                    resp.add_header(
+                        Header::from_bytes(&b"Cache-Control"[..], &b"no-cache"[..]).unwrap(),
+                    );
                     return Some(resp);
                 }
             }
@@ -96,23 +105,35 @@ pub fn serve_static_file(
         use rust_embed::RustEmbed;
 
         if let Some(embedded_file) = <EmbeddedAssets as RustEmbed>::get(relative_path) {
-            let ext = Path::new(relative_path).extension().and_then(|e| e.to_str()).unwrap_or("");
+            let ext = Path::new(relative_path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("");
             let mime = get_mime_type_str(ext);
-            let mut resp = Response::from_data(embedded_file.data.to_vec()).with_status_code(StatusCode(200));
+            let mut resp =
+                Response::from_data(embedded_file.data.to_vec()).with_status_code(StatusCode(200));
             resp.add_header(Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).unwrap());
-            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
-            resp.add_header(Header::from_bytes(&b"Cache-Control"[..], &b"public, max-age=3600"[..]).unwrap());
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Cache-Control"[..], &b"public, max-age=3600"[..]).unwrap(),
+            );
             return Some(resp);
         }
 
         // SPA Fallback a index.html embebido si la ruta no tiene extensión
         if !relative_path.contains('.') {
             if let Some(index_file) = <EmbeddedAssets as RustEmbed>::get("index.html") {
-                let mut resp = Response::from_data(index_file.data.to_vec()).with_status_code(StatusCode(200));
+                let mut resp =
+                    Response::from_data(index_file.data.to_vec()).with_status_code(StatusCode(200));
                 resp.add_header(
-                    Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap(),
+                    Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
+                        .unwrap(),
                 );
-                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                resp.add_header(
+                    Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+                );
                 return Some(resp);
             }
         }
