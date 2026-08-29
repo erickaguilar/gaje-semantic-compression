@@ -72,12 +72,13 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos ultra-ligeros de 32 MB.
 * **[STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md](plans/STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md)**: Oportunidades estratégicas de alto rendimiento (WebGPU, sub-4bit y ecosistema).
 * **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
-* **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/GAJE_BENCHMARK_SUITE_PLAN.md)**: Especificación de la suite continua de benchmarks.
-* **[QUALITY_EVAL_PROTOCOL.md](plans/QUALITY_EVAL_PROTOCOL.md)**: Protocolo de evaluación de calidad semántica y perplejidad.
 * **[QUALITY_EXPORT_PLAN.md](plans/QUALITY_EXPORT_PLAN.md)**: Plan de exportación calibrada con preservación de gradientes.
 * **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos del ciclo de desarrollo.
 
 ### ✅ Planes Implementados y Certificados (`docs/plans/completed/`)
+* **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/completed/GAJE_BENCHMARK_SUITE_PLAN.md)**: Suite unificada y automatizada de benchmarks y métricas continuas (`gaje-cli benchmark`).
+* **[EVAL_HARNESS_DESIGN.md](plans/completed/EVAL_HARNESS_DESIGN.md)**: Arquitectura del Eval Harness multidimensional (Factual, Anti-Loops, Hardware, PPL).
+* **[QUALITY_EVAL_PROTOCOL.md](plans/completed/QUALITY_EVAL_PROTOCOL.md)**: Protocolo de evaluación de calidad semántica, diversidad léxica $d_1/d_2$ y detección de bucles.
 * **[GAJE_CLI_IMPROVEMENTS_PLAN.md](plans/completed/GAJE_CLI_IMPROVEMENTS_PLAN.md)**: `clap` v4, REPL interactivo y herramienta `gaje-cli doctor`.
 * **[BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md](plans/completed/BOTTLENECK_OPTIMIZATION_DNF_TECHNIQUES_PLAN.md)**: Multi-Stream WASM, exportación tensorial paralela en Rust y zero-copy mmap.
 * **[GAJE_CLI_SERVE_NATIVE_PLAN.md](plans/completed/GAJE_CLI_SERVE_NATIVE_PLAN.md)**: Servidor HTTP nativo en Rust con SSE y compatibilidad API OpenAI.

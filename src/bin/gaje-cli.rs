@@ -197,21 +197,29 @@ struct BenchArgs {
     #[arg(short, long)]
     model: Option<String>,
 
-    /// Prompt de evaluación
-    #[arg(
-        short,
-        long,
-        default_value = "Explica en pocas palabras qué es la compresión semántica genómica."
-    )]
-    prompt: String,
+    /// Suite de evaluación: 'quick', 'full', 'harness', 'reasoning'
+    #[arg(long, default_value = "full")]
+    suite: String,
 
-    /// Número de tokens a generar
+    /// Prompt de evaluación personalizado (opcional)
+    #[arg(short, long)]
+    prompt: Option<String>,
+
+    /// Número de tokens a generar por prueba
     #[arg(short, long, default_value_t = 64)]
     tokens: usize,
 
     /// Archivo de texto o JSONL para cálculo de perplejidad
     #[arg(long)]
     corpus: Option<String>,
+
+    /// Formato de salida: 'console', 'markdown', 'json'
+    #[arg(short, long, default_value = "console")]
+    format: String,
+
+    /// Ruta de archivo para exportar el reporte (ej. docs/reports/BENCHMARK_OFFICIAL.md)
+    #[arg(short, long)]
+    output: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -422,9 +430,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             let model_path = resolve_default_model(bench_args.model);
             _impl::io::cli_tools::benchmark_cmd(
                 &model_path,
-                &bench_args.prompt,
+                &bench_args.suite,
+                bench_args.prompt.as_deref(),
                 bench_args.tokens,
                 bench_args.corpus.as_deref(),
+                &bench_args.format,
+                bench_args.output.as_deref(),
             )?;
             Ok(())
         }

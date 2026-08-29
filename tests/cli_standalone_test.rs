@@ -58,3 +58,26 @@ fn test_cli_models_listing() {
         assert!(res.is_ok());
     }
 }
+
+#[test]
+fn test_cli_benchmark_suite() {
+    let model_path = "models/production/gaje_pico_135m.flat";
+    let report_out = "/tmp/test_gaje_benchmark_report.md";
+    if Path::new(model_path).exists() {
+        let res = _impl::io::cli_tools::benchmark_cmd(
+            model_path,
+            "quick",
+            Some("¿Qué es la memoria asociativa?"),
+            16,
+            None,
+            "markdown",
+            Some(report_out),
+        );
+        assert!(res.is_ok(), "benchmark_cmd falló: {:?}", res.err());
+        assert!(Path::new(report_out).exists());
+        let md_content = std::fs::read_to_string(report_out).unwrap();
+        assert!(md_content.contains("Reporte Oficial de Benchmark & Eval Harness"));
+        assert!(md_content.contains("Throughput"));
+        let _ = std::fs::remove_file(report_out);
+    }
+}
