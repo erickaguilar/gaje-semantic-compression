@@ -63,20 +63,23 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
     }
 
     let (repo_id, filename) = match model_identifier {
-        "gaje_pico_135m.flat" | "gaje_pico_135m" | "pico" => {
-            ("erickaguilar/gaje-pico-135m", "gaje_pico_135m.flat")
+        "gaje_pico_135m.flat" | "gaje_pico_135m" | "pico" | "135m" => {
+            ("eaguilar/gaje-models", "gaje_pico_135m.flat")
         }
         "gaje_nano_0_5b.flat" | "gaje_nano_0_5b" | "nano_0_5b" | "qwen_0_5b" | "0.5b" | "qwen2.5-0.5b" => {
-            ("eaguilar/gaje-nano-0.5b", "gaje_nano_0_5b.flat")
+            ("eaguilar/gaje-models", "gaje_nano_0_5b.flat")
         }
-        "gaje_nano_1.5b.flat" | "gaje_nano_1.5b" | "nano" => {
-            ("erickaguilar/gaje-nano-1.5b", "gaje_nano_1.5b.flat")
+        "gaje_nano_1.5b.flat" | "gaje_nano_1.5b" | "nano" | "1.5b" => {
+            ("eaguilar/gaje-models", "gaje_nano_1.5b.flat")
         }
-        "gaje_prime_3b.flat" | "gaje_prime_3b" | "prime" => {
-            ("erickaguilar/gaje-prime-3b", "gaje_prime_3b.flat")
+        "gaje_coder_3b.flat" | "gaje_coder_3b" | "coder" | "coder_3b" => {
+            ("eaguilar/gaje-models", "gaje_coder_3b.flat")
         }
-        "gaje_ultra_7b.flat" | "gaje_ultra_7b" | "ultra" => {
-            ("erickaguilar/gaje-ultra-7b", "gaje_ultra_7b.flat")
+        "gaje_prime_3b.flat" | "gaje_prime_3b" | "prime" | "3b" => {
+            ("eaguilar/gaje-models", "gaje_prime_3b.flat")
+        }
+        "gaje_ultra_7b.flat" | "gaje_ultra_7b" | "ultra" | "7b" => {
+            ("eaguilar/gaje-models", "gaje_ultra_7b.flat")
         }
         "deepseek_r1_1.5b.flat" | "deepseek_r1_1.5b" | "deepseek-r1" | "r1" | "r1-1.5b" => {
             ("eaguilar/gaje-models", "deepseek_r1_distill_qwen_1.5b.flat")
@@ -103,7 +106,7 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
                 } else {
                     "model.flat"
                 };
-                let repo = format!("erickaguilar/{}", custom.trim_end_matches(".flat"));
+                let repo = format!("eaguilar/{}", custom.trim_end_matches(".flat"));
                 return (
                     format!("https://huggingface.co/{}/resolve/main/{}", repo, fname),
                     fname.to_string(),

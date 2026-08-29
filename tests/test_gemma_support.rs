@@ -57,6 +57,6 @@ fn test_downloader_aliases() {
     assert_eq!(fname_gemma, "gaje_gemma_2b.flat");
 
     let (url_nano05, fname_nano05) = resolve_model_url("qwen2.5-0.5b");
-    assert!(url_nano05.contains("eaguilar/gaje-nano-0.5b"));
+    assert!(url_nano05.contains("eaguilar/gaje-models"));
     assert_eq!(fname_nano05, "gaje_nano_0_5b.flat");
 }
