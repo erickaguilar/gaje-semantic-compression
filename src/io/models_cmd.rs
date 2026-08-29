@@ -197,3 +197,93 @@ pub fn verify_model(file_path: &Path) -> Result<(), String> {
     println!("🏆 VEREDICTO: El modelo {:?} es 100% íntegro y compatible.", file_path);
     Ok(())
 }
+
+/// Incrusta un tokenizador binario GTOK en la cabecera de un modelo .flat existente
+pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Result<(), String> {
+    use std::io::{Seek, SeekFrom, Write};
+
+    if !flat_path.exists() {
+        return Err(format!("El modelo no existe: {:?}", flat_path));
+    }
+
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(flat_path)
+        .map_err(|e| format!("Error abriendo {:?}: {}", flat_path, e))?;
+
+    let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
+    file.read_exact(&mut header_bytes).map_err(|e| e.to_string())?;
+    let mut header = FlatHeaderV2::from_bytes(&header_bytes).map_err(|e| format!("Error en cabecera: {:?}", e))?;
+
+    let tok_path: PathBuf = if let Some(p) = tokenizer_path_opt {
+        p.to_path_buf()
+    } else {
+        match header.arch_family {
+            3 | 4 => PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok"),
+            2 => PathBuf::from("models/core/tokenizers/smollm2_tokenizer.gtok"),
+            _ => {
+                let default_gtok = PathBuf::from("models/core/tokenizer.gtok");
+                if default_gtok.exists() {
+                    default_gtok
+                } else {
+                    return Err("No se especificó tokenizador y no se pudo auto-detectar".to_string());
+                }
+            }
+        }
+    };
+
+    if !tok_path.exists() {
+        return Err(format!("El tokenizador origen no existe: {:?}", tok_path));
+    }
+
+    let gtok_bytes = std::fs::read(&tok_path).map_err(|e| format!("Error leyendo tokenizador {:?}: {}", tok_path, e))?;
+
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    let gtok_offset = meta.len();
+    let gtok_len = gtok_bytes.len() as u64;
+
+    file.seek(SeekFrom::End(0)).map_err(|e| e.to_string())?;
+    file.write_all(&gtok_bytes).map_err(|e| e.to_string())?;
+
+    header.gtok_offset = gtok_offset;
+    header.gtok_len = gtok_len;
+
+    file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+    let updated_bytes: &[u8] = unsafe {
+        std::slice::from_raw_parts(&header as *const FlatHeaderV2 as *const u8, FlatHeaderV2::SIZE)
+    };
+    file.write_all(updated_bytes).map_err(|e| e.to_string())?;
+    file.flush().map_err(|e| e.to_string())?;
+
+    println!("🎉 GTOK incrustado con éxito en {:?} desde {:?} ({:.2} MB en offset {})",
+        flat_path, tok_path, gtok_len as f64 / (1024.0 * 1024.0), gtok_offset);
+    Ok(())
+}
+
+/// Escanea e inyecta automáticamente el tokenizador adecuado en todos los modelos que carezcan de GTOK
+pub fn inject_all_gtok(search_dir: &Path) -> Result<(), String> {
+    println!("\n🧬 ===========================================================================================");
+    println!("⚡ GAJE HELIX — Auto-Inyección de GTOK en Modelos Locales");
+    println!("===========================================================================================\n");
+
+    let models = list_models(search_dir)?;
+    let mut modified = 0;
+
+    for m in &models {
+        if !m.has_gtok {
+            println!("📦 Inyectando GTOK en: {} (Arquitectura: {})...", m.filename, m.arch_name);
+            match inject_gtok(&m.path, None) {
+                Ok(_) => modified += 1,
+                Err(e) => eprintln!("   ❌ Error: {}", e),
+            }
+        }
+    }
+
+    if modified == 0 {
+        println!("✨ Todos los modelos en {:?} ya cuentan con GTOK incrustado.", search_dir);
+    } else {
+        println!("\n🏆 {} modelo(s) actualizados con GTOK nativo con éxito.\n", modified);
+    }
+    Ok(())
+}

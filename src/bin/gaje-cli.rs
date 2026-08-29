@@ -114,6 +114,20 @@ enum ModelsSubcommand {
         /// Ruta al archivo .flat
         file: String,
     },
+    /// Incrusta un tokenizador GTOK en un archivo .flat existente
+    InjectGtok {
+        /// Ruta al archivo .flat
+        file: String,
+        /// Ruta al tokenizador .gtok (opcional, se auto-detecta si no se especifica)
+        #[arg(short, long)]
+        tokenizer: Option<String>,
+    },
+    /// Auto-inyecta GTOK en todos los modelos del catálogo que carezcan de él
+    InjectAll {
+        /// Directorio de búsqueda (por defecto: models/)
+        #[arg(default_value = "models")]
+        dir: String,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -224,6 +238,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 }
                 ModelsSubcommand::Verify { file } => {
                     models_cmd::verify_model(Path::new(&file))?;
+                    Ok(())
+                }
+                ModelsSubcommand::InjectGtok { file, tokenizer } => {
+                    let tok_ref = tokenizer.as_ref().map(|s| Path::new(s.as_str()));
+                    models_cmd::inject_gtok(Path::new(&file), tok_ref)?;
+                    Ok(())
+                }
+                ModelsSubcommand::InjectAll { dir } => {
+                    models_cmd::inject_all_gtok(Path::new(&dir))?;
                     Ok(())
                 }
             }
