@@ -120,7 +120,7 @@ fn default_state() -> String {
     "stable".to_string()
 }
 
-pub(crate) fn default_dni() -> String {
+pub fn default_dni() -> String {
     use chrono::Utc;
     use rand::Rng;
     let now = Utc::now().format("%Y%m%d%H%M%S").to_string();

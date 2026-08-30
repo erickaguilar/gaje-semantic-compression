@@ -20,6 +20,7 @@
 
 | Archivo | Estado Biológico | Tamaño | Rol y Descripción |
 | :--- | :--- | :---: | :--- |
+| 👑 **`max.gaje`** | **Organismo Conforme 2-Bit (Born Native)** | **11.39 MB** | **Insignia de Nacimiento Nativo**: Primer organismo nacido desde cero bajo la constelación cuaternaria $Q2\_0\_CONFORMAL$ (8 bloques, 256 dim, $A,C,G,T$). Cabe en caché L3 y opera a $38+$ tok/s sin FP32. |
 | 🧬 **`feto_genomico_v1.gaje`** | **Feto / Embrión en Desarrollo** | **2.08 GB** | **Organismo Genómico en Desarrollo**: Modelo nacido con arquitectura nativa `gaje_native` (2 bloques, 768 dim) en etapa embrionaria. Sirve como banco de pruebas para algoritmos de mutación y destilación. |
 
 ---

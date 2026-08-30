@@ -14,6 +14,7 @@
 // - [`mutation`](crate::nn::llm::mutation): mutaciones por capa y homeostasis.
 // - [`python`](crate::nn::llm::python): bindings `#[pymethods]` (feature `python`).
 
+pub mod birth;
 pub mod forward;
 #[cfg(test)]
 pub mod integration_tests;
@@ -70,6 +71,7 @@ pub struct GenomicLLM {
     pub use_gpu: bool,
 }
 
+pub use crate::nn::llm::birth::*;
 pub use crate::nn::llm::forward::*;
 pub use crate::nn::llm::mutation::*;
 pub use crate::nn::llm::python::*;

@@ -77,6 +77,9 @@ enum Commands {
 
     /// Orquesta un enjambre de micro-agentes con StateGraph y Tree-of-Thoughts (ToT)
     Swarm(SwarmArgs),
+
+    /// Da a luz a un organismo genómico nativo en 2-bits (Q2_0 / ADN)
+    Birth(BirthArgs),
 }
 
 #[derive(Args, Debug)]
@@ -324,6 +327,37 @@ struct SwarmArgs {
     depth: usize,
 }
 
+#[derive(Args, Debug)]
+struct BirthArgs {
+    /// Nombre del organismo nacido (por defecto: max)
+    #[arg(short, long, default_value = "max")]
+    name: String,
+
+    /// Dimensión oculta del modelo (por defecto: 256)
+    #[arg(long, default_value_t = 256)]
+    dim: usize,
+
+    /// Número de capas transformer (por defecto: 8)
+    #[arg(long, default_value_t = 8)]
+    layers: usize,
+
+    /// Número de cabezas de atención (por defecto: 4)
+    #[arg(long, default_value_t = 4)]
+    heads: usize,
+
+    /// Dimensión intermedia FFN (por defecto: 768)
+    #[arg(long, default_value_t = 768)]
+    ffn_dim: usize,
+
+    /// Tamaño de vocabulario (por defecto: 4000)
+    #[arg(long, default_value_t = 4000)]
+    vocab_size: usize,
+
+    /// Ruta de salida del archivo .gaje
+    #[arg(short, long)]
+    output: Option<String>,
+}
+
 fn resolve_default_model(model_opt: Option<String>) -> String {
     if let Some(m) = model_opt {
         return m;
@@ -489,6 +523,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),
         Some(Commands::Swarm(swarm_args)) => handle_swarm(&swarm_args),
+        Some(Commands::Birth(birth_args)) => handle_birth(&birth_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -678,6 +713,94 @@ fn handle_swarm(args: &SwarmArgs) -> Result<(), Box<dyn std::error::Error + Send
         println!("  • Salidas de Tools     : {:?}", state.tool_outputs);
     }
     println!("\n💬 Respuesta Final:\n{}\n", state.response.as_deref().unwrap_or("Sin respuesta"));
+
+    Ok(())
+}
+
+fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use _impl::nn::llm::birth::{create_born_organism, BornConfig};
+    use _impl::io::flat_writer::save_genomic_flat_q;
+    use _impl::io::config::ModelConfig;
+    use std::path::Path;
+
+    let output_path = args.output.clone().unwrap_or_else(|| {
+        format!("models/born/{}.gaje", args.name)
+    });
+
+    println!("\n🧬 GAJE PROTOCOLO DE GÉNESIS — Nacimiento de Organismo en 2-Bits (Q2_0)");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  • Nombre del Organismo : {}", args.name);
+    println!("  • Dimensión Oculta     : {}", args.dim);
+    println!("  • Capas Neuronales     : {}", args.layers);
+    println!("  • Cabezas de Atención  : {}", args.heads);
+    println!("  • Dimensión FFN        : {}", args.ffn_dim);
+    println!("  • Tamaño Vocabulario   : {} tokens", args.vocab_size);
+    println!("  • Esquema de Pesos     : Q2_0 (2.0 bits/peso, Constelación Cuaternaria)");
+    println!("  • Destino del Organismo: {}", output_path);
+
+    let config = BornConfig {
+        name: args.name.clone(),
+        vocab_size: args.vocab_size,
+        dim: args.dim,
+        n_layers: args.layers,
+        n_heads: args.heads,
+        intermediate_dim: args.ffn_dim,
+        eps: 1e-6,
+        k_wta_ratio: 0.15,
+    };
+
+    println!("\n⏳ Inicializando genoma conforme y tensores cuaternarios...");
+    let t0 = std::time::Instant::now();
+    let organism = create_born_organism(config);
+    let init_elapsed = t0.elapsed();
+    println!("✅ Estructura celular creada en {:.2?}", init_elapsed);
+
+    // Asegurar directorio padre
+    if let Some(parent) = Path::new(&output_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let arch_config = _impl::io::config::ArchConfig {
+        name: args.name.clone(),
+        version: "2.0.0-born".to_string(),
+        tokenizer_id: "gpt2".to_string(),
+        rope_base: 10000.0,
+        ffn_act: "silu".to_string(),
+        use_genomic_norm: false,
+        rope_style: "rope".to_string(),
+        anchor_threshold: 0.1,
+        ffn_anchor_threshold: 0.1,
+        rna_threshold: 0.5,
+        unpermute_weights: false,
+        apply_smollm_rope_patch: false,
+        tie_word_embeddings: false,
+        dni: _impl::io::config::default_dni(),
+        state: "born".to_string(),
+    };
+
+    let model_config = ModelConfig {
+        config: arch_config,
+        n_embd: args.dim,
+        n_head: args.heads,
+        n_head_kv: args.heads,
+        n_blocks: args.layers,
+        vocab_size: Some(args.vocab_size),
+        eps: 1e-6,
+    };
+
+    println!("💾 Escribiendo archivo .gaje zero-copy...");
+    let t_write = std::time::Instant::now();
+    save_genomic_flat_q(&output_path, &organism, &model_config, None, 3)?;
+    let write_elapsed = t_write.elapsed();
+
+    let file_size = std::fs::metadata(&output_path)?.len();
+    let size_mb = file_size as f64 / (1024.0 * 1024.0);
+
+    println!("🎉 ¡Nacimiento completado con éxito!");
+    println!("  • Archivo Genómico     : {}", output_path);
+    println!("  • Tamaño en Disco      : {:.2} MB", size_mb);
+    println!("  • Tiempo de Exportación: {:.2?}", write_elapsed);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     Ok(())
 }
