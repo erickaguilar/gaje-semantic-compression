@@ -398,6 +398,8 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
     }
     // Buscar en rutas comunes
     let candidates = [
+        "models/born/max.gaje",
+        "models/production/gaje_coder_3b.flat",
         "models/production/gaje_pico_135m.flat",
         "models/production/gaje_nano_1.5b.flat",
         "models/gaje_pico_135m.flat",
@@ -408,7 +410,7 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
             return c.to_string();
         }
     }
-    "models/production/gaje_pico_135m.flat".to_string()
+    "models/born/max.gaje".to_string()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

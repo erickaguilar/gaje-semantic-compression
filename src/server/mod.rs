@@ -95,11 +95,14 @@ pub fn run_server(
 
     let active_model: Arc<RwLock<Option<LoadedModel>>> = Arc::new(RwLock::new(None));
 
-    // Precargar modelo inicial si se especificó o si existe gaje_coder_3b o gaje_pico
+    // Precargar modelo inicial si se especificó o si existe max.gaje, gaje_coder_3b o gaje_pico
     let model_to_load = config.initial_model.clone().unwrap_or_else(|| {
+        let max_born = config.models_dir.join("born/max.gaje");
         let coder = config.models_dir.join("production/gaje_coder_3b.flat");
         let pico = config.models_dir.join("production/gaje_pico_135m.flat");
-        if coder.exists() {
+        if max_born.exists() {
+            max_born.to_string_lossy().to_string()
+        } else if coder.exists() {
             coder.to_string_lossy().to_string()
         } else if pico.exists() {
             pico.to_string_lossy().to_string()
