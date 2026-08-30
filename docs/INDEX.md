@@ -96,6 +96,10 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[TESTING_AND_VERIFICATION_PLAN.md](plans/completed/TESTING_AND_VERIFICATION_PLAN.md)**: Suite de pruebas de regresión, certificación de hardware y purga de memoria.
 * **[DOCUMENTATION_CONSOLIDATION_PLAN.md](plans/completed/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Consolidación y sincronización documental global.
 
+### 🔬 Investigaciones y Topología Matemática (`docs/research/`)
+* **[BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md](research/BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md)**: **NACIMIENTO Y ENTRENAMIENTO NATIVO EN 2-BITS.** Hallazgos de viabilidad de `max.gaje` ($99.19\%$ reducción de pérdida en CPU con STE), mapeo conforme y fases de coherencia.
+* **[ELECTRODYNAMICS_AND_COMPLEX_FLOW_TOPOLOGY.md](research/ELECTRODYNAMICS_AND_COMPLEX_FLOW_TOPOLOGY.md)**: Dinámica de electrodinámica, flujo potencial $\Omega(z)$, líneas de flujo en $\mathbb{C}$ y coeficiente de reflexión $\Gamma_b$.
+
 ### 🏷️ Registro y Nomenclatura (`docs/registry/`)
 * **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).
 * **[MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md](registry/MODELS_REGISTRY_AND_REPRODUCTION_RECIPES.md)**: Recetas de reproducción y registro de modelos en producción.
