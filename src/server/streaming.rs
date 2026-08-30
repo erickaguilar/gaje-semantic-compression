@@ -111,8 +111,12 @@ pub fn handle_chat_stream_request(
     ));
 
     let max_tokens = chat_req.max_tokens.unwrap_or(256);
-    let temperature = chat_req.temperature.unwrap_or(0.6);
-    let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.05);
+    let temperature = if is_born {
+        chat_req.temperature.unwrap_or(0.15).min(0.25)
+    } else {
+        chat_req.temperature.unwrap_or(0.6)
+    };
+    let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
 
     let prompt_tokens_u32 = tokenizer
         .encode(&full_prompt, false)
