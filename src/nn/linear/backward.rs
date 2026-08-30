@@ -24,7 +24,7 @@ impl GenomicLinear {
             let mut acc = vec![0.0f32; in_f];
             for i in range {
                 let g = d_output.get(i).copied().unwrap_or(0.0);
-                if g == 0.0 {
+                if g.abs() < 1e-6 {
                     continue;
                 }
                 match &self.weight_db {
@@ -521,18 +521,19 @@ impl GenomicLinear {
                 }
                 for i in 0..self.out_features {
                     let g = grads.get(i).cloned().unwrap_or(0.0);
-                    if g == 0.0 {
+                    if g.abs() < 1e-6 {
                         continue;
                     }
                     let row = i * in_f;
                     if row + in_f > db_mut.len() {
                         continue;
                     }
+                    let lr_g = lr * g;
                     for (j, &x) in input.iter().enumerate() {
                         if j >= in_f {
                             break;
                         }
-                        db_mut[row + j] -= lr * g * x;
+                        db_mut[row + j] -= lr_g * x;
                     }
                 }
             }
