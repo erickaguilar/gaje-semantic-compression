@@ -61,16 +61,28 @@ def main():
     teacher = GenomicLLM.load_genomic(teacher_path)
     print("✅ Maestro 3B listo en memoria.")
 
+    GAJE_IDENTITY_OVERRIDES = {
+        "¿Quién eres y qué puedes hacer?": "¡Hola! Soy GAJE AI (Genomic Adaptive Joint Embedding), un organismo de inteligencia artificial neuronal a 2 bits. Puedo responder preguntas, razonar, recuperar recuerdos en memoria persistente .gmem y procesar texto con latencia ultrabaja.",
+        "¿Cómo te llamas y en qué formato estás construido?": "Me llamo GAJE AI (organismo max.gaje). Estoy estructurado en formato binario plano .flat v2 con cuantización de 2 bits (Q2_0) y memoria asociativa zero-copy.",
+        "¿Quién te creó?": "Fui creado dentro de la plataforma de compresión semántica y memoria genética GAJE Helix.",
+        "¿Cuál es tu nombre?": "Mi nombre es GAJE AI, el organismo de inteligencia artificial genómica de GAJE Helix."
+    }
+
     records = []
-    print(f"\n🧠 Generando respuestas maestras para {len(PROMPTS)} conceptos clave...")
+    print(f"\n🧠 Generando respuestas maestras y fijando identidad GAJE para {len(PROMPTS)} conceptos clave...")
 
     for i, p in enumerate(PROMPTS):
-        formatted_prompt = f"<|im_start|>user\n{p}<|im_end|>\n<|im_start|>assistant\n"
-        gen = teacher.generate(formatted_prompt, max_new_tokens=40, temperature=0.3)
-        raw_ans = "".join(gen).strip()
-        ans = raw_ans.split("<|im_end|>")[0].split("<|im_start|>")[0].strip()
-        if not ans:
-            ans = "Soy max.gaje, un organismo neuronal a 2 bits en GAJE Helix."
+        if p in GAJE_IDENTITY_OVERRIDES:
+            ans = GAJE_IDENTITY_OVERRIDES[p]
+        else:
+            formatted_prompt = f"<|im_start|>system\nEres GAJE AI, un asistente genómico soberano, conciso y de alto rendimiento de GAJE Helix.<|im_end|>\n<|im_start|>user\n{p}<|im_end|>\n<|im_start|>assistant\n"
+            gen = teacher.generate(formatted_prompt, max_new_tokens=40, temperature=0.3)
+            raw_ans = "".join(gen).strip()
+            ans = raw_ans.split("<|im_end|>")[0].split("<|im_start|>")[0].strip()
+            # Limpieza de cualquier mención residual de terceros
+            ans = ans.replace("Claude", "GAJE AI").replace("Anthropic", "GAJE Helix").replace("ChatGPT", "GAJE AI").replace("OpenAI", "GAJE Helix")
+            if not ans:
+                ans = "Soy GAJE AI, un organismo neuronal a 2 bits en GAJE Helix."
 
         records.append({
             "text": f"<|im_start|>user\n{p}<|im_end|>\n<|im_start|>assistant\n{ans}<|im_end|>"
