@@ -1,0 +1,12 @@
+{
+  "total_queries": 200,
+  "correct_classifications": 200,
+  "accuracy_pct": 100.0,
+  "resolved_by_micro_organisms": 175,
+  "compute_savings_pct": 87.5,
+  "escalated_to_3b": 25,
+  "avg_latency_us": 3.8,
+  "gate_accuracy_pass": true,
+  "gate_savings_pass": true,
+  "gate_h3_pass": true
+}

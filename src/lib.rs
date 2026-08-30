@@ -62,6 +62,10 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
         crate::compute::graph::graph_bench_native_py,
         m
     )?)?;
+    m.add_function(wrap_pyfunction!(
+        crate::compute::graph::route_query_default_py,
+        m
+    )?)?;
     m.add_class::<crate::compute::epoch_manager::EpochManager>()?;
     m.add_class::<crate::nn::iqat::NativeIQATEngine>()?;
     m.add_function(wrap_pyfunction!(

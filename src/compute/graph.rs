@@ -282,7 +282,24 @@ impl SwarmRouterNode {
     pub fn route_query(&self, query: &str) -> RoutingDecision {
         let query_lower = query.to_lowercase();
 
-        // 1. Detección por coincidencia léxica / semántica rápida
+        // 1. Detección de Razonamiento Profundo / Síntesis compleja (> 100 caracteres + descriptores de alta densidad)
+        let deep_indicators = [
+            "explica detalladamente", "ensayo", "demostración", "análisis comparativo",
+            "paso a paso", "exhaustivo", "epistemológic", "arquitectura completa",
+            "múltiples párrafos", "demostrar", "tratado",
+        ];
+        let has_deep_indicator = deep_indicators.iter().any(|ind| query_lower.contains(ind));
+
+        if (query.len() > 130 && has_deep_indicator) || query.len() > 200 {
+            return RoutingDecision {
+                intent: SwarmIntent::DeepReasoning,
+                target_node: self.deep_reasoning_target,
+                confidence: 0.92,
+                explanation: "Consulta de alta densidad conceptual -> Sintetizador 3B (Deep Reasoning)".to_string(),
+            };
+        }
+
+        // 2. Detección por coincidencia léxica / semántica rápida en rutas especializadas
         for (keywords, intent, target) in &self.routes {
             let matches: usize = keywords
                 .iter()
@@ -304,23 +321,22 @@ impl SwarmRouterNode {
             }
         }
 
-        // 2. Si la consulta es compleja o larga (> 120 caracteres) y no coincide con reglas,
-        // derivar a razonamiento profundo si no alcanza el umbral de confianza
-        if query.len() > 120 {
+        // 3. Consultas largas no coincidentes -> Razonamiento profundo
+        if query.len() > 100 {
             return RoutingDecision {
                 intent: SwarmIntent::DeepReasoning,
                 target_node: self.deep_reasoning_target,
                 confidence: 0.85,
-                explanation: "Consulta de alta complejidad estructural -> Razonamiento profundo".to_string(),
+                explanation: "Consulta de longitud extensa sin coincidencia léxica directa -> Razonamiento profundo".to_string(),
             };
         }
 
-        // 3. Fallback determinista
+        // 4. Fallback determinista (Micro-asistente directo 135M)
         RoutingDecision {
             intent: SwarmIntent::DirectFactual,
             target_node: self.fallback_target,
-            confidence: 0.60,
-            explanation: "Sin coincidencia específica -> Asistente directo (fallback)".to_string(),
+            confidence: 0.65,
+            explanation: "Consulta directa/breve -> Micro-asistente 135M (DirectFactual)".to_string(),
         }
     }
 }
@@ -825,3 +841,62 @@ pub fn graph_bench_native_py(chain_len: usize, iterations: u64) -> PyResult<Grap
         final_hops: last_hops,
     })
 }
+
+/// Enruta una consulta usando la configuración estándar de SwarmRouterNode (Fase 4c)
+#[cfg(feature = "python")]
+#[pyfunction]
+pub fn route_query_default_py(query: &str) -> PyResult<(String, usize, f32, String)> {
+    let router = SwarmRouterNode::new("default_swarm_router", 0, 1, 0.70)
+        .add_intent_route(
+            vec![
+                "hola".into(), "buenos días".into(), "buenas tardes".into(), "gracias".into(),
+                "capital".into(), "quién es".into(), "quién fue".into(), "cuándo nació".into(),
+                "qué es".into(), "definición".into(), "edad".into(), "altura".into(), "idioma".into(),
+                "moneda".into(), "país".into(), "continente".into(), "población".into(),
+                "presidente".into(), "año".into(), "distancia".into(), "temperatura".into(),
+            ],
+            SwarmIntent::DirectFactual,
+            0,
+        )
+        .add_intent_route(
+            vec![
+                "documento".into(), "memoria".into(), "gmem".into(), "archivo".into(),
+                "historial".into(), "registro".into(), "episodio".into(), "recuperar".into(),
+                "semántico".into(), "vector".into(), "buscar en texto".into(), "corpus".into(),
+                "embedding".into(), "nicho".into(), "lineage".into(), "island".into(),
+                "episódica".into(), "declarativa".into(), "procedimental".into(),
+            ],
+            SwarmIntent::MemoryRAG,
+            2,
+        )
+        .add_intent_route(
+            vec![
+                "calcular".into(), "sumar".into(), "restar".into(), "multiplicar".into(),
+                "dividir".into(), "porcentaje".into(), "ecuación".into(), "fórmula".into(),
+                "matemática".into(), "+".into(), "-".into(), "*".into(), "/".into(),
+                "estadística".into(), "promedio".into(), "desviación".into(), "integral".into(),
+                "derivada".into(), "evaluar".into(), "seno".into(), "coseno".into(),
+            ],
+            SwarmIntent::ToolExecution,
+            3,
+        )
+        .add_intent_route(
+            vec![
+                "código".into(), "programar".into(), "implementar".into(), "función rust".into(),
+                "script python".into(), "algoritmo".into(), "refactorizar".into(), "debug".into(),
+                "compilar".into(), "error de sintaxis".into(), "benchmark".into(),
+                "struct".into(), "trait".into(), "class".into(), "def ".into(), "fn ".into(),
+            ],
+            SwarmIntent::CodeGeneration,
+            4,
+        );
+
+    let decision = router.route_query(query);
+    Ok((
+        decision.intent.as_str().to_string(),
+        decision.target_node,
+        decision.confidence,
+        decision.explanation,
+    ))
+}
+
