@@ -80,6 +80,9 @@ enum Commands {
 
     /// Da a luz a un organismo genómico nativo en 2-bits (Q2_0 / ADN)
     Birth(BirthArgs),
+
+    /// Entrena un organismo nacido (Q2_0) con el estimador Straight-Through cuaternario
+    TrainBorn(TrainBornArgs),
 }
 
 #[derive(Args, Debug)]
@@ -349,11 +352,42 @@ struct BirthArgs {
     #[arg(long, default_value_t = 768)]
     ffn_dim: usize,
 
-    /// Tamaño de vocabulario (por defecto: 4000)
-    #[arg(long, default_value_t = 4000)]
+    /// Tamaño de vocabulario (por defecto: 49152, compatible con SmolLM2/GAJE GTOK)
+    #[arg(long, default_value_t = 49152)]
     vocab_size: usize,
 
     /// Ruta de salida del archivo .gaje
+    #[arg(short, long)]
+    output: Option<String>,
+}
+
+#[derive(Args, Debug)]
+struct TrainBornArgs {
+    /// Archivo del modelo genómico (.gaje o .flat)
+    #[arg(short, long, default_value = "models/born/max.gaje")]
+    model: String,
+
+    /// Ruta al dataset de entrenamiento (JSONL o texto)
+    #[arg(short, long, default_value = "data/genesis_conversational_corpus.jsonl")]
+    dataset: String,
+
+    /// Tasa de aprendizaje (Learning Rate)
+    #[arg(long, default_value_t = 0.005)]
+    lr: f32,
+
+    /// Número de épocas de entrenamiento
+    #[arg(short, long, default_value_t = 10)]
+    epochs: usize,
+
+    /// Decaimiento por capas (Layer-wise decay)
+    #[arg(long, default_value_t = 0.95)]
+    lr_decay: f32,
+
+    /// Recorte de gradientes (Gradient Clipping)
+    #[arg(long, default_value_t = 1.0)]
+    gclip: f32,
+
+    /// Ruta de guardado tras el entrenamiento
     #[arg(short, long)]
     output: Option<String>,
 }
@@ -524,6 +558,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),
         Some(Commands::Swarm(swarm_args)) => handle_swarm(&swarm_args),
         Some(Commands::Birth(birth_args)) => handle_birth(&birth_args),
+        Some(Commands::TrainBorn(train_args)) => handle_train_born(&train_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -800,6 +835,122 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     println!("  • Archivo Genómico     : {}", output_path);
     println!("  • Tamaño en Disco      : {:.2} MB", size_mb);
     println!("  • Tiempo de Exportación: {:.2?}", write_elapsed);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+    Ok(())
+}
+
+fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use _impl::io::flat_reader::GajeFlatFileReader;
+    use _impl::io::flat_writer::save_genomic_flat_q;
+
+    println!("\n🧬 GAJE PROTOCOLO DE CRIANZA — Entrenamiento Nativo STE en 2-Bits (Q2_0)");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  • Modelo Organismo    : {}", args.model);
+    println!("  • Dataset de Crianza  : {}", args.dataset);
+    println!("  • Épocas              : {}", args.epochs);
+    println!("  • Learning Rate       : {:.4}", args.lr);
+    println!("  • Layer-wise Decay    : {:.2}", args.lr_decay);
+    println!("  • Gradient Clip       : {:.2}", args.gclip);
+
+    println!("\n⏳ Abriendo archivo genómico y cargando modelo...");
+    let (mut model, tokenizer) = repl::load_model_and_tokenizer(&args.model)?;
+    let reader = GajeFlatFileReader::open(&args.model)?;
+    let config = reader.load_config()?;
+
+    println!("✅ Modelo cargado ({} bloques, {} dim)", model.blocks.len(), config.n_embd);
+
+    // Leer y parsear dataset
+    println!("📖 Leyendo y tokenizando corpus...");
+    let file = std::fs::File::open(&args.dataset)?;
+    let lines = std::io::BufRead::lines(std::io::BufReader::new(file));
+    let mut sequences: Vec<Vec<usize>> = Vec::new();
+    let mut total_tokens = 0usize;
+
+    for line_res in lines {
+        let line = line_res?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let text = if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+            val.get("text")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&line)
+                .to_string()
+        } else {
+            line
+        };
+
+        if let Ok(tokens_u32) = tokenizer.encode(&text, false) {
+            let mut tokens: Vec<usize> = tokens_u32.into_iter().map(|t| t as usize).collect();
+            let vocab_limit = model.embeddings.out_features;
+            tokens.retain(|&t| t < vocab_limit);
+            if tokens.len() >= 2 {
+                total_tokens += tokens.len();
+                sequences.push(tokens);
+            }
+        }
+    }
+
+    println!("📊 Corpus procesado: {} secuencias, {} tokens totales", sequences.len(), total_tokens);
+    if sequences.is_empty() {
+        return Err("El dataset no contiene secuencias válidas".into());
+    }
+
+    println!("\n🔥 Iniciando bucle de entrenamiento STE cuaternario...");
+    let t_start = std::time::Instant::now();
+    let mut initial_loss = 0.0f32;
+    let mut final_loss = 0.0f32;
+    let n_blocks = model.blocks.len();
+
+    for epoch in 1..=args.epochs {
+        let t_ep = std::time::Instant::now();
+        let mut ep_loss_sum = 0.0f32;
+        let mut ep_toks = 0usize;
+
+        for seq in &sequences {
+            let loss = model.train_sequence_cached_layerwise_core(
+                seq.clone(),
+                args.lr,
+                n_blocks,
+                args.gclip,
+                args.lr_decay,
+                true,
+                None,
+            )?;
+            ep_loss_sum += loss * (seq.len() - 1) as f32;
+            ep_toks += seq.len() - 1;
+        }
+
+        let ep_avg_loss = ep_loss_sum / ep_toks.max(1) as f32;
+        if epoch == 1 {
+            initial_loss = ep_avg_loss;
+        }
+        final_loss = ep_avg_loss;
+
+        let ep_dur = t_ep.elapsed().as_secs_f32().max(1e-4);
+        let tps = (ep_toks as f32) / ep_dur;
+
+        println!(
+            "  • Época {:>2}/{} | Loss: {:.4} | {:.0} tok/s | Tiempo: {:.2}s",
+            epoch, args.epochs, ep_avg_loss, tps, ep_dur
+        );
+    }
+
+    let total_time = t_start.elapsed();
+    let delta_loss = initial_loss - final_loss;
+    let red_pct = (delta_loss / initial_loss.max(1e-6)) * 100.0;
+
+    println!("\n📈 Resumen de Crianza Genómica:");
+    println!("  • Pérdida Inicial   : {:.4}", initial_loss);
+    println!("  • Pérdida Final     : {:.4}", final_loss);
+    println!("  • Reducción Pérdida : {:.4} ({:.2}%)", delta_loss, red_pct);
+    println!("  • Tiempo Total      : {:.2?}", total_time);
+
+    let output_path = args.output.clone().unwrap_or_else(|| args.model.clone());
+    println!("\n💾 Guardando organismo entrenado en: {}", output_path);
+    save_genomic_flat_q(&output_path, &model, &config, None, 3)?;
+    println!("✅ ¡Organismo guardado y listo para inferencia conversacional!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     Ok(())
