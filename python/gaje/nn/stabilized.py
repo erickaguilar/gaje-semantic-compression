@@ -1053,7 +1053,10 @@ class GenomicLLM:
             prev_text = ""
             for gid in gen_ids:
                 accumulated_ids.append(gid)
-                curr_text = self.tokenizer.decode(accumulated_ids, skip_special_tokens=False)
+                try:
+                    curr_text = self.tokenizer.decode(accumulated_ids, skip_special_tokens=False)
+                except TypeError:
+                    curr_text = self.tokenizer.decode(accumulated_ids)
                 if len(curr_text) > len(prev_text):
                     delta = curr_text[len(prev_text):]
                     prev_text = curr_text
