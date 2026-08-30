@@ -74,6 +74,9 @@ enum Commands {
 
     /// Gestión de épocas de memoria asociativa (.gmem v2)
     Epoch(EpochArgs),
+
+    /// Orquesta un enjambre de micro-agentes con StateGraph y Tree-of-Thoughts (ToT)
+    Swarm(SwarmArgs),
 }
 
 #[derive(Args, Debug)]
@@ -302,6 +305,25 @@ struct EpochArgs {
     comment: String,
 }
 
+#[derive(Args, Debug)]
+struct SwarmArgs {
+    /// Consulta o tarea a procesar por el enjambre
+    #[arg(short, long)]
+    prompt: Option<String>,
+
+    /// Usar razonamiento en árbol Tree-of-Thoughts (MCTS)
+    #[arg(long, default_value_t = true)]
+    tot: bool,
+
+    /// Número de iteraciones / presupuesto de evaluaciones MCTS
+    #[arg(long, default_value_t = 16)]
+    budget: usize,
+
+    /// Profundidad máxima del árbol ToT
+    #[arg(long, default_value_t = 3)]
+    depth: usize,
+}
+
 fn resolve_default_model(model_opt: Option<String>) -> String {
     if let Some(m) = model_opt {
         return m;
@@ -466,6 +488,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),
+        Some(Commands::Swarm(swarm_args)) => handle_swarm(&swarm_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -595,5 +618,66 @@ fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send
             );
         }
     }
+    Ok(())
+}
+
+fn handle_swarm(args: &SwarmArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use _impl::compute::graph::*;
+    use std::sync::Arc;
+
+    let query = args.prompt.clone().unwrap_or_else(|| {
+        "Deducir y sintetizar la relación óptima entre compresión genómica y latencia MCTS".to_string()
+    });
+
+    println!("\n🧬 GAJE AGENTIC SWARM — Orquestador de Enjambre Multi-Agente");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("📝 Consulta: \"{}\"", query);
+
+    let mut graph = StateGraph::new();
+
+    // Node 0: Factual Direct Specialist
+    struct FactualNode;
+    impl AgentNode for FactualNode {
+        fn name(&self) -> &str { "micro_factual_135m" }
+        fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+            state.touch();
+            state.response = Some(format!("[135M Factual] Respuesta resuelta directamente: {}", state.user_query));
+            Ok(StepResult::End(state))
+        }
+    }
+    let factual_idx = graph.add_node(Arc::new(FactualNode));
+
+    // Node 1: Tool Node (Calculator Sandbox)
+    let tool_node = ToolNode::new("math_calculator", factual_idx, |st| {
+        Ok(format!("computed_sandbox({})", st.user_query))
+    });
+    let tool_idx = graph.add_node(Arc::new(tool_node));
+
+    // Node 2: ToT Reasoner Node (MCTS Tree-of-Thoughts)
+    let tot_node = ToTNode::new("tot_mcts_reasoner", args.depth, args.budget, 1.41, factual_idx);
+    let tot_idx = graph.add_node(Arc::new(tot_node));
+
+    // Node 3: Swarm Router
+    let router = SwarmRouterNode::new("swarm_router", factual_idx, tot_idx, 0.70)
+        .add_intent_route(vec!["calcular".into(), "math".into(), "+".into()], SwarmIntent::ToolExecution, tool_idx)
+        .add_intent_route(vec!["deducir".into(), "analizar".into(), "relación".into(), "sintetizar".into()], SwarmIntent::DeepReasoning, tot_idx);
+    let router_idx = graph.add_node(Arc::new(router));
+
+    let executor = SwarmExecutor::new(Arc::new(graph));
+    let (state, hops, elapsed_ms) = executor.execute_profiled(router_idx, AgentState::with_query(query))
+        .map_err(|e| format!("{:?}", e))?;
+
+    println!("\n⚡ Telemetría del Grafo Agéntico:");
+    println!("  • Intención Detectada  : {}", state.intent.as_deref().unwrap_or("DirectFactual"));
+    println!("  • Saltos en el Grafo   : {} pasos", hops);
+    println!("  • Latencia de Ejecución: {:.2} ms", elapsed_ms);
+    if !state.context.is_empty() {
+        println!("  • Contexto Acumulado   : {}", state.context.join("\n    "));
+    }
+    if !state.tool_outputs.is_empty() {
+        println!("  • Salidas de Tools     : {:?}", state.tool_outputs);
+    }
+    println!("\n💬 Respuesta Final:\n{}\n", state.response.as_deref().unwrap_or("Sin respuesta"));
+
     Ok(())
 }

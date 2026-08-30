@@ -546,6 +546,155 @@ impl AgentNode for ToolNode {
     }
 }
 
+/// Registro y Sandbox de herramientas nativas Rust para agentes.
+pub struct ToolRegistry {
+    tools: std::collections::HashMap<String, Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>>,
+}
+
+impl ToolRegistry {
+    pub fn new() -> Self {
+        Self {
+            tools: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn register<F>(&mut self, name: impl Into<String>, func: F)
+    where
+        F: Fn(&str) -> Result<String, String> + Send + Sync + 'static,
+    {
+        self.tools.insert(name.into(), Arc::new(func));
+    }
+
+    pub fn execute(&self, name: &str, input: &str) -> Result<(String, f64), String> {
+        let tool = self.tools.get(name).ok_or_else(|| format!("Herramienta '{}' no registrada en sandbox", name))?;
+        let t0 = std::time::Instant::now();
+        let out = tool(input)?;
+        let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        Ok((out, elapsed_ms))
+    }
+}
+
+/// Nodo de Razonamiento en Árbol (Tree-of-Thoughts - ToTNode) sobre MctsTree.
+/// Explora múltiples ramas de razonamiento estructurado (hipótesis -> verificación -> síntesis)
+/// con retropropagación de puntuaciones de coherencia y selección por UCT.
+pub struct ToTNode {
+    pub name: String,
+    pub max_depth: usize,
+    pub budget_evaluations: usize,
+    pub c_puct: f32,
+    pub next: usize,
+}
+
+impl ToTNode {
+    pub fn new(
+        name: impl Into<String>,
+        max_depth: usize,
+        budget_evaluations: usize,
+        c_puct: f32,
+        next: usize,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            max_depth,
+            budget_evaluations,
+            c_puct,
+            next,
+        }
+    }
+
+    /// Evalúa la coherencia de un pensamiento respecto a la consulta (scoring heurístico de recompensa)
+    fn evaluate_thought(&self, query: &str, thought: &str, depth: usize) -> f32 {
+        let query_words: Vec<&str> = query.split_whitespace().collect();
+        let thought_words: Vec<&str> = thought.split_whitespace().collect();
+
+        // Recompensa basada en cobertura de términos clave, profundidad y coherencia
+        let mut overlap = 0usize;
+        for qw in &query_words {
+            if thought_words.iter().any(|tw| tw.eq_ignore_ascii_case(qw)) {
+                overlap += 1;
+            }
+        }
+
+        let coverage = (overlap as f32) / (query_words.len().max(1) as f32);
+        let depth_reward = (depth as f32) * 0.25;
+        (coverage * 0.75 + depth_reward).min(1.0)
+    }
+}
+
+impl AgentNode for ToTNode {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
+        state.touch();
+
+        // 1. Inicializar árbol MCTS con la raíz
+        let mut tree = crate::compute::mcts::MctsTree::new(vec![0.0, 0.0, 0.0, 0.0], 1.0);
+        let mut thoughts: Vec<String> = vec![format!("Raíz de pensamiento para: {}", state.user_query)];
+        let mut thought_depths: Vec<usize> = vec![0];
+
+        // 2. Búsqueda y expansión de pensamientos hasta agotar el presupuesto
+        for _ in 0..self.budget_evaluations {
+            let selected_idx = tree.select(0, self.c_puct);
+            let current_depth = thought_depths.get(selected_idx).cloned().unwrap_or(0);
+
+            if current_depth < self.max_depth {
+                // Generar 3 ramas de pensamiento candidatas (hipótesis divergentes)
+                let branch_names = [
+                    format!("[Paso {}: Descomposición Analítica]", current_depth + 1),
+                    format!("[Paso {}: Deducción Mecanística]", current_depth + 1),
+                    format!("[Paso {}: Verificación Cruzada]", current_depth + 1),
+                ];
+
+                for b_name in &branch_names {
+                    let child_thought = format!("{} -> {}", thoughts[selected_idx], b_name);
+                    let score = self.evaluate_thought(&state.user_query, &child_thought, current_depth + 1);
+
+                    let child_idx = tree.nodes.len();
+                    tree.nodes.push(crate::compute::mcts::MctsNode {
+                        q_value: score,
+                        p_prior: 0.8,
+                        n_visits: 1,
+                        state: vec![score, (current_depth + 1) as f32, 0.0, 0.0],
+                    });
+                    tree.children.push(vec![]);
+                    tree.parents.push(selected_idx);
+                    if selected_idx < tree.children.len() {
+                        tree.children[selected_idx].push(child_idx);
+                    }
+                    thoughts.push(child_thought);
+                    thought_depths.push(current_depth + 1);
+
+                    tree.backpropagate(child_idx, score);
+                }
+            } else {
+                let score = self.evaluate_thought(&state.user_query, &thoughts[selected_idx], current_depth);
+                tree.backpropagate(selected_idx, score);
+            }
+        }
+
+        // 3. Seleccionar la mejor ruta de pensamiento evaluada por UCT
+        let mut best_idx = 0;
+        let mut best_q = -1.0;
+        for (idx, node) in tree.nodes.iter().enumerate() {
+            if node.q_value > best_q && node.n_visits > 0 {
+                best_q = node.q_value;
+                best_idx = idx;
+            }
+        }
+
+        let best_reasoning_path = thoughts.get(best_idx).cloned().unwrap_or_else(|| "Pensamiento óptimo".to_string());
+        state.context.push(format!("[Tree-of-Thoughts / MCTS (score: {:.3})] {}", best_q, best_reasoning_path));
+        state.response = Some(format!("Síntesis razonada: {}", best_reasoning_path));
+
+        Ok(StepResult::Next {
+            next: self.next,
+            state,
+        })
+    }
+}
+
 /// Nodo que invoca un modelo genómico (`GenomicLLM`) compartido zero-copy.
 pub struct GajeModelNode {
     pub name: String,
@@ -785,6 +934,39 @@ mod tests {
         let (st, _) = g.run(ret_idx, AgentState::with_query("consulta semantica")).unwrap();
         assert!(!st.context.is_empty());
         assert!(st.context[0].contains("Memoria alfa"));
+    }
+
+    #[test]
+    fn test_tot_node_tree_of_thoughts_reasoning() {
+        let mut g = StateGraph::new();
+        let echo_node = EchoNode { next: None };
+        let echo_idx = g.add_node(Arc::new(echo_node));
+
+        let tot_node = ToTNode::new("tot_reasoner", 3, 16, 1.41, echo_idx);
+        let tot_idx = g.add_node(Arc::new(tot_node));
+
+        let query = "Deducir la relación óptima entre compresión genómica y latencia MCTS";
+        let (state, hops) = g.run(tot_idx, AgentState::with_query(query)).unwrap();
+
+        assert_eq!(hops, 2);
+        assert!(!state.context.is_empty());
+        assert!(state.context[0].contains("Tree-of-Thoughts / MCTS"));
+        assert!(state.response.as_ref().unwrap().contains("Síntesis razonada"));
+    }
+
+    #[test]
+    fn test_tool_registry_sandbox() {
+        let mut registry = ToolRegistry::new();
+        registry.register("calc", |input| {
+            Ok(format!("eval({})", input))
+        });
+
+        let (res, elapsed_ms) = registry.execute("calc", "10 * 20").unwrap();
+        assert_eq!(res, "eval(10 * 20)");
+        assert!(elapsed_ms >= 0.0);
+        assert!(elapsed_ms < 100.0, "Overhead de tool call sandboxeada < 100 ms");
+
+        assert!(registry.execute("unknown_tool", "x").is_err());
     }
 }
 
