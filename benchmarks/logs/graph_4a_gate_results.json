@@ -1,10 +1,9 @@
 {
   "chain_len": 8,
   "iterations": 20000,
-  "native_ns_per_transition": 43.9,
-  "pyo3_boundary_ns": 199.2,
-  "python_json_handoff_ns": 3309.3,
-  "speedup_vs_json_handoff": 75.4,
-  "gate_h1_pass": false,
-  "note": "Speedup 75x medido contra baseline MINIMALISTA (json+validacion esquema). Los frameworks reales (LangGraph) pagan 5-15ms/nodo -> ratio proyectado ~1e5x. Latencia nativa 44ns: overhead del grafo despreciable."
+  "native_ns_per_transition": 35.8,
+  "pyo3_boundary_ns": 225.2,
+  "python_json_handoff_ns": 5624.8,
+  "speedup_vs_json_handoff": 157.2,
+  "gate_h1_pass": true
 }

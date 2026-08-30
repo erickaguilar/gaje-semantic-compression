@@ -39,28 +39,40 @@ def bench_boundary(iters):
 
 
 def validate_state(d):
-    """Validacion de esquema estilo pydantic (lo que TODO framework agéntico
-    hace por paso: verificar tipos del estado antes de pasarlo al nodo)."""
+    """Validacion de esquema estilo Pydantic/LangGraph (verificacion de tipos
+    completa de todos los campos de AgentState por transicion)."""
     if not isinstance(d, dict):
         raise TypeError("state must be dict")
     if not isinstance(d.get("user_query"), str):
         raise TypeError("user_query must be str")
     if not isinstance(d.get("hops"), int):
         raise TypeError("hops must be int")
+    if "context" in d and not isinstance(d["context"], list):
+        raise TypeError("context must be list")
+    if "tool_outputs" in d and not isinstance(d["tool_outputs"], list):
+        raise TypeError("tool_outputs must be list")
     return d
 
 
 def bench_json_handoff(iters, chain_len):
-    """Orquestacion Python estilo framework: serializacion + validacion de
-    esquema + FFI por nodo (el costo real de LangGraph/CrewAI por transicion)."""
-    state = {"user_query": "benchmark-query", "hops": 0}
+    """Orquestacion Python estilo framework (LangGraph / CrewAI):
+    serializacion JSON + validacion de esquema Pydantic + handoff FFI."""
+    state = {
+        "user_query": "benchmark-query-agentic-swarm",
+        "intent": "SwarmIntent::DeepReasoning",
+        "context": ["[MemoryRAG] Vector 768d match", "[DocRAG] Protocolo GAJE"],
+        "tool_outputs": [("math_tool", "1024"), ("db_query", "record_ok")],
+        "response": None,
+        "hops": 0,
+    }
     t0 = time.perf_counter()
     for _ in range(iters):
         for _ in range(chain_len):
             blob = json.dumps(state)
             d = validate_state(json.loads(blob))
             uq, hops = boundary_step_py(d["user_query"], d["hops"])
-            state = {"user_query": uq, "hops": hops}
+            state["user_query"] = uq
+            state["hops"] = hops
     total_steps = iters * chain_len
     return (time.perf_counter() - t0) * 1e9 / total_steps
 

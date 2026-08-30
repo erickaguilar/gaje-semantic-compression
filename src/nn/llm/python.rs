@@ -200,21 +200,13 @@ impl GenomicLLM {
         Ok(())
     }
 
-    pub fn set_gpu_layers(&mut self, layers: usize) -> PyResult<()> {
-        self.set_gpu_layers(layers);
-        Ok(())
-    }
-
-    #[getter]
-    pub fn gpu_layers(&self) -> usize {
-        self.get_gpu_layers()
-    }
-
-    pub fn is_gpu_active(&self) -> bool {
+    #[pyo3(name = "is_gpu_active")]
+    pub fn py_is_gpu_active(&self) -> bool {
         self.is_gpu_active()
     }
 
-    pub fn offload_to_gpu(&mut self, layers: usize) -> PyResult<usize> {
+    #[pyo3(name = "offload_to_gpu")]
+    pub fn py_offload_to_gpu(&mut self, layers: usize) -> PyResult<usize> {
         self.offload_to_gpu(layers)
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
