@@ -272,3 +272,58 @@ fn test_phase_4b_real_swarm_parallel_fork_and_shared_memory() {
     assert_eq!(transitions, 1);
     assert!(final_state.hops >= 3, "Las 3 ramas incrementaron el contador de hops");
 }
+
+#[test]
+fn test_tot_with_genomic_llm_evaluator_and_router_margin_gate() {
+    use _impl::compute::graph::ToTNode;
+    use _impl::io::flat_reader::load_genomic_auto;
+
+    let model_135m_path = "models/production/gaje_pico_135m.flat";
+    if !std::path::Path::new(model_135m_path).exists() {
+        eprintln!("Modelo 135M no encontrado en {}, omitiendo test LLM evaluator", model_135m_path);
+        return;
+    }
+
+    let pico_model = Arc::new(load_genomic_auto(model_135m_path).expect("Cargar pico 135M"));
+
+    let mut graph = StateGraph::new();
+
+    // Node 0: Terminal sink
+    struct TerminalSink;
+    impl AgentNode for TerminalSink {
+        fn name(&self) -> &str { "terminal_sink" }
+        fn process(&self, state: AgentState) -> Result<StepResult, String> {
+            Ok(StepResult::End(state))
+        }
+    }
+    let sink_idx = graph.add_node(Arc::new(TerminalSink));
+
+    // Node 1: ToTNode con GenomicLLM como función de evaluación en MctsTree
+    let tot_node = ToTNode::new("tot_llm_evaluator", 2, 8, 1.41, sink_idx)
+        .with_evaluator_llm(Arc::clone(&pico_model));
+    let tot_idx = graph.add_node(Arc::new(tot_node));
+
+    // Node 2: SwarmRouter con margen de confianza estricto (min_margin = 0.20)
+    let router = Arc::new(
+        SwarmRouterNode::new("strict_margin_router", sink_idx, tot_idx, 0.70)
+            .with_min_margin(0.20)
+            .add_intent_route(vec!["simple".into(), "capital".into()], SwarmIntent::DirectFactual, sink_idx)
+            .add_intent_route(vec!["deducir".into(), "analizar".into(), "teoría".into()], SwarmIntent::DeepReasoning, tot_idx)
+    );
+    let router_node: Arc<dyn AgentNode> = Arc::clone(&router) as Arc<dyn AgentNode>;
+    let _router_idx = graph.add_node(router_node);
+
+    // 1. Ejecutar ToTNode con scoring nativo del LLM
+    let (state_tot, hops_tot) = graph
+        .run(tot_idx, AgentState::with_query("Deducir la relación entre compresión y entropía"))
+        .expect("Ejecución ToT con LLM evaluator");
+
+    assert_eq!(hops_tot, 2);
+    assert!(!state_tot.context.is_empty());
+    assert!(state_tot.context[0].contains("Tree-of-Thoughts / MCTS"));
+
+    // 2. Probar Gate de Margen: consulta con ambigüedad en longitud media
+    let ambiguous_query = "Por favor analizar la capital y simple deducir la teoría de compresión";
+    let decision = router.route_query(ambiguous_query);
+    assert_eq!(decision.intent, SwarmIntent::DeepReasoning, "Ambigüedad escala a DeepReasoning");
+}

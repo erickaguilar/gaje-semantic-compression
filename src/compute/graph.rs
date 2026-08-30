@@ -241,6 +241,7 @@ pub struct SwarmRouterNode {
     pub fallback_target: usize,
     pub deep_reasoning_target: usize,
     pub confidence_threshold: f32,
+    pub min_margin: f32,
     pub router_llm: Option<Arc<crate::nn::llm::GenomicLLM>>,
 }
 
@@ -257,8 +258,14 @@ impl SwarmRouterNode {
             fallback_target,
             deep_reasoning_target,
             confidence_threshold,
+            min_margin: 0.15,
             router_llm: None,
         }
+    }
+
+    pub fn with_min_margin(mut self, margin: f32) -> Self {
+        self.min_margin = margin;
+        self
     }
 
     pub fn with_router_llm(
@@ -299,7 +306,8 @@ impl SwarmRouterNode {
             };
         }
 
-        // 2. Detección por coincidencia léxica / semántica rápida en rutas especializadas
+        // 2. Detección con margen de confianza entre las mejores intenciones candidatas
+        let mut scored_routes: Vec<(SwarmIntent, usize, f32, usize)> = Vec::new();
         for (keywords, intent, target) in &self.routes {
             let matches: usize = keywords
                 .iter()
@@ -308,17 +316,45 @@ impl SwarmRouterNode {
 
             if matches > 0 {
                 let conf = (0.75 + (matches as f32 * 0.1)).min(0.99);
+                scored_routes.push((intent.clone(), *target, conf, matches));
+            }
+        }
+
+        // Ordenar por confianza descendente
+        scored_routes.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+
+        if let Some((top_intent, top_target, top_conf, top_matches)) = scored_routes.first() {
+            // Verificar margen con la 2da mejor intención (si existe)
+            let margin = if scored_routes.len() > 1 {
+                top_conf - scored_routes[1].2
+            } else {
+                1.0
+            };
+
+            // Gate de entrada: si hay ambigüedad (margen < min_margin), escalar a DeepReasoning
+            if margin < self.min_margin && query.len() > 80 {
                 return RoutingDecision {
-                    intent: intent.clone(),
-                    target_node: *target,
-                    confidence: conf,
+                    intent: SwarmIntent::DeepReasoning,
+                    target_node: self.deep_reasoning_target,
+                    confidence: 0.88,
                     explanation: format!(
-                        "Coincidencia léxica [{}] con {} palabra(s) clave",
-                        intent.as_str(),
-                        matches
+                        "Ambigüedad detectada (Margen Δ={:.2} < ε={:.2}) -> Escalada de seguridad a 3B",
+                        margin, self.min_margin
                     ),
                 };
             }
+
+            return RoutingDecision {
+                intent: top_intent.clone(),
+                target_node: *top_target,
+                confidence: *top_conf,
+                explanation: format!(
+                    "Coincidencia léxica [{}] con {} palabra(s) clave (Margen Δ={:.2})",
+                    top_intent.as_str(),
+                    top_matches,
+                    margin
+                ),
+            };
         }
 
         // 3. Consultas largas no coincidentes -> Razonamiento profundo
@@ -583,6 +619,7 @@ pub struct ToTNode {
     pub budget_evaluations: usize,
     pub c_puct: f32,
     pub next: usize,
+    pub evaluator_llm: Option<Arc<crate::nn::llm::GenomicLLM>>,
 }
 
 impl ToTNode {
@@ -599,15 +636,52 @@ impl ToTNode {
             budget_evaluations,
             c_puct,
             next,
+            evaluator_llm: None,
         }
     }
 
-    /// Evalúa la coherencia de un pensamiento respecto a la consulta (scoring heurístico de recompensa)
+    pub fn with_evaluator_llm(mut self, llm: Arc<crate::nn::llm::GenomicLLM>) -> Self {
+        self.evaluator_llm = Some(llm);
+        self
+    }
+
+    /// Evalúa la coherencia de un pensamiento respecto a la consulta
+    /// usando el modelo GenomicLLM nativo (si está configurado) o heurística rápida
     fn evaluate_thought(&self, query: &str, thought: &str, depth: usize) -> f32 {
+        if let Some(ref llm) = self.evaluator_llm {
+            let mut prompt_toks: Vec<usize> = query.bytes().take(32).map(|b| (b % 128) as usize).collect();
+            let thought_toks: Vec<usize> = thought.bytes().take(32).map(|b| (b % 128) as usize).collect();
+            prompt_toks.extend(thought_toks);
+
+            let mut local_model = (*std::sync::Arc::as_ref(llm)).clone();
+            let mut log_sum = 0.0f32;
+            let mut count = 0usize;
+
+            for (pos, &tok) in prompt_toks.iter().enumerate() {
+                if let Ok(logits) = local_model.forward_core(tok, pos == 0) {
+                    if !logits.is_empty() {
+                        let max_l = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                        let exp_sum: f32 = logits.iter().map(|&x| (x - max_l).exp()).sum();
+                        let target_logit = logits[tok % logits.len()];
+                        let log_prob = target_logit - max_l - exp_sum.ln();
+                        log_sum += log_prob;
+                        count += 1;
+                    }
+                }
+            }
+
+            if count > 0 {
+                let avg_log_prob = log_sum / (count as f32);
+                let llm_score = (avg_log_prob / 10.0 + 1.0).clamp(0.1, 1.0);
+                let depth_reward = (depth as f32) * 0.15;
+                return (llm_score * 0.85 + depth_reward).min(1.0);
+            }
+        }
+
+        // Fallback heurístico si no hay LLM evaluator
         let query_words: Vec<&str> = query.split_whitespace().collect();
         let thought_words: Vec<&str> = thought.split_whitespace().collect();
 
-        // Recompensa basada en cobertura de términos clave, profundidad y coherencia
         let mut overlap = 0usize;
         for qw in &query_words {
             if thought_words.iter().any(|tw| tw.eq_ignore_ascii_case(qw)) {
