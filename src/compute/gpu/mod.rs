@@ -4,6 +4,7 @@
 
 pub mod context;
 pub mod pipeline;
+pub mod scheduler;
 
 #[cfg(feature = "python")]
 pub mod python;

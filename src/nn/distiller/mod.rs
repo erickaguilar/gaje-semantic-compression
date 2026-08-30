@@ -13,11 +13,14 @@
 // - [`teacher`](crate::nn::distiller::teacher): `Teacher` (maestro GGUF + mapeo de vocabulario).
 // - [`council`](crate::nn::distiller::council): `CouncilOfTeachers` (consenso entre maestros).
 // - [`distill`](crate::nn::distiller::distill): `GenomicDistiller`/`NativeGenomicDistiller` (ciclo de destilación).
+// - [`graph`](crate::nn::distiller::graph): `DistillationGraph` (grafo N maestros → M alumnos, batch 32 VRAM).
 
 pub mod council;
 pub mod distill;
+pub mod graph;
 pub mod teacher;
 
 pub use crate::nn::distiller::council::*;
 pub use crate::nn::distiller::distill::*;
+pub use crate::nn::distiller::graph::*;
 pub use crate::nn::distiller::teacher::*;

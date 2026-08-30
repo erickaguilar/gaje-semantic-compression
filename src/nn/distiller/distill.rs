@@ -199,3 +199,65 @@ impl GenomicDistiller {
         Ok(())
     }
 }
+
+// =============================================================================
+// DNI en Línea GPU: activación del pipeline zero-copy
+// =============================================================================
+impl GenomicDistiller {
+    /// Intenta un paso de destilación acelerado en GPU vía GpuOnlineDistiller.
+    /// Si la GPU no está disponible, cae de forma transparente a `distill_step` CPU.
+    pub fn distill_step_online_gpu(
+        &self,
+        student: &mut GenomicLLM,
+        text: &str,
+        lr: f32,
+        temperature: f32,
+    ) -> Result<f32, String> {
+        // Intentar ruta GPU si está compilado con feature gpu y hay contexto
+        #[cfg(feature = "gpu")]
+        {
+                let tokens = self.student_tokenizer.encode(text, false).map_err(|e| e.to_string())?;
+                if tokens.len() >= 2 {
+                    let vocab = student.lm_head.out_features;
+                    let consensus = self.council.get_consensus_probs(text, vocab);
+                    if !consensus.is_empty() {
+                        let batch = tokens.len().min(16).min(consensus.len());
+                        if let Some(distiller) = crate::compute::gpu::pipeline::GpuOnlineDistiller::try_new_global(
+                            batch,
+                            temperature,
+                            self.distill_weight,
+                        ) {
+                            let mut teacher_batch = Vec::with_capacity(batch * vocab);
+                            let mut student_batch = Vec::with_capacity(batch * vocab);
+                            student.clear_cache_core();
+                            for i in 0..batch {
+                                let tid = tokens[i] as usize;
+                                let (logits, _) = student.forward_with_hidden_core(tid, false)?;
+                                let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+                                let sum_exp: f32 = logits.iter().map(|l| (l - max_l).exp()).sum();
+                                for &l in &logits {
+                                    student_batch.push(((l - max_l).exp()) / (sum_exp + 1e-12));
+                                }
+                                for &p in &consensus[i] {
+                                    teacher_batch.push(p);
+                                }
+                            }
+                            if let Some(q2_db) = match &mut student.lm_head.weight_db {
+                                crate::nn::linear::WeightDatabase::GenomicQ2_0(db) => Some(db),
+                                _ => None,
+                            } {
+                                let rows = student.lm_head.out_features;
+                                let cols = student.lm_head.in_features;
+                                let db_mut: &mut Vec<crate::io::header::blocks::Q2_0Block> = std::sync::Arc::make_mut(q2_db);
+                                if let Ok(loss) = distiller.distill_step_online(&teacher_batch, &student_batch, db_mut, lr, rows, cols) {
+                                    return Ok(loss);
+                                }
+                            }
+                        }
+                    }
+                }
+        }
+        // Fallback CPU
+        self.distill_step(student, text, lr)
+    }
+}
