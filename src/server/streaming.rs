@@ -83,7 +83,17 @@ pub fn handle_chat_stream_request(
         "Eres GAJE AI, un asistente genómico soberano, conciso y de alto rendimiento.".to_string()
     });
 
-    let mut full_prompt = format!("<|im_start|>system\n{}<|im_end|>\n", sys_prompt);
+    let is_born = chat_req
+        .model
+        .as_deref()
+        .map(|m| m.ends_with(".gaje") || m.contains("max"))
+        .unwrap_or(false);
+
+    let mut full_prompt = if is_born {
+        String::new()
+    } else {
+        format!("<|im_start|>system\n{}<|im_end|>\n", sys_prompt)
+    };
     if let Some(hist) = chat_req.history {
         for msg in hist.iter().rev().take(6).rev() {
             let role = msg.role.as_deref().unwrap_or("user");
