@@ -96,4 +96,14 @@ impl Q2_0Block {
 
         (q2_value as f32) * scale + min
     }
+
+    /// Asigna el valor cuantizado (2 bits, 0..3) al peso `idx` dentro del bloque.
+    #[inline(always)]
+    pub fn set_q_value(&mut self, idx: usize, val: u8) {
+        let byte_idx = idx / 4;
+        let shift = (idx % 4) * 2;
+        let mask = !(0b11 << shift);
+        let clean = self.qs[byte_idx] & mask;
+        self.qs[byte_idx] = clean | ((val & 0b11) << shift);
+    }
 }

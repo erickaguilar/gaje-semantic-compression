@@ -575,3 +575,62 @@ fn test_q2_0_linear_forward_roundtrip() {
         assert!((row0_dec[i] - blocks[0].dequantize_weight(i)).abs() < 1e-6);
     }
 }
+
+#[test]
+fn test_q2_0_ste_updates_and_conformal_birth() {
+    use crate::io::header::Q2_0Block;
+
+    let mut blocks = Vec::new();
+    let mut qs0 = [0u8; 8];
+    // Asignar patrón cuaternario de 2 bits: 0, 1, 2, 3 (A, C, G, T)
+    for k in 0..8 {
+        qs0[k] = 0b11_10_01_00; // 4 valores: 0, 1, 2, 3
+    }
+    blocks.push(Q2_0Block {
+        scale: half::f16::from_f32(0.5),
+        min: half::f16::from_f32(-0.75),
+        qs: qs0,
+    });
+
+    let raw_bytes = unsafe {
+        std::slice::from_raw_parts(
+            blocks.as_ptr() as *const u8,
+            blocks.len() * std::mem::size_of::<Q2_0Block>(),
+        )
+        .to_vec()
+    };
+
+    let mut linear = GenomicLinear::new(
+        raw_bytes,
+        Vec::new(),
+        Vec::new(),
+        1, // out_features = 1
+        32, // in_features = 32
+        32, // block_size = 32
+        Vec::new(),
+        1e-6,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        2, // bit_depth = 2
+    );
+
+    // 1. Verificar backward_core
+    let d_output = vec![1.0f32];
+    let d_input = linear.backward_core(d_output).unwrap();
+    assert_eq!(d_input.len(), 32);
+    assert_eq!(d_input[0], -0.75); // q=0 -> 0*0.5 - 0.75 = -0.75
+
+    // 2. Verificar STE refine
+    let input = vec![1.0f32; 32];
+    let grads = vec![1.0f32];
+    linear.refine_with_grads_ste_core(input, grads, 0.1).unwrap();
+
+    // Las escalas o qs deben haberse actualizado
+    let row_updated = linear.get_row_core(0).unwrap();
+    assert_eq!(row_updated.len(), 32);
+    assert_ne!(row_updated[0], -0.75, "El peso Q2_0 fue refinado vía STE");
+}

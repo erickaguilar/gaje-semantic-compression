@@ -113,6 +113,25 @@ impl GenomicLinear {
                             }
                         }
                     }
+                    WeightDatabase::GenomicQ2_0(db) => {
+                        let row_off = i * n_blocks;
+                        if row_off + n_blocks > db.len() {
+                            continue;
+                        }
+                        for b in 0..n_blocks {
+                            let block = db[row_off + b];
+                            let scale = block.scale.to_f32();
+                            let min = block.min.to_f32();
+                            for k in 0..self.block_size {
+                                let j = b * self.block_size + k;
+                                if j >= in_f {
+                                    break;
+                                }
+                                let q = block.q_value(k) as f32;
+                                acc[j] += g * (q * scale + min);
+                            }
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -152,7 +171,9 @@ impl GenomicLinear {
         lr: f32,
     ) -> Result<(), String> {
         match &mut self.weight_db {
-            WeightDatabase::GenomicQ4_0(_) | WeightDatabase::GenomicQ8_0(_) => {}
+            WeightDatabase::GenomicQ2_0(_)
+            | WeightDatabase::GenomicQ4_0(_)
+            | WeightDatabase::GenomicQ8_0(_) => {}
             _ => return self.refine_with_grads_core(input, grads, lr),
         }
 
@@ -166,6 +187,37 @@ impl GenomicLinear {
 
         // Fase 1 (paralela, solo lectura): acumuladores g_scale/g_min por fila/bloque.
         let row_updates: Vec<Vec<(f32, f32)>> = match &self.weight_db {
+            WeightDatabase::GenomicQ2_0(db) => (0..self.out_features)
+                .into_par_iter()
+                .map(|i| {
+                    let g = grads.get(i).copied().unwrap_or(0.0);
+                    if g == 0.0 {
+                        return Vec::new();
+                    }
+                    let row_off = i * n_blk;
+                    if row_off + n_blk > db.len() {
+                        return Vec::new();
+                    }
+                    let mut per_row = Vec::with_capacity(n_blk);
+                    for b in 0..n_blk {
+                        let block = db[row_off + b];
+                        let mut g_scale = 0.0f32;
+                        let mut g_min = 0.0f32;
+                        for k in 0..bs {
+                            let j = b * bs + k;
+                            if j >= in_f {
+                                break;
+                            }
+                            let x = input.get(j).copied().unwrap_or(0.0);
+                            let q = block.q_value(k) as f32;
+                            g_scale += g * x * q;
+                            g_min += g * x;
+                        }
+                        per_row.push((g_scale, g_min));
+                    }
+                    per_row
+                })
+                .collect(),
             WeightDatabase::GenomicQ4_0(db) => (0..self.out_features)
                 .into_par_iter()
                 .map(|i| {
@@ -180,7 +232,6 @@ impl GenomicLinear {
                     let mut per_row = Vec::with_capacity(n_blk);
                     for b in 0..n_blk {
                         let block = db[row_off + b];
-                        let scale = block.scale.to_f32();
                         let min = block.min.to_f32();
                         let mut g_scale = 0.0f32;
                         let mut g_min = 0.0f32;
@@ -235,6 +286,37 @@ impl GenomicLinear {
 
         // Fase 2 (serial): aplicar lr a escala/min y a q via STE.
         match &mut self.weight_db {
+            WeightDatabase::GenomicQ2_0(db) => {
+                let db_mut = Arc::make_mut(db);
+                for (i, per_row) in row_updates.iter().enumerate() {
+                    if per_row.is_empty() {
+                        continue;
+                    }
+                    let g = grads.get(i).copied().unwrap_or(0.0);
+                    let row_off = i * n_blk;
+                    for b in 0..n_blk {
+                        let (g_scale, g_min) = per_row[b];
+                        let mut nb = db_mut[row_off + b];
+                        let scale_new =
+                            (nb.scale.to_f32() - lr * g_scale).clamp(-max_scale, max_scale);
+                        nb.scale = half::f16::from_f32(scale_new);
+                        nb.min = half::f16::from_f32(nb.min.to_f32() - lr * g_min);
+                        // STE cuaternario sobre q in {0, 1, 2, 3} (Constelacion 2-bit / ADN):
+                        for k in 0..bs {
+                            let j = b * bs + k;
+                            if j >= in_f {
+                                break;
+                            }
+                            let x = input.get(j).copied().unwrap_or(0.0);
+                            let g_q = g * x * nb.scale.to_f32();
+                            let q_new = ((nb.q_value(k) as f32 - lr * g_q).round() as i32)
+                                .clamp(0, 3) as u8;
+                            nb.set_q_value(k, q_new);
+                        }
+                        db_mut[row_off + b] = nb;
+                    }
+                }
+            }
             WeightDatabase::GenomicQ4_0(db) => {
                 let db_mut = Arc::make_mut(db);
                 for (i, per_row) in row_updates.iter().enumerate() {
