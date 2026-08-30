@@ -1,0 +1,8 @@
+{
+  "ram_init_mb": 513.61,
+  "ram_after_pico_mb": 962.46,
+  "ram_after_swarm_mb": 962.46,
+  "delta_swarm_ram_mb": 0.0,
+  "gate_ram_pass": true,
+  "gate_h2_pass": true
+}

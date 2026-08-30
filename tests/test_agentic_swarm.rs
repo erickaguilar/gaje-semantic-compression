@@ -198,3 +198,77 @@ fn test_swarm_router_and_executor_batch() {
         assert!(res.is_ok());
     }
 }
+
+#[test]
+fn test_phase_4b_real_swarm_parallel_fork_and_shared_memory() {
+    use _impl::compute::graph::GajeModelNode;
+    use _impl::io::flat_reader::load_genomic_auto;
+
+    let model_135m_path = "models/production/gaje_pico_135m.flat";
+    if !std::path::Path::new(model_135m_path).exists() {
+        eprintln!("Modelo 135M no encontrado en {}, omitiendo test de inferencia pesada", model_135m_path);
+        return;
+    }
+
+    let pico_model = Arc::new(load_genomic_auto(model_135m_path).expect("Cargar pico 135M"));
+
+    let mut graph = StateGraph::new();
+
+    // 3 Nodos Especialistas 135M compartiendo el MISMO Arc<GenomicLLM> zero-copy
+    let node_math = Arc::new(GajeModelNode::new(
+        "specialist_math_135m",
+        Arc::clone(&pico_model),
+        "Especialista Matemático",
+        8,
+        0.7,
+        None,
+    ));
+    let idx_math = graph.add_node(node_math);
+
+    let node_code = Arc::new(GajeModelNode::new(
+        "specialist_code_135m",
+        Arc::clone(&pico_model),
+        "Especialista Código",
+        8,
+        0.7,
+        None,
+    ));
+    let idx_code = graph.add_node(node_code);
+
+    let node_rag = Arc::new(GajeModelNode::new(
+        "specialist_rag_135m",
+        Arc::clone(&pico_model),
+        "Especialista RAG",
+        8,
+        0.7,
+        None,
+    ));
+    let idx_rag = graph.add_node(node_rag);
+
+    // Nodo Dispatcher que ejecuta un Fork paralelo de los 3 especialistas simultáneamente
+    struct SwarmParallelForkNode {
+        targets: Vec<usize>,
+    }
+    impl AgentNode for SwarmParallelForkNode {
+        fn name(&self) -> &str { "swarm_parallel_fork" }
+        fn process(&self, state: AgentState) -> Result<StepResult, String> {
+            let branches = self.targets.iter().map(|&t| (t, state.clone())).collect();
+            Ok(StepResult::Fork { branches, next: None })
+        }
+    }
+
+    let fork_node = Arc::new(SwarmParallelForkNode {
+        targets: vec![idx_math, idx_code, idx_rag],
+    });
+    let idx_fork = graph.add_node(fork_node);
+
+    let t0 = std::time::Instant::now();
+    let (final_state, transitions) = graph
+        .run(idx_fork, AgentState::with_query("Calcular e implementar compresión"))
+        .expect("Ejecución enjambre paralelo");
+    let elapsed = t0.elapsed();
+
+    println!("⚡ Enjambre 3x 135M ejecutado en paralelo en {:?}", elapsed);
+    assert_eq!(transitions, 1);
+    assert!(final_state.hops >= 3, "Las 3 ramas incrementaron el contador de hops");
+}

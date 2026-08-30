@@ -241,7 +241,7 @@ pub struct SwarmRouterNode {
     pub fallback_target: usize,
     pub deep_reasoning_target: usize,
     pub confidence_threshold: f32,
-    pub router_llm: Option<Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>>,
+    pub router_llm: Option<Arc<crate::nn::llm::GenomicLLM>>,
 }
 
 impl SwarmRouterNode {
@@ -263,7 +263,7 @@ impl SwarmRouterNode {
 
     pub fn with_router_llm(
         mut self,
-        llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+        llm: Arc<crate::nn::llm::GenomicLLM>,
     ) -> Self {
         self.router_llm = Some(llm);
         self
@@ -533,7 +533,7 @@ impl AgentNode for ToolNode {
 /// Nodo que invoca un modelo genómico (`GenomicLLM`) compartido zero-copy.
 pub struct GajeModelNode {
     pub name: String,
-    pub llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+    pub llm: Arc<crate::nn::llm::GenomicLLM>,
     pub prompt_role: String,
     pub max_tokens: usize,
     pub temperature: f32,
@@ -543,7 +543,7 @@ pub struct GajeModelNode {
 impl GajeModelNode {
     pub fn new(
         name: impl Into<String>,
-        llm: Arc<std::sync::RwLock<crate::nn::llm::GenomicLLM>>,
+        llm: Arc<crate::nn::llm::GenomicLLM>,
         prompt_role: impl Into<String>,
         max_tokens: usize,
         temperature: f32,
@@ -579,9 +579,12 @@ impl AgentNode for GajeModelNode {
             prompt_tokens = vec![1];
         }
 
-        let mut llm_guard = self.llm.write().map_err(|e| e.to_string())?;
+        // Clonar el modelo: copia superficial (shallow) de < 4 KB donde todos los
+        // tensores pesados son Arc<Mmap> / Arc<Vec<u8>> Zero-Copy compartidos.
+        // Cada hilo obtiene su propio KV-cache local sin bloqueos RwLock.
+        let mut model_instance = (*self.llm).clone();
         let eos_ids = vec![0, 2];
-        let gen_res = llm_guard.generate_native_core(
+        let gen_res = model_instance.generate_native_core(
             prompt_tokens,
             self.max_tokens,
             self.temperature,
