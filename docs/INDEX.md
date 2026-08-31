@@ -18,6 +18,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[DIMENSIONAL_SCALING_AND_CONFORMAL_GENESIS_FINDINGS.md](research/DIMENSIONAL_SCALING_AND_CONFORMAL_GENESIS_FINDINGS.md)**: **ESCALADO DIMENSIONAL, TRANSFORMACIONES CONFORMES Y DNI EN GPU** — Demostración empírica de la transición $D=256 \to D=512$, invarianza de ángulos conformes en el plano complejo $\mathbb{C}$ y validación del pipeline GPU en Vulkan.
 * **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
 * **[FROZEN_BODY_CAUSAL_AB_PROTOCOL.md](research/FROZEN_BODY_CAUSAL_AB_PROTOCOL.md)**: Protocolo A/B causal del cuerpo congelado — aislamiento de causas sobre por qué los cuerpos cuantizados no deben recibir QAT post-cuantización.
 * **[CE_VS_GENERATION.md](research/CE_VS_GENERATION.md)**: Hallazgo central de la Fase 4b — la CE media no correlaciona con la calidad de generación; la evaluación generativa es la métrica de éxito.
