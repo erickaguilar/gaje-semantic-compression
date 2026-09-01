@@ -364,7 +364,7 @@ struct BirthArgs {
 #[derive(Args, Debug)]
 struct TrainBornArgs {
     /// Archivo del modelo genómico (.gaje o .flat)
-    #[arg(short, long, default_value = "models/born/max.gaje")]
+    #[arg(short, long, default_value = "models/production/gaje_pico_135m.flat")]
     model: String,
 
     /// Ruta al dataset de entrenamiento (JSONL o texto)
@@ -398,7 +398,7 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
     }
     // Buscar en rutas comunes
     let candidates = [
-        "models/born/max.gaje",
+        "models/production/gaje_pico_135m.flat",
         "models/production/gaje_coder_3b.flat",
         "models/production/gaje_pico_135m.flat",
         "models/production/gaje_nano_1.5b.flat",
@@ -410,7 +410,7 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
             return c.to_string();
         }
     }
-    "models/born/max.gaje".to_string()
+    "models/production/gaje_pico_135m.flat".to_string()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

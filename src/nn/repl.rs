@@ -42,25 +42,11 @@ pub fn load_model_and_tokenizer(model_path: &str) -> Result<(GenomicLLM, GajeTok
         let model = reader
             .load_genomic()
             .map_err(|e| format!("Error cargando LLM: {}", e))?;
-        let tokenizer = if let Some(gtok) = reader.get_embedded_gtok() {
-            GajeTokenizer::from_gtok(gtok)
-        } else {
-            let local_tok = path
-                .parent()
-                .unwrap_or(Path::new(""))
-                .join("tokenizer.json");
-            let core_tok = Path::new("models/core/tokenizer.json");
-            if local_tok.exists() {
-                GajeTokenizer::from_file(local_tok).map_err(|e| e.to_string())?
-            } else if core_tok.exists() {
-                GajeTokenizer::from_file(core_tok).map_err(|e| e.to_string())?
-            } else {
-                return Err(
-                    "No se encontró tokenizador GTOK incrustado ni archivo tokenizer.json"
-                        .to_string(),
-                );
-            }
-        };
+        let gtok = reader.get_embedded_gtok().ok_or_else(|| {
+            "No se encontró tokenizador GTOK incrustado en el modelo .flat.\n💡 El modelo debe contener el tokenizador nativo unificado (todos los valores incluidos).\n   Regenere el modelo con `gaje-cli birth` o `export-flat` con GTOK embebido."
+                .to_string()
+        })?;
+        let tokenizer = GajeTokenizer::from_gtok(gtok);
         return Ok((model, tokenizer));
     }
 
