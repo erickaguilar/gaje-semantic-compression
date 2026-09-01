@@ -957,12 +957,19 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
 
     println!("✅ Modelo cargado ({} bloques, {} dim)", model.blocks.len(), config.n_embd);
 
+    let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(&args.model, config.n_embd as u32);
+    if let Some(ref orch) = memory_orch {
+        let total = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
+        println!("🧠 Hipocampo Congénito detectado: {} hechos activos vinculados a la crianza", total);
+    }
+
     // Leer y parsear dataset
     println!("📖 Leyendo y tokenizando corpus...");
     let file = std::fs::File::open(&args.dataset)?;
     let lines = std::io::BufRead::lines(std::io::BufReader::new(file));
     let mut sequences: Vec<Vec<usize>> = Vec::new();
     let mut total_tokens = 0usize;
+    let mut new_facts_added = 0usize;
 
     for line_res in lines {
         let line = line_res?;
@@ -978,6 +985,16 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
             line
         };
 
+        if let Some(ref mut orch) = memory_orch {
+            let exists = orch.documental.entries.iter().any(|e| e.text == text);
+            if !exists {
+                let id = (orch.documental.entries.len() + 1) as u64;
+                let vec = _impl::compute::island::IslandOrchestrator::vector_from_text(&text, config.n_embd);
+                orch.add_memory(_impl::compute::island::IslandNiche::Documental, id, vec, text.clone());
+                new_facts_added += 1;
+            }
+        }
+
         if let Ok(tokens_u32) = tokenizer.encode(&text, false) {
             let mut tokens: Vec<usize> = tokens_u32.into_iter().map(|t| t as usize).collect();
             let vocab_limit = model.embeddings.out_features;
@@ -987,6 +1004,10 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
                 sequences.push(tokens);
             }
         }
+    }
+
+    if new_facts_added > 0 {
+        println!("🧠 [Hipocampo] +{} nuevos hechos integrados al nicho documental durante la lectura", new_facts_added);
     }
 
     println!("📊 Corpus procesado: {} secuencias, {} tokens totales", sequences.len(), total_tokens);
@@ -1047,7 +1068,21 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
     let output_path = args.output.clone().unwrap_or_else(|| args.model.clone());
     println!("\n💾 Guardando organismo entrenado en: {}", output_path);
     save_genomic_flat_q(&output_path, &model, &config, None, 3)?;
-    println!("✅ ¡Organismo guardado y listo para inferencia conversacional!");
+
+    if let Some(ref mut orch) = memory_orch {
+        let memory_dir = if output_path.ends_with(".gaje") {
+            output_path.strip_suffix(".gaje").unwrap().to_string() + "_memory"
+        } else if output_path.ends_with(".flat") {
+            output_path.strip_suffix(".flat").unwrap().to_string() + "_memory"
+        } else {
+            format!("{}_memory", output_path)
+        };
+        orch.save_all(&memory_dir)?;
+        let total = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
+        println!("🧠 Hipocampo Sincronizado: {} hechos consolidados en {}", total, memory_dir);
+    }
+
+    println!("✅ ¡Organismo y memoria guardados y listos para inferencia!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     Ok(())
