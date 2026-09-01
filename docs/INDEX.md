@@ -69,6 +69,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[CONGENITAL_MEMORY_AND_EMBODIED_GENESIS_PLAN.md](plans/CONGENITAL_MEMORY_AND_EMBODIED_GENESIS_PLAN.md)**: **NACIMIENTO CON MEMORIA CONGÉNITA (`.gmem`)** — Co-evolución de corteza Q2_0 e hipocampo mmap en 3 nichos fácticos desde la génesis.
 * **[LASER_SEMANTIC_WAVEGUIDE_PLAN.md](plans/LASER_SEMANTIC_WAVEGUIDE_PLAN.md)**: **EL LÁSER SEMÁNTICO (`max_laser.gaje`)** — Arquitectura colimada *Deep & Narrow* ($D=384, L=12, H=6, V=4096$) para máxima coherencia de fase en ~22 MB.
 * **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo y arquitectura del motor.
 * **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro de ejecución de grafos agénticos soberanos en Rust.
