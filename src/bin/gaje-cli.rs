@@ -359,6 +359,10 @@ struct BirthArgs {
     /// Ruta de salida del archivo .gaje
     #[arg(short, long)]
     output: Option<String>,
+
+    /// Ruta opcional a un tokenizador binario (.gtok o .bin) para incrustar nativamente
+    #[arg(short, long)]
+    tokenizer: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -826,8 +830,18 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     };
 
     println!("💾 Escribiendo archivo .gaje zero-copy...");
+    let tokenizer_obj = if let Some(path) = &args.tokenizer {
+        if path.ends_with(".json") {
+            _impl::core::tokenizer::GajeTokenizer::from_file(path).ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let t_write = std::time::Instant::now();
-    save_genomic_flat_q(&output_path, &organism, &model_config, None, 3)?;
+    save_genomic_flat_q(&output_path, &organism, &model_config, tokenizer_obj.as_ref(), 3)?;
     let write_elapsed = t_write.elapsed();
 
     let file_size = std::fs::metadata(&output_path)?.len();

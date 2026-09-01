@@ -79,7 +79,7 @@ impl GGUFLoader {
         Ok(ModelConfig {
             config: ArchConfig {
                 name,
-                version: "1.0.0-alpha".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
                 tokenizer_id: "tokenizer".to_string(),
                 rope_base: actual_rope_base,
                 ffn_act: "swiglu".to_string(),

@@ -51,7 +51,7 @@ pub struct ArchConfig {
 impl ArchConfig {
     #[cfg(feature = "python")]
     #[new]
-    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.0.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, rna_threshold = 0.5, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
+    #[pyo3(signature = (name = "GAJE-Model".to_string(), version = "1.7.0-alpha".to_string(), tokenizer_id = "gpt2".to_string(), rope_base = 10000.0, ffn_act = "swiglu".to_string(), use_genomic_norm = false, rope_style = "split".to_string(), anchor_threshold = 0.1, ffn_anchor_threshold = 0.1, rna_threshold = 0.5, unpermute_weights = false, apply_smollm_rope_patch = false, dni = "".to_string(), state = "stable".to_string()))]
     pub fn py_new(
         name: String,
         version: String,
@@ -93,7 +93,7 @@ fn default_name() -> String {
     "GAJE-Model".to_string()
 }
 fn default_version() -> String {
-    "1.0.0-alpha".to_string()
+    env!("CARGO_PKG_VERSION").to_string()
 }
 fn default_tokenizer() -> String {
     "gpt2".to_string()

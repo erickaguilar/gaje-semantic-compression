@@ -18,6 +18,8 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[COMPLEX_PHASE_GRAPH_1BIT_2BIT_FINDINGS.md](research/COMPLEX_PHASE_GRAPH_1BIT_2BIT_FINDINGS.md)**: **REDES DE FASE EN $\mathbb{C}$, 1-BIT POR EJE Y GRAFOS DE CAYLEY** — Escalado de capacidad sin aumentar bits, apareamiento de Watson-Crick, combinatoria exponencial $4^N$ y difusión de fase en sub-10 MB.
+* **[CONFORMAL_HELICAL_WAVEGUIDE_FINDINGS.md](research/CONFORMAL_HELICAL_WAVEGUIDE_FINDINGS.md)**: **DINÁMICA DE MAPEO CONFORME Y TORSIÓN HELICOIDAL EN 2-BITS** — Preservación de relaciones angulares relativas ($\cos \theta$), ecuaciones de Cauchy-Riemann, física del resorte y convergencia de `max_human` a Loss 3.09.
 * **[HUMAN_VOCABULARY_AND_MICRO_DIMENSION_GENESIS.md](research/HUMAN_VOCABULARY_AND_MICRO_DIMENSION_GENESIS.md)**: **VOCABULARIO HUMANO CALIBRADO (4k) Y MICRO-DIMENSIONES (D=256)** — Desacoplamiento del hacinamiento vectorial mediante la métrica de presión $\rho = V/D$, reducción de huella a ~15 MB y aceleración 12x en GPU.
 * **[DIMENSIONAL_SCALING_AND_CONFORMAL_GENESIS_FINDINGS.md](research/DIMENSIONAL_SCALING_AND_CONFORMAL_GENESIS_FINDINGS.md)**: **ESCALADO DIMENSIONAL, TRANSFORMACIONES CONFORMES Y DNI EN GPU** — Demostración empírica de la transición $D=256 \to D=512$, invarianza de ángulos conformes en el plano complejo $\mathbb{C}$ y validación del pipeline GPU en Vulkan.
 * **[QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md](research/QUANTUM_GENOMIC_TOKENIZATION_FINDINGS.md)**: Fundamento matemático del isomorfismo cuántico-genómico (2-qubit Hilbert space a bases de ADN de 2-bits) y matrices de densidad $\rho$.
@@ -28,6 +30,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[Q2_0_2BIT_SPATIAL_EXPERIMENT.md](research/Q2_0_2BIT_SPATIAL_EXPERIMENT.md)**: **Veredicto del experimento Q2_0 (NEGATIVO)**.
 
 ### 📊 Resultados y Certificaciones Oficiales (`docs/reports/` y `docs/certifications/`)
+* **[MAX_LASER_GENESIS_REPORT.md](reports/MAX_LASER_GENESIS_REPORT.md)**: **CERTIFICACIÓN DE GÉNESIS `max_laser.gaje`** — Organismo colimado *Deep & Narrow* ($D=384, L=12, H=6, V=4096$) en 19.72 MB con 111 tensores Q2_0 limpios.
 * **[GPU_ACCELERATION_CERTIFICATION.md](certifications/GPU_ACCELERATION_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE ACELERACIÓN GPU (Vulkan / WGPU)** — Despacho masivo de capas tensoriales sobre AMD Radeon Vega con memoria unificada (UMA) y concordancia matemática exacta.
 * **[QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md](certifications/QUANTUM_EMBEDDING_INFERENCE_CERTIFICATION.md)**: **CERTIFICACIÓN OFICIAL DE INFERENCIA CUÁNTICA (.qemb)** — Cero regresión semántica y reducción del 91.1% en RAM.
 * **[BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)**: **BENCHMARK CIENTÍFICO OFICIAL v1.6.0** — 125 evaluaciones en 5 modelos certificados (velocidad, recall semántico, degradación 0%, compresión 8.0x).
@@ -66,6 +69,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[LASER_SEMANTIC_WAVEGUIDE_PLAN.md](plans/LASER_SEMANTIC_WAVEGUIDE_PLAN.md)**: **EL LÁSER SEMÁNTICO (`max_laser.gaje`)** — Arquitectura colimada *Deep & Narrow* ($D=384, L=12, H=6, V=4096$) para máxima coherencia de fase en ~22 MB.
 * **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo y arquitectura del motor.
 * **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro de ejecución de grafos agénticos soberanos en Rust.
 * **[AGENTIC_GRAPH_RUST.md](plans/AGENTIC_GRAPH_RUST.md)**: Tipos `AgentState`, `AgentNode` y orquestación cíclica sin dependencias externas.

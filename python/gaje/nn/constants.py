@@ -4,7 +4,7 @@ Ensures stability across different model versions and architectures.
 """
 
 # Default Metadata Values
-DEFAULT_VERSION = "0.9.5-alpha"
+DEFAULT_VERSION = "1.7.0-alpha"
 DEFAULT_ROPE_BASE = 10000.0
 DEFAULT_EPS = 1e-5
 DEFAULT_TOKENIZER_ID = "gpt2"

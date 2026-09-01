@@ -1,7 +1,7 @@
 {
   "name": "gaje-semantic-compression",
-  "version": "1.0.0",
-  "description": "[![Version](https://img.shields.io/badge/version-1.3.1--alpha_Silver_Adult-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md) [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3-orange.svg)](src/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/plans/PLAN_2BIT_ANCHORED_QUANTIZATION.md)",
+  "version": "1.7.0-alpha",
+  "description": "[![Version](https://img.shields.io/badge/version-1.7.0--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md) [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE) [![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/reports/session_findings_v1.6.0_phase_3.1.md)",
   "main": "index.js",
   "directories": {
     "doc": "docs",

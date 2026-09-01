@@ -84,3 +84,34 @@ replace = 'version = "{new_version}"'
 filename = "python/gaje/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "python/gaje/utils/version.py"
+search = 'return "{current_version}"'
+replace = 'return "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "python/gaje/nn/constants.py"
+search = 'DEFAULT_VERSION = "{current_version}"'
+replace = 'DEFAULT_VERSION = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "package.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "docs/INDEX.md"
+search = '(v{current_version})'
+replace = '(v{new_version})'
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = '(v{current_version})'
+replace = '(v{new_version})'
+
+[[tool.bumpversion.files]]
+filename = "docs/meta/EMPIRICAL_TRUTH_STATE.md"
+search = '(v{current_version}: Helix Ecosystem)'
+replace = '(v{new_version}: Helix Ecosystem)'
+
