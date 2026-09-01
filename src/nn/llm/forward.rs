@@ -5,6 +5,11 @@ use crate::nn::llm::GenomicLLM;
 
 impl GenomicLLM {
     #[inline]
+    pub fn dim(&self) -> usize {
+        self.output_norm.len()
+    }
+
+    #[inline]
     pub fn get_token_embedding(&self, token_id: usize) -> Result<Vec<f32>, String> {
         if let Some(ref qemb) = self.quantum_embeddings {
             let dim = qemb.codebook.dim;

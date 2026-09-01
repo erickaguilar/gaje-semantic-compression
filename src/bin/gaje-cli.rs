@@ -612,12 +612,32 @@ fn run_single_prompt(
     let t0 = Instant::now();
     let (mut llm, tokenizer) = repl::load_model_and_tokenizer(model_path)?;
     let load_ms = t0.elapsed().as_secs_f64() * 1000.0;
-    println!("✅ Modelo listo en {:.2} ms\n", load_ms);
+    println!("✅ Modelo listo en {:.2} ms", load_ms);
 
-    let chat_prompt = format!(
-        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        prompt
-    );
+    let mut context_prefix = String::new();
+    if let Some(orch) = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(model_path, llm.dim() as u32) {
+        let q_vec = _impl::compute::island::IslandOrchestrator::vector_from_text(prompt, llm.dim());
+        let matches = orch.retrieve_context(&q_vec, 2);
+        let relevant: Vec<_> = matches.into_iter().filter(|m| m.similarity >= 0.50).collect();
+        if !relevant.is_empty() {
+            let facts_str = relevant.iter().map(|m| m.text.as_str()).collect::<Vec<_>>().join(" | ");
+            println!("🧠 [Hipocampo] Inyectado contexto relevante: {}", facts_str);
+            context_prefix = format!("[Conocimiento Hipocampal: {}]\n", facts_str);
+        }
+    }
+    println!();
+
+    let chat_prompt = if context_prefix.is_empty() {
+        format!(
+            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            prompt
+        )
+    } else {
+        format!(
+            "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+            context_prefix, prompt
+        )
+    };
     let prompt_tokens_u32 = tokenizer
         .encode(&chat_prompt, false)
         .map_err(|e| e.to_string())?;

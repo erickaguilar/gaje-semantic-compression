@@ -384,6 +384,50 @@ impl IslandOrchestrator {
             total_documental_entries: self.documental.entries.len(),
         }
     }
+
+    /// Genera vector semántico determinista en R^D normalizado
+    pub fn vector_from_text(text: &str, dim: usize) -> Vec<f32> {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        text.hash(&mut hasher);
+        let seed = hasher.finish();
+
+        let mut vec = vec![0.0f32; dim];
+        let mut norm_sq = 0.0f32;
+        for (i, val) in vec.iter_mut().enumerate() {
+            let pseudo = ((seed.wrapping_add(i as u64).wrapping_mul(6364136223846793005)) >> 32) as i32;
+            let f = (pseudo as f32) / (i32::MAX as f32);
+            *val = f;
+            norm_sq += f * f;
+        }
+        let norm = norm_sq.sqrt().max(1e-8);
+        for val in vec.iter_mut() {
+            *val /= norm;
+        }
+        vec
+    }
+
+    /// Intenta localizar y cargar el directorio de memoria asociado a un modelo
+    pub fn try_load_paired_memory(model_path: &str, dim: u32) -> Option<Self> {
+        let memory_dir = if model_path.ends_with(".gaje") {
+            model_path.strip_suffix(".gaje").unwrap().to_string() + "_memory"
+        } else if model_path.ends_with(".flat") {
+            model_path.strip_suffix(".flat").unwrap().to_string() + "_memory"
+        } else {
+            format!("{}_memory", model_path)
+        };
+
+        if std::path::Path::new(&memory_dir).exists() {
+            let mut orch = Self::new(dim);
+            if orch.load_all(&memory_dir).is_ok() {
+                let total = orch.episodic.entries.len() + orch.documental.entries.len() + orch.conversational.entries.len();
+                if total > 0 {
+                    return Some(orch);
+                }
+            }
+        }
+        None
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
