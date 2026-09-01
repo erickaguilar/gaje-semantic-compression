@@ -363,6 +363,14 @@ struct BirthArgs {
     /// Ruta opcional a un tokenizador binario (.gtok o .bin) para incrustar nativamente
     #[arg(short, long)]
     tokenizer: Option<String>,
+
+    /// Vincular e inicializar hipocampo de memoria congénita (.gmem) desde el nacimiento
+    #[arg(long)]
+    with_memory: bool,
+
+    /// Ruta opcional a un archivo de hechos iniciales (JSONL o texto) para el nicho documental
+    #[arg(long)]
+    memory_facts: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -844,6 +852,56 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     save_genomic_flat_q(&output_path, &organism, &model_config, tokenizer_obj.as_ref(), 3)?;
     let write_elapsed = t_write.elapsed();
 
+    let mut memory_info = None;
+    if args.with_memory {
+        let memory_dir = if output_path.ends_with(".gaje") {
+            output_path.strip_suffix(".gaje").unwrap().to_string() + "_memory"
+        } else {
+            format!("{}_memory", output_path)
+        };
+
+        let mut orch = _impl::compute::island::IslandOrchestrator::new(args.dim as u32);
+        let mut facts_count = 0;
+
+        if let Some(facts_path) = &args.memory_facts {
+            if let Ok(content) = std::fs::read_to_string(facts_path) {
+                for (idx, line) in content.lines().enumerate() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() { continue; }
+                    let fact_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                        v.get("text").and_then(|t| t.as_str()).unwrap_or(trimmed).to_string()
+                    } else {
+                        trimmed.to_string()
+                    };
+
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    fact_text.hash(&mut hasher);
+                    let seed = hasher.finish();
+
+                    let mut vec = vec![0.0f32; args.dim];
+                    let mut norm_sq = 0.0f32;
+                    for (i, val) in vec.iter_mut().enumerate() {
+                        let pseudo = ((seed.wrapping_add(i as u64).wrapping_mul(6364136223846793005)) >> 32) as i32;
+                        let f = (pseudo as f32) / (i32::MAX as f32);
+                        *val = f;
+                        norm_sq += f * f;
+                    }
+                    let norm = norm_sq.sqrt().max(1e-8);
+                    for val in vec.iter_mut() {
+                        *val /= norm;
+                    }
+
+                    orch.add_memory(_impl::compute::island::IslandNiche::Documental, (idx + 1) as u64, vec, fact_text);
+                    facts_count += 1;
+                }
+            }
+        }
+
+        orch.save_all(&memory_dir)?;
+        memory_info = Some((memory_dir, facts_count));
+    }
+
     let file_size = std::fs::metadata(&output_path)?.len();
     let size_mb = file_size as f64 / (1024.0 * 1024.0);
 
@@ -851,6 +909,9 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     println!("  • Archivo Genómico     : {}", output_path);
     println!("  • Tamaño en Disco      : {:.2} MB", size_mb);
     println!("  • Tiempo de Exportación: {:.2?}", write_elapsed);
+    if let Some((mem_dir, count)) = memory_info {
+        println!("  • Hipocampo Congénito  : {} ({} hechos en nicho documental, D={})", mem_dir, count, args.dim);
+    }
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     Ok(())
