@@ -208,6 +208,26 @@ pub fn run_server(
             continue;
         }
 
+        if url == "/api/memory" && method == Method::Get {
+            let active_guard = active_model.read().unwrap();
+            let (active_path, active_dim) = if let Some(ref m) = *active_guard {
+                (Some(m.path.to_string_lossy().to_string()), m.llm.dim())
+            } else {
+                (None, 384)
+            };
+            let json_val = api::get_memory_info(active_path.as_deref(), active_dim);
+            let body = json_val.to_string();
+            let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
+            resp.add_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            resp.add_header(
+                Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+            );
+            let _ = request.respond(resp);
+            continue;
+        }
+
         if url == "/api/load_model" && method == Method::Post {
             let mut body = String::new();
             let mut req = request;
