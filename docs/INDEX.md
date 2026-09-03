@@ -18,6 +18,11 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md)**: **ENJAMBRES ESPECIALIZADOS Y BIOMIMETISMO COLONIAL** — Castas cognitivas (45M a 3B), analogías con hormigas cortadoras, sifonóforos y sistema entérico para orquestación $<10\text{ µs}$.
+* **[FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md](research/FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md)**: **CAPACIDADES FUNCIONALES DESBLOQUEADAS POR COMPRESIÓN** — Memoria continua viva (<0.12 ms), enjambres multi-agente concurrentes, soberanía zero-server y tool-calling determinista.
+* **[EXPONENTIAL_AND_PHASE_CODING_MATHEMATICS_FINDINGS.md](research/EXPONENTIAL_AND_PHASE_CODING_MATHEMATICS_FINDINGS.md)**: **CODIFICACIÓN EXPONENCIAL, LNS Y DOMINIOS DE FASE COMPLEJA** — Aritmética sin multiplicadores mediante sumas logarítmicas ($x \to \log_2(x)$) e interferencia periódica en $\mathbb{C}$ ($e^{i \theta}$).
+* **[BF4_MICROSCALING_AND_INSTANT_HEADER_TRANSMUTATION_FINDINGS.md](research/BF4_MICROSCALING_AND_INSTANT_HEADER_TRANSMUTATION_FINDINGS.md)**: **MICROSCALING BF4/FP4 Y TRANSMUTACIÓN INMEDIATA DE CABECERAS** — Resolución no uniforme de decimales finos cerca del cero y generación de vistas físicas zero-copy en arranque en frío.
+* **[ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md](research/ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md)**: **FIDELIDAD DE MEMORIA Y AISLAMIENTO DE RUIDO EN .GMEM** — Gating por brecha de entropía ($\Delta_{\text{top}}$), subespacios ortogonales en $\mathbb{R}^{384}$ y poda competitiva K-WTA.
 * **[COMPLEX_PHASE_GRAPH_1BIT_2BIT_FINDINGS.md](research/COMPLEX_PHASE_GRAPH_1BIT_2BIT_FINDINGS.md)**: **REDES DE FASE EN $\mathbb{C}$, 1-BIT POR EJE Y GRAFOS DE CAYLEY** — Escalado de capacidad sin aumentar bits, apareamiento de Watson-Crick, combinatoria exponencial $4^N$ y difusión de fase en sub-10 MB.
 * **[CONFORMAL_HELICAL_WAVEGUIDE_FINDINGS.md](research/CONFORMAL_HELICAL_WAVEGUIDE_FINDINGS.md)**: **DINÁMICA DE MAPEO CONFORME Y TORSIÓN HELICOIDAL EN 2-BITS** — Preservación de relaciones angulares relativas ($\cos \theta$), ecuaciones de Cauchy-Riemann, física del resorte y convergencia de `max_human` a Loss 3.09.
 * **[HUMAN_VOCABULARY_AND_MICRO_DIMENSION_GENESIS.md](research/HUMAN_VOCABULARY_AND_MICRO_DIMENSION_GENESIS.md)**: **VOCABULARIO HUMANO CALIBRADO (4k) Y MICRO-DIMENSIONES (D=256)** — Desacoplamiento del hacinamiento vectorial mediante la métrica de presión $\rho = V/D$, reducción de huella a ~15 MB y aceleración 12x en GPU.
@@ -69,20 +74,27 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md](plans/EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md)**: **SUPER-MOE EDGE 500 MB** — Arquitectura MoE de 8 expertos (Top-2 activos), 2.2B de capacidad paramétrica virtual con cómputo de 350M y 25 MB de memoria congénita `.gmem`.
+* **[BF2_COMPLEX_PHASE_FLOAT_PLAN.md](plans/BF2_COMPLEX_PHASE_FLOAT_PLAN.md)**: **PUNTO FLOTANTE DE FASE BF2-COMPLEX** — Inferencia en $\mathbb{C}$ sin multiplicadores, rotaciones QPSK y continuidad por interferencia en 2-bits.
+* **[MOUNTAIN_RECOVERY_COMPLEX_PHASE_PLAN.md](plans/MOUNTAIN_RECOVERY_COMPLEX_PHASE_PLAN.md)**: **RECUPERACIÓN DE LA MONTAÑA SEMÁNTICA** — Reconstrucción de topología suave en $\mathbb{C}$ mediante rotaciones QPSK y desplazamientos de bits en 2-bits.
 * **[CONGENITAL_MEMORY_AND_EMBODIED_GENESIS_PLAN.md](plans/CONGENITAL_MEMORY_AND_EMBODIED_GENESIS_PLAN.md)**: **NACIMIENTO CON MEMORIA CONGÉNITA (`.gmem`)** — Co-evolución de corteza Q2_0 e hipocampo mmap en 3 nichos fácticos desde la génesis.
 * **[LASER_SEMANTIC_WAVEGUIDE_PLAN.md](plans/LASER_SEMANTIC_WAVEGUIDE_PLAN.md)**: **EL LÁSER SEMÁNTICO (`max_laser.gaje`)** — Arquitectura colimada *Deep & Narrow* ($D=384, L=12, H=6, V=4096$) para máxima coherencia de fase en ~22 MB.
 * **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo y arquitectura del motor.
-* **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro de ejecución de grafos agénticos soberanos en Rust.
-* **[AGENTIC_GRAPH_RUST.md](plans/AGENTIC_GRAPH_RUST.md)**: Tipos `AgentState`, `AgentNode` y orquestación cíclica sin dependencias externas.
+* **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos del ciclo de desarrollo.
+* **[Q4_0_NANO_PICO_PRODUCTION_PLAN.md](plans/Q4_0_NANO_PICO_PRODUCTION_PLAN.md)**: **PRODUCCIÓN Q4_0 NANO/PICO** — Consolidación de PPL < 10 y calibración factual en `gaje_nano_0_5b` y `gaje_pico_135m`.
 * **[DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md](plans/DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md)**: Estrategia de destilación y transferencia de conocimiento desde maestros Qwen2.5 / DeepSeek / Gemma.
-* **[NATIVE_SEMANTIC_RAG_PLAN.md](plans/NATIVE_SEMANTIC_RAG_PLAN.md)**: Plan de RAG semántico nativo e indexación HNSW zero-copy.
 * **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos ultra-ligeros de 32 MB.
 * **[STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md](plans/STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md)**: Oportunidades estratégicas de alto rendimiento (WebGPU, sub-4bit y ecosistema).
 * **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
-* **[QUALITY_EXPORT_PLAN.md](plans/QUALITY_EXPORT_PLAN.md)**: Plan de exportación calibrada con preservación de gradientes.
-* **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos del ciclo de desarrollo.
+* **[MILESTONE_ALGEBRAIC_INITIALIZATION.md](plans/MILESTONE_ALGEBRAIC_INITIALIZATION.md)**: Inicialización algebraica mediante campo ciclotómico $\mathbb{Q}(\zeta_{16})$.
+* **[TRAINING_PIPELINE_PLAN.md](plans/TRAINING_PIPELINE_PLAN.md)**: Hoja de ruta global para pipeline de entrenamiento y afinamiento.
+* **[WEB_UI_OPTIMIZATION_ROADMAP.md](plans/WEB_UI_OPTIMIZATION_ROADMAP.md)**: Roadmap de aceleración WebGPU, virtualización DOM en chat y suites E2E Playwright.
 
 ### ✅ Planes Implementados y Certificados (`docs/plans/completed/`)
+* **[AGENTIC_GRAPH_RUST.md](plans/completed/AGENTIC_GRAPH_RUST.md)**: **ORQUESTACIÓN AGÉNTICA SOBERANA** — Tipos `AgentState`, `AgentNode` y orquestación Tokio sin dependencias (`gaje-cli swarm`).
+* **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/completed/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro ejecutado de grafos agénticos y enjambre asíncrono.
+* **[GPU_STE_ACCELERATION_AND_ONLINE_DISTILLATION_PLAN.md](plans/completed/GPU_STE_ACCELERATION_AND_ONLINE_DISTILLATION_PLAN.md)**: **ACELERACIÓN GPU STE & DESTILACIÓN DNI** — Shaders WGSL (`ste_q2_backward`, `kl_divergence`, `batched_gemv`) y pipeline GPU en Rust.
+* **[DISTILL_SMOLLM2_1TEACHER.md](plans/completed/DISTILL_SMOLLM2_1TEACHER.md)**: **DESTILACIÓN 1-A-1** — SFT sobre `lm_head` FP32 (`NativeGenomicTrainer.fit_lm_head`).
 * **[GAJE_BENCHMARK_SUITE_PLAN.md](plans/completed/GAJE_BENCHMARK_SUITE_PLAN.md)**: Suite unificada y automatizada de benchmarks y métricas continuas (`gaje-cli benchmark`).
 * **[EVAL_HARNESS_DESIGN.md](plans/completed/EVAL_HARNESS_DESIGN.md)**: Arquitectura del Eval Harness multidimensional (Factual, Anti-Loops, Hardware, PPL).
 * **[QUALITY_EVAL_PROTOCOL.md](plans/completed/QUALITY_EVAL_PROTOCOL.md)**: Protocolo de evaluación de calidad semántica, diversidad léxica $d_1/d_2$ y detección de bucles.
@@ -102,6 +114,10 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[WEB_UI_IMPROVEMENT_PLAN.md](plans/completed/WEB_UI_IMPROVEMENT_PLAN.md)**: Plataforma Web UI dual Y2K/Zen, telemetría HUD, streaming SSE y OPFS cache.
 * **[TESTING_AND_VERIFICATION_PLAN.md](plans/completed/TESTING_AND_VERIFICATION_PLAN.md)**: Suite de pruebas de regresión, certificación de hardware y purga de memoria.
 * **[DOCUMENTATION_CONSOLIDATION_PLAN.md](plans/completed/DOCUMENTATION_CONSOLIDATION_PLAN.md)**: Consolidación y sincronización documental global.
+* **[Q2_0_SPATIAL_2BIT_EXPERIMENT.md](plans/completed/Q2_0_SPATIAL_2BIT_EXPERIMENT.md)**: **EXPERIMENTO Q2_0 ESPACIAL** — Concluido con veredicto empírico (rechazo de H2 por degradación acumulativa, consolidación de Q4_0).
+* **[TEMPORAL_4BIT_EMULATION_DESIGN.md](plans/completed/TEMPORAL_4BIT_EMULATION_DESIGN.md)**: **EMULACIÓN TEMPORAL 4-BIT** — Concluido/Refutado numéricamente (dithering temporal no recupera precisión).
+* **[IQAT_Q4_0_BODY_DESIGN.md](plans/completed/IQAT_Q4_0_BODY_DESIGN.md)**: **DISEÑO IQAT DEL CUERPO** — Concluido (aislamiento causal: QAT sobre cuerpo congelado degenera la generación).
+* **[QUALITY_EXPORT_PLAN.md](plans/completed/QUALITY_EXPORT_PLAN.md)**: **EXPORT DE CALIDAD** — Concluido (Fase 4b: optimización de held-out CE desacoplada de coherencia generativa).
 
 ### 🔬 Investigaciones y Topología Matemática (`docs/research/`)
 * **[BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md](research/BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md)**: **NACIMIENTO Y ENTRENAMIENTO NATIVO EN 2-BITS.** Hallazgos de viabilidad de `max.gaje` ($99.19\%$ reducción de pérdida en CPU con STE), mapeo conforme y fases de coherencia.

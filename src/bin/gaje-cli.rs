@@ -83,6 +83,9 @@ enum Commands {
 
     /// Entrena un organismo nacido (Q2_0) con el estimador Straight-Through cuaternario
     TrainBorn(TrainBornArgs),
+
+    /// Destilación de conocimiento DNI online (Maestro -> Alumno)
+    Distill(DistillArgs),
 }
 
 #[derive(Args, Debug)]
@@ -404,6 +407,49 @@ struct TrainBornArgs {
     output: Option<String>,
 }
 
+#[derive(Args, Debug)]
+struct DistillArgs {
+    /// Archivo del modelo maestro (.flat, .gaje o .gguf)
+    #[arg(short, long)]
+    teacher: String,
+
+    /// Archivo del modelo alumno (.flat o .gaje)
+    #[arg(short, long)]
+    student: String,
+
+    /// Dataset en formato JSONL o texto para destilación
+    #[arg(short, long)]
+    dataset: String,
+
+    /// Épocas de destilación
+    #[arg(short, long, default_value_t = 3)]
+    epochs: usize,
+
+    /// Tasa de aprendizaje (Learning Rate)
+    #[arg(long, default_value_t = 0.001)]
+    lr: f32,
+
+    /// Ponderación de divergencia KL vs SFT (alpha: 0.0=solo CE, 1.0=solo KL)
+    #[arg(long, default_value_t = 0.7)]
+    alpha: f32,
+
+    /// Temperatura de suavizado softmax para destilación
+    #[arg(long, default_value_t = 1.0)]
+    temperature: f32,
+
+    /// Tokenizador opcional para el maestro
+    #[arg(long)]
+    teacher_tokenizer: Option<String>,
+
+    /// Tokenizador opcional para el alumno
+    #[arg(long)]
+    student_tokenizer: Option<String>,
+
+    /// Archivo de salida para el modelo refinado (.flat o .gaje)
+    #[arg(short, long)]
+    output: Option<String>,
+}
+
 fn resolve_default_model(model_opt: Option<String>) -> String {
     if let Some(m) = model_opt {
         return m;
@@ -573,6 +619,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(Commands::Swarm(swarm_args)) => handle_swarm(&swarm_args),
         Some(Commands::Birth(birth_args)) => handle_birth(&birth_args),
         Some(Commands::TrainBorn(train_args)) => handle_train_born(&train_args),
+        Some(Commands::Distill(distill_args)) => handle_distill(&distill_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -1087,3 +1134,241 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
 
     Ok(())
 }
+
+fn load_model_with_optional_tok(
+    model_path: &str,
+    custom_tok_path: Option<&str>,
+) -> Result<(_impl::nn::llm::GenomicLLM, _impl::core::tokenizer::GajeTokenizer), Box<dyn std::error::Error + Send + Sync>> {
+    use _impl::core::tokenizer::GajeTokenizer;
+    use _impl::core::gtok::GtokNativeTokenizer;
+
+    if let Some(tok_path) = custom_tok_path {
+        let reader = _impl::io::flat_reader::GajeFlatFileReader::open(model_path)?;
+        let model = reader.load_genomic()?;
+        let tokenizer = if tok_path.ends_with(".bin") || tok_path.ends_with(".gtok") {
+            let bytes = std::fs::read(tok_path)?;
+            let gtok = GtokNativeTokenizer::from_bytes(&bytes)?;
+            GajeTokenizer::from_gtok(gtok)
+        } else {
+            GajeTokenizer::from_file(tok_path).map_err(|e| e.to_string())?
+        };
+        Ok((model, tokenizer))
+    } else {
+        match repl::load_model_and_tokenizer(model_path) {
+            Ok(pair) => Ok(pair),
+            Err(e) => {
+                if Path::new("data/gtok_human_4k.bin").exists() {
+                    let bytes = std::fs::read("data/gtok_human_4k.bin")?;
+                    let gtok = GtokNativeTokenizer::from_bytes(&bytes)?;
+                    let reader = _impl::io::flat_reader::GajeFlatFileReader::open(model_path)?;
+                    let model = reader.load_genomic()?;
+                    Ok((model, GajeTokenizer::from_gtok(gtok)))
+                } else if Path::new("models/core/tokenizer.json").exists() {
+                    let reader = _impl::io::flat_reader::GajeFlatFileReader::open(model_path)?;
+                    let model = reader.load_genomic()?;
+                    let tokenizer = GajeTokenizer::from_file("models/core/tokenizer.json")
+                        .map_err(|e| e.to_string())?;
+                    Ok((model, tokenizer))
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
+    }
+}
+
+fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use _impl::io::flat_reader::GajeFlatFileReader;
+    use _impl::io::flat_writer::save_genomic_flat_q;
+    use _impl::nn::distiller::{CouncilOfTeachers, GenomicDistiller, Teacher};
+
+    println!("\n🧬 GAJE PROTOCOLO DE DESTILACIÓN — DNI Online (Maestro ➔ Alumno)");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  • Modelo Maestro     : {}", args.teacher);
+    println!("  • Modelo Alumno      : {}", args.student);
+    println!("  • Dataset Destilación: {}", args.dataset);
+    println!("  • Épocas             : {}", args.epochs);
+    println!("  • Learning Rate (lr) : {:.4}", args.lr);
+    println!("  • Ponderación Alpha  : {:.2} (KL vs CE)", args.alpha);
+    println!("  • Temperatura        : {:.2}", args.temperature);
+
+    println!("\n⏳ Cargando modelo alumno...");
+    let (mut student_model, student_tok) =
+        load_model_with_optional_tok(&args.student, args.student_tokenizer.as_deref())?;
+    let student_reader = GajeFlatFileReader::open(&args.student)?;
+    let student_config = student_reader.load_config()?;
+    let student_header = student_reader.header;
+
+    println!(
+        "✅ Alumno cargado ({} bloques, {} dim, vocab: {})",
+        student_model.blocks.len(),
+        student_config.n_embd,
+        student_model.lm_head.out_features
+    );
+
+    println!("\n⏳ Cargando modelo maestro...");
+    let teacher = if args.teacher.ends_with(".gguf") {
+        #[cfg(feature = "native")]
+        {
+            let tok_path = args
+                .teacher_tokenizer
+                .as_deref()
+                .unwrap_or("models/core/tokenizer.json");
+            Teacher::new(
+                "Maestro_GGUF".to_string(),
+                &args.teacher,
+                tok_path,
+                &student_tok,
+            )?
+        }
+        #[cfg(not(feature = "native"))]
+        {
+            return Err("Soporte GGUF requiere feature 'native'".into());
+        }
+    } else {
+        let (teacher_model, teacher_tok) =
+            load_model_with_optional_tok(&args.teacher, args.teacher_tokenizer.as_deref())?;
+        Teacher::from_model(
+            "Maestro_Flat".to_string(),
+            teacher_model,
+            teacher_tok,
+            &student_tok,
+        )
+    };
+
+    println!(
+        "✅ Maestro listo (vocabulario mapeado, identidad: {})",
+        teacher.is_identity_vocab
+    );
+
+    // Configurar consejo y destilador
+    let mut council = CouncilOfTeachers::new();
+    council.add_teacher(teacher);
+    let mut distiller = GenomicDistiller::new(council, student_tok.clone());
+    distiller.distill_weight = args.alpha;
+
+    // Leer dataset de destilación
+    println!("\n📖 Leyendo y preparando dataset de destilación...");
+    let file = std::fs::File::open(&args.dataset)?;
+    let lines = std::io::BufRead::lines(std::io::BufReader::new(file));
+    let mut texts: Vec<String> = Vec::new();
+
+    for line_res in lines {
+        let line = line_res?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let (Some(prompt), Some(resp)) = (
+                val.get("prompt").and_then(|v| v.as_str()),
+                val.get("response").and_then(|v| v.as_str()),
+            ) {
+                texts.push(format!(
+                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
+                    prompt, resp
+                ));
+            } else if let (Some(inst), Some(resp)) = (
+                val.get("instruction").and_then(|v| v.as_str()),
+                val.get("response").and_then(|v| v.as_str()),
+            ) {
+                texts.push(format!(
+                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
+                    inst, resp
+                ));
+            } else if let Some(t) = val.get("text").and_then(|v| v.as_str()) {
+                texts.push(t.to_string());
+            } else {
+                texts.push(trimmed.to_string());
+            }
+        } else {
+            texts.push(trimmed.to_string());
+        }
+    }
+
+    println!("📊 Total de secuencias para destilación: {}", texts.len());
+    if texts.is_empty() {
+        return Err("El dataset no contiene secuencias válidas".into());
+    }
+
+    println!("\n🔥 Iniciando ciclo de destilación DNI...");
+    let t_start = std::time::Instant::now();
+    let mut initial_loss = 0.0f32;
+    let mut final_loss = 0.0f32;
+
+    for epoch in 1..=args.epochs {
+        let t_ep = std::time::Instant::now();
+        let mut ep_loss_sum = 0.0f32;
+        let mut count = 0usize;
+
+        for (idx, text) in texts.iter().enumerate() {
+            match distiller.distill_step(&mut student_model, text, args.lr) {
+                Ok(loss) => {
+                    ep_loss_sum += loss;
+                    count += 1;
+                }
+                Err(e) => {
+                    if idx < 3 {
+                        eprintln!("  [!] Advertencia en muestra {}: {}", idx, e);
+                    }
+                }
+            }
+        }
+
+        let ep_avg_loss = if count > 0 {
+            ep_loss_sum / count as f32
+        } else {
+            0.0
+        };
+        if epoch == 1 {
+            initial_loss = ep_avg_loss;
+        }
+        final_loss = ep_avg_loss;
+
+        let ep_dur = t_ep.elapsed().as_secs_f32().max(1e-4);
+        println!(
+            "  • Época {:>2}/{} | Loss: {:.4} | Muestras: {} | Tiempo: {:.2}s",
+            epoch, args.epochs, ep_avg_loss, count, ep_dur
+        );
+    }
+
+    let total_time = t_start.elapsed();
+    let delta_loss = initial_loss - final_loss;
+    let red_pct = if initial_loss > 1e-6 {
+        (delta_loss / initial_loss) * 100.0
+    } else {
+        0.0
+    };
+
+    println!("\n📈 Resumen de Destilación DNI:");
+    println!("  • Pérdida Inicial   : {:.4}", initial_loss);
+    println!("  • Pérdida Final     : {:.4}", final_loss);
+    println!("  • Reducción Pérdida : {:.4} ({:.2}%)", delta_loss, red_pct);
+    println!("  • Tiempo Total      : {:.2?}", total_time);
+
+    let output_path = args.output.clone().unwrap_or_else(|| {
+        if args.student.ends_with(".flat") {
+            args.student.strip_suffix(".flat").unwrap().to_string() + "_distilled.flat"
+        } else if args.student.ends_with(".gaje") {
+            args.student.strip_suffix(".gaje").unwrap().to_string() + "_distilled.gaje"
+        } else {
+            format!("{}_distilled", args.student)
+        }
+    });
+
+    println!("\n💾 Guardando alumno refinado en: {}", output_path);
+    save_genomic_flat_q(
+        &output_path,
+        &student_model,
+        &student_config,
+        Some(&student_tok),
+        student_header.quant_format,
+    )?;
+
+    println!("✅ ¡Modelo destilado guardado exitosamente!");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+    Ok(())
+}
+

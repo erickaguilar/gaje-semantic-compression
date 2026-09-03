@@ -117,4 +117,63 @@ impl Teacher {
             is_identity_vocab: is_identity,
         })
     }
+
+    /// Crea un maestro a partir de un modelo GenomicLLM y su tokenizador ya cargados.
+    pub fn from_model(
+        name: String,
+        model: GenomicLLM,
+        tokenizer: GajeTokenizer,
+        student_tokenizer: &GajeTokenizer,
+    ) -> Self {
+        let vocab_size = tokenizer.vocab_size();
+        let mut vocab_mapping = vec![None; vocab_size];
+
+        let mut is_identity = vocab_size == student_tokenizer.vocab_size();
+        if is_identity {
+            for i in 0..100.min(vocab_size) {
+                if let Ok(t1) = tokenizer.decode(&[i as u32], true) {
+                    if let Some(s_id) = student_tokenizer.token_to_id(&t1) {
+                        if s_id as usize != i {
+                            is_identity = false;
+                            break;
+                        }
+                    } else {
+                        is_identity = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if is_identity {
+            for i in 0..vocab_size {
+                vocab_mapping[i] = Some(i);
+            }
+        } else {
+            use rayon::prelude::*;
+            let results: Vec<Option<usize>> = (0..vocab_size)
+                .into_par_iter()
+                .map(|i| {
+                    if let Ok(token_str) = tokenizer.decode(&[i as u32], true) {
+                        if !token_str.is_empty() {
+                            return student_tokenizer
+                                .token_to_id(&token_str)
+                                .map(|id| id as usize);
+                        }
+                    }
+                    None
+                })
+                .collect();
+            vocab_mapping = results;
+        }
+
+        Teacher {
+            name,
+            model,
+            tokenizer,
+            vocab_mapping,
+            is_identity_vocab: is_identity,
+        }
+    }
 }
+
