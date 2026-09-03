@@ -4,6 +4,11 @@
 > **Artefacto:** `models/born/max.gaje` Llama `dim256` `n_blocks8` `n_head4` `vocab49152` `Q2_0` `32×12B` `99.57 MB` 75t `471 MB` cache `25491 págs` `src/nn/repl.rs:32` `v1.7.0-alpha`  
 > **Fecha:** 2026-08-30, **Archivado:** `experiments/archived/q2_0_born/` `PPL45`
 
+> [!WARNING]
+> **EXPERIMENTO CONCLUIDO — HIPÓTESIS REFUTADA (RESULTADO NEGATIVO)**  
+> El modelo nacido puramente en 2-bit ($Q2\_0$) demostró viabilidad numérica pero colapso semántico severo ($PPL \approx 45$, lenguaje incoherente).  
+> **Estándar Certificado para Producción:** Formato `.gaje.flat` v2 con cuerpo en **$Q4\_0$** y embeddings en **$FP32$**.
+
 ---
 
 ## 1. Resumen Ejecutivo

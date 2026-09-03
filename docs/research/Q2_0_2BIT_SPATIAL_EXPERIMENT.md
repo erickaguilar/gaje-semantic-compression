@@ -3,6 +3,11 @@
 > Rama: `develop` · Fecha: 2026-08-20
 > Ejecuta `docs/plans/Q2_0_SPATIAL_2BIT_EXPERIMENT.md`. Resultado: **NEGATIVO — H2 rechazada**.
 
+> [!WARNING]
+> **HIPÓTESIS REFUTADA EMPÍRICAMENTE (RESULTADO NEGATIVO)**  
+> La cuantización pura de 2-bits degrada la coherencia semántica en modelos densos más allá del umbral admisible.  
+> **Ruta Certificada:** Cuantización híbrida de producción **$Q4\_0$ (cuerpo) + $FP32$ (embeddings)** en formato `.gaje.flat` v2.
+
 ---
 
 ## 1. Resumen ejecutivo

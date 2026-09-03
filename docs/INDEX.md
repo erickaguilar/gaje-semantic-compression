@@ -4,7 +4,19 @@ Mapa central del repositorio consolidado. Define la estructura lógica actual, l
 
 ---
 
-## 📂 1. Documentación (`docs/`)
+## 🧭 Rutas Rápidas de Lectura (Onboarding Tracks)
+
+Si buscas información específica sin recorrer todo el archivo de documentación, sigue estas rutas recomendadas:
+
+| Tu Perfil u Objetivo | Ruta Recomendada | Documentos Clave |
+| :--- | :--- | :--- |
+| 🚀 **Desarrollador / Producción** | Cómo compilar, ejecutar inferencia en servidor o terminal y gestionar modelos `.flat`. | 1. [GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)<br>2. [GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)<br>3. [MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md) |
+| 🔬 **Auditor Científico / Benchmarks** | Contrastar claims de rendimiento, paridad FP32, latencias sub-ms y perplejidad. | 1. [EMPIRICAL_TRUTH_STATE.md](meta/EMPIRICAL_TRUTH_STATE.md) ⭐<br>2. [BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)<br>3. [smollm2_fp32_parity.md](reports/smollm2_fp32_parity.md) |
+| 🧬 **Investigador / Bio-inspirado** | Comprensión profunda de la memoria de islas, espacios conformes y estandarización. | 1. [NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md](research/NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md)<br>2. [ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md](research/ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md)<br>3. [SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md) |
+
+---
+
+## 📂 1. Documentación Detallada (`docs/`)
 
 La documentación se organiza por función. La **investigación exploratoria** y las **versiones heredadas** se conservan íntegramente en `docs/archive/`.
 
@@ -18,6 +30,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md](research/NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md)**: **ESTANDARIZACIÓN DE NOMENCLATURA Y MAPEO DUAL-LAYER** — Mapeo biunívoco entre la identidad bio-cibernética y los estándares de ingeniería de sistemas/ML para maximizar adopción y compatibilidad.
 * **[SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md)**: **ENJAMBRES ESPECIALIZADOS Y BIOMIMETISMO COLONIAL** — Castas cognitivas (45M a 3B), analogías con hormigas cortadoras, sifonóforos y sistema entérico para orquestación $<10\text{ µs}$.
 * **[FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md](research/FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md)**: **CAPACIDADES FUNCIONALES DESBLOQUEADAS POR COMPRESIÓN** — Memoria continua viva (<0.12 ms), enjambres multi-agente concurrentes, soberanía zero-server y tool-calling determinista.
 * **[EXPONENTIAL_AND_PHASE_CODING_MATHEMATICS_FINDINGS.md](research/EXPONENTIAL_AND_PHASE_CODING_MATHEMATICS_FINDINGS.md)**: **CODIFICACIÓN EXPONENCIAL, LNS Y DOMINIOS DE FASE COMPLEJA** — Aritmética sin multiplicadores mediante sumas logarítmicas ($x \to \log_2(x)$) e interferencia periódica en $\mathbb{C}$ ($e^{i \theta}$).

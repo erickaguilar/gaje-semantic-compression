@@ -5,6 +5,13 @@
 > contexto/lm_head, nunca por QAT del cuerpo" en un modelo sin los problemas de
 > gibberish de SmolLM2-135M.
 
+> [!WARNING]
+> **HALLAZGO NEGATIVO CERTIFICADO — REGLA OPERATIVA DE CUERPO CONGELADO**  
+> Aplicar QAT al cuerpo ya cuantizado ($Q4\_0$) destruye la coherencia de generación (100%/95% degeneradas vs 0% en base).  
+> **Regla de Producción:** El cuerpo del transformer cuantizado se mantiene estrictamente congelado (*Frozen Body*); la adaptación se efectúa únicamente por contexto o sobre la cabeza del modelo (`lm_head`).
+
+---
+
 ## Pregunta
 
 El punto dulce de SmolLM2 fue la **destilación corta con lm_head congelado,
