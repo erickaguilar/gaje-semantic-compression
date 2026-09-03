@@ -30,6 +30,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[PATH_TO_VIABLE_2BIT_LLM_FINDINGS.md](research/PATH_TO_VIABLE_2BIT_LLM_FINDINGS.md)**: **HACIA LA VIABILIDAD DEL LLM EN 2-BITS** — Diagnóstico de los límites del nacimiento sin entrenamiento y los 3 pilares para modelos viables sub-20MB (Ranking Parity, Desacoplamiento V/D e Hipocampo .gmem).
 * **[NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md](research/NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md)**: **ESTANDARIZACIÓN DE NOMENCLATURA Y MAPEO DUAL-LAYER** — Mapeo biunívoco entre la identidad bio-cibernética y los estándares de ingeniería de sistemas/ML para maximizar adopción y compatibilidad.
 * **[SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md)**: **ENJAMBRES ESPECIALIZADOS Y BIOMIMETISMO COLONIAL** — Castas cognitivas (45M a 3B), analogías con hormigas cortadoras, sifonóforos y sistema entérico para orquestación $<10\text{ µs}$.
 * **[FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md](research/FUNCTIONAL_CAPABILITIES_BEYOND_COMPRESSION_FINDINGS.md)**: **CAPACIDADES FUNCIONALES DESBLOQUEADAS POR COMPRESIÓN** — Memoria continua viva (<0.12 ms), enjambres multi-agente concurrentes, soberanía zero-server y tool-calling determinista.
@@ -87,6 +88,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[GOLDEN_RECIPE_2BIT_HIGH_POWER_DISTILLATION.md](plans/GOLDEN_RECIPE_2BIT_HIGH_POWER_DISTILLATION.md)**: **LA RECETA DORADA 2-BIT EN ALTA POTENCIA** — Protocolo de reproducción en GPU para romper la barrera de coherencia: arquitectura híbrida desacoplada ($Q2\_0$ en cuerpo + $FP32$ en `lm_head`), GTOK 4K y destilación por consenso (DeepSeek-R1 + Qwen 3B).
 * **[EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md](plans/EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md)**: **SUPER-MOE EDGE 500 MB** — Arquitectura MoE de 8 expertos (Top-2 activos), 2.2B de capacidad paramétrica virtual con cómputo de 350M y 25 MB de memoria congénita `.gmem`.
 * **[BF2_COMPLEX_PHASE_FLOAT_PLAN.md](plans/BF2_COMPLEX_PHASE_FLOAT_PLAN.md)**: **PUNTO FLOTANTE DE FASE BF2-COMPLEX** — Inferencia en $\mathbb{C}$ sin multiplicadores, rotaciones QPSK y continuidad por interferencia en 2-bits.
 * **[MOUNTAIN_RECOVERY_COMPLEX_PHASE_PLAN.md](plans/MOUNTAIN_RECOVERY_COMPLEX_PHASE_PLAN.md)**: **RECUPERACIÓN DE LA MONTAÑA SEMÁNTICA** — Reconstrucción de topología suave en $\mathbb{C}$ mediante rotaciones QPSK y desplazamientos de bits en 2-bits.
