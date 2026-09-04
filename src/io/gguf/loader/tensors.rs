@@ -95,17 +95,8 @@ impl GGUFLoader {
             unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
         }
 
-        // Auto-detección de bit_depth para Mixed-Bit Import
-        let bit_depth = if name.contains("attn")
-            || name.contains("q_proj")
-            || name.contains("k_proj")
-            || name.contains("v_proj")
-            || name.contains("o_proj")
-        {
-            4
-        } else {
-            2
-        };
+        // Cuantización 4-bit consistente para preservar fidelidad en atención y FFN
+        let bit_depth = 4;
 
         let (dna, centroids, anchors_u8) = if bit_depth == 4 {
             crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold)

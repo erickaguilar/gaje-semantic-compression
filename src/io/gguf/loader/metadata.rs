@@ -168,7 +168,7 @@ impl GGUFLoader {
                 anchor_threshold: 0.1,
                 ffn_anchor_threshold: 0.1,
                 rna_threshold: 0.5,
-                unpermute_weights: true, // Re-habilitamos unpermute para Llama
+                unpermute_weights: arch == "llama", // Solo Llama requiere unpermute; Qwen2 ya usa split directo
                 apply_smollm_rope_patch: is_smollm2,
                 tie_word_embeddings: false,
                 dni: default_dni(),
