@@ -10,8 +10,8 @@ from gaje.nn.stabilized import GenomicLLM
 from gaje.nn.configs import get_config
 
 
-def test_save_and_load_db():
-    print("🧪 GAJE PROTOCOL: TEST REDB INTEGRATION 🧪")
+def test_save_and_load_gaje():
+    print("🧪 GAJE PROTOCOL: TEST ZERO-COPY .GAJE SAVE/LOAD 🧪")
 
     db_path = "test_model.gaje"
     if os.path.exists(db_path):
