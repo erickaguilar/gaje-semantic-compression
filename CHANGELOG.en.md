@@ -2,6 +2,30 @@
 
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.2-alpha] - 2026-09-04
+### Added
+- **Sovereign Binary Format Unification (`.gaje` v2) & In-Place Adaptation**:
+  - Unified `.flat` and `.gaje` into a single sovereign zero-copy binary standard (`mmap`, magic `b"GAJE"`).
+  - Fixed 4096-byte header (`FlatHeaderV2` / `FlatHeaderV3`) supporting continuous adaptation, genetic lineage, and cryptographic hashes (`lineage_parent_hash`, `lineage_current_hash`, `num_mutations`, `num_overrides`).
+  - Native in-place centroid mutation engine (`src/io/adaptive.rs`) preventing base weight duplication and block misalignment.
+  - New CLI subcommands: `gaje-cli mutate` and `gaje-cli history`.
+- **Dedicated Terminal Tools Module (`src/cli/`)**:
+  - Created `crate::cli` namespace (`src/cli/models.rs`, `src/cli/tools.rs`) separating presentation and inspection tools from pure I/O layers.
+  - Purged exploratory monolithic scripts in `src/bin/` (`gen_50.rs`, `gen_300.rs`, `distill_run.rs`), establishing `gaje-cli.rs` as the sovereign single binary.
+
+### Changed
+- **Total Eradication of `redb` and Obsolete Dependencies**:
+  - Removed `redb` and `lz4_flex` from `Cargo.toml`.
+  - Deleted legacy database loaders (`src/core/db.rs`, `src/io/smg1.rs`, `src/io/db_loader/`), standardizing zero-copy loading via `GajeFlatFileReader`.
+- **Semantic Clarification & Architectural Refactoring of `src/`**:
+  - Renamed `src/compute/sampler.rs` to `src/compute/sintergic.rs` (dedicated to Grinberg's Sintergic theory and Lagrangian phase space).
+  - Centralized standard autoregressive sampling (`sample_min_p`, `sample_top_p_core`) into `src/compute/sampling.rs`.
+  - Renamed `src/nn/linear/database.rs` to `src/nn/linear/storage.rs`, eradicating "database" in favor of `WeightStorage` (with backward-compatible `WeightDatabase` alias).
+  - Consolidated the entire GGUF subsystem under `src/io/gguf/` (`loader/`, `reader.rs`, `writer.rs`, `types.rs`).
+- **Mobile Environment Sanitization (Termux / Android)**:
+  - 100% clean compilation with zero compiler warnings (`cargo check --bins --tests`).
+  - Updated integration tests to dynamically query `std::env::temp_dir()`, guaranteeing 100% test pass rates in Termux sandbox environments without permission errors.
+
 ## [1.7.1-alpha] - 2026-08-29
 ### Added
 - **Sovereign Rust Single-Binary (`gaje-cli`) & Embedded Web UI**:

@@ -1,13 +1,14 @@
-# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.0-alpha)
+# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.2-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.0--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.2--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
+[![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](README.md)
 [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), instant memory-mapped file loading (**`.gaje.flat` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
+**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), in-place adaptive centroid mutations with lineage tracking, instant memory-mapped file loading (**unified `.gaje` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
 
 ---
 
@@ -77,23 +78,29 @@ cargo build --release --bin gaje-cli
 ./target/release/gaje-cli serve --port 8080
 
 # Interactive Chat REPL session
-./target/release/gaje-cli chat --model models/production/gaje_pico_135m.flat
+./target/release/gaje-cli chat --model models/production/gaje_pico_135m.gaje
 
 # Pull models directly from Hugging Face
 ./target/release/gaje-cli pull pico
 
 # Inspect and verify local models catalog
 ./target/release/gaje-cli models list
-./target/release/gaje-cli models inspect models/production/gaje_pico_135m.flat
+./target/release/gaje-cli models inspect models/production/gaje_pico_135m.gaje
 
-# Export any model (.gguf, .gaje, .flat) to zero-copy flat v2
-./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.flat
+# In-place genomic centroid mutation (.gaje)
+./target/release/gaje-cli mutate --model models/production/gaje_pico_135m.gaje --rate 0.05
+
+# Inspect genetic lineage and adaptive generations
+./target/release/gaje-cli history --model models/production/gaje_pico_135m.gaje
+
+# Export any model (.gguf, .gaje) to zero-copy flat v2
+./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.gaje
 
 # Throughput (TPS), TTFT and Perplexity (PPL) benchmark suite
-./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.flat --tokens 64
+./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.gaje --tokens 64
 
 # Audit tensor weights (zero NaN / zero Inf certificate)
-./target/release/gaje-cli audit models/production/gaje_pico_135m.flat
+./target/release/gaje-cli audit models/production/gaje_pico_135m.gaje
 
 # Diagnostic hardware extensions (AVX2, AVX512, NEON, FMA)
 ./target/release/gaje-cli doctor
@@ -110,11 +117,11 @@ cargo test --test cli_standalone_test
 
 ## 🛠️ Architectural Foundations
 
-### 1. Dynamic Self-Describing Flat Headers (`.gaje.flat` v2)
-The **`FlatHeaderV2`** binary structure implements an autodescriptive **`ArchitectureDescriptor`**. During exporting (`export_gaje_flat.py`), the model dimensions, RoPE parameters, and attention permutation patterns ($Q/K$) are dynamically parsed and written to bytes `56-79` of the file header, eliminating manual deployment errors.
+### 1. Dynamic Self-Describing Flat Headers (`.gaje` v2)
+The **`FlatHeaderV2`** binary structure implements an autodescriptive **`ArchitectureDescriptor`**. Model dimensions, RoPE parameters, and attention permutation patterns ($Q/K$) are dynamically parsed and written to the fixed 4096-byte header, including cryptographic lineage tracking and mutation counters.
 
 ### 2. Quantization-Aware Training (QAT) Stabilization
-GAJE supports native local adaptation algorithms. Centroid updates in Rust (`linear.rs`) are normalized by dividing the accumulated gradients by the actual activation count (`centroid_counts`), preventing gradient explosion (`NaN` / `Inf`) and guaranteeing mathematical convergence of quantization loss.
+GAJE supports native local adaptation algorithms. Centroid updates in Rust (`storage.rs`) are normalized by dividing the accumulated gradients by the actual activation count (`centroid_counts`), preventing gradient explosion (`NaN` / `Inf`) and guaranteeing mathematical convergence of quantization loss.
 
 ### 3. Minimum Action Lagrangian Sampling
 Token generation is modeled as a dynamic system governed by the Principle of Least Action, evaluating kinetic energy $T$ (semantic mobility) and potential energy $V$ (grammatical constraint):
@@ -123,19 +130,25 @@ $$\mathcal{L} = T - V$$
 
 ---
 
-## 📂 Repository Organization (`v1.6.0-alpha`)
+## 📂 Repository Organization (`v1.7.2-alpha`)
 
 ```text
 gaje-semantic-compression/
-├── src/                    # Rust Native Core (AVX2/FMA SIMD Kernels, LLM Engine, KV-Cache, Mmap Loader)
-│   └── bin/gaje-cli.rs     # Primary native engine CLI
-├── python/gaje/            # PyO3 Bridge and Native Python Infrasctructure Wrappers
+├── src/                    # Rust Native Core (SIMD Kernels, LLM Engine, KV-Cache, Mmap Loader)
+│   ├── bin/gaje-cli.rs     # Sovereign single binary CLI
+│   ├── cli/                # Terminal presentation and subcommands (models, tools)
+│   ├── compute/            # Pure numeric compute (sintergic, sampling, SIMD kernels, quantize)
+│   ├── core/               # Base structures (gtok, tokenizers, session ring buffer, DNI)
+│   ├── io/                 # Zero-copy mmap I/O (adaptive, flat_reader, flat_writer, gguf/, gmem)
+│   ├── nn/                 # Neural layers (WeightStorage, GenomicLLM, Spiking, Distiller)
+│   └── server/             # Embedded native HTTP server with SSE streaming (tiny_http)
+├── python/gaje/            # PyO3 Bridge and Native Python Infrastructure Wrappers
 ├── examples/               # Core demos, Web UI, notebooks and Rust utilities
 │   └── ui/web_ui/          # Web UI Frontend (http://localhost:8080) and server.py server
 ├── tests/                  # Verification Suite (unit, integration, metrics, training, ui_e2e)
-├── scripts/                # Utility scripts and Flat Exporters (.gaje.flat)
-├── models/production/      # Quantized Production Models (Qwen2 0.5B, SmolLM2 135M)
-└── docs/                   # Scientific papers, blueprints, and reports (v1.6.0 report)
+├── scripts/                # Maintenance scripts and transmuters
+├── models/production/      # Quantized Production Models (.gaje flat v2)
+└── docs/                   # Scientific papers, blueprints, and reports
     ├── reports/            # Verified empirical results (parity reports and benchmarks)
     ├── guides/             # Operational manuals (GAJE CLI, workflows)
     ├── plans/              # Roadmaps and strategic plans

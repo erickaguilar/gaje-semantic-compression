@@ -1,14 +1,14 @@
-# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.0-alpha)
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.2-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.0--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.2--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Format](https://img.shields.io/badge/Format-Zero--Copy_Flat_mmap-brightgreen.svg)](docs/reports/session_findings_v1.6.0_phase_3.1.md)
+[![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
 [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models%20Hub-yellow)](https://huggingface.co/eaguilar/gaje-models)
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](README.en.md)
 [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano **`.gaje.flat` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
+**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano unificado **`.gaje` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además capacidades adaptativas de mutación in-place y linaje genético, memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
 
 > **2-bits (experimental):** la cuantización de **2-bits por peso (4 estados `00=A`, `01=C`, `11=G`, `10=T`)** se desarrolla en el módulo neuromórfico (`src/nn/spiking`) y quedó documentada como frente de investigación (inviable en hardware comercial por costo de cómputo). **La ruta de producción certificada es Q4_0 + FP32.**
 
@@ -119,20 +119,25 @@ $$\mathcal{L} = T - V$$
 
 ---
 
-## 📂 Organización del Repositorio (`v1.7.0-alpha`)
+## 📂 Organización del Repositorio (`v1.7.2-alpha`)
 
 ```text
 gaje-semantic-compression/
-├── src/                    # Núcleo Nativo en Rust (Kernels SIMD AVX2/FMA, LLM Engine, KV-Cache, Mmap Loader)
-│   └── bin/gaje-cli.rs     # CLI principal del motor nativo
+├── src/                    # Núcleo Nativo en Rust (Kernels SIMD, LLM Engine, KV-Cache, Mmap Loader)
+│   ├── bin/gaje-cli.rs     # CLI soberano único (sin scripts monolíticos descartables)
+│   ├── cli/                # Capa de presentación y subcomandos de terminal (models, tools)
+│   ├── compute/            # Motor numérico puro (sintergic, sampling, kernels SIMD, quantize)
+│   ├── core/               # Estructuras base (gtok, tokenizadores, memoria de sesión de anillo, DNI)
+│   ├── io/                 # E/S mmap zero-copy (adaptive, flat_reader, flat_writer, gguf/, gmem)
+│   ├── nn/                 # Capas neuronales (WeightStorage, GenomicLLM, Spiking, Distiller)
+│   └── server/             # Servidor HTTP embebido nativo con streaming SSE (tiny_http)
 ├── python/gaje/            # Puente PyO3 y Wrappers de Inferencia Nativas
 ├── examples/               # Demos de núcleo, Web UI, notebooks y utilidades Rust
 │   └── ui/web_ui/          # Interfaz Visual Web UI (http://localhost:8080) y Servidor server.py
 ├── tests/                  # Suite de Pruebas (unit, integration, metrics, training, ui_e2e)
-├── scripts/                # Herramientas de Mantenimiento y Exportadores Flat (.gaje.flat)
+├── scripts/                # Herramientas de Mantenimiento y Transmutadores
 ├── benchmarks/             # Benchmarks de rendimiento (perplexity, decode, flat, RAG)
-│   └── performance/        # bench_decode.py, gaje_flat_benchmark.py (métricas por fase)
-├── models/production/      # Modelos Cuantizados de Producción (Qwen2 0.5B, SmolLM2 135M)
+├── models/production/      # Modelos Cuantizados de Producción (.gaje plano v2)
 └── docs/                   # Documentación Científica, Planes y Reportes de Certificación
     ├── reports/            # Resultados empíricos verificados (reportes de paridad y benchmarks)
     ├── guides/             # Manuales operativos (GAJE CLI, flujos de trabajo)
@@ -162,23 +167,29 @@ cargo build --release --bin gaje-cli
 ./target/release/gaje-cli serve --port 8080
 
 # Sesión interactiva de Chat REPL en terminal
-./target/release/gaje-cli chat --model models/production/gaje_pico_135m.flat
+./target/release/gaje-cli chat --model models/production/gaje_pico_135m.gaje
 
 # Descargar modelos directamente desde Hugging Face
 ./target/release/gaje-cli pull pico
 
 # Catálogo e inspección estructural de modelos locales
 ./target/release/gaje-cli models list
-./target/release/gaje-cli models inspect models/production/gaje_pico_135m.flat
+./target/release/gaje-cli models inspect models/production/gaje_pico_135m.gaje
 
-# Exportar cualquier modelo (.gguf, .gaje, .flat) a formato plano zero-copy v2
-./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.flat
+# Mutación genómica in-place sobre centroides (.gaje)
+./target/release/gaje-cli mutate --model models/production/gaje_pico_135m.gaje --rate 0.05
+
+# Inspección de linaje genético y generaciones adaptativas
+./target/release/gaje-cli history --model models/production/gaje_pico_135m.gaje
+
+# Exportar cualquier modelo (.gguf, .gaje) a formato plano zero-copy v2
+./target/release/gaje-cli export-flat models/source/model.gguf -o models/production/model.gaje
 
 # Benchmark de latencia (TTFT), Throughput (TPS) y Perplejidad (PPL)
-./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.flat --tokens 64
+./target/release/gaje-cli benchmark --model models/production/gaje_pico_135m.gaje --tokens 64
 
 # Auditoría matemática de tensores (chequeo de 0 NaNs/Infs y entropía de centroides)
-./target/release/gaje-cli audit models/production/gaje_pico_135m.flat
+./target/release/gaje-cli audit models/production/gaje_pico_135m.gaje
 
 # Diagnóstico de extensiones de hardware (AVX2, AVX512, NEON, FMA)
 ./target/release/gaje-cli doctor

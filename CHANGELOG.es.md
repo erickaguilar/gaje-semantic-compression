@@ -2,6 +2,30 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.2-alpha] - 2026-09-04
+### Añadido
+- **Unificación de Formato Binario Soberano `.gaje` v2 y Adaptación In-Place**:
+  - Fusión de los formatos `.flat` y `.gaje` en un estándar binario plano nativo único zero-copy (`mmap`, magic `b"GAJE"`).
+  - Cabecera fija de 4096 bytes (`FlatHeaderV2` / `FlatHeaderV3`) con soporte de adaptación continua, linaje genético y trazabilidad criptográfica (`lineage_parent_hash`, `lineage_current_hash`, `num_mutations`, `num_overrides`).
+  - Motor de mutación in-place sobre centroides (`src/io/adaptive.rs`) sin duplicación de pesos base ni desalineación de bloques.
+  - Nuevos subcomandos nativos en CLI: `gaje-cli mutate` e `gaje-cli history`.
+- **Módulo Dedicado de Herramientas de Terminal (`src/cli/`)**:
+  - Creación del namespace nativo `crate::cli` (`src/cli/models.rs`, `src/cli/tools.rs`) aislando la presentación y herramientas de terminal de la capa de E/S pura.
+  - Saneamiento de `src/bin/` eliminando scripts monolíticos descartables (`gen_50.rs`, `gen_300.rs`, `distill_run.rs`), dejando a `gaje-cli.rs` como único binario soberano.
+
+### Modificado
+- **Eliminación Total de `redb` y Dependencias Obsoletas**:
+  - Erradicación de `redb` y `lz4_flex` en `Cargo.toml`.
+  - Eliminación de archivos legacy (`src/core/db.rs`, `src/io/smg1.rs`, `src/io/db_loader/`), consolidando el loader nativo en lecturas directas zero-copy vía `GajeFlatFileReader`.
+- **Clarificación Semántica y Refactorización Arquitectónica de `src/`**:
+  - Renombrado `src/compute/sampler.rs` a `src/compute/sintergic.rs` (focalizado en el transductor sintergial de Jacobo Grinberg y osciladores lagrangianos).
+  - Centralización del muestreo autorregresivo estándar (`sample_min_p`, `sample_top_p_core`) en `src/compute/sampling.rs`.
+  - Renombrado `src/nn/linear/database.rs` a `src/nn/linear/storage.rs`, erradicando el término "database" en favor del enum `WeightStorage` (con alias retrocompatible `WeightDatabase`).
+  - Consolidación del subsistema GGUF bajo `src/io/gguf/` (`loader/`, `reader.rs`, `writer.rs`, `types.rs`).
+- **Sanidad y Compatibilidad en Dispositivos Móviles (Termux / Android)**:
+  - Eliminación del 100% de warnings de compilación (`cargo check --bins --tests`).
+  - Actualización de tests de integración para el uso de `std::env::temp_dir()`, asegurando 100% de tests pasando en Android/Termux sin errores de permisos.
+
 ## [1.7.1-alpha] - 2026-08-29
 ### Añadido
 - **Binario Único Soberano en Rust (`gaje-cli`) y Web UI Embebida**:
