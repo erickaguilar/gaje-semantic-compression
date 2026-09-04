@@ -13,6 +13,8 @@ pub mod io;
 pub mod nn;
 pub mod pyo3_shim;
 #[cfg(feature = "native")]
+pub mod cli;
+#[cfg(feature = "native")]
 pub mod server;
 #[cfg(feature = "wasm")]
 pub mod wasm;

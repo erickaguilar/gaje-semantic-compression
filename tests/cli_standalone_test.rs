@@ -8,8 +8,11 @@ use std::path::Path;
 
 #[test]
 fn test_cli_dataset_build_roundtrip() {
-    let tmp_input = "/tmp/test_cli_dataset_input.jsonl";
-    let tmp_output = "/tmp/test_cli_dataset_output.jsonl";
+    let tmp_dir = std::env::temp_dir();
+    let tmp_input_buf = tmp_dir.join("test_cli_dataset_input.jsonl");
+    let tmp_output_buf = tmp_dir.join("test_cli_dataset_output.jsonl");
+    let tmp_input = tmp_input_buf.to_str().unwrap();
+    let tmp_output = tmp_output_buf.to_str().unwrap();
 
     // 1. Crear archivo temporal de entrada con pares conversacionales
     {
@@ -26,9 +29,9 @@ fn test_cli_dataset_build_roundtrip() {
         .unwrap();
     }
 
-    // 2. Invocar dataset_build_cmd directamente desde Rust
+    // 2. Invocar dataset_build_cmd directamente desde Rust (usando re-exportación o módulo cli)
     let inputs = vec![tmp_input.to_string()];
-    let res = _impl::io::cli_tools::dataset_build_cmd(&inputs, tmp_output, None, 5);
+    let res = _impl::cli::tools::dataset_build_cmd(&inputs, tmp_output, None, 5);
     assert!(res.is_ok(), "dataset_build_cmd falló: {:?}", res.err());
 
     // 3. Verificar salida
@@ -62,9 +65,11 @@ fn test_cli_models_listing() {
 #[test]
 fn test_cli_benchmark_suite() {
     let model_path = "models/production/gaje_pico_135m.flat";
-    let report_out = "/tmp/test_gaje_benchmark_report.md";
+    let tmp_dir = std::env::temp_dir();
+    let report_buf = tmp_dir.join("test_gaje_benchmark_report.md");
+    let report_out = report_buf.to_str().unwrap();
     if Path::new(model_path).exists() {
-        let res = _impl::io::cli_tools::benchmark_cmd(
+        let res = _impl::cli::tools::benchmark_cmd(
             model_path,
             "quick",
             Some("¿Qué es la memoria asociativa?"),

@@ -1,5 +1,5 @@
+use crate::cli::models as models_cmd;
 use crate::compute::doctor;
-use crate::io::models_cmd;
 use serde_json::json;
 use std::path::Path;
 

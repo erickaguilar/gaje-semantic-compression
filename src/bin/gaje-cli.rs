@@ -1,6 +1,7 @@
+use _impl::cli::models as models_cmd;
+use _impl::cli::tools as cli_tools;
 use _impl::compute::doctor;
 use _impl::compute::kernels;
-use _impl::io::models_cmd;
 use _impl::nn::repl::{self, ReplConfig};
 use clap::{Args, Parser, Subcommand};
 use std::path::{Path, PathBuf};
@@ -606,7 +607,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         Some(Commands::Benchmark(bench_args)) => {
             let model_path = resolve_default_model(bench_args.model);
-            _impl::io::cli_tools::benchmark_cmd(
+            cli_tools::benchmark_cmd(
                 &model_path,
                 &bench_args.suite,
                 bench_args.prompt.as_deref(),
@@ -618,7 +619,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::ExportFlat(export_args)) => {
-            _impl::io::cli_tools::export_flat_cmd(
+            cli_tools::export_flat_cmd(
                 &export_args.input,
                 &export_args.output,
                 export_args.tokenizer.as_deref(),
@@ -627,7 +628,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::DatasetBuild(dataset_args)) => {
-            _impl::io::cli_tools::dataset_build_cmd(
+            cli_tools::dataset_build_cmd(
                 &dataset_args.inputs,
                 &dataset_args.output,
                 dataset_args.tokenizer.as_deref(),
@@ -636,7 +637,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::Audit(audit_args)) => {
-            _impl::io::cli_tools::audit_cmd(
+            cli_tools::audit_cmd(
                 &audit_args.model,
                 audit_args.entropy,
                 audit_args.check_nan,

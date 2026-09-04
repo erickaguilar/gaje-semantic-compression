@@ -2,7 +2,7 @@ pub mod arch;
 #[cfg(feature = "native")]
 pub mod adaptive;
 #[cfg(feature = "native")]
-pub mod cli_tools;
+pub use crate::cli::tools as cli_tools;
 pub mod config;
 pub mod downloader;
 #[cfg(feature = "native")]
@@ -18,4 +18,5 @@ pub mod gmem;
 pub mod header;
 pub mod loader;
 #[cfg(feature = "native")]
-pub mod models_cmd;
+pub use crate::cli::models as models_cmd;
+
