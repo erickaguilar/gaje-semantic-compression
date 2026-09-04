@@ -89,6 +89,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[SEMANTIC_ENRICHMENT_GUIDE.md](guides/SEMANTIC_ENRICHMENT_GUIDE.md)**: Enriquecimiento semántico.
 
 ### 🗺️ Planes Activos y Roadmap Estratégico (`docs/plans/`)
+* **[GAJE_CODE_RUST_SPECIALIST_SWARM_PLAN.md](plans/GAJE_CODE_RUST_SPECIALIST_SWARM_PLAN.md)**: **ESPECIALISTA GAJE-CODE-RUST EN EL ENJAMBRE** — Arquitectura, micro-corteza (135M-350M), tokenizador GTOK v2 especializado en código e hipocampo congénito `rust_std.gmem` (<0.12 ms) para generación determinista de Rust sin alucinaciones.
 * **[GOLDEN_RECIPE_2BIT_HIGH_POWER_DISTILLATION.md](plans/GOLDEN_RECIPE_2BIT_HIGH_POWER_DISTILLATION.md)**: **LA RECETA DORADA 2-BIT EN ALTA POTENCIA** — Protocolo de reproducción en GPU para romper la barrera de coherencia: arquitectura híbrida desacoplada ($Q2\_0$ en cuerpo + $FP32$ en `lm_head`), GTOK 4K y destilación por consenso (DeepSeek-R1 + Qwen 3B).
 * **[EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md](plans/EDGE_SUPER_MOE_500MB_ARCHITECTURE_PLAN.md)**: **SUPER-MOE EDGE 500 MB** — Arquitectura MoE de 8 expertos (Top-2 activos), 2.2B de capacidad paramétrica virtual con cómputo de 350M y 25 MB de memoria congénita `.gmem`.
 * **[BF2_COMPLEX_PHASE_FLOAT_PLAN.md](plans/BF2_COMPLEX_PHASE_FLOAT_PLAN.md)**: **PUNTO FLOTANTE DE FASE BF2-COMPLEX** — Inferencia en $\mathbb{C}$ sin multiplicadores, rotaciones QPSK y continuidad por interferencia en 2-bits.
