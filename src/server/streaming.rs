@@ -85,7 +85,7 @@ pub fn handle_chat_stream_request(
     let is_born = chat_req
         .model
         .as_deref()
-        .map(|m| m.ends_with(".gaje") || m.contains("max"))
+        .map(|m| m.contains("born_") || m.contains("/born/"))
         .unwrap_or(false);
 
     let model_name_str = chat_req.model.as_deref().unwrap_or("");

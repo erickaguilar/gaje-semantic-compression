@@ -372,9 +372,12 @@ pub fn run_server(
                     });
 
                 let prompt = chat_req.message.unwrap_or_default();
+                let sys_prompt = chat_req.system_prompt.unwrap_or_else(|| {
+                    "Eres GAJE AI, un asistente de inteligencia artificial avanzado, conciso y de alto rendimiento.".to_string()
+                });
                 let chat_prompt = format!(
-                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                    prompt
+                    "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                    sys_prompt, prompt
                 );
                 let prompt_tokens = loaded
                     .tokenizer
@@ -382,7 +385,7 @@ pub fn run_server(
                     .unwrap_or_default();
                 let prompt_tokens_usize: Vec<usize> =
                     prompt_tokens.into_iter().map(|t| t as usize).collect();
-                let eos_ids = vec![2, 0];
+                let eos_ids = vec![0, 2, 151643, 151644, 151645];
                 let gen = loaded
                     .llm
                     .generate_native_core(
