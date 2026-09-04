@@ -480,8 +480,20 @@ impl GtokNativeTokenizer {
             return (Some(id), NucleotideBase::Adenine);
         }
 
-        // 2. Desinencias verbales (Guanina = 10)
-        for suffix in &["ndo", "iendo", "ando", "aron", "ieron", "amos", "emos", "ado", "ido", "aba", "ía"] {
+        // Si es un ideograma CJK unificado (chino, japonés kanji: U+4E00..=U+9FFF), cada carácter es su propio lema base
+        if word.chars().any(|c| ('\u{4E00}'..='\u{9FFF}').contains(&c)) {
+            if let Some(&id) = self.token_to_id.get(word) {
+                return (Some(id), NucleotideBase::Adenine);
+            }
+        }
+
+        // 2. Desinencias verbales / Acción (Guanina = 10)
+        // Español: -ndo, -iendo, -ando, -aron, -ieron, -amos, -emos, -ado, -ido, -aba, -ía
+        // Inglés:  -ing, -ed, -es, -s, -tion, -ated
+        for suffix in &[
+            "ndo", "iendo", "ando", "aron", "ieron", "amos", "emos", "ado", "ido", "aba", "ía",
+            "ing", "ed", "tion", "ated"
+        ] {
             if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
                 let stem = &lower[..lower.len() - suffix.len()];
                 if let Some(&id) = self.token_to_id.get(stem) {
@@ -490,8 +502,10 @@ impl GtokNativeTokenizer {
             }
         }
 
-        // 3. Desinencias de número/género (Citosina = 01)
-        for suffix in &["es", "as", "os", "s", "a", "o"] {
+        // 3. Desinencias de número/género / Flexión nominal (Citosina = 01)
+        // Español: -es, -as, -os, -s, -a, -o
+        // Inglés:  -s, -es, -ies
+        for suffix in &["es", "as", "os", "s", "a", "o", "ies"] {
             if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
                 let stem = &lower[..lower.len() - suffix.len()];
                 if let Some(&id) = self.token_to_id.get(stem) {
@@ -500,8 +514,13 @@ impl GtokNativeTokenizer {
             }
         }
 
-        // 4. Modificadores / Adjetivos (Timina = 11)
-        for suffix in &["mente", "ivo", "iva", "ito", "ita", "able", "ible"] {
+        // 4. Modificadores / Adjetivos / Derivación (Timina = 11)
+        // Español: -mente, -ivo, -iva, -ito, -ita, -able, -ible
+        // Inglés:  -ly, -ful, -less, -able, -ible, -ness, -ment, -ive
+        for suffix in &[
+            "mente", "ivo", "iva", "ito", "ita", "able", "ible",
+            "ly", "ful", "less", "ness", "ment", "ive"
+        ] {
             if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
                 let stem = &lower[..lower.len() - suffix.len()];
                 if let Some(&id) = self.token_to_id.get(stem) {
@@ -510,7 +529,7 @@ impl GtokNativeTokenizer {
             }
         }
 
-        // Si no hay raíz conocida, delegar al BPE estándar con base neutra
+        // Si no hay raíz conocida, delegar al BPE estándar con base neutra (Adenina)
         (self.token_to_id.get(word).copied(), NucleotideBase::Adenine)
     }
 
@@ -622,5 +641,24 @@ mod tests {
         let (id3, base3) = t2.encode_morphological_codon("casas");
         assert_eq!(id3, Some(2));
         assert_eq!(base3, NucleotideBase::Cytosine);
+
+        // 4. Prueba en inglés y CJK:
+        // Token 0: "walk" (4 bytes: 0..4)
+        // Token 1: "中" (3 bytes UTF-8: 4..7)
+        let english_data = vec![
+            b'G', b'T', b'O', b'K', 2, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0,
+            1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 4, 0, 0, 0, 7, 0, 0, 0,
+            b'w', b'a', b'l', b'k', 0xe4, 0xb8, 0xad,
+        ];
+        let t_en = GtokNativeTokenizer::from_bytes(&english_data).unwrap();
+        let (id_walk, base_walk) = t_en.encode_morphological_codon("walking");
+        assert_eq!(id_walk, Some(0));
+        assert_eq!(base_walk, NucleotideBase::Guanine);
+
+        // 5. Prueba CJK (chino): Los ideogramas son lemas puros en Adenina (00)
+        let (id_cjk, base_cjk) = t_en.encode_morphological_codon("中");
+        assert_eq!(id_cjk, Some(1));
+        assert_eq!(base_cjk, NucleotideBase::Adenine);
     }
 }
