@@ -29,58 +29,87 @@ pub fn export_flat_cmd(
 
     let t0 = Instant::now();
 
-    // 1. Cargar modelo base
-    let (model, default_tok) = load_model_and_tokenizer(input_path)?;
+    // 1. Cargar modelo base y configuración
+    let (model, tokenizer, config) = if input_path.ends_with(".gguf") {
+        println!("🔮 Detectado formato de entrada GGUF. Analizando metadatos y tensores...");
+        let loader = crate::io::gguf::loader::GGUFLoader::new(input_path)
+            .map_err(|e| format!("Error abriendo GGUF: {}", e))?;
+        let mut config = loader
+            .infer_config()
+            .map_err(|e| format!("Error infiriendo config GGUF: {}", e))?;
+        let model = loader
+            .load_genomic_llm(config.clone(), 0.0)
+            .map_err(|e| format!("Error cargando LLM genómico desde GGUF: {}", e))?;
+
+        config.vocab_size = Some(model.lm_head.out_features);
+
+        let tokenizer = if let Some(tok_path) = tokenizer_opt {
+            println!("📚 Cargando tokenizador externo desde: {}", tok_path);
+            GajeTokenizer::from_file(Path::new(tok_path)).map_err(|e| e.to_string())?
+        } else if Path::new("models/core/tokenizer.gtok").exists() {
+            println!("📚 Usando tokenizador GTOK por defecto (models/core/tokenizer.gtok)");
+            GajeTokenizer::from_gtok(
+                crate::core::gtok::GtokNativeTokenizer::from_file("models/core/tokenizer.gtok")
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            return Err("Para exportar desde GGUF debe proporcionar --tokenizer <ruta> o tener models/core/tokenizer.gtok".to_string());
+        };
+
+        (model, tokenizer, config)
+    } else {
+        let (model, default_tok) = load_model_and_tokenizer(input_path)?;
+        let tokenizer = if let Some(tok_path) = tokenizer_opt {
+            println!("📚 Cargando tokenizador externo desde: {}", tok_path);
+            GajeTokenizer::from_file(Path::new(tok_path)).map_err(|e| e.to_string())?
+        } else {
+            default_tok
+        };
+
+        // 3. Sintetizar ModelConfig
+        let n_embd = model.embeddings.out_features;
+        let n_head = model.blocks.first().map(|b| b.attn.n_head).unwrap_or(8);
+        let n_head_kv = model
+            .blocks
+            .first()
+            .map(|b| b.attn.n_head_kv)
+            .unwrap_or(n_head);
+        let n_blocks = model.blocks.len();
+        let vocab_size = model.lm_head.out_features;
+
+        let config = ModelConfig {
+            config: ArchConfig {
+                name: "GAJE-Model".to_string(),
+                version: "1.7.0-alpha".to_string(),
+                tokenizer_id: "gtok".to_string(),
+                rope_base: 10000.0,
+                ffn_act: "silu".to_string(),
+                use_genomic_norm: false,
+                rope_style: "split".to_string(),
+                anchor_threshold: 0.1,
+                ffn_anchor_threshold: 0.1,
+                rna_threshold: 0.5,
+                unpermute_weights: false,
+                apply_smollm_rope_patch: false,
+                tie_word_embeddings: false,
+                dni: "GAJE-DNI-NATIVE".to_string(),
+                state: "stable".to_string(),
+            },
+            n_embd,
+            n_head,
+            n_head_kv,
+            n_blocks,
+            vocab_size: Some(vocab_size),
+            eps: model.eps,
+        };
+        (model, tokenizer, config)
+    };
+
     let load_time = t0.elapsed();
     println!(
         "✅ Modelo origen cargado en {:.2} ms",
         load_time.as_secs_f64() * 1000.0
     );
-
-    // 2. Resolver tokenizador
-    let tokenizer = if let Some(tok_path) = tokenizer_opt {
-        println!("📚 Cargando tokenizador externo desde: {}", tok_path);
-        GajeTokenizer::from_file(Path::new(tok_path)).map_err(|e| e.to_string())?
-    } else {
-        default_tok
-    };
-
-    // 3. Sintetizar ModelConfig
-    let n_embd = model.embeddings.out_features;
-    let n_head = model.blocks.first().map(|b| b.attn.n_head).unwrap_or(8);
-    let n_head_kv = model
-        .blocks
-        .first()
-        .map(|b| b.attn.n_head_kv)
-        .unwrap_or(n_head);
-    let n_blocks = model.blocks.len();
-    let vocab_size = model.lm_head.out_features;
-
-    let config = ModelConfig {
-        config: ArchConfig {
-            name: "GAJE-Model".to_string(),
-            version: "1.7.0-alpha".to_string(),
-            tokenizer_id: "gtok".to_string(),
-            rope_base: 10000.0,
-            ffn_act: "silu".to_string(),
-            use_genomic_norm: false,
-            rope_style: "split".to_string(),
-            anchor_threshold: 0.1,
-            ffn_anchor_threshold: 0.1,
-            rna_threshold: 0.5,
-            unpermute_weights: false,
-            apply_smollm_rope_patch: false,
-            tie_word_embeddings: false,
-            dni: "GAJE-DNI-NATIVE".to_string(),
-            state: "stable".to_string(),
-        },
-        n_embd,
-        n_head,
-        n_head_kv,
-        n_blocks,
-        vocab_size: Some(vocab_size),
-        eps: model.eps,
-    };
 
     println!("⚡ Serializando tensores con alineación SIMD a 64 bytes y Rayon...");
     let write_t0 = Instant::now();

@@ -75,8 +75,18 @@ impl GGUFReader {
             let tensor_type = match tensor_type_id {
                 0 => GGMLType::F32,
                 1 => GGMLType::F16,
+                2 => GGMLType::Q4_0,
+                3 => GGMLType::Q4_1,
+                6 => GGMLType::Q5_0,
+                7 => GGMLType::Q5_1,
                 8 => GGMLType::Q8_0,
-                // Add more as needed
+                9 => GGMLType::Q8_1,
+                10 => GGMLType::Q2_K,
+                11 => GGMLType::Q3_K,
+                12 => GGMLType::Q4_K,
+                13 => GGMLType::Q5_K,
+                14 => GGMLType::Q6_K,
+                15 => GGMLType::Q8_K,
                 _ => {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,

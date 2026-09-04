@@ -71,6 +71,35 @@ pub fn dequantize_q8_0_core(data_u8: &[u8], out_features: usize, in_features: us
     results
 }
 
+pub fn dequantize_q4_0_core(data_u8: &[u8], out_features: usize, in_features: usize) -> Vec<f32> {
+    let n_blocks = in_features / 32;
+    let block_size = 18; // 2 bytes delta f16 + 16 bytes nibbles
+    let mut results = vec![0.0f32; out_features * in_features];
+    results
+        .par_chunks_mut(in_features)
+        .enumerate()
+        .for_each(|(i, row)| {
+            let row_offset = i * n_blocks * block_size;
+            for b in 0..n_blocks {
+                let offset = row_offset + b * block_size;
+                if offset + 18 > data_u8.len() {
+                    break;
+                }
+                let delta =
+                    half::f16::from_le_bytes([data_u8[offset], data_u8[offset + 1]]).to_f32();
+                let qs = &data_u8[offset + 2..offset + 18];
+                for j in 0..16 {
+                    let byte = qs[j];
+                    let v0 = (byte & 0x0F) as i8 - 8;
+                    let v1 = ((byte >> 4) & 0x0F) as i8 - 8;
+                    row[b * 32 + j] = (v0 as f32) * delta;
+                    row[b * 32 + j + 16] = (v1 as f32) * delta;
+                }
+            }
+        });
+    results
+}
+
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     let mut centroids = Vec::with_capacity(n_blocks * 4);
     for _ in 0..n_blocks {

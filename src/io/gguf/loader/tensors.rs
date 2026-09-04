@@ -80,10 +80,13 @@ impl GGUFLoader {
             GGMLType::Q8_0 => {
                 crate::compute::math::dequantize_q8_0_core(data, out_features, in_features)
             }
+            GGMLType::Q4_0 => {
+                crate::compute::math::dequantize_q4_0_core(data, out_features, in_features)
+            }
             _ => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    "Unsupported tensor type",
+                    format!("Unsupported tensor type: {:?}", info.tensor_type),
                 ))
             }
         };

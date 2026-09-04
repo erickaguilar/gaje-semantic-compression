@@ -261,18 +261,21 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
     let tok_path: PathBuf = if let Some(p) = tokenizer_path_opt {
         p.to_path_buf()
     } else {
-        match header.arch_family {
+        let candidate = match header.arch_family {
             3 | 4 => PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok"),
             2 => PathBuf::from("models/core/tokenizers/smollm2_tokenizer.gtok"),
-            _ => {
-                let default_gtok = PathBuf::from("models/core/tokenizer.gtok");
-                if default_gtok.exists() {
-                    default_gtok
-                } else {
-                    return Err(
-                        "No se especificó tokenizador y no se pudo auto-detectar".to_string()
-                    );
-                }
+            _ => PathBuf::from("models/core/tokenizer.gtok"),
+        };
+        if candidate.exists() {
+            candidate
+        } else {
+            let default_gtok = PathBuf::from("models/core/tokenizer.gtok");
+            if default_gtok.exists() {
+                default_gtok
+            } else {
+                return Err(
+                    "No se especificó tokenizador y no se pudo encontrar models/core/tokenizer.gtok".to_string(),
+                );
             }
         }
     };
