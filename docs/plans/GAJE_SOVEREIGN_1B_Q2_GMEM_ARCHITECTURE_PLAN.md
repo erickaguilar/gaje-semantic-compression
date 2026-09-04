@@ -145,6 +145,62 @@ Para dar a luz a este modelo sin limitaciones de hardware móvil:
                   └─────────────────────────────────────────────────────────────┘
 ```
 
+### 5.1 Evolución Histórica del Entrenamiento: ¿Por qué DNI y no RLHF Clásico?
+
+Para entender cómo aprende a conversar `GAJE-Sovereign-1B`, es crucial contrastar la evolución técnica del entrenamiento de modelos de lenguaje:
+
+```
+    ERA 1 (2014-2018)            ERA 2 (2018-2020)            ERA 3 (2021-2022)            ERA 4 (Hoy / GAJE)
+┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐
+│  RNNs / LSTMs        │     │  Preentrenamiento    │     │  SFT (Instruct)      │     │  Destilación DNI     │
+│  (La Era Antigua)    │ ──> │  Autoregresivo Puro  │ ──> │  (Sin Refuerzo)      │ ──> │  (Direct Neural      │
+│  Amnesia a 30 tokens │     │  (GPT-2 / GPT-3)     │     │  (Alpaca / FLAN)     │     │   Imprinting)        │
+└──────────────────────┘     └──────────────────────┘     └──────────────────────┘     └──────────────────────┘
+```
+
+1. **La Era Antigua (RNN / LSTM):**  
+   Procesamiento secuencial con acumulación de estado oculto. Sufrían de degradación de gradiente y amnesia contextual severa pasadas las 30 palabras.
+2. **Preentrenamiento Causal Puro (GPT-2 / GPT-3 Original, 2018–2020):**  
+   Modelos entrenados exclusivamente prediciendo la siguiente palabra (*Next-Token Prediction*) sobre terabytes de texto sin procesar de internet. **El modelo no sabía que era un asistente ni sabía responder preguntas**: ante la pregunta *"¿Quién eres?"*, se limitaba a completar el texto continuando una historia de ficción o un hilo de foro.
+3. **Ajuste Fino Supervisado (SFT / InstructGPT, 2021–2022):**  
+   Alineación mediante pares curados de `[Instrucción]` $\to$ `[Respuesta Ideal]` (datasets como *Alpaca* o *FLAN*). El modelo aprendió por primera vez a adoptar el rol de asistente conversacional útil y obediente.
+4. **Refuerzo con Humanos (RLHF con PPO, 2022–2024):**  
+   Modelos de recompensa (*Reward Models*) y algoritmos de optimización de políticas (PPO). Aunque efectivo para alinear tono, es extremadamente costoso, inestable y computacionalmente inviable fuera de macro-corporaciones.
+5. **El Enfoque GAJE — Destilación de Probabilidades Suaves (DNI):**  
+   En lugar de entrenar modelos de recompensa pesados, un modelo maestro consagrado (ej. Qwen 3B / Llama 3) proyecta sus distribuciones de probabilidad completas (*soft logits*) directamente sobre la arquitectura de GAJE. El alumno absorbe la sintaxis, el matiz semántico y la cadencia conversacional en horas de cómputo en GPU sin fricción.
+
+---
+
+### 5.2 La Estrategia Dual de Datos: Hugging Face (90%) + Corpus RAE Soberano (10%)
+
+El modelo no se entrena con un solo tipo de archivo. La adquisición de lenguaje se divide en dos componentes sinérgicos:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 📚 DATASET MASIVO DE HUGGING FACE (90% del Cómputo)             │
+│ (Ej. Alpaca-ES, OpenHermes, Cohere-Ayah, 50,000+ ejemplos)      │
+├─────────────────────────────────────────────────────────────────┤
+│ • Aporta CULTURA GENERAL, VERSATILIDAD Y AMPLIUD:               │
+│   - Historia, geografía, lógica matemática, física y ciencia.   │
+│   - Resolución de problemas y redacción de código multilingüe.  │
+│   - Seguimiento riguroso de instrucciones complejas.            │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+                               ▼ (Fusión y Calibración)
+┌─────────────────────────────────────────────────────────────────┐
+│ 🧬 CORPUS SOBERANO CURADO (10% del Cómputo / Impronta Directa)  │
+│ (data/gaje_human_conversational_es.jsonl, estilo RAE)           │
+├─────────────────────────────────────────────────────────────────┤
+│ • Define el ALMA, IDENTIDAD Y NATURALIDAD HUMANA:               │
+│   - Pregunta clave: "¿Quién eres y qué puedes hacer?"           │
+│   - Soberanía local: no alucinar que proviene de OpenAI o HF.   │
+│   - Cadencia humana: empatía, escucha activa, calidez cotidiana.│
+│   - Precisión de la RAE: puntuación, acentuación y riqueza.     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Esta sinergia garantiza que `GAJE-Sovereign-1B` disponga del conocimiento enciclopédico de un dataset global de Hugging Face, pero hable con la personalidad serena, cálida y soberana definida en su ADN propio.
+
 ---
 
 ## 6. 📋 Hoja de Ruta Operativa
