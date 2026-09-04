@@ -271,12 +271,14 @@ pub fn save_genomic_flat_q(
     }
 
     // 3. Obtener GTOK binario para incrustación automática
-    let gtok_bytes: Vec<u8> = {
+    let gtok_bytes: Vec<u8> = if let Some(gtok) = tokenizer.and_then(|t| t.gtok()) {
+        gtok.to_bytes(crate::core::gtok::GTOK_VERSION)
+    } else {
         let qwen_gtok = PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok");
         let smol_gtok = PathBuf::from("models/core/tokenizers/smollm2_tokenizer.gtok");
         let def_gtok = PathBuf::from("models/core/tokenizer.gtok");
 
-        if config.n_embd >= 1536 && qwen_gtok.exists() {
+        if (config.n_embd == 896 || config.n_embd >= 1536) && qwen_gtok.exists() {
             std::fs::read(qwen_gtok).unwrap_or_default()
         } else if smol_gtok.exists() {
             std::fs::read(smol_gtok).unwrap_or_default()

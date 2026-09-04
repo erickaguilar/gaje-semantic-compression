@@ -101,6 +101,11 @@ impl GajeTokenizer {
         Err("Tokenizador no inicializado".into())
     }
 
+    /// Obtiene una referencia al tokenizador nativo GTOK si está presente
+    pub fn gtok(&self) -> Option<&GtokNativeTokenizer> {
+        self.gtok.as_ref()
+    }
+
     /// Obtiene el tamaño del vocabulario
     pub fn vocab_size(&self) -> usize {
         #[cfg(feature = "native")]

@@ -252,10 +252,30 @@ pub(crate) fn tensor_size_bytes(info: &GGUFTensorInfo) -> usize {
     match info.tensor_type {
         GGMLType::F32 => (n_elements * 4) as usize,
         GGMLType::F16 => (n_elements * 2) as usize,
+        GGMLType::Q4_0 => {
+            // Q4_0: bloques de 32 elementos. Cada bloque: 1 f16 delta (2 bytes) + 16 bytes nibbles = 18 bytes.
+            ((n_elements + 31) / 32 * 18) as usize
+        }
+        GGMLType::Q4_1 => {
+            // Q4_1: bloques de 32 elementos. Cada bloque: 2 f16 (4 bytes) + 16 bytes nibbles = 20 bytes.
+            ((n_elements + 31) / 32 * 20) as usize
+        }
+        GGMLType::Q5_0 => {
+            // Q5_0: bloques de 32 elementos = 22 bytes.
+            ((n_elements + 31) / 32 * 22) as usize
+        }
+        GGMLType::Q5_1 => {
+            // Q5_1: bloques de 32 elementos = 24 bytes.
+            ((n_elements + 31) / 32 * 24) as usize
+        }
         GGMLType::Q8_0 => {
-            // Q8_0: blocks of 32 elements. Each block: 1 f16 delta + 32 i8 weights = 34 bytes.
+            // Q8_0: bloques de 32 elementos. Cada bloque: 1 f16 delta + 32 i8 weights = 34 bytes.
             ((n_elements + 31) / 32 * 34) as usize
         }
-        _ => 0, // Should be handled during loading
+        GGMLType::Q8_1 => {
+            // Q8_1: bloques de 32 elementos = 36 bytes.
+            ((n_elements + 31) / 32 * 36) as usize
+        }
+        _ => 0, // Fallback
     }
 }

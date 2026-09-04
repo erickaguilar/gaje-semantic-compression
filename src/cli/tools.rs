@@ -46,14 +46,21 @@ pub fn export_flat_cmd(
         let tokenizer = if let Some(tok_path) = tokenizer_opt {
             println!("📚 Cargando tokenizador externo desde: {}", tok_path);
             GajeTokenizer::from_file(Path::new(tok_path)).map_err(|e| e.to_string())?
+        } else if let Some(gtok) = loader.extract_gtok_tokenizer() {
+            println!(
+                "📚 Tokenizador BPE nativo GTOK extraído directamente del GGUF ({} tokens, {} merges)",
+                gtok.vocab.len(),
+                gtok.merges.len()
+            );
+            GajeTokenizer::from_gtok(gtok)
         } else if Path::new("models/core/tokenizer.gtok").exists() {
-            println!("📚 Usando tokenizador GTOK por defecto (models/core/tokenizer.gtok)");
+            println!("📚 Usando tokenizador GTOK de respaldo (models/core/tokenizer.gtok)");
             GajeTokenizer::from_gtok(
                 crate::core::gtok::GtokNativeTokenizer::from_file("models/core/tokenizer.gtok")
                     .map_err(|e| e.to_string())?,
             )
         } else {
-            return Err("Para exportar desde GGUF debe proporcionar --tokenizer <ruta> o tener models/core/tokenizer.gtok".to_string());
+            return Err("Para exportar desde GGUF debe proporcionar --tokenizer <ruta> o el GGUF debe contener tokenizer.ggml.tokens".to_string());
         };
 
         (model, tokenizer, config)

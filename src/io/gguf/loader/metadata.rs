@@ -31,6 +31,86 @@ impl GGUFLoader {
         }
     }
 
+    /// Extrae el tokenizador BPE nativo GTOK directamente desde los metadatos GGUF
+    pub fn extract_gtok_tokenizer(&self) -> Option<crate::core::gtok::GtokNativeTokenizer> {
+        use crate::core::gtok::GtokNativeTokenizer;
+        use std::collections::HashMap;
+
+        let tokens_val = self.reader.metadata.get("tokenizer.ggml.tokens")?;
+        let tokens_arr = match tokens_val {
+            GGUFValue::Array(arr) => arr,
+            _ => return None,
+        };
+
+        let mut vocab = Vec::with_capacity(tokens_arr.len());
+        let mut token_to_id = HashMap::with_capacity(tokens_arr.len());
+
+        for (id, val) in tokens_arr.iter().enumerate() {
+            if let GGUFValue::String(tok) = val {
+                vocab.push(tok.clone());
+                token_to_id.insert(tok.clone(), id as u32);
+            } else {
+                return None;
+            }
+        }
+
+        let mut merges = Vec::new();
+        let mut merges_map = HashMap::new();
+
+        if let Some(GGUFValue::Array(merges_arr)) = self.reader.metadata.get("tokenizer.ggml.merges") {
+            for val in merges_arr {
+                if let GGUFValue::String(m_str) = val {
+                    let parts: Vec<&str> = m_str.split_whitespace().collect();
+                    if parts.len() == 2 {
+                        let left_str = parts[0];
+                        let right_str = parts[1];
+                        let target_str = format!("{}{}", left_str, right_str);
+
+                        if let (Some(&left_id), Some(&right_id)) =
+                            (token_to_id.get(left_str), token_to_id.get(right_str))
+                        {
+                            if let Some(&target_id) = token_to_id.get(&target_str) {
+                                merges.push((left_id, right_id, target_id));
+                                merges_map.insert((left_id, right_id), target_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let bos_id = self.get_metadata_u32("tokenizer.ggml.bos_token_id").unwrap_or(0);
+        let eos_id = self.get_metadata_u32("tokenizer.ggml.eos_token_id").unwrap_or(151645);
+        let pad_id = self.get_metadata_u32("tokenizer.ggml.padding_token_id").unwrap_or(eos_id);
+        let unk_id = 0;
+
+        let mut extra_stop_ids = Vec::new();
+        if !extra_stop_ids.contains(&eos_id) {
+            extra_stop_ids.push(eos_id);
+        }
+        for stop_str in &["<|im_end|>", "<|endoftext|>"] {
+            if let Some(&sid) = token_to_id.get(*stop_str) {
+                if !extra_stop_ids.contains(&sid) {
+                    extra_stop_ids.push(sid);
+                }
+            }
+        }
+
+        Some(GtokNativeTokenizer {
+            vocab,
+            token_to_id,
+            merges,
+            merges_map,
+            bos_id,
+            eos_id,
+            unk_id,
+            pad_id,
+            extra_stop_ids,
+            version: crate::core::gtok::GTOK_VERSION,
+            flags: 0,
+        })
+    }
+
     pub fn infer_config(&self) -> std::io::Result<ModelConfig> {
         let arch = self
             .get_metadata_string("general.architecture")
