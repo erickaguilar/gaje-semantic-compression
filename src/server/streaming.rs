@@ -79,7 +79,7 @@ pub fn handle_chat_stream_request(
 
     let user_msg = chat_req.message.unwrap_or_default();
     let sys_prompt = chat_req.system_prompt.unwrap_or_else(|| {
-        "Eres GAJE AI, un asistente genómico soberano, conciso y de alto rendimiento.".to_string()
+        "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.".to_string()
     });
 
     let is_born = chat_req
@@ -129,7 +129,7 @@ pub fn handle_chat_stream_request(
     let temperature = if is_born {
         chat_req.temperature.unwrap_or(0.15).min(0.25)
     } else {
-        chat_req.temperature.unwrap_or(0.6)
+        chat_req.temperature.unwrap_or(0.3)
     };
     let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
 
@@ -212,7 +212,16 @@ pub fn handle_chat_stream_request(
             }
         }
 
-        let next_token = crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
+        let next_token = if temperature <= 0.01 {
+            logits
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(idx, _)| idx)
+                .unwrap_or(0)
+        } else {
+            crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0)
+        };
 
         if eos_ids.contains(&next_token) {
             break;

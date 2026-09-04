@@ -366,14 +366,14 @@ pub fn run_server(
                         history: None,
                         system_prompt: None,
                         max_tokens: Some(256),
-                        temperature: Some(0.4),
+                        temperature: Some(0.3),
                         top_p: Some(0.9),
                         repetition_penalty: Some(1.15),
                     });
 
                 let prompt = chat_req.message.unwrap_or_default();
                 let sys_prompt = chat_req.system_prompt.unwrap_or_else(|| {
-                    "Eres GAJE AI, un asistente de inteligencia artificial avanzado, conciso y de alto rendimiento.".to_string()
+                    "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.".to_string()
                 });
                 let chat_prompt = format!(
                     "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
