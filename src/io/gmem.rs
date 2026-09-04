@@ -76,7 +76,9 @@ pub const GMEM_IVF_CLUSTERS: usize = 64;
 /// Cuantos clústeres se sondean por consulta (recall determinista).
 pub const GMEM_IVF_PROBE: usize = 8;
 /// Iteraciones de k-means ligero entrenado sobre una muestra.
+#[allow(dead_code)]
 const GMEM_IVF_ITERS: usize = 3;
+#[allow(dead_code)]
 const GMEM_IVF_SAMPLE: usize = 4096;
 
 #[derive(Clone, Debug)]
@@ -223,7 +225,7 @@ impl GmemMemoryIndex {
             self.ivf = None;
             return;
         }
-        use rand::Rng;
+        
 
         let dim = self.header.dim as usize;
         // Regla k~sqrt(N) acotada: mas clústeres = listas mas chicas y menos
@@ -684,7 +686,8 @@ mod tests {
         let hash = index.compute_entries_hash();
         index.header.metrics_hash = hash;
 
-        let temp_path = "/tmp/test_gmem_v2_lineage.gmem";
+        let temp_file = std::env::temp_dir().join("test_gmem_v2_lineage.gmem");
+        let temp_path = temp_file.to_str().unwrap();
         index
             .save_to_file(temp_path)
             .expect("Error guardando .gmem v2");
@@ -797,7 +800,8 @@ mod tests {
 
     #[test]
     fn test_gmem_v1_legacy_compatibility() {
-        let temp_path = "/tmp/test_gmem_v1_legacy.gmem";
+        let temp_file = std::env::temp_dir().join("test_gmem_v1_legacy.gmem");
+        let temp_path = temp_file.to_str().unwrap();
         {
             let mut file = File::create(temp_path).unwrap();
             let mut header_raw = [0u8; 64];

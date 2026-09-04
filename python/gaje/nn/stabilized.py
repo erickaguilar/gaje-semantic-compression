@@ -1141,6 +1141,29 @@ class GenomicLLM:
         import tempfile
         from gaje.utils.version import get_project_version
 
+        if hasattr(self, "rust_llm") and self.rust_llm is not None:
+            save_path = output_path if (output_path.endswith(".gaje") or output_path.endswith(".flat")) else (output_path + ".gaje")
+            parent_dir = os.path.dirname(os.path.abspath(save_path))
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            model_config = dna_semantic_compression.ModelConfig(
+                self.config.name,
+                self.n_embd,
+                self.n_head,
+                self.n_head_kv,
+                self.n_blocks,
+                self.eps,
+                self.config
+            )
+            dna_semantic_compression.save_genomic_model(save_path, self.rust_llm, model_config)
+            print(f"🧬 [Zero-Copy Mmap] Modelo guardado en formato unificado: {save_path}")
+            return
+
+        if not hasattr(dna_semantic_compression, "GajeDatabaseWriter"):
+            raise NotImplementedError(
+                "GajeDatabaseWriter ha sido deprecado en favor del formato binario plano .gaje zero-copy."
+            )
+
         if not output_path.endswith(".gaje"):
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
@@ -1419,13 +1442,14 @@ class GenomicLLM:
                     )
                     return obj
 
-        # El path puede ser un fichero DB redb (p.ej. un .flat exportado con
-        # save_genomic_model) o un directorio con model.gaje dentro. Si ya es un
-        # fichero, abrirlo directamente; solo anexar 'model.gaje' si es un dir.
-        if os.path.isdir(input_path):
-            input_path = os.path.join(input_path, "model.gaje")
-
-        db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
+        if hasattr(dna_semantic_compression, "GajeDatabaseReader"):
+            if os.path.isdir(input_path):
+                input_path = os.path.join(input_path, "model.gaje")
+            db_reader = dna_semantic_compression.GajeDatabaseReader(input_path)
+        else:
+            raise ValueError(
+                f"El archivo '{input_path}' no es un modelo GAJE válido (se requiere formato binario unificado con firma 'GAJE')."
+            )
 
         # Try to read metadata safely
         try:

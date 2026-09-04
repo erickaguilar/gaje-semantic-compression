@@ -6,7 +6,6 @@ use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::llm::GenomicLLM;
 use crate::nn::repl::load_model_and_tokenizer;
 use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};

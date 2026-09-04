@@ -24,6 +24,3 @@ pub struct GGUFLoader {
     pub reader: GGUFReader,
 }
 
-pub use crate::io::gguf_loader::load::*;
-pub use crate::io::gguf_loader::metadata::*;
-pub use crate::io::gguf_loader::tensors::*;

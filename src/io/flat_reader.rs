@@ -1,7 +1,5 @@
 use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
-#[cfg(feature = "native")]
-use crate::io::db_loader::NativeLoader;
 use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
 use serde::{Deserialize, Serialize};
@@ -408,26 +406,20 @@ impl GajeFlatFileReader {
     }
 }
 
+pub type GajeModelReader = GajeFlatFileReader;
+
 pub fn load_genomic_auto(path: &str) -> std::io::Result<GenomicLLM> {
     if let Ok(mut f) = std::fs::File::open(path) {
         use std::io::Read;
         let mut magic = [0u8; 4];
         if f.read_exact(&mut magic).is_ok() && &magic == b"GAJE" {
-            println!("⚡ [Zero-Copy Mmap] Detectado formato binario plano .gaje.flat. Carga mmap instantánea...");
+            println!("⚡ [Zero-Copy Mmap] Detectado formato binario unificado .gaje. Carga mmap instantánea...");
             let reader = GajeFlatFileReader::open(path)?;
             return reader.load_genomic();
         }
     }
-    #[cfg(feature = "native")]
-    {
-        let loader = NativeLoader::new(path)?;
-        loader.load_llm()
-    }
-    #[cfg(not(feature = "native"))]
-    {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "Formato no .flat no soportado en modo sin base nativa",
-        ))
-    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("El archivo '{path}' no tiene la firma binaria GAJE válida (magic bytes b\"GAJE\")."),
+    ))
 }

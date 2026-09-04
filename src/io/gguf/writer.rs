@@ -16,6 +16,7 @@ pub struct GGUFWriter {
     metadata: Vec<(String, GGUFValue)>,
     tensors: Vec<GGUFTensorInfo>,
     tensor_data: Vec<Vec<u8>>,
+    #[allow(dead_code)]
     alignment: u64,
 }
 
@@ -227,7 +228,6 @@ fn value_size(v: &GGUFValue) -> u64 {
 mod tests {
     use super::*;
     use crate::io::gguf::reader::GGUFReader;
-    use std::io::Cursor;
 
     #[test]
     fn roundtrip_write_then_read() {
@@ -250,7 +250,7 @@ mod tests {
         let mut buf = Vec::new();
         writer.write(&mut buf).unwrap();
 
-        let mut reader = GGUFReader::open_from_bytes(&buf).unwrap();
+        let reader = GGUFReader::open_from_bytes(&buf).unwrap();
         assert!(matches!(
             reader.metadata.get("general.name"),
             Some(GGUFValue::String(s)) if s == "test"

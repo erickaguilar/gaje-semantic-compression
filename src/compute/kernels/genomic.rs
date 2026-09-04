@@ -224,39 +224,42 @@ pub unsafe fn genomic_dot_product_q4_0(
         return genomic_dot_product_q4_0_neon(blocks, input, n_blocks);
     }
 
-    // Fallback escalar
-    let mut total_sum = 0.0f32;
+    #[cfg(not(target_arch = "aarch64"))]
+    {
+        // Fallback escalar
+        let mut total_sum = 0.0f32;
 
-    for j in 0..n_blocks {
-        let block = &blocks[j];
-        let scale = block.scale.to_f32();
-        let min = block.min.to_f32();
+        for j in 0..n_blocks {
+            let block = &blocks[j];
+            let scale = block.scale.to_f32();
+            let min = block.min.to_f32();
 
-        let input_offset = j * 32;
-        let mut sum_q_in = 0.0f32;
-        let mut sum_in = 0.0f32;
+            let input_offset = j * 32;
+            let mut sum_q_in = 0.0f32;
+            let mut sum_in = 0.0f32;
 
-        let qs = &block.qs;
+            let qs = &block.qs;
 
-        for k in 0..16 {
-            let byte = *qs.get_unchecked(k);
-            let q0 = (byte & 0x0F) as f32;
-            let q1 = (byte >> 4) as f32;
+            for k in 0..16 {
+                let byte = *qs.get_unchecked(k);
+                let q0 = (byte & 0x0F) as f32;
+                let q1 = (byte >> 4) as f32;
 
-            let x0 = *input.get_unchecked(input_offset + k * 2);
-            let x1 = *input.get_unchecked(input_offset + k * 2 + 1);
+                let x0 = *input.get_unchecked(input_offset + k * 2);
+                let x1 = *input.get_unchecked(input_offset + k * 2 + 1);
 
-            sum_q_in += q0 * x0 + q1 * x1;
-            sum_in += x0 + x1;
+                sum_q_in += q0 * x0 + q1 * x1;
+                sum_in += x0 + x1;
+            }
+
+            total_sum += sum_q_in * scale + sum_in * min;
         }
 
-        total_sum += sum_q_in * scale + sum_in * min;
-    }
-
-    if total_sum.abs() < 1e-6 {
-        0.0
-    } else {
-        total_sum
+        if total_sum.abs() < 1e-6 {
+            0.0
+        } else {
+            total_sum
+        }
     }
 }
 
@@ -774,7 +777,7 @@ pub fn gemv_q4_0(
     mins: &[u16],
     input: &[f32],
     output: &mut [f32],
-    out_features: usize,
+    _out_features: usize,
     in_features: usize,
 ) {
     let blocks_per_row = in_features / 32;

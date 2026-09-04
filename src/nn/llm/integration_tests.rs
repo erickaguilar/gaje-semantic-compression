@@ -145,7 +145,7 @@ fn test_transpose_isolated_nibble() {
     if !std::path::Path::new(path).exists() {
         return;
     }
-    let mut model = load_genomic_auto(path).unwrap();
+    let model = load_genomic_auto(path).unwrap();
     // Toma el gate_gen del bloque 0 como linear Genomic4Bit aislado.
     let bi = 0usize;
     let eps = 1e-3f32;
@@ -307,7 +307,7 @@ fn test_refine_indexing_matches_forward() {
     let grads: Vec<f32> = (0..out_features)
         .map(|i| ((i % 5) as f32 - 2.0) * 0.05)
         .collect();
-    drop(gl);
+    let _ = gl;
 
     let c_before = model.blocks[bi].gate_gen.centroids[0];
     model.blocks[bi]
@@ -565,7 +565,7 @@ fn test_body_ladder_sweep() {
         eprintln!("skip");
         return;
     }
-    let n = load_genomic_auto(model_path).unwrap().blocks.len();
+    let _n = load_genomic_auto(model_path).unwrap().blocks.len();
     let tokenizer = crate::core::tokenizer::GajeTokenizer::from_file(tok_path).expect("tok");
     let raw = std::fs::read_to_string(corpus_path).expect("corpus");
     let mut stream: Vec<usize> = Vec::new();

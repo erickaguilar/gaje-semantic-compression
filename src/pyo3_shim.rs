@@ -16,7 +16,8 @@ impl<'a> Python<'a> {
 }
 
 #[cfg(not(feature = "python"))]
-pub struct Bound<'a, T>(&'a T);
+#[allow(dead_code)]
+pub struct Bound<'a, T>(pub &'a T);
 
 #[cfg(not(feature = "python"))]
 pub struct PyModule;
@@ -32,7 +33,8 @@ impl PyObject {
 }
 
 #[cfg(not(feature = "python"))]
-pub struct PyRefMut<'a, T>(&'a mut T);
+#[allow(dead_code)]
+pub struct PyRefMut<'a, T>(pub &'a mut T);
 
 #[cfg(not(feature = "python"))]
 pub struct PyErr;

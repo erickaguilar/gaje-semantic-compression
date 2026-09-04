@@ -1,7 +1,7 @@
 // =============================================================================
 // tensors — lectura y genomización de tensores (F32/F16/Q8_0) + unpermute
 // =============================================================================
-use crate::io::gguf::{GGMLType, GGUFValue};
+use crate::io::gguf::GGMLType;
 use crate::io::gguf_loader::GGUFLoader;
 use crate::nn::linear::GenomicLinear;
 

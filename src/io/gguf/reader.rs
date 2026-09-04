@@ -138,6 +138,7 @@ impl GGUFReader {
         Ok(&self.buffer[start..end])
     }
 
+    #[allow(dead_code)]
     fn get_tensor_size_bytes(&self, info: &GGUFTensorInfo) -> usize {
         tensor_size_bytes(info)
     }

@@ -7,14 +7,13 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::Read;
+use std::path::PathBuf;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
 use crate::compute::island::IslandOrchestrator;
-use crate::io::gmem::{GmemMemoryIndex, GMEM_FLAG_PROMOTED, GMEM_FLAG_SEALED};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct EpochMetrics {

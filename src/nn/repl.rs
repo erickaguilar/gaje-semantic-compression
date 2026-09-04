@@ -38,29 +38,17 @@ pub fn load_model_and_tokenizer(model_path: &str) -> Result<(GenomicLLM, GajeTok
         ));
     }
 
-    if let Ok(reader) = crate::io::flat_reader::GajeFlatFileReader::open(model_path) {
-        let model = reader
-            .load_genomic()
-            .map_err(|e| format!("Error cargando LLM: {}", e))?;
-        let gtok = reader.get_embedded_gtok().ok_or_else(|| {
-            "No se encontró tokenizador GTOK incrustado en el modelo .flat.\n💡 El modelo debe contener el tokenizador nativo unificado (todos los valores incluidos).\n   Regenere el modelo con `gaje-cli birth` o `export-flat` con GTOK embebido."
-                .to_string()
-        })?;
-        let tokenizer = GajeTokenizer::from_gtok(gtok);
-        return Ok((model, tokenizer));
-    }
-
-    #[cfg(feature = "native")]
-    {
-        let loader = crate::io::loader::NativeLoader::new(model_path).map_err(|e| e.to_string())?;
-        let model = loader.load_llm().map_err(|e| e.to_string())?;
-        let tokenizer = loader.load_tokenizer().map_err(|e| e.to_string())?;
-        Ok((model, tokenizer))
-    }
-    #[cfg(not(feature = "native"))]
-    {
-        Err("Formato no soportado en modo sin base nativa".to_string())
-    }
+    let reader = crate::io::flat_reader::GajeFlatFileReader::open(model_path)
+        .map_err(|e| format!("Error abriendo modelo GAJE: {}", e))?;
+    let model = reader
+        .load_genomic()
+        .map_err(|e| format!("Error cargando LLM: {}", e))?;
+    let gtok = reader.get_embedded_gtok().ok_or_else(|| {
+        "No se encontró tokenizador GTOK incrustado en el modelo.\n💡 El modelo debe contener el tokenizador nativo unificado.\n   Regenere el modelo con GTOK embebido."
+            .to_string()
+    })?;
+    let tokenizer = GajeTokenizer::from_gtok(gtok);
+    Ok((model, tokenizer))
 }
 
 pub fn run_repl(

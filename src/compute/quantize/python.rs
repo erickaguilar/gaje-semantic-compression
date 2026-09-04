@@ -212,7 +212,7 @@ pub fn quantize_q4_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     });
 
     // Convert out_blocks slice to raw bytes
-    let raw_bytes = unsafe {
+    let _raw_bytes = unsafe {
         std::slice::from_raw_parts(
             out_blocks.as_ptr() as *const u8,
             out_blocks.len() * std::mem::size_of::<crate::io::header::Q4_0Block>(),
@@ -282,7 +282,7 @@ pub fn quantize_q8_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     });
 
     // Convert out_blocks slice to raw bytes
-    let raw_bytes = unsafe {
+    let _raw_bytes = unsafe {
         std::slice::from_raw_parts(
             out_blocks.as_ptr() as *const u8,
             out_blocks.len() * std::mem::size_of::<crate::io::header::Q8_0Block>(),
@@ -364,7 +364,7 @@ pub fn quantize_q2_0_native(data_u8: Vec<u8>, _py: Python<'_>) -> PyResult<PyObj
     });
 
     // Convert out_blocks slice to raw bytes
-    let raw_bytes = unsafe {
+    let _raw_bytes = unsafe {
         std::slice::from_raw_parts(
             out_blocks.as_ptr() as *const u8,
             out_blocks.len() * std::mem::size_of::<crate::io::header::Q2_0Block>(),
@@ -408,7 +408,7 @@ pub fn genomize_f16_native(
     if bit_depth == 4 {
         // Convertir F16 a F32 para procesar con el core de 4 bits existente
         let f32_data: Vec<f32> = f16_data.iter().map(|v| v.to_f32()).collect();
-        let (dna, centroids, anchors) = genomize_4bit_core(&f32_data, block_size, anchor_threshold);
+        let (_dna, _centroids, _anchors) = genomize_4bit_core(&f32_data, block_size, anchor_threshold);
         #[cfg(feature = "python")]
         {
             use pyo3::types::PyBytes;
@@ -421,7 +421,7 @@ pub fn genomize_f16_native(
             Err("Python not enabled".into())
         }
     } else {
-        let (dna, centroids, anchors) =
+        let (_dna, _centroids, _anchors) =
             genomize_f16_core(f16_data, block_size, anchor_threshold, base_c_arr);
 
         #[cfg(feature = "python")]

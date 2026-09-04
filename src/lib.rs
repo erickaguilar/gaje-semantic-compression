@@ -40,9 +40,6 @@ fn _impl(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::compute::sampler::ToroidalSampler>()?;
     m.add_class::<crate::compute::sampler::SintergicSampler>()?;
     m.add_class::<crate::io::loader::NativeLoader>()?;
-    m.add_class::<crate::core::db::GajeDatabaseWriter>()?;
-    m.add_class::<crate::core::db::GajeBatchWriter>()?;
-    m.add_class::<crate::core::db::GajeDatabaseReader>()?;
     m.add_class::<crate::io::loader::ModelConfig>()?;
     m.add_class::<crate::io::loader::ArchConfig>()?;
     m.add_class::<crate::io::arch::ArchitectureDescriptor>()?;

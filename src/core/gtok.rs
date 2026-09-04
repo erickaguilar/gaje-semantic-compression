@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::path::Path;
 
 #[cfg(feature = "python")]
@@ -610,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_gtok_v2_morphology_and_roundtrip() {
-        let mut v1_data = vec![
+        let v1_data = vec![
             b'G', b'T', b'O', b'K', 1, 0, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0,
             1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 5, 0, 0, 0, 11, 0, 0, 0, 15, 0, 0, 0,

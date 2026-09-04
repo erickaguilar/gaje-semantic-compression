@@ -193,7 +193,7 @@ impl IslandOrchestrator {
             return 0.0;
         }
 
-        let eval_loss = |weights: &[f32; 3], min_sim: f32| -> f32 {
+        let eval_loss = |weights: &[f32; 3], _min_sim: f32| -> f32 {
             let mut loss = 0.0f32;
             for (q, &target_niche) in queries.iter().zip(target_niche_ids.iter()) {
                 let (res_epi, (res_doc, res_conv)) = rayon::join(

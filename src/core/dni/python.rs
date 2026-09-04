@@ -14,8 +14,6 @@ use crate::pyo3_shim::exceptions::PyValueError;
 use crate::pyo3_shim::*;
 
 use crate::core::dni::{DNIEngine, SemanticNiche};
-use crate::core::tokenizer::GajeTokenizer;
-use crate::nn::distiller::CouncilOfTeachers;
 use crate::nn::llm::GenomicLLM;
 
 #[cfg_attr(feature = "python", pymethods)]

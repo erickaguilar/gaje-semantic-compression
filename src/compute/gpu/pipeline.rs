@@ -651,7 +651,7 @@ impl GpuOnlineDistiller {
         teacher_logits: &[f32],
         student_logits: &[f32],
         q2_blocks: &mut [crate::io::header::blocks::Q2_0Block],
-        lr: f32,
+        _lr: f32,
         rows: usize,
         cols: usize,
     ) -> Result<f32, String> {
@@ -686,7 +686,7 @@ impl GpuOnlineDistiller {
             rows: u32,
             cols: u32,
             padding: [u32; 2],
-        };
+        }
 
         let uniforms = OnlineDistillUniforms {
             alpha: self.alpha,

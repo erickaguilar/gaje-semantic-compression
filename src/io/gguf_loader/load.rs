@@ -3,7 +3,7 @@
 // =============================================================================
 use crate::io::config::ModelConfig;
 use crate::io::gguf_loader::GGUFLoader;
-use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
+use crate::nn::{GenomicAttention, GenomicLLM, RustGenomicBlock};
 
 impl GGUFLoader {
     pub fn load_genomic_llm(

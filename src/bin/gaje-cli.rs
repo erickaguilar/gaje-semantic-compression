@@ -86,6 +86,34 @@ enum Commands {
 
     /// Destilación de conocimiento DNI online (Maestro -> Alumno)
     Distill(DistillArgs),
+
+    /// Inyecta una mutación genómica controlada in-place en centroides (.gaje)
+    Mutate(MutateArgs),
+
+    /// Inspecciona el linaje evolutivo y estado adaptativo de un modelo (.gaje)
+    History(HistoryArgs),
+}
+
+#[derive(Args, Debug)]
+struct MutateArgs {
+    /// Archivo del modelo a mutar (.gaje o .flat)
+    #[arg(short, long)]
+    model: Option<String>,
+
+    /// Nombre específico del tensor a mutar (opcional, por defecto: última capa / atención)
+    #[arg(short, long)]
+    tensor: Option<String>,
+
+    /// Intensidad / sigma de la perturbación estocástica de centroides
+    #[arg(short, long, default_value_t = 0.005)]
+    intensity: f32,
+}
+
+#[derive(Args, Debug)]
+struct HistoryArgs {
+    /// Archivo del modelo a inspeccionar (.gaje o .flat)
+    #[arg(short, long)]
+    model: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -620,6 +648,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(Commands::Birth(birth_args)) => handle_birth(&birth_args),
         Some(Commands::TrainBorn(train_args)) => handle_train_born(&train_args),
         Some(Commands::Distill(distill_args)) => handle_distill(&distill_args),
+        Some(Commands::Mutate(mutate_args)) => handle_mutate(&mutate_args),
+        Some(Commands::History(history_args)) => handle_history(&history_args),
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -1371,4 +1401,49 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
 
     Ok(())
 }
+
+fn handle_mutate(args: &MutateArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let model_path = resolve_default_model(args.model.clone());
+    println!("\n🧬 GAJE ADAPTIVE — Mutación In-Place de Centroides (Codebook Tuning)");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  • Modelo Objetivo   : {}", model_path);
+    println!("  • Tensor            : {}", args.tensor.as_deref().unwrap_or("Automático (última capa / atención)"));
+    println!("  • Intensidad (sigma): {}", args.intensity);
+
+    let report = _impl::io::adaptive::mutate_model_centroids(
+        Path::new(&model_path),
+        args.tensor.as_deref(),
+        args.intensity,
+    )?;
+
+    println!("\n✅ Mutación aplicada con éxito in-place:");
+    println!("  • Tensor mutado       : {}", report.tensor_name);
+    println!("  • Centroides alterados: {} centroides float32", report.num_centroids);
+    println!("  • Muestra previa      : {:?}", report.old_centroids_sample);
+    println!("  • Muestra nueva       : {:?}", report.new_centroids_sample);
+    println!("  • Mutación acumulada  : #{}", report.mutation_index);
+    println!("  • Hash Ancestro       : {:#018x}", report.parent_hash);
+    println!("  • Hash Linaje Nuevo   : {:#018x}", report.new_lineage_hash);
+    println!("\n💡 El modelo ha evolucionado directamente sobre su archivo sin duplicar gigabytes en disco.\n");
+    Ok(())
+}
+
+fn handle_history(args: &HistoryArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let model_path = resolve_default_model(args.model.clone());
+    let rep = _impl::io::adaptive::inspect_lineage(Path::new(&model_path))?;
+
+    println!("\n🧬 GAJE LINEAGE — Árbol Genealógico y Estado Adaptativo");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  • Archivo del Modelo  : {}", rep.path);
+    println!("  • Arquitectura        : {}", rep.arch_summary);
+    println!("  • Cuantización        : {}", rep.quant_format);
+    println!("  • Tensores Registrados: {}", rep.num_tensors);
+    println!("  • Mutaciones Vivas    : {}", rep.num_mutations);
+    println!("  • Estado Adaptativo   : {}", if rep.has_adaptive_section { "ACTIVO (Organismo adaptado / en evolución)" } else { "PRÍSTINO (Modelo base congelado)" });
+    println!("  • Hash Padre (Parent) : {}", rep.parent_hash_hex);
+    println!("  • Hash Linaje Actual  : {}", rep.current_hash_hex);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Ok(())
+}
+
 

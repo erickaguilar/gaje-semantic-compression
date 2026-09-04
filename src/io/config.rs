@@ -169,3 +169,39 @@ impl ModelConfig {
         }
     }
 }
+
+impl Default for ArchConfig {
+    fn default() -> Self {
+        Self {
+            name: default_name(),
+            version: default_version(),
+            tokenizer_id: default_tokenizer(),
+            rope_base: default_rope_base(),
+            ffn_act: default_ffn_act(),
+            use_genomic_norm: default_false(),
+            rope_style: default_rope_style(),
+            anchor_threshold: default_anchor_threshold(),
+            ffn_anchor_threshold: default_anchor_threshold(),
+            rna_threshold: default_rna_threshold(),
+            unpermute_weights: default_false(),
+            apply_smollm_rope_patch: default_false(),
+            tie_word_embeddings: default_false(),
+            dni: default_dni(),
+            state: default_state(),
+        }
+    }
+}
+
+impl Default for ModelConfig {
+    fn default() -> Self {
+        Self {
+            config: ArchConfig::default(),
+            n_embd: 256,
+            n_head: 4,
+            n_head_kv: 4,
+            n_blocks: 4,
+            vocab_size: Some(49152),
+            eps: 1e-6,
+        }
+    }
+}

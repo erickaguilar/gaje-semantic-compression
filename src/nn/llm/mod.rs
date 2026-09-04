@@ -26,7 +26,6 @@ use std::sync::Arc;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-use crate::compute::kernels::rms_norm;
 use crate::core::quantum_codebook::QuantumEmbeddingTableNative;
 use crate::core::topology::CentroidGraph;
 use crate::nn::block::RustGenomicBlock;
@@ -72,6 +71,3 @@ pub struct GenomicLLM {
 }
 
 pub use crate::nn::llm::birth::*;
-pub use crate::nn::llm::forward::*;
-pub use crate::nn::llm::mutation::*;
-pub use crate::nn::llm::python::*;

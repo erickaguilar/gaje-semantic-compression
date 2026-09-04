@@ -50,7 +50,3 @@ pub struct GajeNeuromorphicLayer {
     pub lagrangian: LagrangianEngine, // Motor de física semántica
 }
 
-pub use crate::nn::spiking::layer::init::*;
-pub use crate::nn::spiking::layer::integrate::*;
-pub use crate::nn::spiking::layer::python::*;
-pub use crate::nn::spiking::layer::spike::*;

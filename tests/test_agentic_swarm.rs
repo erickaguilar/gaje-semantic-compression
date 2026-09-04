@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use _impl::compute::graph::{
-    AgentNode, AgentState, GmemRetrievalNode, RoutingDecision, RuleRouterNode,
+    AgentNode, AgentState, GmemRetrievalNode, RuleRouterNode,
     StateGraph, StepResult, SwarmExecutor, SwarmIntent, SwarmRouterNode, ToolNode,
 };
 use _impl::compute::island::{IslandNiche, IslandOrchestrator};

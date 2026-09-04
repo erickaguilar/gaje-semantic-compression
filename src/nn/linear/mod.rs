@@ -56,7 +56,3 @@ pub struct GenomicLinear {
     pub stride: usize,
 }
 
-pub use crate::nn::linear::backward::*;
-pub use crate::nn::linear::forward::*;
-pub use crate::nn::linear::init::*;
-pub use crate::nn::linear::python::*;

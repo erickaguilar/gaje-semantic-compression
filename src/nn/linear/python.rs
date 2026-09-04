@@ -4,7 +4,6 @@
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-use crate::nn::linear::GenomicLinear;
 
 #[cfg(feature = "python")]
 #[pymethods]

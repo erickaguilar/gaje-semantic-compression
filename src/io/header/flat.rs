@@ -40,9 +40,21 @@ pub struct FlatHeaderV2 {
     pub gtok_offset: u64,
     pub gtok_len: u64,
 
-    // === RESERVA (4000 bytes) ===
-    pub reserved: [u8; 4000],
+    // === SECCIÓN DE ADAPTACIÓN GENÓMICA Y DELTAS (48 bytes) ===
+    pub adapt_offset: u64,
+    pub adapt_len: u64,
+    pub num_overrides: u32,
+    pub num_mutations: u32,
+    pub lineage_parent_hash: u64,
+    pub lineage_current_hash: u64,
+    pub adapt_flags: u32,
+    pub _pad_adapt: u32,
+
+    // === RESERVA (3952 bytes) ===
+    pub reserved: [u8; 3952],
 }
+
+pub type FlatHeaderV3 = FlatHeaderV2;
 
 impl FlatHeaderV2 {
     pub const SIZE: usize = 4096;
@@ -81,6 +93,11 @@ impl FlatHeaderV2 {
         } else {
             self.group_size as usize
         }
+    }
+
+    /// Indica si el modelo contiene una sección de adaptación genómica activa
+    pub fn has_adaptive_section(&self) -> bool {
+        self.adapt_len > 0 && self.adapt_offset > 0
     }
 
     /// Devuelve el descriptor de arquitectura si está presente en el header

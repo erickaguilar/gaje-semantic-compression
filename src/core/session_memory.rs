@@ -8,13 +8,9 @@ use pyo3::exceptions::{PyIOError, PyValueError};
 use pyo3::prelude::*;
 
 #[cfg(not(feature = "python"))]
-use crate::pyo3_shim::exceptions::{PyIOError, PyValueError};
-#[cfg(not(feature = "python"))]
 use crate::pyo3_shim::*;
 
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufReader, BufWriter};
 
 /// 🧬 SessionBuffer: Memoria Intermedia Toroidal para GAJE-Flow
 /// Implementa un Ring Buffer basado en SoA (Structure of Arrays) para optimizar

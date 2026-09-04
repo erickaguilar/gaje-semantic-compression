@@ -137,7 +137,7 @@ impl GenomicLinear {
         // Intentar GPU si es Q2_0 y hay pipeline
         #[cfg(feature = "gpu")]
         {
-            if let WeightDatabase::GenomicQ2_0(db) = &self.weight_db {
+            if let WeightDatabase::GenomicQ2_0(_db) = &self.weight_db {
                 if batch >= 4 { // umbral para amortizar transferencia VRAM
                     if let Some(pipes) = crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES.as_ref() {
                         // Aplanar inputs batch → [batch*in_features]

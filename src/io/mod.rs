@@ -1,9 +1,9 @@
 pub mod arch;
 #[cfg(feature = "native")]
+pub mod adaptive;
+#[cfg(feature = "native")]
 pub mod cli_tools;
 pub mod config;
-#[cfg(feature = "native")]
-pub mod db_loader;
 pub mod downloader;
 #[cfg(feature = "native")]
 pub mod ffi;
@@ -19,5 +19,3 @@ pub mod header;
 pub mod loader;
 #[cfg(feature = "native")]
 pub mod models_cmd;
-#[cfg(feature = "native")]
-pub mod smg1;

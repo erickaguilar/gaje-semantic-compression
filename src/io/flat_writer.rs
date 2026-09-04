@@ -4,7 +4,7 @@ use crate::io::flat_reader::FlatTensorEntry;
 use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
 use rayon::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 fn align64_size(len: usize) -> usize {
@@ -324,7 +324,15 @@ pub fn save_genomic_flat_q(
         arch_qk_permute: 0,
         gtok_offset: if gtok_len > 0 { gtok_offset } else { 0 },
         gtok_len,
-        reserved: [0u8; 4000],
+        adapt_offset: 0,
+        adapt_len: 0,
+        num_overrides: 0,
+        num_mutations: 0,
+        lineage_parent_hash: 0,
+        lineage_current_hash: 0,
+        adapt_flags: 0,
+        _pad_adapt: 0,
+        reserved: [0u8; 3952],
     };
 
     let mut header_bin = [0u8; 4096];
@@ -381,64 +389,7 @@ pub fn save_genomic_model(
     config: &ModelConfig,
     tokenizer: Option<&GajeTokenizer>,
 ) -> std::io::Result<()> {
-    let writer = crate::core::db::GajeDatabaseWriter::new(path).map_err(std::io::Error::other)?;
-    let mut batch = writer.begin_batch_rust().map_err(std::io::Error::other)?;
-    batch
-        .write_metadata("config", &serde_json::to_string(config).unwrap())
-        .unwrap();
-    if let Some(tok) = tokenizer {
-        if let Ok(tok_str) = tok.to_string(true) {
-            batch.write_metadata("tokenizer", &tok_str).unwrap();
-        }
-    }
-    let compress = |d: &[u8]| lz4_flex::compress_prepend_size(d);
-    let f32_u8 =
-        |d: &[f32]| unsafe { std::slice::from_raw_parts(d.as_ptr() as *const u8, d.len() * 4) };
-    let write_l = |b: &mut crate::core::db::GajeBatchWriter, p: &str, l: &GenomicLinear| {
-        b.write_tensor(&format!("{}.dna", p), &compress(l.database_ref()))
-            .unwrap();
-        b.write_tensor(&format!("{}.centroids", p), &compress(f32_u8(&l.centroids)))
-            .unwrap();
-        b.write_tensor(
-            &format!("{}.anchors", p),
-            &compress(&l.anchors_sparse_buffer()),
-        )
-        .unwrap();
-        if !l.bias.is_empty() {
-            b.write_tensor(&format!("{}.bias", p), &compress(f32_u8(&l.bias)))
-                .unwrap();
-        }
-    };
-    write_l(&mut batch, "token_embd", &model.embeddings);
-    for (i, blk) in model.blocks.iter().enumerate() {
-        let p = format!("blk.{}.", i);
-        write_l(&mut batch, &format!("{}attn_q", p), &blk.q_gen);
-        write_l(&mut batch, &format!("{}attn_k", p), &blk.k_gen);
-        write_l(&mut batch, &format!("{}attn_v", p), &blk.v_gen);
-        write_l(&mut batch, &format!("{}attn_output", p), &blk.w_o);
-        write_l(&mut batch, &format!("{}ffn_gate", p), &blk.gate_gen);
-        write_l(&mut batch, &format!("{}ffn_up", p), &blk.up_gen);
-        write_l(&mut batch, &format!("{}ffn_down", p), &blk.w_down);
-        batch
-            .write_tensor(
-                &format!("{}attn_norm", p),
-                &compress(f32_u8(&blk.attn.rmsnorm_weight)),
-            )
-            .unwrap();
-        batch
-            .write_tensor(&format!("{}ffn_norm", p), &compress(f32_u8(&blk.ffn_norm)))
-            .unwrap();
-        batch
-            .write_tensor(&format!("{}h_scale", p), &compress(f32_u8(&[blk.h_scale])))
-            .unwrap();
-    }
-    write_l(&mut batch, "lm_head", &model.lm_head);
-    batch
-        .write_tensor("output_norm", &compress(f32_u8(&model.output_norm)))
-        .unwrap();
-    batch.commit().unwrap();
-    writer.compact().unwrap();
-    Ok(())
+    save_genomic_flat(path, model, config, tokenizer)
 }
 
 pub fn init_born_genomic_model(
@@ -531,10 +482,6 @@ pub fn init_born_genomic_model(
         gpu_layers: 0,
         use_gpu: false,
     };
-    if path.ends_with(".flat") {
-        save_genomic_flat(path, &model, &config, None)?;
-    } else {
-        save_genomic_model(path, &model, &config, None)?;
-    }
+    save_genomic_flat(path, &model, &config, None)?;
     Ok(model)
 }

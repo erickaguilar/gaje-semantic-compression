@@ -1,4 +1,3 @@
-use crate::compute::sampler::ToroidalSampler;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::llm::GenomicLLM;
 use serde::Deserialize;

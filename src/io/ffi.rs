@@ -1,9 +1,4 @@
-use crate::core::tokenizer::GajeTokenizer;
-use crate::io::config::ModelConfig;
-use crate::io::db_loader::NativeLoader;
-use crate::io::flat_reader::load_genomic_auto;
-use crate::io::flat_writer::{init_born_genomic_model, save_genomic_model};
-use crate::nn::llm::GenomicLLM;
+use crate::io::loader::NativeLoader;
 
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
