@@ -13,6 +13,43 @@ use pyo3::prelude::*;
 
 pub const GTOK_MAGIC: &[u8; 4] = b"GTOK";
 pub const GTOK_VERSION: u16 = 1;
+pub const GTOK_VERSION_V2: u16 = 2;
+
+/// Formato de Tokenizador GTOK
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GtokFormat {
+    V1BpeClassic,
+    V2GenomicMorphological,
+}
+
+/// Bases nucleótidas de 2-bits asociadas a desinencias gramaticales (GTOK v2)
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum NucleotideBase {
+    Adenine = 0,  // 00 (Fase 0°)   - Forma base / Lema neutro
+    Cytosine = 1, // 01 (Fase 90°)  - Género / Plural / Concordancia
+    Guanine = 2,  // 10 (Fase 180°) - Acción / Conjugación temporal
+    Thymine = 3,  // 11 (Fase 270°) - Modificador / Adjetivo / Derivación
+}
+
+impl NucleotideBase {
+    pub fn from_u8(val: u8) -> Self {
+        match val & 0b11 {
+            0 => Self::Adenine,
+            1 => Self::Cytosine,
+            2 => Self::Guanine,
+            _ => Self::Thymine,
+        }
+    }
+
+    pub fn to_char(&self) -> char {
+        match self {
+            Self::Adenine => 'A',
+            Self::Cytosine => 'C',
+            Self::Guanine => 'G',
+            Self::Thymine => 'T',
+        }
+    }
+}
 
 lazy_static::lazy_static! {
     static ref BYTE_TO_UNICODE: Vec<String> = {
@@ -415,6 +452,114 @@ impl GtokNativeTokenizer {
         }
         stops
     }
+
+    /// Retorna el formato activo del tokenizador (v1 Clásico vs v2 Genómico).
+    pub fn format(&self) -> GtokFormat {
+        if self.version >= GTOK_VERSION_V2 {
+            GtokFormat::V2GenomicMorphological
+        } else {
+            GtokFormat::V1BpeClassic
+        }
+    }
+
+    /// Codifica una palabra en su raíz léxica (lema) y codón nucleótido de 2-bits (GTOK v2).
+    ///
+    /// Mapeo de bases:
+    /// - 'A' (00): Forma base / Lema exacto
+    /// - 'C' (01): Plural / Desinencia nominal (ej. 's', 'es')
+    /// - 'G' (10): Conjugación verbal / Acción (ej. 'ndo', 'do', 'ó', 'aron')
+    /// - 'T' (11): Modificador / Adjetivo / Diminutivo (ej. 'mente', 'ito', 'ivo')
+    pub fn encode_morphological_codon(&self, word: &str) -> (Option<u32>, NucleotideBase) {
+        // 1. Probar coincidencia exacta (Adenina = forma base)
+        if let Some(&id) = self.token_to_id.get(word) {
+            return (Some(id), NucleotideBase::Adenine);
+        }
+
+        let lower = word.to_lowercase();
+        if let Some(&id) = self.token_to_id.get(&lower) {
+            return (Some(id), NucleotideBase::Adenine);
+        }
+
+        // 2. Desinencias verbales (Guanina = 10)
+        for suffix in &["ndo", "iendo", "ando", "aron", "ieron", "amos", "emos", "ado", "ido", "aba", "ía"] {
+            if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
+                let stem = &lower[..lower.len() - suffix.len()];
+                if let Some(&id) = self.token_to_id.get(stem) {
+                    return (Some(id), NucleotideBase::Guanine);
+                }
+            }
+        }
+
+        // 3. Desinencias de número/género (Citosina = 01)
+        for suffix in &["es", "as", "os", "s", "a", "o"] {
+            if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
+                let stem = &lower[..lower.len() - suffix.len()];
+                if let Some(&id) = self.token_to_id.get(stem) {
+                    return (Some(id), NucleotideBase::Cytosine);
+                }
+            }
+        }
+
+        // 4. Modificadores / Adjetivos (Timina = 11)
+        for suffix in &["mente", "ivo", "iva", "ito", "ita", "able", "ible"] {
+            if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
+                let stem = &lower[..lower.len() - suffix.len()];
+                if let Some(&id) = self.token_to_id.get(stem) {
+                    return (Some(id), NucleotideBase::Thymine);
+                }
+            }
+        }
+
+        // Si no hay raíz conocida, delegar al BPE estándar con base neutra
+        (self.token_to_id.get(word).copied(), NucleotideBase::Adenine)
+    }
+
+    /// Serializa el tokenizador a formato binario GTOK (v1 o v2).
+    pub fn to_bytes(&self, target_version: u16) -> Vec<u8> {
+        let mut buf = Vec::new();
+
+        // 1. Cabecera (16 bytes)
+        buf.extend_from_slice(GTOK_MAGIC);
+        buf.extend_from_slice(&target_version.to_le_bytes());
+        buf.extend_from_slice(&self.flags.to_le_bytes());
+        buf.extend_from_slice(&(self.vocab.len() as u32).to_le_bytes());
+        buf.extend_from_slice(&(self.merges.len() as u32).to_le_bytes());
+
+        // 2. Tokens especiales (18 bytes)
+        buf.extend_from_slice(&self.bos_id.to_le_bytes());
+        buf.extend_from_slice(&self.eos_id.to_le_bytes());
+        buf.extend_from_slice(&self.unk_id.to_le_bytes());
+        buf.extend_from_slice(&self.pad_id.to_le_bytes());
+        buf.extend_from_slice(&(self.extra_stop_ids.len() as u16).to_le_bytes());
+
+        for &sid in &self.extra_stop_ids {
+            buf.extend_from_slice(&sid.to_le_bytes());
+        }
+
+        // 3. String Table (Offsets + UTF-8 Pool)
+        let mut string_pool = Vec::new();
+        let mut offsets: Vec<u32> = Vec::with_capacity(self.vocab.len() + 1);
+        offsets.push(0);
+
+        for token in &self.vocab {
+            string_pool.extend_from_slice(token.as_bytes());
+            offsets.push(string_pool.len() as u32);
+        }
+
+        for off in offsets {
+            buf.extend_from_slice(&off.to_le_bytes());
+        }
+        buf.extend_from_slice(&string_pool);
+
+        // 4. Binary Merges Table
+        for &(left, right, target) in &self.merges {
+            buf.extend_from_slice(&left.to_le_bytes());
+            buf.extend_from_slice(&right.to_le_bytes());
+            buf.extend_from_slice(&target.to_le_bytes());
+        }
+
+        buf
+    }
 }
 
 #[cfg(test)]
@@ -441,5 +586,41 @@ mod tests {
         assert_eq!(tokenizer.vocab[0], "<unk>");
         assert_eq!(tokenizer.vocab[3], "AB");
         assert_eq!(tokenizer.eos_id, 2);
+        assert_eq!(tokenizer.format(), GtokFormat::V1BpeClassic);
+    }
+
+    #[test]
+    fn test_gtok_v2_morphology_and_roundtrip() {
+        let mut v1_data = vec![
+            b'G', b'T', b'O', b'K', 1, 0, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0,
+            1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 5, 0, 0, 0, 11, 0, 0, 0, 15, 0, 0, 0,
+            b'<', b'u', b'n', b'k', b'>', b'c', b'a', b'm', b'i', b'n', b'a', b'c', b'a', b's', b'a',
+        ];
+
+        let t1 = GtokNativeTokenizer::from_bytes(&v1_data).unwrap();
+        assert_eq!(t1.format(), GtokFormat::V1BpeClassic);
+
+        // Serializar a v2
+        let v2_bytes = t1.to_bytes(GTOK_VERSION_V2);
+        let t2 = GtokNativeTokenizer::from_bytes(&v2_bytes).unwrap();
+        assert_eq!(t2.version, GTOK_VERSION_V2);
+        assert_eq!(t2.format(), GtokFormat::V2GenomicMorphological);
+
+        // Prueba de codón morfológico (desinencias nucleótidas)
+        // 1. "camina" es forma base (Adenina = 00)
+        let (id1, base1) = t2.encode_morphological_codon("camina");
+        assert_eq!(id1, Some(1));
+        assert_eq!(base1, NucleotideBase::Adenine);
+
+        // 2. "caminando" deriva de "camina" con desinencia verbal (Guanina = 10)
+        let (id2, base2) = t2.encode_morphological_codon("caminando");
+        assert_eq!(id2, Some(1));
+        assert_eq!(base2, NucleotideBase::Guanine);
+
+        // 3. "casas" deriva de "casa" con desinencia plural (Citosina = 01)
+        let (id3, base3) = t2.encode_morphological_codon("casas");
+        assert_eq!(id3, Some(2));
+        assert_eq!(base3, NucleotideBase::Cytosine);
     }
 }
