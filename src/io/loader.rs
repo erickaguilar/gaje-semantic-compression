@@ -4,10 +4,10 @@
 //! (`crate::io::loader::*`) mientras la implementación vive en submódulos cohesionados:
 //!
 //! - [`config`](crate::io::config): estructuras de configuración (`ArchConfig`, `ModelConfig`).
-//! - [`gguf_loader`](crate::io::gguf_loader): importación desde formato GGUF.
-//! - [`db_loader`](crate::io::db_loader): carga/lectura desde la base `redb` (`NativeLoader`).
-//! - [`flat_reader`](crate::io::flat_reader): lectura zero-copy del formato `.gaje.flat`.
-//! - [`flat_writer`](crate::io::flat_writer): guardado e inicialización de modelos.
+//! - [`gguf`](crate::io::gguf): importación y parsing desde formato GGUF (`GGUFReader`, `GGUFLoader`).
+//! - [`flat_reader`](crate::io::flat_reader): lectura zero-copy mmap del formato plano binario `.gaje`.
+//! - [`flat_writer`](crate::io::flat_writer): guardado e inicialización de modelos `.gaje`.
+//! - [`adaptive`](crate::io::adaptive): mutación in-place y linaje adaptativo.
 //! - [`ffi`](crate::io::ffi): wrappers PyO3 hacia el núcleo.
 
 #[derive(Clone)]

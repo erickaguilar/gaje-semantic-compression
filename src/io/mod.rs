@@ -13,7 +13,7 @@ pub mod flat_writer;
 #[cfg(feature = "native")]
 pub mod gguf;
 #[cfg(feature = "native")]
-pub mod gguf_loader;
+pub use crate::io::gguf::loader as gguf_loader;
 pub mod gmem;
 pub mod header;
 pub mod loader;

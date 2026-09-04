@@ -2,7 +2,7 @@
 // load — load_genomic_llm: construcción del modelo genómico completo
 // =============================================================================
 use crate::io::config::ModelConfig;
-use crate::io::gguf_loader::GGUFLoader;
+use super::GGUFLoader;
 use crate::nn::{GenomicAttention, GenomicLLM, RustGenomicBlock};
 
 impl GGUFLoader {

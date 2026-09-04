@@ -3,7 +3,7 @@
 // =============================================================================
 use crate::io::config::{default_dni, ArchConfig, ModelConfig};
 use crate::io::gguf::GGUFValue;
-use crate::io::gguf_loader::GGUFLoader;
+use super::GGUFLoader;
 
 impl GGUFLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
