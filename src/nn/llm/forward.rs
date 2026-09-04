@@ -843,7 +843,7 @@ impl GenomicLLM {
                 }
             }
 
-            let next_tok = crate::compute::sampler::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
+            let next_tok = crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
 
             generated.push(next_tok);
 

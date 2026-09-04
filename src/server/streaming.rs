@@ -212,7 +212,7 @@ pub fn handle_chat_stream_request(
             }
         }
 
-        let next_token = crate::compute::sampler::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
+        let next_token = crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
 
         if eos_ids.contains(&next_token) {
             break;

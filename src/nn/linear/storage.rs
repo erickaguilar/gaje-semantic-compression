@@ -1,12 +1,13 @@
 // =============================================================================
-// database — WeightDatabase y trait GenomicOperable
+// storage — WeightStorage y trait GenomicOperable
 // =============================================================================
 use std::sync::Arc;
 
 use crate::io::header::{Q2_0Block, Q4_0Block, Q8_0Block};
 
+/// Almacenamiento y buffer de pesos en memoria para capas lineales genómicas.
 #[derive(Clone)]
-pub enum WeightDatabase {
+pub enum WeightStorage {
     Genomic2Bit(Arc<Vec<u8>>),
     Genomic4Bit(Arc<Vec<u8>>),
     GenomicQ4_0(Arc<Vec<Q4_0Block>>),
@@ -15,6 +16,9 @@ pub enum WeightDatabase {
     GenomicF32(Arc<Vec<f32>>),
 }
 
+/// Alias retrocompatible para WeightStorage.
+pub type WeightDatabase = WeightStorage;
+
 pub trait GenomicOperable {
     fn bit_depth(&self) -> u8;
     fn read(&self, byte_idx: usize, sub_idx: usize) -> u8;
@@ -22,28 +26,28 @@ pub trait GenomicOperable {
     fn len_bytes(&self) -> usize;
 }
 
-impl GenomicOperable for WeightDatabase {
+impl GenomicOperable for WeightStorage {
     fn bit_depth(&self) -> u8 {
         match self {
-            WeightDatabase::Genomic2Bit(_) => 2,
-            WeightDatabase::Genomic4Bit(_) => 4,
-            WeightDatabase::GenomicQ4_0(_) => 4,
-            WeightDatabase::GenomicQ8_0(_) => 8,
-            WeightDatabase::GenomicQ2_0(_) => 2,
-            WeightDatabase::GenomicF32(_) => 32,
+            WeightStorage::Genomic2Bit(_) => 2,
+            WeightStorage::Genomic4Bit(_) => 4,
+            WeightStorage::GenomicQ4_0(_) => 4,
+            WeightStorage::GenomicQ8_0(_) => 8,
+            WeightStorage::GenomicQ2_0(_) => 2,
+            WeightStorage::GenomicF32(_) => 32,
         }
     }
     fn read(&self, byte_idx: usize, sub_idx: usize) -> u8 {
         match self {
-            WeightDatabase::Genomic2Bit(db) => (db[byte_idx] >> ((3 - sub_idx) * 2)) & 0b11,
-            WeightDatabase::Genomic4Bit(db) => {
+            WeightStorage::Genomic2Bit(db) => (db[byte_idx] >> ((3 - sub_idx) * 2)) & 0b11,
+            WeightStorage::Genomic4Bit(db) => {
                 if sub_idx == 0 {
                     db[byte_idx] >> 4
                 } else {
                     db[byte_idx] & 0x0F
                 }
             }
-            WeightDatabase::GenomicQ4_0(db) => {
+            WeightStorage::GenomicQ4_0(db) => {
                 let block_idx = byte_idx / 16;
                 let qs_idx = byte_idx % 16;
                 if let Some(block) = db.get(block_idx) {
@@ -57,7 +61,7 @@ impl GenomicOperable for WeightDatabase {
                     0
                 }
             }
-            WeightDatabase::GenomicQ8_0(db) => {
+            WeightStorage::GenomicQ8_0(db) => {
                 let block_idx = byte_idx / 32;
                 let qs_idx = byte_idx % 32;
                 if let Some(block) = db.get(block_idx) {
@@ -66,7 +70,7 @@ impl GenomicOperable for WeightDatabase {
                     0
                 }
             }
-            WeightDatabase::GenomicQ2_0(db) => {
+            WeightStorage::GenomicQ2_0(db) => {
                 let block_idx = byte_idx / 8;
                 let qs_idx = byte_idx % 8;
                 if let Some(block) = db.get(block_idx) {
@@ -81,13 +85,13 @@ impl GenomicOperable for WeightDatabase {
     }
     fn mutate(&mut self, byte_idx: usize, sub_idx: usize, new_bits: u8) {
         match self {
-            WeightDatabase::Genomic2Bit(ref mut db) => {
+            WeightStorage::Genomic2Bit(ref mut db) => {
                 let db_mut = Arc::make_mut(db);
                 let shift = (3 - sub_idx) * 2;
                 db_mut[byte_idx] &= !(0b11 << shift);
                 db_mut[byte_idx] |= (new_bits & 0b11) << shift;
             }
-            WeightDatabase::Genomic4Bit(ref mut db) => {
+            WeightStorage::Genomic4Bit(ref mut db) => {
                 let db_mut = Arc::make_mut(db);
                 if sub_idx == 0 {
                     db_mut[byte_idx] = (db_mut[byte_idx] & 0x0F) | (new_bits << 4);
@@ -95,7 +99,7 @@ impl GenomicOperable for WeightDatabase {
                     db_mut[byte_idx] = (db_mut[byte_idx] & 0xF0) | (new_bits & 0x0F);
                 }
             }
-            WeightDatabase::GenomicQ4_0(ref mut db) => {
+            WeightStorage::GenomicQ4_0(ref mut db) => {
                 let db_mut = Arc::make_mut(db);
                 let block_idx = byte_idx / 16;
                 let qs_idx = byte_idx % 16;
@@ -112,12 +116,12 @@ impl GenomicOperable for WeightDatabase {
     }
     fn len_bytes(&self) -> usize {
         match self {
-            WeightDatabase::Genomic2Bit(db) => db.len(),
-            WeightDatabase::Genomic4Bit(db) => db.len(),
-            WeightDatabase::GenomicQ4_0(db) => db.len() * 16,
-            WeightDatabase::GenomicQ8_0(db) => db.len() * 32,
-            WeightDatabase::GenomicQ2_0(db) => db.len() * 12,
-            WeightDatabase::GenomicF32(db) => db.len() * 4,
+            WeightStorage::Genomic2Bit(db) => db.len(),
+            WeightStorage::Genomic4Bit(db) => db.len(),
+            WeightStorage::GenomicQ4_0(db) => db.len() * 16,
+            WeightStorage::GenomicQ8_0(db) => db.len() * 32,
+            WeightStorage::GenomicQ2_0(db) => db.len() * 12,
+            WeightStorage::GenomicF32(db) => db.len() * 4,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::compute::sampler::ToroidalSampler;
+use crate::compute::sintergic::ToroidalSampler;
 use crate::core::session_memory::SessionBuffer;
 use crate::core::tokenizer::GajeTokenizer;
 use crate::io::flat_reader::GajeFlatFileReader;

@@ -10,7 +10,7 @@
 // histórica (`crate::nn::linear::*`) mientras la implementación vive en
 // submódulos cohesionados:
 //
-// - [`database`](crate::nn::linear::database): `WeightDatabase` y el trait `GenomicOperable`.
+// - [`storage`](crate::nn::linear::storage): `WeightStorage` y el trait `GenomicOperable`.
 // - [`init`](crate::nn::linear::init): construcción (`new`/`empty`) y acceso crudo a pesos.
 // - [`forward`](crate::nn::linear::forward): cómputo de filas y forwards (single/fused).
 // - [`backward`](crate::nn::linear::backward): gradientes, refine con gradientes y mutaciones.
@@ -18,10 +18,11 @@
 // - [`tests`](crate::nn::linear::tests): tests unitarios.
 
 pub mod backward;
-pub mod database;
 pub mod forward;
 pub mod init;
 pub mod python;
+pub mod storage;
+pub use storage as database;
 #[cfg(test)]
 pub mod tests;
 
@@ -31,12 +32,12 @@ use std::sync::Arc;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-pub use crate::nn::linear::database::*;
+pub use crate::nn::linear::storage::*;
 
 #[cfg_attr(feature = "python", pyclass)]
 #[derive(Clone)]
 pub struct GenomicLinear {
-    pub weight_db: WeightDatabase,
+    pub weight_db: WeightStorage,
     pub epi_strands: Arc<Vec<u8>>,
     pub tri_strands: Arc<Vec<u8>>,
     pub epi_cols: Arc<Vec<(usize, usize)>>,
