@@ -55,10 +55,7 @@ pub fn mutate_model_centroids(
     target_tensor_name: Option<&str>,
     intensity: f32,
 ) -> Result<MutationReport, Box<dyn std::error::Error + Send + Sync>> {
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(path)?;
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
 
     // 1. Leer y validar cabecera FlatHeaderV2 (4096 bytes)
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
@@ -79,9 +76,9 @@ pub fn mutate_model_centroids(
 
     // 3. Identificar tensor a mutar
     let chosen_entry = if let Some(name) = target_tensor_name {
-        tensor_map.get(name).ok_or_else(|| {
-            format!("Tensor '{}' no encontrado en el modelo.", name)
-        })?
+        tensor_map
+            .get(name)
+            .ok_or_else(|| format!("Tensor '{}' no encontrado en el modelo.", name))?
     } else {
         // Por defecto: buscar el tensor de salida del último bloque o lm_head
         let mut last_attn = None;
@@ -92,9 +89,11 @@ pub fn mutate_model_centroids(
                 break;
             }
         }
-        last_attn.or_else(|| tensor_map.get("lm_head")).ok_or_else(|| {
-            "No se encontró un tensor adecuado para mutar automáticamente.".to_string()
-        })?
+        last_attn
+            .or_else(|| tensor_map.get("lm_head"))
+            .ok_or_else(|| {
+                "No se encontró un tensor adecuado para mutar automáticamente.".to_string()
+            })?
     };
 
     let mut old_sample = Vec::new();
@@ -198,7 +197,11 @@ pub fn mutate_model_centroids(
         file.write_all(&new_bytes)?;
         num_mutated_params = count;
     } else {
-        return Err(format!("El tensor '{}' no tiene datos de pesos mutables.", chosen_entry.name).into());
+        return Err(format!(
+            "El tensor '{}' no tiene datos de pesos mutables.",
+            chosen_entry.name
+        )
+        .into());
     }
 
     // 7. Actualizar cabecera con el nuevo linaje y mutación
@@ -209,7 +212,12 @@ pub fn mutate_model_centroids(
     };
     header.lineage_parent_hash = parent_hash;
     header.num_mutations += 1;
-    let new_hash = compute_mutation_hash(parent_hash, &chosen_entry.name, intensity, header.num_mutations);
+    let new_hash = compute_mutation_hash(
+        parent_hash,
+        &chosen_entry.name,
+        intensity,
+        header.num_mutations,
+    );
     header.lineage_current_hash = new_hash;
     header.adapt_flags |= 1; // Bit 0: Adaptación activa
 
@@ -234,7 +242,9 @@ pub fn mutate_model_centroids(
 }
 
 /// Inspecciona el linaje y estado adaptativo de un modelo .gaje
-pub fn inspect_lineage(path: &Path) -> Result<LineageReport, Box<dyn std::error::Error + Send + Sync>> {
+pub fn inspect_lineage(
+    path: &Path,
+) -> Result<LineageReport, Box<dyn std::error::Error + Send + Sync>> {
     let mut file = OpenOptions::new().read(true).open(path)?;
     let mut header_bytes = [0u8; FlatHeaderV2::SIZE];
     file.read_exact(&mut header_bytes)?;
@@ -299,7 +309,10 @@ mod tests {
         let report_mut = inspect_lineage(Path::new(path_str)).unwrap();
         assert_eq!(report_mut.num_mutations, 1);
         assert!(report_mut.has_adaptive_section);
-        assert_eq!(report_mut.current_hash_hex, format!("{:#018x}", mut_report.new_lineage_hash));
+        assert_eq!(
+            report_mut.current_hash_hex,
+            format!("{:#018x}", mut_report.new_lineage_hash)
+        );
 
         // Limpieza
         let _ = std::fs::remove_file(model_path);

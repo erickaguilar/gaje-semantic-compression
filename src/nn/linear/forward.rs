@@ -128,21 +128,25 @@ impl GenomicLinear {
     /// Forward batched en GPU (Q2_0) — 4 hilos paralelos, batch 8-64
     /// Usa `batched_gemv_q2.wgsl` workgroup(32,8,1) si GPU disponible, fallback a CPU AVX2.
     /// `inputs: [batch][in_features]` → `outputs: [batch][out_features]` todo en VRAM.
-    pub fn forward_batched_core(
-        &self,
-        inputs: &[Vec<f32>],
-    ) -> Result<Vec<Vec<f32>>, String> {
-        if inputs.is_empty() { return Ok(Vec::new()); }
+    pub fn forward_batched_core(&self, inputs: &[Vec<f32>]) -> Result<Vec<Vec<f32>>, String> {
+        if inputs.is_empty() {
+            return Ok(Vec::new());
+        }
         let batch = inputs.len();
         // Intentar GPU si es Q2_0 y hay pipeline
         #[cfg(feature = "gpu")]
         {
             if let WeightDatabase::GenomicQ2_0(_db) = &self.weight_db {
-                if batch >= 4 { // umbral para amortizar transferencia VRAM
-                    if let Some(pipes) = crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES.as_ref() {
+                if batch >= 4 {
+                    // umbral para amortizar transferencia VRAM
+                    if let Some(pipes) =
+                        crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES.as_ref()
+                    {
                         // Aplanar inputs batch → [batch*in_features]
                         let mut flat_in = Vec::with_capacity(batch * self.in_features);
-                        for inp in inputs { flat_in.extend_from_slice(inp); }
+                        for inp in inputs {
+                            flat_in.extend_from_slice(inp);
+                        }
                         // Llamada batched GEMV GPU: procesa 4 hilos paralelos (workgroups 2-8)
                         // Nota: pipeline espera Q2Blocks + flat_in + batch
                         // Por ahora delegamos a CPU y marcamos uso GPU para KL/STE posterior
@@ -154,9 +158,13 @@ impl GenomicLinear {
         }
         // Fallback CPU paralelo 4 hilos (rayon) — varios al mismo tiempo
         use rayon::prelude::*;
-        let outs: Vec<Vec<f32>> = inputs.par_iter().map(|inp| {
-            self.forward_core(inp.clone(), None, false).unwrap_or(vec![0.0; self.out_features])
-        }).collect();
+        let outs: Vec<Vec<f32>> = inputs
+            .par_iter()
+            .map(|inp| {
+                self.forward_core(inp.clone(), None, false)
+                    .unwrap_or(vec![0.0; self.out_features])
+            })
+            .collect();
         Ok(outs)
     }
 
@@ -189,12 +197,16 @@ impl GenomicLinear {
     /// Intenta ejecutar la proyección lineal en GPU (WGPU / Vulkan) si los pesos están disponibles en FP32
     pub fn forward_gpu(&self, input: &[f32]) -> Option<Vec<f32>> {
         if let WeightDatabase::GenomicF32(ref w) = self.weight_db {
-            crate::compute::gpu::pipeline::gpu_gemv_f32(w, input, self.out_features, self.in_features)
+            crate::compute::gpu::pipeline::gpu_gemv_f32(
+                w,
+                input,
+                self.out_features,
+                self.in_features,
+            )
         } else {
             None
         }
     }
-
 
     pub fn forward_fused_3(
         l1: &GenomicLinear,

@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use _impl::compute::graph::{
-    AgentNode, AgentState, GmemRetrievalNode, RuleRouterNode,
-    StateGraph, StepResult, SwarmExecutor, SwarmIntent, SwarmRouterNode, ToolNode,
+    AgentNode, AgentState, GmemRetrievalNode, RuleRouterNode, StateGraph, StepResult,
+    SwarmExecutor, SwarmIntent, SwarmRouterNode, ToolNode,
 };
 use _impl::compute::island::{IslandNiche, IslandOrchestrator};
+use std::sync::Arc;
 
 #[test]
 fn test_agentic_swarm_multi_node_execution() {
@@ -51,13 +51,26 @@ fn test_agentic_swarm_multi_node_execution() {
 
     // Node 3: Router
     let router = RuleRouterNode::new("intent_router", synth_idx)
-        .add_route(vec!["documento".to_string(), "gaje".to_string(), "memoria".to_string()], rag_idx)
-        .add_route(vec!["calcular".to_string(), "math".to_string(), "+".to_string()], math_idx);
+        .add_route(
+            vec![
+                "documento".to_string(),
+                "gaje".to_string(),
+                "memoria".to_string(),
+            ],
+            rag_idx,
+        )
+        .add_route(
+            vec!["calcular".to_string(), "math".to_string(), "+".to_string()],
+            math_idx,
+        );
     let router_idx = graph.add_node(Arc::new(router));
 
     // Turno 1: Ruta RAG
     let (state_rag, hops_rag) = graph
-        .run(router_idx, AgentState::with_query("¿Qué es GAJE y cómo funciona su memoria?"))
+        .run(
+            router_idx,
+            AgentState::with_query("¿Qué es GAJE y cómo funciona su memoria?"),
+        )
         .unwrap();
 
     assert!(hops_rag >= 2);
@@ -71,7 +84,11 @@ fn test_agentic_swarm_multi_node_execution() {
 
     assert!(hops_tool >= 2);
     assert!(!state_tool.tool_outputs.is_empty());
-    assert!(state_tool.response.as_ref().unwrap().contains("math_evaluator"));
+    assert!(state_tool
+        .response
+        .as_ref()
+        .unwrap()
+        .contains("math_evaluator"));
 }
 
 #[test]
@@ -86,7 +103,9 @@ fn test_agentic_swarm_fork_and_merge() {
         }
         fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
             state.touch();
-            state.tool_outputs.push(("alpha".to_string(), "ok".to_string()));
+            state
+                .tool_outputs
+                .push(("alpha".to_string(), "ok".to_string()));
             Ok(StepResult::End(state))
         }
     }
@@ -100,7 +119,9 @@ fn test_agentic_swarm_fork_and_merge() {
         }
         fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
             state.touch();
-            state.tool_outputs.push(("beta".to_string(), "ok".to_string()));
+            state
+                .tool_outputs
+                .push(("beta".to_string(), "ok".to_string()));
             Ok(StepResult::End(state))
         }
     }
@@ -129,7 +150,9 @@ fn test_agentic_swarm_fork_and_merge() {
 
     let d_idx = graph.add_node(Arc::new(ForkDispatcher { a: a_idx, b: b_idx }));
 
-    let (res, transitions) = graph.run(d_idx, AgentState::with_query("paralelo")).unwrap();
+    let (res, transitions) = graph
+        .run(d_idx, AgentState::with_query("paralelo"))
+        .unwrap();
     assert_eq!(transitions, 1);
     assert_eq!(res.tool_outputs.len(), 2);
 }
@@ -141,10 +164,15 @@ fn test_swarm_router_and_executor_batch() {
     // Node 0: Factual Specialist
     struct FactualSpecialist;
     impl AgentNode for FactualSpecialist {
-        fn name(&self) -> &str { "factual_specialist" }
+        fn name(&self) -> &str {
+            "factual_specialist"
+        }
         fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
             state.touch();
-            state.response = Some(format!("Respuesta fáctica directa para: {}", state.user_query));
+            state.response = Some(format!(
+                "Respuesta fáctica directa para: {}",
+                state.user_query
+            ));
             Ok(StepResult::End(state))
         }
     }
@@ -153,10 +181,15 @@ fn test_swarm_router_and_executor_batch() {
     // Node 1: Deep Reasoning Specialist (3B Synthesizer)
     struct DeepReasoningSpecialist;
     impl AgentNode for DeepReasoningSpecialist {
-        fn name(&self) -> &str { "deep_reasoning_specialist" }
+        fn name(&self) -> &str {
+            "deep_reasoning_specialist"
+        }
         fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
             state.touch();
-            state.response = Some(format!("Razonamiento profundo multi-paso para: {}", state.user_query));
+            state.response = Some(format!(
+                "Razonamiento profundo multi-paso para: {}",
+                state.user_query
+            ));
             Ok(StepResult::End(state))
         }
     }
@@ -164,7 +197,11 @@ fn test_swarm_router_and_executor_batch() {
 
     // Node 2: SwarmRouterNode
     let router = SwarmRouterNode::new("swarm_router", factual_idx, deep_idx, 0.70)
-        .add_intent_route(vec!["simple".to_string(), "capital".to_string()], SwarmIntent::DirectFactual, factual_idx);
+        .add_intent_route(
+            vec!["simple".to_string(), "capital".to_string()],
+            SwarmIntent::DirectFactual,
+            factual_idx,
+        );
     let router_idx = graph.add_node(Arc::new(router));
 
     let executor = SwarmExecutor::new(Arc::new(graph));
@@ -175,7 +212,11 @@ fn test_swarm_router_and_executor_batch() {
         .unwrap();
     assert!(hops_s >= 2);
     assert!(elapsed_s >= 0.0);
-    assert!(st_simple.response.as_ref().unwrap().contains("Respuesta fáctica directa"));
+    assert!(st_simple
+        .response
+        .as_ref()
+        .unwrap()
+        .contains("Respuesta fáctica directa"));
 
     // 2. Consulta compleja larga -> Deep Reasoning
     let long_query = "Explica detalladamente la relación entre la teoría de la relatividad general, la mecánica cuántica y la transducción sintergial de Jacobo Grinberg en 500 palabras estructuradas paso a paso.";
@@ -183,7 +224,11 @@ fn test_swarm_router_and_executor_batch() {
         .execute_profiled(router_idx, AgentState::with_query(long_query))
         .unwrap();
     assert!(hops_d >= 2);
-    assert!(st_deep.response.as_ref().unwrap().contains("Razonamiento profundo multi-paso"));
+    assert!(st_deep
+        .response
+        .as_ref()
+        .unwrap()
+        .contains("Razonamiento profundo multi-paso"));
 
     // 3. Batch masivo concurrente con Rayon
     let batch_queries = vec![
@@ -206,7 +251,10 @@ fn test_phase_4b_real_swarm_parallel_fork_and_shared_memory() {
 
     let model_135m_path = "models/production/gaje_pico_135m.flat";
     if !std::path::Path::new(model_135m_path).exists() {
-        eprintln!("Modelo 135M no encontrado en {}, omitiendo test de inferencia pesada", model_135m_path);
+        eprintln!(
+            "Modelo 135M no encontrado en {}, omitiendo test de inferencia pesada",
+            model_135m_path
+        );
         return;
     }
 
@@ -250,10 +298,15 @@ fn test_phase_4b_real_swarm_parallel_fork_and_shared_memory() {
         targets: Vec<usize>,
     }
     impl AgentNode for SwarmParallelForkNode {
-        fn name(&self) -> &str { "swarm_parallel_fork" }
+        fn name(&self) -> &str {
+            "swarm_parallel_fork"
+        }
         fn process(&self, state: AgentState) -> Result<StepResult, String> {
             let branches = self.targets.iter().map(|&t| (t, state.clone())).collect();
-            Ok(StepResult::Fork { branches, next: None })
+            Ok(StepResult::Fork {
+                branches,
+                next: None,
+            })
         }
     }
 
@@ -264,13 +317,19 @@ fn test_phase_4b_real_swarm_parallel_fork_and_shared_memory() {
 
     let t0 = std::time::Instant::now();
     let (final_state, transitions) = graph
-        .run(idx_fork, AgentState::with_query("Calcular e implementar compresión"))
+        .run(
+            idx_fork,
+            AgentState::with_query("Calcular e implementar compresión"),
+        )
         .expect("Ejecución enjambre paralelo");
     let elapsed = t0.elapsed();
 
     println!("⚡ Enjambre 3x 135M ejecutado en paralelo en {:?}", elapsed);
     assert_eq!(transitions, 1);
-    assert!(final_state.hops >= 3, "Las 3 ramas incrementaron el contador de hops");
+    assert!(
+        final_state.hops >= 3,
+        "Las 3 ramas incrementaron el contador de hops"
+    );
 }
 
 #[test]
@@ -280,7 +339,10 @@ fn test_tot_with_genomic_llm_evaluator_and_router_margin_gate() {
 
     let model_135m_path = "models/production/gaje_pico_135m.flat";
     if !std::path::Path::new(model_135m_path).exists() {
-        eprintln!("Modelo 135M no encontrado en {}, omitiendo test LLM evaluator", model_135m_path);
+        eprintln!(
+            "Modelo 135M no encontrado en {}, omitiendo test LLM evaluator",
+            model_135m_path
+        );
         return;
     }
 
@@ -291,7 +353,9 @@ fn test_tot_with_genomic_llm_evaluator_and_router_margin_gate() {
     // Node 0: Terminal sink
     struct TerminalSink;
     impl AgentNode for TerminalSink {
-        fn name(&self) -> &str { "terminal_sink" }
+        fn name(&self) -> &str {
+            "terminal_sink"
+        }
         fn process(&self, state: AgentState) -> Result<StepResult, String> {
             Ok(StepResult::End(state))
         }
@@ -307,15 +371,26 @@ fn test_tot_with_genomic_llm_evaluator_and_router_margin_gate() {
     let router = Arc::new(
         SwarmRouterNode::new("strict_margin_router", sink_idx, tot_idx, 0.70)
             .with_min_margin(0.20)
-            .add_intent_route(vec!["simple".into(), "capital".into()], SwarmIntent::DirectFactual, sink_idx)
-            .add_intent_route(vec!["deducir".into(), "analizar".into(), "teoría".into()], SwarmIntent::DeepReasoning, tot_idx)
+            .add_intent_route(
+                vec!["simple".into(), "capital".into()],
+                SwarmIntent::DirectFactual,
+                sink_idx,
+            )
+            .add_intent_route(
+                vec!["deducir".into(), "analizar".into(), "teoría".into()],
+                SwarmIntent::DeepReasoning,
+                tot_idx,
+            ),
     );
     let router_node: Arc<dyn AgentNode> = Arc::clone(&router) as Arc<dyn AgentNode>;
     let _router_idx = graph.add_node(router_node);
 
     // 1. Ejecutar ToTNode con scoring nativo del LLM
     let (state_tot, hops_tot) = graph
-        .run(tot_idx, AgentState::with_query("Deducir la relación entre compresión y entropía"))
+        .run(
+            tot_idx,
+            AgentState::with_query("Deducir la relación entre compresión y entropía"),
+        )
         .expect("Ejecución ToT con LLM evaluator");
 
     assert_eq!(hops_tot, 2);
@@ -325,5 +400,9 @@ fn test_tot_with_genomic_llm_evaluator_and_router_margin_gate() {
     // 2. Probar Gate de Margen: consulta con ambigüedad en longitud media
     let ambiguous_query = "Por favor analizar la capital y simple deducir la teoría de compresión";
     let decision = router.route_query(ambiguous_query);
-    assert_eq!(decision.intent, SwarmIntent::DeepReasoning, "Ambigüedad escala a DeepReasoning");
+    assert_eq!(
+        decision.intent,
+        SwarmIntent::DeepReasoning,
+        "Ambigüedad escala a DeepReasoning"
+    );
 }

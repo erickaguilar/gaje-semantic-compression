@@ -49,4 +49,3 @@ pub struct GajeNeuromorphicLayer {
     pub rms_ema: f32,
     pub lagrangian: LagrangianEngine, // Motor de física semántica
 }
-

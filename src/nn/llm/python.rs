@@ -4,7 +4,6 @@
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
-
 #[cfg(feature = "python")]
 #[pymethods]
 impl GenomicLLM {
@@ -208,4 +207,3 @@ impl GenomicLLM {
             .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }
-

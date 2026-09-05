@@ -47,4 +47,3 @@ pub struct DNIEngine {
     pub original_dna_hash: Vec<u64>,
     pub niche: SemanticNiche,
 }
-

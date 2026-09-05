@@ -23,4 +23,3 @@ use crate::io::gguf::GGUFReader;
 pub struct GGUFLoader {
     pub reader: GGUFReader,
 }
-

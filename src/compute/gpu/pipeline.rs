@@ -79,49 +79,53 @@ impl GpuComputePipelines {
             cache: None,
         });
 
-        let batched_gemv_q4_0_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Batched GEMV Q4_0 Pipeline"),
-            layout: None,
-            module: &batched_gemv_q4_0_shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        let batched_gemv_q2_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Batched GEMV Q2 Pipeline"),
-            layout: None,
-            module: &batched_gemv_q2_shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
+        let batched_gemv_q4_0_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Batched GEMV Q4_0 Pipeline"),
+                layout: None,
+                module: &batched_gemv_q4_0_shader,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+        let batched_gemv_q2_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Batched GEMV Q2 Pipeline"),
+                layout: None,
+                module: &batched_gemv_q2_shader,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
 
         let kl_divergence_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("KL Divergence WGSL Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/kl_divergence.wgsl").into()),
         });
 
-        let kl_divergence_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("KL Divergence Pipeline"),
-            layout: None,
-            module: &kl_divergence_shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
+        let kl_divergence_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("KL Divergence Pipeline"),
+                layout: None,
+                module: &kl_divergence_shader,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
 
         let ste_q2_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("STE Q2 Backward WGSL Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/ste_q2_backward.wgsl").into()),
         });
-        let ste_q2_backward_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("STE Q2 Backward Pipeline"),
-            layout: None,
-            module: &ste_q2_shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
+        let ste_q2_backward_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("STE Q2 Backward Pipeline"),
+                layout: None,
+                module: &ste_q2_shader,
+                entry_point: Some("main"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
 
         Ok(Self {
             ctx,
@@ -624,15 +628,18 @@ impl GpuOnlineDistiller {
         if !(0.0..=1.0).contains(&alpha) {
             return Err("alpha debe estar en [0.0, 1.0]".to_string());
         }
-        Ok(Self { pipelines, batch_size, temperature, alpha })
+        Ok(Self {
+            pipelines,
+            batch_size,
+            temperature,
+            alpha,
+        })
     }
-    pub fn try_new_global(
-        batch_size: usize,
-        temperature: f32,
-        alpha: f32,
-    ) -> Option<Arc<Self>> {
+    pub fn try_new_global(batch_size: usize, temperature: f32, alpha: f32) -> Option<Arc<Self>> {
         let pipes = GLOBAL_GPU_PIPELINES.as_ref()?.clone();
-        Self::new(pipes, batch_size, temperature, alpha).ok().map(Arc::new)
+        Self::new(pipes, batch_size, temperature, alpha)
+            .ok()
+            .map(Arc::new)
     }
 
     /// Ejecuta un paso de destilación DNI en línea completo en GPU.
@@ -729,18 +736,24 @@ impl GpuOnlineDistiller {
 
         // Q2 blocks buffer (read-write, VRAM - se actualiza con STE)
         let n_blocks_per_row = cols / 32;
-        let blocks_byte_size = (rows * n_blocks_per_row) * std::mem::size_of::<crate::io::header::blocks::Q2_0Block>();
+        let blocks_byte_size =
+            (rows * n_blocks_per_row) * std::mem::size_of::<crate::io::header::blocks::Q2_0Block>();
         let blocks_bytes: &[u8] = unsafe {
             std::slice::from_raw_parts(q2_blocks.as_ptr() as *const u8, blocks_byte_size)
         };
         let blocks_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("OnlineDistill Q2 Blocks"),
             contents: blocks_bytes,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
         });
 
         // --- Paso 1: Despachar shader KL divergence ---
-        let bind_group_layout = self.pipelines.kl_divergence_pipeline.get_bind_group_layout(0);
+        let bind_group_layout = self
+            .pipelines
+            .kl_divergence_pipeline
+            .get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("OnlineDistill Bind Group"),
             layout: &bind_group_layout,
@@ -783,7 +796,10 @@ impl GpuOnlineDistiller {
         }
 
         // --- Paso 2: Despachar STE Q2 backward para actualizar pesos ---
-        let ste_bind_group_layout = self.pipelines.ste_q2_backward_pipeline.get_bind_group_layout(0);
+        let ste_bind_group_layout = self
+            .pipelines
+            .ste_q2_backward_pipeline
+            .get_bind_group_layout(0);
         let ste_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("OnlineDistill STE Bind Group"),
             layout: &ste_bind_group_layout,

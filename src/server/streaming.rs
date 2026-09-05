@@ -90,12 +90,23 @@ pub fn handle_chat_stream_request(
 
     let model_name_str = chat_req.model.as_deref().unwrap_or("");
     let mut context_prefix = String::new();
-    if let Some(orch) = crate::compute::island::IslandOrchestrator::try_load_paired_memory(model_name_str, llm.dim() as u32) {
-        let q_vec = crate::compute::island::IslandOrchestrator::vector_from_text(&user_msg, llm.dim());
+    if let Some(orch) = crate::compute::island::IslandOrchestrator::try_load_paired_memory(
+        model_name_str,
+        llm.dim() as u32,
+    ) {
+        let q_vec =
+            crate::compute::island::IslandOrchestrator::vector_from_text(&user_msg, llm.dim());
         let matches = orch.retrieve_context(&q_vec, 2);
-        let relevant: Vec<_> = matches.into_iter().filter(|m| m.similarity >= 0.50).collect();
+        let relevant: Vec<_> = matches
+            .into_iter()
+            .filter(|m| m.similarity >= 0.50)
+            .collect();
         if !relevant.is_empty() {
-            let facts_str = relevant.iter().map(|m| m.text.as_str()).collect::<Vec<_>>().join(" | ");
+            let facts_str = relevant
+                .iter()
+                .map(|m| m.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" | ");
             context_prefix = format!("[Conocimiento Hipocampal: {}]\n", facts_str);
         }
     }
@@ -107,7 +118,15 @@ pub fn handle_chat_stream_request(
             format!("<|im_start|>system\n{}<|im_end|>\n", context_prefix)
         }
     } else {
-        format!("<|im_start|>system\n{}{}<|im_end|>\n", sys_prompt, if context_prefix.is_empty() { "".to_string() } else { format!("\n{}", context_prefix) })
+        format!(
+            "<|im_start|>system\n{}{}<|im_end|>\n",
+            sys_prompt,
+            if context_prefix.is_empty() {
+                "".to_string()
+            } else {
+                format!("\n{}", context_prefix)
+            }
+        )
     };
     if let Some(hist) = chat_req.history {
         for msg in hist.iter().rev().take(6).rev() {
@@ -231,7 +250,13 @@ pub fn handle_chat_stream_request(
         seen_tokens.insert(next_token);
 
         let full_curr = tokenizer
-            .decode(&generated_tokens.iter().map(|&t| t as u32).collect::<Vec<_>>(), false)
+            .decode(
+                &generated_tokens
+                    .iter()
+                    .map(|&t| t as u32)
+                    .collect::<Vec<_>>(),
+                false,
+            )
             .unwrap_or_default();
         let clean_full = full_curr
             .replace("<|im_end|>", "")

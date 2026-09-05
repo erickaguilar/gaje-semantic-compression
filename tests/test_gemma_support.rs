@@ -6,12 +6,19 @@ use _impl::io::downloader::resolve_model_url;
 
 #[test]
 fn test_gemma_and_deepseek_detection() {
-    let gemma_desc = ArchitectureDescriptor::infer_from_name_core("gemma-2-2b-it.gguf", 2048, 8, 4, 18);
+    let gemma_desc =
+        ArchitectureDescriptor::infer_from_name_core("gemma-2-2b-it.gguf", 2048, 8, 4, 18);
     assert_eq!(gemma_desc.family, ModelFamily::Gemma);
     assert_eq!(gemma_desc.ffn_act, "geglu");
     assert_eq!(gemma_desc.rope_style, "interleaved");
 
-    let deepseek_desc = ArchitectureDescriptor::infer_from_name_core("DeepSeek-R1-Distill-Qwen-1.5B.gguf", 1536, 12, 2, 28);
+    let deepseek_desc = ArchitectureDescriptor::infer_from_name_core(
+        "DeepSeek-R1-Distill-Qwen-1.5B.gguf",
+        1536,
+        12,
+        2,
+        28,
+    );
     assert_eq!(deepseek_desc.family, ModelFamily::Qwen2_5);
     assert_eq!(deepseek_desc.ffn_act, "swiglu");
     assert_eq!(deepseek_desc.rope_style, "split");

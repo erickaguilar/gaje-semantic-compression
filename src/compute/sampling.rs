@@ -165,11 +165,7 @@ pub fn generate_random_dna(n_elements: usize) -> Vec<u8> {
 ///
 /// Descarta tokens cuya probabilidad relativa respecto a la probabilidad máxima
 /// sea inferior al umbral `min_p` (por defecto 0.05).
-pub fn sample_min_p(
-    logits: &[f32],
-    temperature: f32,
-    min_p: f32,
-) -> Result<usize, String> {
+pub fn sample_min_p(logits: &[f32], temperature: f32, min_p: f32) -> Result<usize, String> {
     if logits.is_empty() {
         return Ok(0);
     }

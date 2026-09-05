@@ -77,7 +77,9 @@ impl GenomicLLM {
             h = block.forward_core(h, pos)?;
         }
         let h_norm = if self.is_gpu_active() {
-            if let Some(gpu_norm) = crate::compute::gpu::pipeline::gpu_rms_norm(&h, &self.output_norm, self.eps) {
+            if let Some(gpu_norm) =
+                crate::compute::gpu::pipeline::gpu_rms_norm(&h, &self.output_norm, self.eps)
+            {
                 gpu_norm
             } else {
                 unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) }
@@ -106,10 +108,12 @@ impl GenomicLLM {
             if let Some(gpu_logits) = self.lm_head.forward_gpu(&h_norm) {
                 gpu_logits
             } else {
-                self.lm_head.forward_core(h_norm, modulation, activate_rna)?
+                self.lm_head
+                    .forward_core(h_norm, modulation, activate_rna)?
             }
         } else {
-            self.lm_head.forward_core(h_norm, modulation, activate_rna)?
+            self.lm_head
+                .forward_core(h_norm, modulation, activate_rna)?
         };
         #[cfg(not(target_arch = "wasm32"))]
         let head_ms = t_head_start.elapsed().as_secs_f32() * 1000.0;
@@ -843,7 +847,8 @@ impl GenomicLLM {
                 }
             }
 
-            let next_tok = crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
+            let next_tok =
+                crate::compute::sampling::sample_min_p(&logits, temperature, 0.05).unwrap_or(0);
 
             generated.push(next_tok);
 

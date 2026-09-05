@@ -525,7 +525,7 @@ impl MlaAttention {
 
                 for t in 0..seq_len {
                     let s_rope = unsafe { dot_product(q_rope_slice, &self.k_rope_cache[t]) };
-                    
+
                     let s_nope = if let Some(ref w_uk) = self.w_uk {
                         let mut k_nope_head = vec![0.0f32; nope_dim];
                         let c_kv = &self.kv_latent_cache[t];
@@ -587,4 +587,3 @@ impl MlaAttention {
         Ok(attn_out)
     }
 }
-

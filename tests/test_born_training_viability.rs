@@ -21,9 +21,8 @@ fn test_born_q2_0_training_viability_and_loss_decrease() {
 
     // Secuencia de entrenamiento sintética (patrón recurrente de tokens)
     let sequence = vec![
-        10usize, 20, 30, 40, 50, 60, 70, 80,
-        10, 20, 30, 40, 50, 60, 70, 80,
-        10, 20, 30, 40, 50, 60, 70, 80,
+        10usize, 20, 30, 40, 50, 60, 70, 80, 10, 20, 30, 40, 50, 60, 70, 80, 10, 20, 30, 40, 50,
+        60, 70, 80,
     ];
 
     let lr = 0.01f32;
@@ -31,7 +30,10 @@ fn test_born_q2_0_training_viability_and_loss_decrease() {
     let mut initial_loss = 0.0f32;
     let mut final_loss = 0.0f32;
 
-    println!("📊 Ejecutando {} épocas de entrenamiento con STE Cuaternario...", epochs);
+    println!(
+        "📊 Ejecutando {} épocas de entrenamiento con STE Cuaternario...",
+        epochs
+    );
 
     for epoch in 0..epochs {
         let loss = model
@@ -63,8 +65,14 @@ fn test_born_q2_0_training_viability_and_loss_decrease() {
     let reduction_pct = (delta / initial_loss) * 100.0;
     println!("  • Reducción    : {:.4} ({:.2}%)", delta, reduction_pct);
 
-    assert!(final_loss < initial_loss, "La pérdida debe decrecer tras el entrenamiento");
-    assert!(reduction_pct > 15.0, "La reducción de pérdida debe ser superior al 15%");
+    assert!(
+        final_loss < initial_loss,
+        "La pérdida debe decrecer tras el entrenamiento"
+    );
+    assert!(
+        reduction_pct > 15.0,
+        "La reducción de pérdida debe ser superior al 15%"
+    );
     println!("✅ VIABILIDAD EMPÍRICA CERTIFICADA: El organismo nacido aprende con STE Cuaternario");
     println!("==================================================================\n");
 }

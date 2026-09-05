@@ -63,15 +63,16 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
     }
 
     let (repo_id, filename) = match model_identifier {
-        "max.gaje" | "max" => {
-            ("eaguilar/gaje-models", "max.gaje")
-        }
+        "max.gaje" | "max" => ("eaguilar/gaje-models", "max.gaje"),
         "gaje_pico_135m.flat" | "gaje_pico_135m" | "pico" | "135m" => {
             ("eaguilar/gaje-models", "gaje_pico_135m.flat")
         }
-        "gaje_nano_0_5b.flat" | "gaje_nano_0_5b" | "nano_0_5b" | "qwen_0_5b" | "0.5b" | "qwen2.5-0.5b" => {
-            ("eaguilar/gaje-models", "gaje_nano_0_5b.flat")
-        }
+        "gaje_nano_0_5b.flat"
+        | "gaje_nano_0_5b"
+        | "nano_0_5b"
+        | "qwen_0_5b"
+        | "0.5b"
+        | "qwen2.5-0.5b" => ("eaguilar/gaje-models", "gaje_nano_0_5b.flat"),
         "gaje_nano_1.5b.flat" | "gaje_nano_1.5b" | "nano" | "1.5b" => {
             ("eaguilar/gaje-models", "gaje_nano_1.5b.flat")
         }

@@ -430,7 +430,11 @@ struct TrainBornArgs {
     model: String,
 
     /// Ruta al dataset de entrenamiento (JSONL o texto)
-    #[arg(short, long, default_value = "data/genesis_conversational_corpus.jsonl")]
+    #[arg(
+        short,
+        long,
+        default_value = "data/genesis_conversational_corpus.jsonl"
+    )]
     dataset: String,
 
     /// Tasa de aprendizaje (Learning Rate)
@@ -659,11 +663,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             Ok(())
         }
         Some(Commands::Audit(audit_args)) => {
-            cli_tools::audit_cmd(
-                &audit_args.model,
-                audit_args.entropy,
-                audit_args.check_nan,
-            )?;
+            cli_tools::audit_cmd(&audit_args.model, audit_args.entropy, audit_args.check_nan)?;
             Ok(())
         }
         Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),
@@ -719,12 +719,22 @@ fn run_single_prompt(
     println!("✅ Modelo listo en {:.2} ms", load_ms);
 
     let mut context_prefix = String::new();
-    if let Some(orch) = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(model_path, llm.dim() as u32) {
+    if let Some(orch) = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(
+        model_path,
+        llm.dim() as u32,
+    ) {
         let q_vec = _impl::compute::island::IslandOrchestrator::vector_from_text(prompt, llm.dim());
         let matches = orch.retrieve_context(&q_vec, 2);
-        let relevant: Vec<_> = matches.into_iter().filter(|m| m.similarity >= 0.50).collect();
+        let relevant: Vec<_> = matches
+            .into_iter()
+            .filter(|m| m.similarity >= 0.50)
+            .collect();
         if !relevant.is_empty() {
-            let facts_str = relevant.iter().map(|m| m.text.as_str()).collect::<Vec<_>>().join(" | ");
+            let facts_str = relevant
+                .iter()
+                .map(|m| m.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" | ");
             println!("🧠 [Hipocampo] Inyectado contexto relevante: {}", facts_str);
             context_prefix = format!("[Conocimiento Hipocampal: {}]\n", facts_str);
         }
@@ -783,18 +793,26 @@ fn run_single_prompt(
 
 fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let dim = args.dim as u32;
-    let mut mgr = match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, dim) {
-        Ok(m) => m,
-        Err(e) => return Err(format!("Error abriendo gestor de épocas: {}", e).into()),
-    };
+    let mut mgr =
+        match _impl::compute::epoch_manager::EpochManager::new(&args.path, &args.organism, dim) {
+            Ok(m) => m,
+            Err(e) => return Err(format!("Error abriendo gestor de épocas: {}", e).into()),
+        };
 
     match args.action.as_str() {
         "list" => {
             let epochs = mgr.list_epochs().map_err(|e| e.to_string())?;
             let active = mgr.active_epoch_id;
-            println!("📚 Épocas registradas para '{}': (Época Activa: {})", args.organism, active);
+            println!(
+                "📚 Épocas registradas para '{}': (Época Activa: {})",
+                args.organism, active
+            );
             for ep in epochs {
-                let star = if ep.epoch_id == active { format!("*{}", ep.epoch_id) } else { format!(" {}", ep.epoch_id) };
+                let star = if ep.epoch_id == active {
+                    format!("*{}", ep.epoch_id)
+                } else {
+                    format!(" {}", ep.epoch_id)
+                };
                 println!(
                     "  {} Época #{}: {} (Fecha: {}, Padre: #{}, Estado: {:?})",
                     star, ep.epoch_id, ep.comment, ep.created_at, ep.parent_epoch, ep.verdict
@@ -803,16 +821,22 @@ fn handle_epoch(args: &EpochArgs) -> Result<(), Box<dyn std::error::Error + Send
         }
         "snapshot" => {
             let mut orch = _impl::compute::island::IslandOrchestrator::new(dim);
-            let new_id = mgr.create_snapshot(&mut orch, &args.comment, None).map_err(|e| e.to_string())?;
+            let new_id = mgr
+                .create_snapshot(&mut orch, &args.comment, None)
+                .map_err(|e| e.to_string())?;
             println!("✅ Creado snapshot: Época ID {}", new_id);
         }
         "rollback" => {
             println!("⏪ Realizando rollback a la época #{}...", args.epoch_id);
             mgr.rollback_to(args.epoch_id).map_err(|e| e.to_string())?;
-            println!("✅ Rollback exitoso. Época activa ahora es ID {}", args.epoch_id);
+            println!(
+                "✅ Rollback exitoso. Época activa ahora es ID {}",
+                args.epoch_id
+            );
         }
         "promote" => {
-            mgr.promote_epoch(args.epoch_id).map_err(|e| e.to_string())?;
+            mgr.promote_epoch(args.epoch_id)
+                .map_err(|e| e.to_string())?;
             println!("✅ Época ID {} promovida a activa.", args.epoch_id);
         }
         "seal" => {
@@ -834,7 +858,8 @@ fn handle_swarm(args: &SwarmArgs) -> Result<(), Box<dyn std::error::Error + Send
     use std::sync::Arc;
 
     let query = args.prompt.clone().unwrap_or_else(|| {
-        "Deducir y sintetizar la relación óptima entre compresión genómica y latencia MCTS".to_string()
+        "Deducir y sintetizar la relación óptima entre compresión genómica y latencia MCTS"
+            .to_string()
     });
 
     println!("\n🧬 GAJE AGENTIC SWARM — Orquestador de Enjambre Multi-Agente");
@@ -846,10 +871,15 @@ fn handle_swarm(args: &SwarmArgs) -> Result<(), Box<dyn std::error::Error + Send
     // Node 0: Factual Direct Specialist
     struct FactualNode;
     impl AgentNode for FactualNode {
-        fn name(&self) -> &str { "micro_factual_135m" }
+        fn name(&self) -> &str {
+            "micro_factual_135m"
+        }
         fn process(&self, mut state: AgentState) -> Result<StepResult, String> {
             state.touch();
-            state.response = Some(format!("[135M Factual] Respuesta resuelta directamente: {}", state.user_query));
+            state.response = Some(format!(
+                "[135M Factual] Respuesta resuelta directamente: {}",
+                state.user_query
+            ));
             Ok(StepResult::End(state))
         }
     }
@@ -862,43 +892,73 @@ fn handle_swarm(args: &SwarmArgs) -> Result<(), Box<dyn std::error::Error + Send
     let tool_idx = graph.add_node(Arc::new(tool_node));
 
     // Node 2: ToT Reasoner Node (MCTS Tree-of-Thoughts)
-    let tot_node = ToTNode::new("tot_mcts_reasoner", args.depth, args.budget, 1.41, factual_idx);
+    let tot_node = ToTNode::new(
+        "tot_mcts_reasoner",
+        args.depth,
+        args.budget,
+        1.41,
+        factual_idx,
+    );
     let tot_idx = graph.add_node(Arc::new(tot_node));
 
     // Node 3: Swarm Router
     let router = SwarmRouterNode::new("swarm_router", factual_idx, tot_idx, 0.70)
-        .add_intent_route(vec!["calcular".into(), "math".into(), "+".into()], SwarmIntent::ToolExecution, tool_idx)
-        .add_intent_route(vec!["deducir".into(), "analizar".into(), "relación".into(), "sintetizar".into()], SwarmIntent::DeepReasoning, tot_idx);
+        .add_intent_route(
+            vec!["calcular".into(), "math".into(), "+".into()],
+            SwarmIntent::ToolExecution,
+            tool_idx,
+        )
+        .add_intent_route(
+            vec![
+                "deducir".into(),
+                "analizar".into(),
+                "relación".into(),
+                "sintetizar".into(),
+            ],
+            SwarmIntent::DeepReasoning,
+            tot_idx,
+        );
     let router_idx = graph.add_node(Arc::new(router));
 
     let executor = SwarmExecutor::new(Arc::new(graph));
-    let (state, hops, elapsed_ms) = executor.execute_profiled(router_idx, AgentState::with_query(query))
+    let (state, hops, elapsed_ms) = executor
+        .execute_profiled(router_idx, AgentState::with_query(query))
         .map_err(|e| format!("{:?}", e))?;
 
     println!("\n⚡ Telemetría del Grafo Agéntico:");
-    println!("  • Intención Detectada  : {}", state.intent.as_deref().unwrap_or("DirectFactual"));
+    println!(
+        "  • Intención Detectada  : {}",
+        state.intent.as_deref().unwrap_or("DirectFactual")
+    );
     println!("  • Saltos en el Grafo   : {} pasos", hops);
     println!("  • Latencia de Ejecución: {:.2} ms", elapsed_ms);
     if !state.context.is_empty() {
-        println!("  • Contexto Acumulado   : {}", state.context.join("\n    "));
+        println!(
+            "  • Contexto Acumulado   : {}",
+            state.context.join("\n    ")
+        );
     }
     if !state.tool_outputs.is_empty() {
         println!("  • Salidas de Tools     : {:?}", state.tool_outputs);
     }
-    println!("\n💬 Respuesta Final:\n{}\n", state.response.as_deref().unwrap_or("Sin respuesta"));
+    println!(
+        "\n💬 Respuesta Final:\n{}\n",
+        state.response.as_deref().unwrap_or("Sin respuesta")
+    );
 
     Ok(())
 }
 
 fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use _impl::nn::llm::birth::{create_born_organism, BornConfig};
-    use _impl::io::flat_writer::save_genomic_flat_q;
     use _impl::io::config::ModelConfig;
+    use _impl::io::flat_writer::save_genomic_flat_q;
+    use _impl::nn::llm::birth::{create_born_organism, BornConfig};
     use std::path::Path;
 
-    let output_path = args.output.clone().unwrap_or_else(|| {
-        format!("models/born/{}.gaje", args.name)
-    });
+    let output_path = args
+        .output
+        .clone()
+        .unwrap_or_else(|| format!("models/born/{}.gaje", args.name));
 
     println!("\n🧬 GAJE PROTOCOLO DE GÉNESIS — Nacimiento de Organismo en 2-Bits (Q2_0)");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -973,7 +1033,13 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     };
 
     let t_write = std::time::Instant::now();
-    save_genomic_flat_q(&output_path, &organism, &model_config, tokenizer_obj.as_ref(), 3)?;
+    save_genomic_flat_q(
+        &output_path,
+        &organism,
+        &model_config,
+        tokenizer_obj.as_ref(),
+        3,
+    )?;
     let write_elapsed = t_write.elapsed();
 
     let mut memory_info = None;
@@ -991,12 +1057,18 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
             if let Ok(content) = std::fs::read_to_string(facts_path) {
                 for (idx, line) in content.lines().enumerate() {
                     let trimmed = line.trim();
-                    if trimmed.is_empty() { continue; }
-                    let fact_text = if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
-                        v.get("text").and_then(|t| t.as_str()).unwrap_or(trimmed).to_string()
-                    } else {
-                        trimmed.to_string()
-                    };
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+                    let fact_text =
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                            v.get("text")
+                                .and_then(|t| t.as_str())
+                                .unwrap_or(trimmed)
+                                .to_string()
+                        } else {
+                            trimmed.to_string()
+                        };
 
                     use std::hash::{Hash, Hasher};
                     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -1006,7 +1078,10 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
                     let mut vec = vec![0.0f32; args.dim];
                     let mut norm_sq = 0.0f32;
                     for (i, val) in vec.iter_mut().enumerate() {
-                        let pseudo = ((seed.wrapping_add(i as u64).wrapping_mul(6364136223846793005)) >> 32) as i32;
+                        let pseudo = ((seed
+                            .wrapping_add(i as u64)
+                            .wrapping_mul(6364136223846793005))
+                            >> 32) as i32;
                         let f = (pseudo as f32) / (i32::MAX as f32);
                         *val = f;
                         norm_sq += f * f;
@@ -1016,7 +1091,12 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
                         *val /= norm;
                     }
 
-                    orch.add_memory(_impl::compute::island::IslandNiche::Documental, (idx + 1) as u64, vec, fact_text);
+                    orch.add_memory(
+                        _impl::compute::island::IslandNiche::Documental,
+                        (idx + 1) as u64,
+                        vec,
+                        fact_text,
+                    );
                     facts_count += 1;
                 }
             }
@@ -1034,7 +1114,10 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
     println!("  • Tamaño en Disco      : {:.2} MB", size_mb);
     println!("  • Tiempo de Exportación: {:.2?}", write_elapsed);
     if let Some((mem_dir, count)) = memory_info {
-        println!("  • Hipocampo Congénito  : {} ({} hechos en nicho documental, D={})", mem_dir, count, args.dim);
+        println!(
+            "  • Hipocampo Congénito  : {} ({} hechos en nicho documental, D={})",
+            mem_dir, count, args.dim
+        );
     }
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
@@ -1053,23 +1136,44 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
     println!("  • Learning Rate       : {:.4}", args.lr);
     println!("  • Layer-wise Decay    : {:.2}", args.lr_decay);
     println!("  • Gradient Clip       : {:.2}", args.gclip);
-    println!("  • Acelerador          : {}", if args.gpu { "⚡ GPU (Vulkan / WGPU)" } else { "🖥️  CPU (AVX2/NEON Rayon)" });
+    println!(
+        "  • Acelerador          : {}",
+        if args.gpu {
+            "⚡ GPU (Vulkan / WGPU)"
+        } else {
+            "🖥️  CPU (AVX2/NEON Rayon)"
+        }
+    );
 
     println!("\n⏳ Abriendo archivo genómico y cargando modelo...");
     let (mut model, tokenizer) = repl::load_model_and_tokenizer(&args.model)?;
     let reader = GajeFlatFileReader::open(&args.model)?;
     let config = reader.load_config()?;
 
-    println!("✅ Modelo cargado ({} bloques, {} dim)", model.blocks.len(), config.n_embd);
+    println!(
+        "✅ Modelo cargado ({} bloques, {} dim)",
+        model.blocks.len(),
+        config.n_embd
+    );
 
-    let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(&args.model, config.n_embd as u32)
-        .or_else(|| {
-            println!("🧠 Inicializando nuevo Hipocampo Congénito (.gmem) para el organismo...");
-            Some(_impl::compute::island::IslandOrchestrator::new(config.n_embd as u32))
-        });
+    let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(
+        &args.model,
+        config.n_embd as u32,
+    )
+    .or_else(|| {
+        println!("🧠 Inicializando nuevo Hipocampo Congénito (.gmem) para el organismo...");
+        Some(_impl::compute::island::IslandOrchestrator::new(
+            config.n_embd as u32,
+        ))
+    });
     if let Some(ref orch) = memory_orch {
-        let total = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
-        println!("🧠 Hipocampo Congénito activo: {} hechos vinculados a la crianza", total);
+        let total = orch.documental.entries.len()
+            + orch.episodic.entries.len()
+            + orch.conversational.entries.len();
+        println!(
+            "🧠 Hipocampo Congénito activo: {} hechos vinculados a la crianza",
+            total
+        );
     }
 
     // Leer y parsear dataset
@@ -1098,8 +1202,16 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
             let exists = orch.documental.entries.iter().any(|e| e.text == text);
             if !exists {
                 let id = (orch.documental.entries.len() + 1) as u64;
-                let vec = _impl::compute::island::IslandOrchestrator::vector_from_text(&text, config.n_embd);
-                orch.add_memory(_impl::compute::island::IslandNiche::Documental, id, vec, text.clone());
+                let vec = _impl::compute::island::IslandOrchestrator::vector_from_text(
+                    &text,
+                    config.n_embd,
+                );
+                orch.add_memory(
+                    _impl::compute::island::IslandNiche::Documental,
+                    id,
+                    vec,
+                    text.clone(),
+                );
                 new_facts_added += 1;
             }
         }
@@ -1116,10 +1228,17 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
     }
 
     if new_facts_added > 0 {
-        println!("🧠 [Hipocampo] +{} nuevos hechos integrados al nicho documental durante la lectura", new_facts_added);
+        println!(
+            "🧠 [Hipocampo] +{} nuevos hechos integrados al nicho documental durante la lectura",
+            new_facts_added
+        );
     }
 
-    println!("📊 Corpus procesado: {} secuencias, {} tokens totales", sequences.len(), total_tokens);
+    println!(
+        "📊 Corpus procesado: {} secuencias, {} tokens totales",
+        sequences.len(),
+        total_tokens
+    );
     if sequences.is_empty() {
         return Err("El dataset no contiene secuencias válidas".into());
     }
@@ -1171,7 +1290,10 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
     println!("\n📈 Resumen de Crianza Genómica:");
     println!("  • Pérdida Inicial   : {:.4}", initial_loss);
     println!("  • Pérdida Final     : {:.4}", final_loss);
-    println!("  • Reducción Pérdida : {:.4} ({:.2}%)", delta_loss, red_pct);
+    println!(
+        "  • Reducción Pérdida : {:.4} ({:.2}%)",
+        delta_loss, red_pct
+    );
     println!("  • Tiempo Total      : {:.2?}", total_time);
 
     let output_path = args.output.clone().unwrap_or_else(|| args.model.clone());
@@ -1187,8 +1309,13 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
             format!("{}_memory", output_path)
         };
         orch.save_all(&memory_dir)?;
-        let total = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
-        println!("🧠 Hipocampo Sincronizado: {} hechos consolidados en {}", total, memory_dir);
+        let total = orch.documental.entries.len()
+            + orch.episodic.entries.len()
+            + orch.conversational.entries.len();
+        println!(
+            "🧠 Hipocampo Sincronizado: {} hechos consolidados en {}",
+            total, memory_dir
+        );
     }
 
     println!("✅ ¡Organismo y memoria guardados y listos para inferencia!");
@@ -1200,9 +1327,15 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
 fn load_model_with_optional_tok(
     model_path: &str,
     custom_tok_path: Option<&str>,
-) -> Result<(_impl::nn::llm::GenomicLLM, _impl::core::tokenizer::GajeTokenizer), Box<dyn std::error::Error + Send + Sync>> {
-    use _impl::core::tokenizer::GajeTokenizer;
+) -> Result<
+    (
+        _impl::nn::llm::GenomicLLM,
+        _impl::core::tokenizer::GajeTokenizer,
+    ),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     use _impl::core::gtok::GtokNativeTokenizer;
+    use _impl::core::tokenizer::GajeTokenizer;
 
     if let Some(tok_path) = custom_tok_path {
         let reader = _impl::io::flat_reader::GajeFlatFileReader::open(model_path)?;
@@ -1406,7 +1539,10 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
     println!("\n📈 Resumen de Destilación DNI:");
     println!("  • Pérdida Inicial   : {:.4}", initial_loss);
     println!("  • Pérdida Final     : {:.4}", final_loss);
-    println!("  • Reducción Pérdida : {:.4} ({:.2}%)", delta_loss, red_pct);
+    println!(
+        "  • Reducción Pérdida : {:.4} ({:.2}%)",
+        delta_loss, red_pct
+    );
     println!("  • Tiempo Total      : {:.2?}", total_time);
 
     let output_path = args.output.clone().unwrap_or_else(|| {
@@ -1439,7 +1575,12 @@ fn handle_mutate(args: &MutateArgs) -> Result<(), Box<dyn std::error::Error + Se
     println!("\n🧬 GAJE ADAPTIVE — Mutación In-Place de Centroides (Codebook Tuning)");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("  • Modelo Objetivo   : {}", model_path);
-    println!("  • Tensor            : {}", args.tensor.as_deref().unwrap_or("Automático (última capa / atención)"));
+    println!(
+        "  • Tensor            : {}",
+        args.tensor
+            .as_deref()
+            .unwrap_or("Automático (última capa / atención)")
+    );
     println!("  • Intensidad (sigma): {}", args.intensity);
 
     let report = _impl::io::adaptive::mutate_model_centroids(
@@ -1450,12 +1591,24 @@ fn handle_mutate(args: &MutateArgs) -> Result<(), Box<dyn std::error::Error + Se
 
     println!("\n✅ Mutación aplicada con éxito in-place:");
     println!("  • Tensor mutado       : {}", report.tensor_name);
-    println!("  • Centroides alterados: {} centroides float32", report.num_centroids);
-    println!("  • Muestra previa      : {:?}", report.old_centroids_sample);
-    println!("  • Muestra nueva       : {:?}", report.new_centroids_sample);
+    println!(
+        "  • Centroides alterados: {} centroides float32",
+        report.num_centroids
+    );
+    println!(
+        "  • Muestra previa      : {:?}",
+        report.old_centroids_sample
+    );
+    println!(
+        "  • Muestra nueva       : {:?}",
+        report.new_centroids_sample
+    );
     println!("  • Mutación acumulada  : #{}", report.mutation_index);
     println!("  • Hash Ancestro       : {:#018x}", report.parent_hash);
-    println!("  • Hash Linaje Nuevo   : {:#018x}", report.new_lineage_hash);
+    println!(
+        "  • Hash Linaje Nuevo   : {:#018x}",
+        report.new_lineage_hash
+    );
     println!("\n💡 El modelo ha evolucionado directamente sobre su archivo sin duplicar gigabytes en disco.\n");
     Ok(())
 }
@@ -1471,7 +1624,14 @@ fn handle_history(args: &HistoryArgs) -> Result<(), Box<dyn std::error::Error + 
     println!("  • Cuantización        : {}", rep.quant_format);
     println!("  • Tensores Registrados: {}", rep.num_tensors);
     println!("  • Mutaciones Vivas    : {}", rep.num_mutations);
-    println!("  • Estado Adaptativo   : {}", if rep.has_adaptive_section { "ACTIVO (Organismo adaptado / en evolución)" } else { "PRÍSTINO (Modelo base congelado)" });
+    println!(
+        "  • Estado Adaptativo   : {}",
+        if rep.has_adaptive_section {
+            "ACTIVO (Organismo adaptado / en evolución)"
+        } else {
+            "PRÍSTINO (Modelo base congelado)"
+        }
+    );
     println!("  • Hash Padre (Parent) : {}", rep.parent_hash_hex);
     println!("  • Hash Linaje Actual  : {}", rep.current_hash_hex);
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
@@ -1498,18 +1658,24 @@ fn print_cli_guide() {
     println!("      Da a luz a un organismo genómico nativo en el plano complejo ℂ.");
     println!("      Ej: gaje-cli birth --dim 512 --layers 12 -o models/born/nuevo.gaje");
     println!("  • gaje-cli train-born (alias: crianza, train, entrenar)");
-    println!("      Entrena un organismo nacido con el estimador Straight-Through cuaternario (STE).");
+    println!(
+        "      Entrena un organismo nacido con el estimador Straight-Through cuaternario (STE)."
+    );
     println!("      Ej: gaje-cli crianza -m models/born/max_512_pro.gaje -e 10 --gpu");
     println!("  • gaje-cli distill (alias: destilar, dni)");
     println!("      Destilación de conocimiento DNI Online (Maestro ➔ Alumno).");
     println!("      Ej: gaje-cli destilar -t models/production/gaje_nano_0_5b.flat -s models/born/max_512_pro.gaje -d data/genesis_conversational_corpus.jsonl");
     println!("  • gaje-cli mutate (alias: mutar)");
-    println!("      Inyecta mutación genómica controlada in-place en centroides sin duplicar archivo.");
+    println!(
+        "      Inyecta mutación genómica controlada in-place en centroides sin duplicar archivo."
+    );
     println!("  • gaje-cli history (alias: historial, lineage)");
     println!("      Inspecciona linaje evolutivo, árbol de mutaciones y estado adaptativo.");
     println!();
     println!("📦 3. GESTIÓN DE MODELOS & MEMORIA ASOCIATIVA (.gmem):");
-    println!("  • gaje-cli models (alias: modelos, ls) [list | inspect <archivo> | verify <archivo>]");
+    println!(
+        "  • gaje-cli models (alias: modelos, ls) [list | inspect <archivo> | verify <archivo>]"
+    );
     println!("      Inspecciona cabeceras binarias, verifica integridad y cataloga modelos.");
     println!("      Ej: gaje-cli modelos list");
     println!("      Ej: gaje-cli modelos inspect models/born/max_512_pro.gaje");
@@ -1522,7 +1688,9 @@ fn print_cli_guide() {
     println!();
     println!("🚀 4. RENDIMIENTO, CALIBRACIÓN & AUDITORÍA:");
     println!("  • gaje-cli doctor (alias: diagnostico, diag, info)");
-    println!("      Diagnóstico integral de hardware: CPU, SIMD (AVX2/NEON), GPU Vulkan y memoria.");
+    println!(
+        "      Diagnóstico integral de hardware: CPU, SIMD (AVX2/NEON), GPU Vulkan y memoria."
+    );
     println!("  • gaje-cli benchmark (alias: bench, medir, test-speed)");
     println!("      Mide latencia TTFT, velocidad sostenida (tok/s) y consumo de memoria RAM.");
     println!("      Ej: gaje-cli bench -m models/born/max_512_pro.gaje");
@@ -1532,7 +1700,7 @@ fn print_cli_guide() {
     println!("      Construye y tokeniza datasets de texto/JSONL para entrenamiento.");
     println!("  • gaje-cli guide (alias: menu, comandos, guia, ayuda)");
     println!("      Muestra este mapa de comandos y ejemplos de uso.");
-    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    println!(
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    );
 }
-
-

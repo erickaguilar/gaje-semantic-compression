@@ -1,13 +1,13 @@
 // =============================================================================
 // birth — Protocolo de Nacimiento de Organismos Genómicos en 2-Bits (Q2_0)
 // =============================================================================
-use std::sync::Arc;
 use crate::io::header::Q2_0Block;
 use crate::nn::attention::GenomicAttention;
 use crate::nn::block::RustGenomicBlock;
 use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
 use crate::nn::llm::GenomicLLM;
+use std::sync::Arc;
 
 /// Configuración de nacimiento del organismo genómico
 #[derive(Debug, Clone)]
@@ -107,7 +107,11 @@ pub fn create_born_q4_0_linear(out_features: usize, in_features: usize) -> Genom
                 let hi = ((row * 31 + b * 7 + k * 2 + 1) % 16) as u8;
                 qs[k] = lo | (hi << 4);
             }
-            blocks.push(Q4_0Block { scale: half::f16::from_f32(scale_val), min: half::f16::from_f32(min_val), qs });
+            blocks.push(Q4_0Block {
+                scale: half::f16::from_f32(scale_val),
+                min: half::f16::from_f32(min_val),
+                qs,
+            });
         }
     }
     GenomicLinear {
@@ -237,7 +241,15 @@ pub fn create_born_q4_0_organism(config: BornConfig) -> GenomicLLM {
     let embeddings = create_born_fp32_linear(config.vocab_size, config.dim);
     let mut blocks = Vec::with_capacity(config.n_layers);
     for idx in 0..config.n_layers {
-        let attn = GenomicAttention::new(config.n_heads, config.n_heads, config.dim / config.n_heads, vec![1.0; config.dim], config.eps, 10000.0, "rope".to_string());
+        let attn = GenomicAttention::new(
+            config.n_heads,
+            config.n_heads,
+            config.dim / config.n_heads,
+            vec![1.0; config.dim],
+            config.eps,
+            10000.0,
+            "rope".to_string(),
+        );
         let q_gen = create_born_q4_0_linear(config.dim, config.dim);
         let k_gen = create_born_q4_0_linear(config.dim, config.dim);
         let v_gen = create_born_q4_0_linear(config.dim, config.dim);
@@ -246,10 +258,37 @@ pub fn create_born_q4_0_organism(config: BornConfig) -> GenomicLLM {
         let up_gen = create_born_q4_0_linear(config.intermediate_dim, config.dim);
         let w_down = create_born_q4_0_linear(config.dim, config.intermediate_dim);
         let ffn_norm = vec![1.0; config.dim];
-        let blk = RustGenomicBlock::new(idx, attn, q_gen, k_gen, v_gen, w_o, gate_gen, up_gen, w_down, ffn_norm, config.eps, "silu".to_string(), false, 1.0, 0.0);
+        let blk = RustGenomicBlock::new(
+            idx,
+            attn,
+            q_gen,
+            k_gen,
+            v_gen,
+            w_o,
+            gate_gen,
+            up_gen,
+            w_down,
+            ffn_norm,
+            config.eps,
+            "silu".to_string(),
+            false,
+            1.0,
+            0.0,
+        );
         blocks.push(blk);
     }
     let output_norm = vec![1.0; config.dim];
     let lm_head = create_born_fp32_linear(config.vocab_size, config.dim);
-    GenomicLLM { embeddings, blocks, output_norm, lm_head, eps: config.eps, k_wta_ratio: config.k_wta_ratio, topology: None, quantum_embeddings: None, gpu_layers: 0, use_gpu: false, }
+    GenomicLLM {
+        embeddings,
+        blocks,
+        output_norm,
+        lm_head,
+        eps: config.eps,
+        k_wta_ratio: config.k_wta_ratio,
+        topology: None,
+        quantum_embeddings: None,
+        gpu_layers: 0,
+        use_gpu: false,
+    }
 }
