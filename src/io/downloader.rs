@@ -63,6 +63,9 @@ pub fn resolve_model_url(model_identifier: &str) -> (String, String) {
     }
 
     let (repo_id, filename) = match model_identifier {
+        "max.gaje" | "max" => {
+            ("eaguilar/gaje-models", "max.gaje")
+        }
         "gaje_pico_135m.flat" | "gaje_pico_135m" | "pico" | "135m" => {
             ("eaguilar/gaje-models", "gaje_pico_135m.flat")
         }
