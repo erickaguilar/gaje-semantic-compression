@@ -41,7 +41,7 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
 2. **Soberanía Nativa:** Funcionalidades de alto rendimiento o herramientas CLI administrativas deben implementarse como comandos en `gaje-cli` (Rust), evitando scripts monolíticos descartables.
 3. **Sin Colisiones de Módulos:** En `python/gaje/`, no crear carpetas que colisionen con extensiones nativas binarias (`_impl`).
 
-### B. Sistema de Diseño Y2K & Dual-Theme
+### B. Sistema de Diseño Y2K & Tri-Theme (Tres Temas Oficiales)
 
 #### 1. Definición y Filosofía de los Temas:
 * **`y2k-dark = 'HIG-APPLE'` (Tema Oscuro por Defecto):**
@@ -55,6 +55,11 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
   * **Fondo, Papel y Cuaderno:** Fondo marfil suave / pergamino limpio (`#f6f5f3` / `#edebe9`) con sutil cuadrícula punteada (*dot-grid* 24px) y línea guía de margen ámbar/carmesí; paneles y tarjetas de respuesta en blanco marfil estructurado (`#ffffff`) como fichas de notas de laboratorio encuadernadas.
   * **Acentos Orgánicos & ADN:** Verde Bosque / Jade Profundo (`#2c5234`), Pizarra (`#2c3539`), Ámbar botánico de notas (`#b45309`) y Carmesí (`#b91c1c`). Módulo de razonamiento desplegable (*thought disclosure*) estilizado como un memorando de investigación (*Field Notes*).
   * **UX & Ergonomía:** Tipografía geométrica limpia (*Inter* / *Plus Jakarta Sans*), micro-bordes neutros de alta legibilidad, iconografía adaptada con filtros invertidos de alto contraste y cero fatiga visual en entornos diurnos.
+* **`y2k-zen = 'E-INK TECHNICAL MINIMALIST'` (Tema Zen vía `[data-theme="zen"]`):**
+  * **Concepto:** Híbrido papel-digital de minimalismo técnico inspirado en dispositivos de tinta electrónica (E-Ink). Diseñado para concentración absoluta, lectura técnica profunda y ambientes de baja luminosidad sin distracciones ni destellos neón.
+  * **Fondo, Superficie y Tinta:** Canvas mate carbón profundo (`#141313`), contraste de tinta de papel nítido (`#e5e2e1`), paneles tonales sobrios (`#1c1b1b`, `#201f1f`) y eliminación intencional de resplandores o desenfoques pesados.
+  * **Acentos Pragmáticos & Bordes:** Bordes estructurales ultrafinos hairline (`1px #2d2c2c` / `#484740`), acentos desaturados Salvia pragmático (*Sage* `#7A8C85`), Pizarra apagada (*Muted Slate* `#64748B`) y blanco puro de tinta.
+  * **UX & Ergonomía:** Tipografía técnica optimizada (*Space Grotesk* en titulares y *Plus Jakarta Sans* en cuerpo con interlineado generoso 1.75x), concebido para maximizar la legibilidad y la retención cognitiva en sesiones prolongadas.
 
 #### 2. Reglas Técnicas de Frontend para Agentes y Desarrolladores:
 * **Regla de Oro de Overflow:** `overflow: hidden` está **estrictamente prohibido** en `.y2k-header` para evitar recortar menús desplegables y tooltips flotantes.

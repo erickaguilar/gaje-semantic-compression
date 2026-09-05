@@ -41,7 +41,7 @@ This document defines the **global project description**, repository architectur
 2. **Native Sovereignty:** High-performance features or administrative CLI tools must be implemented as commands in `gaje-cli` (Rust), avoiding disposable monolithic scripts.
 3. **No Module Collisions:** In `python/gaje/`, do not create directory structures that collide with compiled binary extensions (`_impl`).
 
-### B. Y2K Design System & Dual-Theme Architecture
+### B. Y2K Design System & Tri-Theme Architecture (Three Official Themes)
 
 #### 1. Theme Definitions & Philosophy:
 * **`y2k-dark = 'HIG-APPLE'` (Default Dark Theme):**
@@ -55,6 +55,11 @@ This document defines the **global project description**, repository architectur
   * **Background & Paper:** Soft ivory / clean parchment background (`#f6f5f3` / `#edebe9`) with subtle 24px dot-grid and amber/crimson margin guide lines; response panels styled as bound lab cards in structured ivory white (`#ffffff`).
   * **Organic & DNA Accents:** Forest / Deep Jade Green (`#2c5234`), Slate (`#2c3539`), Botanical Amber (`#b45309`), and Crimson (`#b91c1c`). Thought disclosure module styled as an engineering field notes memorandum.
   * **UX & Ergonomics:** Clean geometric typography (*Inter* / *Plus Jakarta Sans*), high-legibility neutral micro-borders, inverted high-contrast icons, and zero eye strain in daylight environments.
+* **`y2k-zen = 'E-INK TECHNICAL MINIMALIST'` (Zen Theme via `[data-theme="zen"]`):**
+  * **Concept:** Paper-digital hybrid technical minimalism inspired by industrial electronic ink (E-Ink) displays. Engineered for zero distraction, dense technical reading, and elimination of cognitive fatigue in low-light environments.
+  * **Background, Surface & Ink:** Matte deep carbon canvas (`#141313`), crisp paper ink contrast (`#e5e2e1`), restrained tonal panels (`#1c1b1b`, `#201f1f`), and intentional omission of neon glows or heavy blurs.
+  * **Pragmatic Accents & Borders:** Hairline structural borders (`1px #2d2c2c` / `#484740`), desaturated Sage accents (`#7A8C85`), Muted Slate (`#64748B`), and pure ink white.
+  * **UX & Ergonomics:** High-retention technical typography (*Space Grotesk* for headings, *Plus Jakarta Sans* body with generous 1.75x leading), optimized for maximum reading focus.
 
 #### 2. Frontend Technical Rules for Agents & Developers:
 * **Golden Overflow Rule:** `overflow: hidden` is **strictly prohibited** on `.y2k-header` to avoid clipping dropdown menus and floating tooltips.

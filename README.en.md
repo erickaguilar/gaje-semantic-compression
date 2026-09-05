@@ -172,7 +172,13 @@ maturin develop --release --features python
 ```
 
 ### 2. Run the Interactive Web UI
+
 ```bash
+# Sovereign Native Rust Server (Zero-Python, minimal RAM, SSE streaming)
+cargo build --release --bin gaje-cli
+./target/release/gaje-cli serve --port 8080 --chat-only
+
+# Or via lightweight Python development server:
 python examples/ui/web_ui/server.py
 ```
 Open `http://localhost:8080` in your browser and select your flat quantized model.

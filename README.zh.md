@@ -57,8 +57,8 @@ cargo build --release --bin gaje-cli
 ### 2. `gaje-cli` 核心指令集
 
 ```bash
-# 启动内置 Web UI 聊天服务与 SSE 流式 HTTP 服务器 (内存内嵌)
-./target/release/gaje-cli serve --port 8080
+# 启动内置 Web UI 聊天服务与 SSE 流式 HTTP 服务器 (内存内嵌，支持 --chat-only 超轻量模式)
+./target/release/gaje-cli serve --port 8080 --chat-only
 
 # 终端交互式 Chat REPL 会话
 ./target/release/gaje-cli chat --model models/production/gaje_pico_135m.flat
