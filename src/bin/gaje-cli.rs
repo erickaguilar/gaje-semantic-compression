@@ -460,6 +460,10 @@ struct TrainBornArgs {
     /// Acelerar entrenamiento mediante GPU (WGPU / Vulkan)
     #[arg(long)]
     gpu: bool,
+
+    /// Número de capas superiores a entrenar (Ladder training, e.g. 4 para entrenar solo bloques 8-11 + LM Head). Por defecto: todas
+    #[arg(short = 'l', long = "train-layers")]
+    train_layers: Option<usize>,
 }
 
 #[derive(Args, Debug)]
@@ -1156,6 +1160,21 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
         config.n_embd
     );
 
+    if args.gpu {
+        let n_blocks = model.blocks.len();
+        match model.offload_to_gpu(n_blocks) {
+            Ok(assigned) => {
+                println!(
+                    "⚡ Acelerador GPU activado: {}/{} capas asignadas a GPU (Vulkan/WGPU)",
+                    assigned, n_blocks
+                );
+            }
+            Err(e) => {
+                println!("⚠️ Advertencia GPU: {}. Continuando con fallback CPU.", e);
+            }
+        }
+    }
+
     let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(
         &args.model,
         config.n_embd as u32,
@@ -1243,29 +1262,64 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
         return Err("El dataset no contiene secuencias válidas".into());
     }
 
+    let total_blocks = model.blocks.len();
+    let train_blocks = args.train_layers.unwrap_or(total_blocks).min(total_blocks);
+
+    println!(
+        "  • Capas en Crianza    : {}/{} bloques superiores + LM Head{}",
+        train_blocks,
+        total_blocks,
+        if train_blocks < total_blocks { " (Ladder Training)" } else { " (Full Body)" }
+    );
+
     println!("\n🔥 Iniciando bucle de entrenamiento STE cuaternario...");
     let t_start = std::time::Instant::now();
     let mut initial_loss = 0.0f32;
     let mut final_loss = 0.0f32;
-    let n_blocks = model.blocks.len();
+    let n_seqs = sequences.len();
 
+    use std::io::Write;
     for epoch in 1..=args.epochs {
         let t_ep = std::time::Instant::now();
         let mut ep_loss_sum = 0.0f32;
         let mut ep_toks = 0usize;
 
-        for seq in &sequences {
+        for (seq_idx, seq) in sequences.iter().enumerate() {
             let loss = model.train_sequence_cached_layerwise_core(
                 seq.clone(),
                 args.lr,
-                n_blocks,
+                train_blocks,
                 args.gclip,
                 args.lr_decay,
                 true,
                 None,
             )?;
-            ep_loss_sum += loss * (seq.len() - 1) as f32;
-            ep_toks += seq.len() - 1;
+            let n_tok = seq.len().saturating_sub(1);
+            ep_loss_sum += loss * n_tok as f32;
+            ep_toks += n_tok;
+
+            // Telemetría en vivo con vaciado explícito de búfer
+            if (seq_idx + 1) % 10 == 0 || seq_idx + 1 == n_seqs {
+                let elapsed = t_ep.elapsed().as_secs_f32().max(1e-4);
+                let current_tps = (ep_toks as f32) / elapsed;
+                let current_loss = ep_loss_sum / ep_toks.max(1) as f32;
+                let remaining_seqs = n_seqs.saturating_sub(seq_idx + 1);
+                let avg_time_per_seq = elapsed / (seq_idx + 1) as f32;
+                let eta_secs = remaining_seqs as f32 * avg_time_per_seq;
+
+                print!(
+                    "\r  ⚡ [Época {:>2}/{}] Sec {:>3}/{} ({:>3.0}%) | Loss: {:.4} | {:.0} tok/s | ETA: {:>3.0}s   ",
+                    epoch,
+                    args.epochs,
+                    seq_idx + 1,
+                    n_seqs,
+                    ((seq_idx + 1) as f32 / n_seqs as f32) * 100.0,
+                    current_loss,
+                    current_tps,
+                    eta_secs,
+                );
+                std::io::stdout().flush().ok();
+            }
         }
 
         let ep_avg_loss = ep_loss_sum / ep_toks.max(1) as f32;
@@ -1278,9 +1332,10 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
         let tps = (ep_toks as f32) / ep_dur;
 
         println!(
-            "  • Época {:>2}/{} | Loss: {:.4} | {:.0} tok/s | Tiempo: {:.2}s",
+            "\r  • Época {:>2}/{} | Loss: {:.4} | {:.0} tok/s | Tiempo: {:.2}s                              ",
             epoch, args.epochs, ep_avg_loss, tps, ep_dur
         );
+        std::io::stdout().flush().ok();
     }
 
     let total_time = t_start.elapsed();

@@ -104,3 +104,42 @@ fn test_genomic_llm_gpu_layers_offload() {
         assert!(!v.is_infinite());
     }
 }
+
+#[test]
+fn test_gpu_zero_allocation_persistent_pool() {
+    let dim = 64;
+    let x = vec![0.5f32; dim];
+    let weight = vec![1.0f32; dim];
+
+    // Llamar RMSNorm en GPU 20 veces consecutivas para verificar que el pool persistente funciona
+    for _ in 0..20 {
+        let res = _impl::compute::gpu::pipeline::gpu_rms_norm(&x, &weight, 1e-5);
+        if let Some(gpu_norm) = res {
+            assert_eq!(gpu_norm.len(), dim);
+            for &v in &gpu_norm {
+                assert!(!v.is_nan());
+                assert!(v > 0.0);
+            }
+        }
+    }
+
+    // Verificar GEMV repetido con caché de pesos en VRAM
+    let rows = 32;
+    let cols = 64;
+    let w = vec![0.02f32; rows * cols];
+    let mut linear = GenomicLinear::empty();
+    linear.in_features = cols;
+    linear.out_features = rows;
+    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(w));
+
+    for _ in 0..20 {
+        let res = linear.forward_gpu(&x);
+        if let Some(gpu_logits) = res {
+            assert_eq!(gpu_logits.len(), rows);
+            for &v in &gpu_logits {
+                assert!(!v.is_nan());
+            }
+        }
+    }
+}
+

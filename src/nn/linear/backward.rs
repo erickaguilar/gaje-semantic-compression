@@ -536,6 +536,8 @@ impl GenomicLinear {
                         db_mut[row + j] -= lr_g * x;
                     }
                 }
+                #[cfg(feature = "gpu")]
+                crate::compute::gpu::pipeline::invalidate_gpu_weights_cache(db_mut.as_ptr());
             }
             WeightDatabase::GenomicQ4_0(db) => {
                 // QAT de escala/min (calibración in-flight): mantiene `q` fijo.

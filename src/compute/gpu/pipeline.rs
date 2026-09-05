@@ -5,9 +5,43 @@
 #[cfg(feature = "gpu")]
 use crate::compute::gpu::context::{GpuContext, GLOBAL_GPU_CONTEXT};
 #[cfg(feature = "gpu")]
-use std::sync::Arc;
+use std::collections::HashMap;
+#[cfg(feature = "gpu")]
+use std::sync::{Arc, Mutex};
 #[cfg(feature = "gpu")]
 use wgpu::util::DeviceExt;
+
+#[cfg(feature = "gpu")]
+pub struct RmsNormBufferPool {
+    pub capacity: usize,
+    pub uniform_buf: wgpu::Buffer,
+    pub x_buf: wgpu::Buffer,
+    pub weight_buf: wgpu::Buffer,
+    pub output_buf: wgpu::Buffer,
+    pub readback_buf: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+}
+
+#[cfg(feature = "gpu")]
+pub struct SwigluBufferPool {
+    pub capacity: usize,
+    pub uniform_buf: wgpu::Buffer,
+    pub gate_buf: wgpu::Buffer,
+    pub up_buf: wgpu::Buffer,
+    pub output_buf: wgpu::Buffer,
+    pub readback_buf: wgpu::Buffer,
+    pub bind_group: wgpu::BindGroup,
+}
+
+#[cfg(feature = "gpu")]
+pub struct GemvScratchPool {
+    pub max_rows: usize,
+    pub max_cols: usize,
+    pub uniform_buf: wgpu::Buffer,
+    pub x_buf: wgpu::Buffer,
+    pub output_buf: wgpu::Buffer,
+    pub readback_buf: wgpu::Buffer,
+}
 
 #[cfg(feature = "gpu")]
 pub struct GpuComputePipelines {
@@ -19,6 +53,10 @@ pub struct GpuComputePipelines {
     pub batched_gemv_q4_0_pipeline: wgpu::ComputePipeline,
     pub kl_divergence_pipeline: wgpu::ComputePipeline,
     pub ste_q2_backward_pipeline: wgpu::ComputePipeline,
+    pub rms_pool: Mutex<Option<RmsNormBufferPool>>,
+    pub swiglu_pool: Mutex<Option<SwigluBufferPool>>,
+    pub gemv_scratch_pool: Mutex<Option<GemvScratchPool>>,
+    pub gemv_weights_cache: Mutex<HashMap<usize, (Arc<wgpu::Buffer>, usize, usize)>>,
 }
 
 #[cfg(feature = "gpu")]
@@ -136,10 +174,14 @@ impl GpuComputePipelines {
             batched_gemv_q4_0_pipeline,
             kl_divergence_pipeline,
             ste_q2_backward_pipeline,
+            rms_pool: Mutex::new(None),
+            swiglu_pool: Mutex::new(None),
+            gemv_scratch_pool: Mutex::new(None),
+            gemv_weights_cache: Mutex::new(HashMap::new()),
         })
     }
 
-    /// Ejecuta SwiGLU en GPU y retorna el vector resultante en memoria CPU.
+    /// Ejecuta SwiGLU en GPU y retorna el vector resultante en memoria CPU con buffer pool persistente.
     pub fn execute_swiglu(
         &self,
         gate: &[f32],
@@ -168,63 +210,89 @@ impl GpuComputePipelines {
             _pad: [0, 0],
         };
 
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("SwiGLU Uniform Buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let mut pool_guard = self.swiglu_pool.lock().map_err(|e| e.to_string())?;
+        let need_realloc = match &*pool_guard {
+            Some(pool) => pool.capacity < len,
+            None => true,
+        };
 
-        let gate_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Gate Buffer"),
-            contents: bytemuck::cast_slice(gate),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        if need_realloc {
+            let cap = len.max(4096);
+            let byte_size = (cap * std::mem::size_of::<f32>()) as u64;
 
-        let up_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Up Buffer"),
-            contents: bytemuck::cast_slice(up),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("SwiGLU Uniform Buffer Pool"),
+                size: std::mem::size_of::<SwigluUniforms>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let gate_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("SwiGLU Gate Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let up_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("SwiGLU Up Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("SwiGLU Output Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("SwiGLU Readback Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let bind_group_layout = self.swiglu_pipeline.get_bind_group_layout(0);
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("SwiGLU Bind Group Pool"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: gate_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: up_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+            *pool_guard = Some(SwigluBufferPool {
+                capacity: cap,
+                uniform_buf,
+                gate_buf,
+                up_buf,
+                output_buf,
+                readback_buf,
+                bind_group,
+            });
+        }
+
+        let pool = pool_guard.as_ref().unwrap();
+
+        queue.write_buffer(&pool.uniform_buf, 0, bytemuck::bytes_of(&uniforms));
+        queue.write_buffer(&pool.gate_buf, 0, bytemuck::cast_slice(gate));
+        queue.write_buffer(&pool.up_buf, 0, bytemuck::cast_slice(up));
 
         let output_byte_size = (len * std::mem::size_of::<f32>()) as u64;
-        let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Readback Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout = self.swiglu_pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("SwiGLU Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: gate_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: up_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: output_buf.as_entire_binding(),
-                },
-            ],
-        });
-
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("SwiGLU Command Encoder"),
         });
@@ -235,16 +303,15 @@ impl GpuComputePipelines {
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(&self.swiglu_pipeline);
-            compute_pass.set_bind_group(0, &bind_group, &[]);
+            compute_pass.set_bind_group(0, &pool.bind_group, &[]);
             let workgroups = (len as u32 + 255) / 256;
             compute_pass.dispatch_workgroups(workgroups, 1, 1);
         }
 
-        encoder.copy_buffer_to_buffer(&output_buf, 0, &readback_buf, 0, output_byte_size);
+        encoder.copy_buffer_to_buffer(&pool.output_buf, 0, &pool.readback_buf, 0, output_byte_size);
         queue.submit(Some(encoder.finish()));
 
-        // Readback synchronous via pollster
-        let slice = readback_buf.slice(..);
+        let slice = pool.readback_buf.slice(..output_byte_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = sender.send(res);
@@ -259,12 +326,13 @@ impl GpuComputePipelines {
         let data = slice.get_mapped_range();
         let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
-        readback_buf.unmap();
+        pool.readback_buf.unmap();
 
         Ok(result)
     }
 
     /// Multiplicación Matriz-Vector FP32 en GPU: y = W * x
+    /// Mantiene los pesos en VRAM persistente sin re-transferirlos en cada token.
     pub fn execute_gemv_f32(
         &self,
         weights: &[f32],
@@ -296,38 +364,84 @@ impl GpuComputePipelines {
             _pad: [0, 0],
         };
 
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("GEMV Uniform Buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        // Cache de pesos en VRAM por puntero de memoria
+        let weights_key = weights.as_ptr() as usize;
+        let weights_buf = {
+            let mut cache = self.gemv_weights_cache.lock().map_err(|e| e.to_string())?;
+            if let Some((buf, r, c)) = cache.get(&weights_key) {
+                if *r == rows && *c == cols {
+                    buf.clone()
+                } else {
+                    let buf = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Cached GEMV Weights"),
+                        contents: bytemuck::cast_slice(weights),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    }));
+                    cache.insert(weights_key, (buf.clone(), rows, cols));
+                    buf
+                }
+            } else {
+                let buf = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Cached GEMV Weights"),
+                    contents: bytemuck::cast_slice(weights),
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                }));
+                cache.insert(weights_key, (buf.clone(), rows, cols));
+                buf
+            }
+        };
 
-        let weights_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("GEMV Weights Buffer"),
-            contents: bytemuck::cast_slice(weights),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let mut scratch_guard = self.gemv_scratch_pool.lock().map_err(|e| e.to_string())?;
+        let need_realloc = match &*scratch_guard {
+            Some(pool) => pool.max_rows < rows || pool.max_cols < cols,
+            None => true,
+        };
 
-        let x_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("GEMV X Buffer"),
-            contents: bytemuck::cast_slice(x),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        if need_realloc {
+            let m_rows = rows.max(32768);
+            let m_cols = cols.max(4096);
+            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("GEMV Uniform Buffer Pool"),
+                size: std::mem::size_of::<GemvUniforms>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let x_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("GEMV X Buffer Pool"),
+                size: (m_cols * std::mem::size_of::<f32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("GEMV Output Buffer Pool"),
+                size: (m_rows * std::mem::size_of::<f32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("GEMV Readback Buffer Pool"),
+                size: (m_rows * std::mem::size_of::<f32>()) as u64,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            *scratch_guard = Some(GemvScratchPool {
+                max_rows: m_rows,
+                max_cols: m_cols,
+                uniform_buf,
+                x_buf,
+                output_buf,
+                readback_buf,
+            });
+        }
+
+        let pool = scratch_guard.as_ref().unwrap();
+
+        // Escritura asíncrona de x y uniforms (~2 KB en vez de 65.5 MB)
+        queue.write_buffer(&pool.uniform_buf, 0, bytemuck::bytes_of(&uniforms));
+        queue.write_buffer(&pool.x_buf, 0, bytemuck::cast_slice(x));
 
         let output_byte_size = (rows * std::mem::size_of::<f32>()) as u64;
-        let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("GEMV Output Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("GEMV Readback Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
 
         let bind_group_layout = self.gemv_f32_pipeline.get_bind_group_layout(0);
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -336,7 +450,7 @@ impl GpuComputePipelines {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
+                    resource: pool.uniform_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -344,11 +458,11 @@ impl GpuComputePipelines {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: x_buf.as_entire_binding(),
+                    resource: pool.x_buf.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: output_buf.as_entire_binding(),
+                    resource: pool.output_buf.as_entire_binding(),
                 },
             ],
         });
@@ -368,11 +482,10 @@ impl GpuComputePipelines {
             compute_pass.dispatch_workgroups(workgroups, 1, 1);
         }
 
-        encoder.copy_buffer_to_buffer(&output_buf, 0, &readback_buf, 0, output_byte_size);
+        encoder.copy_buffer_to_buffer(&pool.output_buf, 0, &pool.readback_buf, 0, output_byte_size);
         queue.submit(Some(encoder.finish()));
 
-        // Readback
-        let slice = readback_buf.slice(..);
+        let slice = pool.readback_buf.slice(..output_byte_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = sender.send(res);
@@ -387,12 +500,12 @@ impl GpuComputePipelines {
         let data = slice.get_mapped_range();
         let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
-        readback_buf.unmap();
+        pool.readback_buf.unmap();
 
         Ok(result)
     }
 
-    /// Normalización RMS en GPU
+    /// Normalización RMS en GPU con pool de buffers persistente (cero asignación en bucle).
     pub fn execute_rms_norm(
         &self,
         x: &[f32],
@@ -421,63 +534,90 @@ impl GpuComputePipelines {
             _pad: [0, 0],
         };
 
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("RMSNorm Uniform Buffer"),
-            contents: bytemuck::bytes_of(&uniforms),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let mut pool_guard = self.rms_pool.lock().map_err(|e| e.to_string())?;
+        let need_realloc = match &*pool_guard {
+            Some(pool) => pool.capacity < len,
+            None => true,
+        };
 
-        let x_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("RMSNorm X Buffer"),
-            contents: bytemuck::cast_slice(x),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        if need_realloc {
+            let cap = len.max(4096);
+            let byte_size = (cap * std::mem::size_of::<f32>()) as u64;
 
-        let weight_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("RMSNorm Weight Buffer"),
-            contents: bytemuck::cast_slice(weight),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("RMSNorm Uniform Buffer Pool"),
+                size: std::mem::size_of::<RmsUniforms>() as u64,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let x_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("RMSNorm X Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let weight_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("RMSNorm Weight Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("RMSNorm Output Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("RMSNorm Readback Buffer Pool"),
+                size: byte_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            let bind_group_layout = self.rms_norm_pipeline.get_bind_group_layout(0);
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("RMSNorm Bind Group Pool"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: x_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: weight_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: output_buf.as_entire_binding(),
+                    },
+                ],
+            });
+
+            *pool_guard = Some(RmsNormBufferPool {
+                capacity: cap,
+                uniform_buf,
+                x_buf,
+                weight_buf,
+                output_buf,
+                readback_buf,
+                bind_group,
+            });
+        }
+
+        let pool = pool_guard.as_ref().unwrap();
+
+        // Actualización directa de buffers pre-asignados
+        queue.write_buffer(&pool.uniform_buf, 0, bytemuck::bytes_of(&uniforms));
+        queue.write_buffer(&pool.x_buf, 0, bytemuck::cast_slice(x));
+        queue.write_buffer(&pool.weight_buf, 0, bytemuck::cast_slice(weight));
 
         let output_byte_size = (len * std::mem::size_of::<f32>()) as u64;
-        let output_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("RMSNorm Output Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let readback_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("RMSNorm Readback Buffer"),
-            size: output_byte_size,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let bind_group_layout = self.rms_norm_pipeline.get_bind_group_layout(0);
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("RMSNorm Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: x_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: weight_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: output_buf.as_entire_binding(),
-                },
-            ],
-        });
-
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("RMSNorm Command Encoder"),
         });
@@ -488,15 +628,14 @@ impl GpuComputePipelines {
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(&self.rms_norm_pipeline);
-            compute_pass.set_bind_group(0, &bind_group, &[]);
+            compute_pass.set_bind_group(0, &pool.bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
         }
 
-        encoder.copy_buffer_to_buffer(&output_buf, 0, &readback_buf, 0, output_byte_size);
+        encoder.copy_buffer_to_buffer(&pool.output_buf, 0, &pool.readback_buf, 0, output_byte_size);
         queue.submit(Some(encoder.finish()));
 
-        // Readback
-        let slice = readback_buf.slice(..);
+        let slice = pool.readback_buf.slice(..output_byte_size);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = sender.send(res);
@@ -511,7 +650,7 @@ impl GpuComputePipelines {
         let data = slice.get_mapped_range();
         let result: Vec<f32> = bytemuck::cast_slice(&data).to_vec();
         drop(data);
-        readback_buf.unmap();
+        pool.readback_buf.unmap();
 
         Ok(result)
     }
@@ -575,6 +714,19 @@ pub fn gpu_rms_norm(x: &[f32], weight: &[f32], eps: f32) -> Option<Vec<f32>> {
     #[cfg(not(feature = "gpu"))]
     {
         None
+    }
+}
+
+/// Invalida la caché VRAM de pesos si se modificaron (e.g. tras refinamiento STE o SGD)
+pub fn invalidate_gpu_weights_cache(ptr: *const f32) {
+    #[cfg(feature = "gpu")]
+    {
+        if let Some(ref pipes) = *GLOBAL_GPU_PIPELINES {
+            let key = ptr as usize;
+            if let Ok(mut cache) = pipes.gemv_weights_cache.lock() {
+                cache.remove(&key);
+            }
+        }
     }
 }
 
