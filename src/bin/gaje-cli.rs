@@ -45,54 +45,72 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Inicia una sesión interactiva REPL en la terminal
+    #[command(alias = "repl", alias = "conversar")]
     Chat(ChatArgs),
 
     /// Inicia el servidor HTTP nativo en Rust con streaming SSE y servicio de la Web UI
+    #[command(alias = "servidor", alias = "server", alias = "web")]
     Serve(ServeArgs),
 
     /// Ejecuta diagnósticos de hardware, extensiones SIMD y ancho de banda
+    #[command(alias = "diag", alias = "diagnostico", alias = "info")]
     Doctor,
 
-    /// Catálogo e inspección estructural de modelos planos (.flat)
+    /// Catálogo e inspección estructural de modelos (.gaje / .flat)
+    #[command(alias = "modelos", alias = "ls")]
     Models(ModelsArgs),
 
     /// Descarga automatizada de modelos mediante motor nativo multi-stream
-    #[command(alias = "download")]
+    #[command(alias = "download", alias = "descargar", alias = "get")]
     Pull(PullArgs),
 
     /// Benchmark estandarizado de latencia (TTFT), velocidad y memoria
-    #[command(alias = "bench")]
+    #[command(alias = "bench", alias = "medir", alias = "test-speed")]
     Benchmark(BenchArgs),
 
     /// Exporta modelos (.gaje, .gguf, .flat) al formato plano de producción .flat v2
+    #[command(alias = "export", alias = "exportar")]
     ExportFlat(ExportFlatArgs),
 
     /// Construye y normaliza datasets de texto/JSONL para entrenamiento o DNI
+    #[command(alias = "dataset", alias = "datos")]
     DatasetBuild(DatasetBuildArgs),
 
     /// Auditoría matemática de integridad, ausencia de NaNs y entropía de pesos
+    #[command(alias = "auditar", alias = "check")]
     Audit(AuditArgs),
 
     /// Gestión de épocas de memoria asociativa (.gmem v2)
+    #[command(alias = "memoria", alias = "memory")]
     Epoch(EpochArgs),
 
     /// Orquesta un enjambre de micro-agentes con StateGraph y Tree-of-Thoughts (ToT)
+    #[command(alias = "enjambre", alias = "agentes")]
     Swarm(SwarmArgs),
 
     /// Da a luz a un organismo genómico nativo en 2-bits (Q2_0 / ADN)
+    #[command(alias = "nacimiento", alias = "genesis")]
     Birth(BirthArgs),
 
     /// Entrena un organismo nacido (Q2_0) con el estimador Straight-Through cuaternario
+    #[command(alias = "train", alias = "crianza", alias = "entrenar")]
     TrainBorn(TrainBornArgs),
 
     /// Destilación de conocimiento DNI online (Maestro -> Alumno)
+    #[command(alias = "destilar", alias = "dni")]
     Distill(DistillArgs),
 
     /// Inyecta una mutación genómica controlada in-place en centroides (.gaje)
+    #[command(alias = "mutar")]
     Mutate(MutateArgs),
 
     /// Inspecciona el linaje evolutivo y estado adaptativo de un modelo (.gaje)
+    #[command(alias = "historial", alias = "lineage")]
     History(HistoryArgs),
+
+    /// Muestra la guía rápida interactiva y mapa de comandos sin adivinar
+    #[command(alias = "menu", alias = "comandos", alias = "guia", alias = "ayuda")]
+    Guide,
 }
 
 #[derive(Args, Debug)]
@@ -408,7 +426,7 @@ struct BirthArgs {
 #[derive(Args, Debug)]
 struct TrainBornArgs {
     /// Archivo del modelo genómico (.gaje o .flat)
-    #[arg(short, long, default_value = "models/production/gaje_pico_135m.flat")]
+    #[arg(short, long, default_value = "models/born/max_512_pro.gaje")]
     model: String,
 
     /// Ruta al dataset de entrenamiento (JSONL o texto)
@@ -434,6 +452,10 @@ struct TrainBornArgs {
     /// Ruta de guardado tras el entrenamiento
     #[arg(short, long)]
     output: Option<String>,
+
+    /// Acelerar entrenamiento mediante GPU (WGPU / Vulkan)
+    #[arg(long)]
+    gpu: bool,
 }
 
 #[derive(Args, Debug)]
@@ -651,6 +673,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Some(Commands::Distill(distill_args)) => handle_distill(&distill_args),
         Some(Commands::Mutate(mutate_args)) => handle_mutate(&mutate_args),
         Some(Commands::History(history_args)) => handle_history(&history_args),
+        Some(Commands::Guide) => {
+            print_cli_guide();
+            Ok(())
+        }
         None => {
             // Si el usuario pasó --model y --prompt directamente
             if let Some(prompt) = cli.prompt {
@@ -1027,6 +1053,7 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
     println!("  • Learning Rate       : {:.4}", args.lr);
     println!("  • Layer-wise Decay    : {:.2}", args.lr_decay);
     println!("  • Gradient Clip       : {:.2}", args.gclip);
+    println!("  • Acelerador          : {}", if args.gpu { "⚡ GPU (Vulkan / WGPU)" } else { "🖥️  CPU (AVX2/NEON Rayon)" });
 
     println!("\n⏳ Abriendo archivo genómico y cargando modelo...");
     let (mut model, tokenizer) = repl::load_model_and_tokenizer(&args.model)?;
@@ -1035,10 +1062,14 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
 
     println!("✅ Modelo cargado ({} bloques, {} dim)", model.blocks.len(), config.n_embd);
 
-    let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(&args.model, config.n_embd as u32);
+    let mut memory_orch = _impl::compute::island::IslandOrchestrator::try_load_paired_memory(&args.model, config.n_embd as u32)
+        .or_else(|| {
+            println!("🧠 Inicializando nuevo Hipocampo Congénito (.gmem) para el organismo...");
+            Some(_impl::compute::island::IslandOrchestrator::new(config.n_embd as u32))
+        });
     if let Some(ref orch) = memory_orch {
         let total = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
-        println!("🧠 Hipocampo Congénito detectado: {} hechos activos vinculados a la crianza", total);
+        println!("🧠 Hipocampo Congénito activo: {} hechos vinculados a la crianza", total);
     }
 
     // Leer y parsear dataset
@@ -1445,6 +1476,63 @@ fn handle_history(args: &HistoryArgs) -> Result<(), Box<dyn std::error::Error + 
     println!("  • Hash Linaje Actual  : {}", rep.current_hash_hex);
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
     Ok(())
+}
+
+fn print_cli_guide() {
+    println!("\n🧬 GAJE HELIX — Guía Rápida y Mapa de Comandos Unificado");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Uso General: gaje-cli <COMANDO | ALIAS> [OPCIONES]");
+    println!();
+    println!("💬 1. INFERENCIA & DIÁLOGO:");
+    println!("  • gaje-cli chat (alias: conversar, repl)");
+    println!("      Inicia una sesión interactiva REPL en terminal con memoria y streaming.");
+    println!("      Ej: gaje-cli chat -m models/born/max_512_pro.gaje");
+    println!("  • gaje-cli serve (alias: servidor, server, web)");
+    println!("      Lanza el servidor HTTP nativo con Web UI y streaming SSE.");
+    println!("      Ej: gaje-cli serve --port 8080");
+    println!("  • gaje-cli --prompt \"<texto>\" -m <modelo>");
+    println!("      Inferencia directa de una sola consulta sin iniciar REPL.");
+    println!();
+    println!("🧬 2. GÉNESIS & CRIANZA GENÓMICA (2-Bits / Q2_0):");
+    println!("  • gaje-cli birth (alias: nacimiento, genesis)");
+    println!("      Da a luz a un organismo genómico nativo en el plano complejo ℂ.");
+    println!("      Ej: gaje-cli birth --dim 512 --layers 12 -o models/born/nuevo.gaje");
+    println!("  • gaje-cli train-born (alias: crianza, train, entrenar)");
+    println!("      Entrena un organismo nacido con el estimador Straight-Through cuaternario (STE).");
+    println!("      Ej: gaje-cli crianza -m models/born/max_512_pro.gaje -e 10 --gpu");
+    println!("  • gaje-cli distill (alias: destilar, dni)");
+    println!("      Destilación de conocimiento DNI Online (Maestro ➔ Alumno).");
+    println!("      Ej: gaje-cli destilar -t models/production/gaje_nano_0_5b.flat -s models/born/max_512_pro.gaje -d data/genesis_conversational_corpus.jsonl");
+    println!("  • gaje-cli mutate (alias: mutar)");
+    println!("      Inyecta mutación genómica controlada in-place en centroides sin duplicar archivo.");
+    println!("  • gaje-cli history (alias: historial, lineage)");
+    println!("      Inspecciona linaje evolutivo, árbol de mutaciones y estado adaptativo.");
+    println!();
+    println!("📦 3. GESTIÓN DE MODELOS & MEMORIA ASOCIATIVA (.gmem):");
+    println!("  • gaje-cli models (alias: modelos, ls) [list | inspect <archivo> | verify <archivo>]");
+    println!("      Inspecciona cabeceras binarias, verifica integridad y cataloga modelos.");
+    println!("      Ej: gaje-cli modelos list");
+    println!("      Ej: gaje-cli modelos inspect models/born/max_512_pro.gaje");
+    println!("  • gaje-cli pull (alias: descargar, get, download)");
+    println!("      Descarga modelos optimizados multi-stream desde Hugging Face.");
+    println!("      Ej: gaje-cli descargar eaguilar/gaje-models/max_512_pro.gaje");
+    println!("  • gaje-cli epoch (alias: memoria, memory) [status | consolidate | prune]");
+    println!("      Inspecciona y consolida el Hipocampo Congénito .gmem.");
+    println!("      Ej: gaje-cli memoria status -m models/born/max_512_pro.gaje");
+    println!();
+    println!("🚀 4. RENDIMIENTO, CALIBRACIÓN & AUDITORÍA:");
+    println!("  • gaje-cli doctor (alias: diagnostico, diag, info)");
+    println!("      Diagnóstico integral de hardware: CPU, SIMD (AVX2/NEON), GPU Vulkan y memoria.");
+    println!("  • gaje-cli benchmark (alias: bench, medir, test-speed)");
+    println!("      Mide latencia TTFT, velocidad sostenida (tok/s) y consumo de memoria RAM.");
+    println!("      Ej: gaje-cli bench -m models/born/max_512_pro.gaje");
+    println!("  • gaje-cli audit (alias: auditar, check)");
+    println!("      Auditoría matemática de ausencia de NaNs, entropía y ortogonalidad.");
+    println!("  • gaje-cli dataset-build (alias: dataset, datos)");
+    println!("      Construye y tokeniza datasets de texto/JSONL para entrenamiento.");
+    println!("  • gaje-cli guide (alias: menu, comandos, guia, ayuda)");
+    println!("      Muestra este mapa de comandos y ejemplos de uso.");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 }
 
 
