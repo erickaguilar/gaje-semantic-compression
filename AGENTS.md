@@ -68,6 +68,7 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
   * `z-index: 3`: Contenido principal de la barra `.wrap`.
   * `z-index: 200`: Dropdown de menú (`.y2k-menu-dropdown`) y modales (`.y2k-apple-modal`).
 * **Botones Bevel 3D:** Mantener el efecto Web 1.0 con sombras interiores (`box-shadow: inset 1px 1px 0 rgba(255,255,255,.18), inset -1px -1px 0 rgba(0,0,0,.35)`) que se invierten al presionar (`:active`).
+* **Prioridad Mobile-First & Arquitectura PWA:** La Web UI está concebida ante todo como una **PWA móvil soberana** (Android/Termux/iOS). Los botones de control y acción (Monitor HUD, Consola Terminal, Menú, Envío) **NUNCA deben perderse, recortarse ni salirse de la pantalla** en viewports reducidos (320px–480px). Priorizar áreas táctiles (`touch-action: manipulation`, `flex-shrink: 0 !important`) y colapsar títulos antes de comprometer cualquier botón de interacción.
 
 ### C. Verdad Empírica y Certificación
 1. **Compilación no equivale a éxito semántico:** Que el código compile no certifica la precisión de compresión. Las validaciones de Perplejidad (PPL) y distancia semántica deben verificarse formalmente.
