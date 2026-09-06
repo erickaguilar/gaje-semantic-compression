@@ -74,13 +74,21 @@ pub fn get_available_models(
 
 pub fn get_memory_info(model_path: Option<&str>, dim: usize) -> serde_json::Value {
     if let Some(path) = model_path {
-        if let Some(orch) = crate::compute::island::IslandOrchestrator::try_load_paired_memory(path, dim as u32) {
+        if let Some(orch) =
+            crate::compute::island::IslandOrchestrator::try_load_paired_memory(path, dim as u32)
+        {
             let doc_count = orch.documental.entries.len();
             let epi_count = orch.episodic.entries.len();
             let conv_count = orch.conversational.entries.len();
             let total = doc_count + epi_count + conv_count;
 
-            let sample_facts: Vec<_> = orch.documental.entries.iter().take(5).map(|e| e.text.clone()).collect();
+            let sample_facts: Vec<_> = orch
+                .documental
+                .entries
+                .iter()
+                .take(5)
+                .map(|e| e.text.clone())
+                .collect();
 
             return json!({
                 "status": "connected",

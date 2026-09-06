@@ -36,7 +36,8 @@ impl MoeExpert {
         act_fn: &str,
         h_scale: f32,
     ) -> Result<Vec<f32>, String> {
-        let (gate, up) = GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, x, modulation)?;
+        let (gate, up) =
+            GenomicLinear::forward_fused_2(&self.gate_gen, &self.up_gen, x, modulation)?;
         let mut ffn_out = vec![0.0f32; gate.len()];
         if act_fn == "geglu" {
             crate::compute::kernels::geglu(&gate, &up, &mut ffn_out);
@@ -45,7 +46,8 @@ impl MoeExpert {
         } else {
             crate::compute::kernels::swiglu_balanced(&gate, &up, &mut ffn_out, h_scale);
         }
-        self.down_gen.forward_core(ffn_out, modulation, activate_rna)
+        self.down_gen
+            .forward_core(ffn_out, modulation, activate_rna)
     }
 }
 
@@ -91,7 +93,9 @@ impl MoeRouter {
         h_scale: f32,
     ) -> Result<Vec<f32>, String> {
         // 1. Obtener logits de ruteo
-        let mut router_logits = self.gate_weight.forward_core(x.to_vec(), modulation, activate_rna)?;
+        let mut router_logits =
+            self.gate_weight
+                .forward_core(x.to_vec(), modulation, activate_rna)?;
         if router_logits.is_empty() {
             router_logits = vec![0.0f32; self.n_routed_experts.max(self.experts.len())];
         }
@@ -102,15 +106,16 @@ impl MoeRouter {
         }
 
         // 2. Selección Top-K de expertos
-        let k = self.n_active_experts.min(self.experts.len()).min(router_logits.len());
-        let mut indexed_logits: Vec<(usize, f32)> = router_logits
-            .iter()
-            .copied()
-            .enumerate()
-            .collect();
+        let k = self
+            .n_active_experts
+            .min(self.experts.len())
+            .min(router_logits.len());
+        let mut indexed_logits: Vec<(usize, f32)> =
+            router_logits.iter().copied().enumerate().collect();
 
         // Ordenar de mayor a menor probabilidad
-        indexed_logits.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        indexed_logits
+            .sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         let topk = &indexed_logits[0..k];
 
         // 3. Normalización Softmax sobre los Top-K seleccionados
@@ -136,10 +141,15 @@ impl MoeRouter {
             .into_par_iter()
             .map(|(exp_idx, weight)| {
                 if exp_idx < self.experts.len() {
-                    let out = self.experts[exp_idx].forward(x, modulation, activate_rna, act_fn, h_scale);
+                    let out =
+                        self.experts[exp_idx].forward(x, modulation, activate_rna, act_fn, h_scale);
                     (exp_idx, weight, out)
                 } else {
-                    (exp_idx, weight, Err(format!("Expert index {} out of bounds", exp_idx)))
+                    (
+                        exp_idx,
+                        weight,
+                        Err(format!("Expert index {} out of bounds", exp_idx)),
+                    )
                 }
             })
             .collect();
@@ -154,7 +164,8 @@ impl MoeRouter {
         // 5. Agregar salida de expertos compartidos (Shared Experts) si existen
         if let Some(ref shared_list) = self.shared_experts {
             for shared_exp in shared_list {
-                let shared_out = shared_exp.forward(x, modulation, activate_rna, act_fn, h_scale)?;
+                let shared_out =
+                    shared_exp.forward(x, modulation, activate_rna, act_fn, h_scale)?;
                 for i in 0..dim.min(shared_out.len()) {
                     final_out[i] += shared_out[i];
                 }

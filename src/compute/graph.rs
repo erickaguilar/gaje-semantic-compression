@@ -268,10 +268,7 @@ impl SwarmRouterNode {
         self
     }
 
-    pub fn with_router_llm(
-        mut self,
-        llm: Arc<crate::nn::llm::GenomicLLM>,
-    ) -> Self {
+    pub fn with_router_llm(mut self, llm: Arc<crate::nn::llm::GenomicLLM>) -> Self {
         self.router_llm = Some(llm);
         self
     }
@@ -291,9 +288,17 @@ impl SwarmRouterNode {
 
         // 1. Detección de Razonamiento Profundo / Síntesis compleja (> 100 caracteres + descriptores de alta densidad)
         let deep_indicators = [
-            "explica detalladamente", "ensayo", "demostración", "análisis comparativo",
-            "paso a paso", "exhaustivo", "epistemológic", "arquitectura completa",
-            "múltiples párrafos", "demostrar", "tratado",
+            "explica detalladamente",
+            "ensayo",
+            "demostración",
+            "análisis comparativo",
+            "paso a paso",
+            "exhaustivo",
+            "epistemológic",
+            "arquitectura completa",
+            "múltiples párrafos",
+            "demostrar",
+            "tratado",
         ];
         let has_deep_indicator = deep_indicators.iter().any(|ind| query_lower.contains(ind));
 
@@ -302,7 +307,9 @@ impl SwarmRouterNode {
                 intent: SwarmIntent::DeepReasoning,
                 target_node: self.deep_reasoning_target,
                 confidence: 0.92,
-                explanation: "Consulta de alta densidad conceptual -> Sintetizador 3B (Deep Reasoning)".to_string(),
+                explanation:
+                    "Consulta de alta densidad conceptual -> Sintetizador 3B (Deep Reasoning)"
+                        .to_string(),
             };
         }
 
@@ -372,7 +379,8 @@ impl SwarmRouterNode {
             intent: SwarmIntent::DirectFactual,
             target_node: self.fallback_target,
             confidence: 0.65,
-            explanation: "Consulta directa/breve -> Micro-asistente 135M (DirectFactual)".to_string(),
+            explanation: "Consulta directa/breve -> Micro-asistente 135M (DirectFactual)"
+                .to_string(),
         }
     }
 }
@@ -477,7 +485,10 @@ impl AgentNode for RuleRouterNode {
         let query_lower = state.user_query.to_lowercase();
 
         for (keywords, target) in &self.routes {
-            if keywords.iter().any(|kw| query_lower.contains(&kw.to_lowercase())) {
+            if keywords
+                .iter()
+                .any(|kw| query_lower.contains(&kw.to_lowercase()))
+            {
                 state.intent = Some(self.name.clone());
                 return Ok(StepResult::Next {
                     next: *target,
@@ -535,7 +546,9 @@ impl AgentNode for GmemRetrievalNode {
 
         let results = orch.retrieve_context(&query_vec, self.top_k);
         for res in results {
-            state.context.push(format!("[{}] {}", res.niche.as_str(), res.text));
+            state
+                .context
+                .push(format!("[{}] {}", res.niche.as_str(), res.text));
         }
 
         Ok(StepResult::Next {
@@ -584,7 +597,10 @@ impl AgentNode for ToolNode {
 
 /// Registro y Sandbox de herramientas nativas Rust para agentes.
 pub struct ToolRegistry {
-    tools: std::collections::HashMap<String, Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>>,
+    tools: std::collections::HashMap<
+        String,
+        Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>,
+    >,
 }
 
 impl ToolRegistry {
@@ -602,7 +618,10 @@ impl ToolRegistry {
     }
 
     pub fn execute(&self, name: &str, input: &str) -> Result<(String, f64), String> {
-        let tool = self.tools.get(name).ok_or_else(|| format!("Herramienta '{}' no registrada en sandbox", name))?;
+        let tool = self
+            .tools
+            .get(name)
+            .ok_or_else(|| format!("Herramienta '{}' no registrada en sandbox", name))?;
         let t0 = std::time::Instant::now();
         let out = tool(input)?;
         let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
@@ -649,8 +668,13 @@ impl ToTNode {
     /// usando el modelo GenomicLLM nativo (si está configurado) o heurística rápida
     fn evaluate_thought(&self, query: &str, thought: &str, depth: usize) -> f32 {
         if let Some(ref llm) = self.evaluator_llm {
-            let mut prompt_toks: Vec<usize> = query.bytes().take(32).map(|b| (b % 128) as usize).collect();
-            let thought_toks: Vec<usize> = thought.bytes().take(32).map(|b| (b % 128) as usize).collect();
+            let mut prompt_toks: Vec<usize> =
+                query.bytes().take(32).map(|b| (b % 128) as usize).collect();
+            let thought_toks: Vec<usize> = thought
+                .bytes()
+                .take(32)
+                .map(|b| (b % 128) as usize)
+                .collect();
             prompt_toks.extend(thought_toks);
 
             let mut local_model = (*std::sync::Arc::as_ref(llm)).clone();
@@ -705,7 +729,8 @@ impl AgentNode for ToTNode {
 
         // 1. Inicializar árbol MCTS con la raíz
         let mut tree = crate::compute::mcts::MctsTree::new(vec![0.0, 0.0, 0.0, 0.0], 1.0);
-        let mut thoughts: Vec<String> = vec![format!("Raíz de pensamiento para: {}", state.user_query)];
+        let mut thoughts: Vec<String> =
+            vec![format!("Raíz de pensamiento para: {}", state.user_query)];
         let mut thought_depths: Vec<usize> = vec![0];
 
         // 2. Búsqueda y expansión de pensamientos hasta agotar el presupuesto
@@ -723,7 +748,8 @@ impl AgentNode for ToTNode {
 
                 for b_name in &branch_names {
                     let child_thought = format!("{} -> {}", thoughts[selected_idx], b_name);
-                    let score = self.evaluate_thought(&state.user_query, &child_thought, current_depth + 1);
+                    let score =
+                        self.evaluate_thought(&state.user_query, &child_thought, current_depth + 1);
 
                     let child_idx = tree.nodes.len();
                     tree.nodes.push(crate::compute::mcts::MctsNode {
@@ -743,7 +769,11 @@ impl AgentNode for ToTNode {
                     tree.backpropagate(child_idx, score);
                 }
             } else {
-                let score = self.evaluate_thought(&state.user_query, &thoughts[selected_idx], current_depth);
+                let score = self.evaluate_thought(
+                    &state.user_query,
+                    &thoughts[selected_idx],
+                    current_depth,
+                );
                 tree.backpropagate(selected_idx, score);
             }
         }
@@ -758,8 +788,14 @@ impl AgentNode for ToTNode {
             }
         }
 
-        let best_reasoning_path = thoughts.get(best_idx).cloned().unwrap_or_else(|| "Pensamiento óptimo".to_string());
-        state.context.push(format!("[Tree-of-Thoughts / MCTS (score: {:.3})] {}", best_q, best_reasoning_path));
+        let best_reasoning_path = thoughts
+            .get(best_idx)
+            .cloned()
+            .unwrap_or_else(|| "Pensamiento óptimo".to_string());
+        state.context.push(format!(
+            "[Tree-of-Thoughts / MCTS (score: {:.3})] {}",
+            best_q, best_reasoning_path
+        ));
         state.response = Some(format!("Síntesis razonada: {}", best_reasoning_path));
 
         Ok(StepResult::Next {
@@ -832,7 +868,11 @@ impl AgentNode for GajeModelNode {
         );
 
         let generated_text = match gen_res {
-            Ok(toks) => format!("[{}] Síntesis completada con {} tokens.", self.name, toks.len()),
+            Ok(toks) => format!(
+                "[{}] Síntesis completada con {} tokens.",
+                self.name,
+                toks.len()
+            ),
             Err(e) => format!("[{}] Error: {}", self.name, e),
         };
 
@@ -979,13 +1019,19 @@ mod tests {
         let router_idx = g.add_node(Arc::new(router));
 
         // 1. Query que coincide con regla
-        let (st1, _) = g.run(router_idx, AgentState::with_query("por favor calcular 2+2")).unwrap();
+        let (st1, _) = g
+            .run(router_idx, AgentState::with_query("por favor calcular 2+2"))
+            .unwrap();
         assert_eq!(st1.tool_outputs.len(), 1);
         assert_eq!(st1.tool_outputs[0].0, "calculator");
-        assert!(st1.tool_outputs[0].1.contains("computed(por favor calcular 2+2)"));
+        assert!(st1.tool_outputs[0]
+            .1
+            .contains("computed(por favor calcular 2+2)"));
 
         // 2. Query que cae en default
-        let (st2, _) = g.run(router_idx, AgentState::with_query("hola mundo")).unwrap();
+        let (st2, _) = g
+            .run(router_idx, AgentState::with_query("hola mundo"))
+            .unwrap();
         assert_eq!(st2.tool_outputs.len(), 0);
         assert_eq!(st2.context.len(), 1);
         assert_eq!(st2.context[0], "echo:hola mundo");
@@ -995,7 +1041,12 @@ mod tests {
     fn test_gmem_retrieval_node_execution() {
         use crate::compute::island::{IslandNiche, IslandOrchestrator};
         let mut orch = IslandOrchestrator::new(16);
-        orch.add_memory(IslandNiche::Episodic, 1, vec![0.5; 16], "Memoria alfa".to_string());
+        orch.add_memory(
+            IslandNiche::Episodic,
+            1,
+            vec![0.5; 16],
+            "Memoria alfa".to_string(),
+        );
         let orch_arc = Arc::new(std::sync::RwLock::new(orch));
 
         let mut g = StateGraph::new();
@@ -1005,7 +1056,9 @@ mod tests {
         let ret_idx = g.add_node(Arc::new(ret_node));
         let _echo_idx = g.add_node(Arc::new(echo_node));
 
-        let (st, _) = g.run(ret_idx, AgentState::with_query("consulta semantica")).unwrap();
+        let (st, _) = g
+            .run(ret_idx, AgentState::with_query("consulta semantica"))
+            .unwrap();
         assert!(!st.context.is_empty());
         assert!(st.context[0].contains("Memoria alfa"));
     }
@@ -1025,20 +1078,25 @@ mod tests {
         assert_eq!(hops, 2);
         assert!(!state.context.is_empty());
         assert!(state.context[0].contains("Tree-of-Thoughts / MCTS"));
-        assert!(state.response.as_ref().unwrap().contains("Síntesis razonada"));
+        assert!(state
+            .response
+            .as_ref()
+            .unwrap()
+            .contains("Síntesis razonada"));
     }
 
     #[test]
     fn test_tool_registry_sandbox() {
         let mut registry = ToolRegistry::new();
-        registry.register("calc", |input| {
-            Ok(format!("eval({})", input))
-        });
+        registry.register("calc", |input| Ok(format!("eval({})", input)));
 
         let (res, elapsed_ms) = registry.execute("calc", "10 * 20").unwrap();
         assert_eq!(res, "eval(10 * 20)");
         assert!(elapsed_ms >= 0.0);
-        assert!(elapsed_ms < 100.0, "Overhead de tool call sandboxeada < 100 ms");
+        assert!(
+            elapsed_ms < 100.0,
+            "Overhead de tool call sandboxeada < 100 ms"
+        );
 
         assert!(registry.execute("unknown_tool", "x").is_err());
     }
@@ -1105,43 +1163,101 @@ pub fn route_query_default_py(query: &str) -> PyResult<(String, usize, f32, Stri
     let router = SwarmRouterNode::new("default_swarm_router", 0, 1, 0.70)
         .add_intent_route(
             vec![
-                "hola".into(), "buenos días".into(), "buenas tardes".into(), "gracias".into(),
-                "capital".into(), "quién es".into(), "quién fue".into(), "cuándo nació".into(),
-                "qué es".into(), "definición".into(), "edad".into(), "altura".into(), "idioma".into(),
-                "moneda".into(), "país".into(), "continente".into(), "población".into(),
-                "presidente".into(), "año".into(), "distancia".into(), "temperatura".into(),
+                "hola".into(),
+                "buenos días".into(),
+                "buenas tardes".into(),
+                "gracias".into(),
+                "capital".into(),
+                "quién es".into(),
+                "quién fue".into(),
+                "cuándo nació".into(),
+                "qué es".into(),
+                "definición".into(),
+                "edad".into(),
+                "altura".into(),
+                "idioma".into(),
+                "moneda".into(),
+                "país".into(),
+                "continente".into(),
+                "población".into(),
+                "presidente".into(),
+                "año".into(),
+                "distancia".into(),
+                "temperatura".into(),
             ],
             SwarmIntent::DirectFactual,
             0,
         )
         .add_intent_route(
             vec![
-                "documento".into(), "memoria".into(), "gmem".into(), "archivo".into(),
-                "historial".into(), "registro".into(), "episodio".into(), "recuperar".into(),
-                "semántico".into(), "vector".into(), "buscar en texto".into(), "corpus".into(),
-                "embedding".into(), "nicho".into(), "lineage".into(), "island".into(),
-                "episódica".into(), "declarativa".into(), "procedimental".into(),
+                "documento".into(),
+                "memoria".into(),
+                "gmem".into(),
+                "archivo".into(),
+                "historial".into(),
+                "registro".into(),
+                "episodio".into(),
+                "recuperar".into(),
+                "semántico".into(),
+                "vector".into(),
+                "buscar en texto".into(),
+                "corpus".into(),
+                "embedding".into(),
+                "nicho".into(),
+                "lineage".into(),
+                "island".into(),
+                "episódica".into(),
+                "declarativa".into(),
+                "procedimental".into(),
             ],
             SwarmIntent::MemoryRAG,
             2,
         )
         .add_intent_route(
             vec![
-                "calcular".into(), "sumar".into(), "restar".into(), "multiplicar".into(),
-                "dividir".into(), "porcentaje".into(), "ecuación".into(), "fórmula".into(),
-                "matemática".into(), "+".into(), "-".into(), "*".into(), "/".into(),
-                "estadística".into(), "promedio".into(), "desviación".into(), "integral".into(),
-                "derivada".into(), "evaluar".into(), "seno".into(), "coseno".into(),
+                "calcular".into(),
+                "sumar".into(),
+                "restar".into(),
+                "multiplicar".into(),
+                "dividir".into(),
+                "porcentaje".into(),
+                "ecuación".into(),
+                "fórmula".into(),
+                "matemática".into(),
+                "+".into(),
+                "-".into(),
+                "*".into(),
+                "/".into(),
+                "estadística".into(),
+                "promedio".into(),
+                "desviación".into(),
+                "integral".into(),
+                "derivada".into(),
+                "evaluar".into(),
+                "seno".into(),
+                "coseno".into(),
             ],
             SwarmIntent::ToolExecution,
             3,
         )
         .add_intent_route(
             vec![
-                "código".into(), "programar".into(), "implementar".into(), "función rust".into(),
-                "script python".into(), "algoritmo".into(), "refactorizar".into(), "debug".into(),
-                "compilar".into(), "error de sintaxis".into(), "benchmark".into(),
-                "struct".into(), "trait".into(), "class".into(), "def ".into(), "fn ".into(),
+                "código".into(),
+                "programar".into(),
+                "implementar".into(),
+                "función rust".into(),
+                "script python".into(),
+                "algoritmo".into(),
+                "refactorizar".into(),
+                "debug".into(),
+                "compilar".into(),
+                "error de sintaxis".into(),
+                "benchmark".into(),
+                "struct".into(),
+                "trait".into(),
+                "class".into(),
+                "def ".into(),
+                "fn ".into(),
             ],
             SwarmIntent::CodeGeneration,
             4,
@@ -1155,4 +1271,3 @@ pub fn route_query_default_py(query: &str) -> PyResult<(String, usize, f32, Stri
         decision.explanation,
     ))
 }
-

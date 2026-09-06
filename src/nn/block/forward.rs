@@ -20,7 +20,12 @@ impl RustGenomicBlock {
 
         let x_norm = if !self.attn.rmsnorm_weight.is_empty() {
             let res = unsafe {
-                crate::compute::kernels::rms_norm_offset(&x, &self.attn.rmsnorm_weight, self.attn.eps, norm_offset)
+                crate::compute::kernels::rms_norm_offset(
+                    &x,
+                    &self.attn.rmsnorm_weight,
+                    self.attn.eps,
+                    norm_offset,
+                )
             };
             if res.iter().any(|v| v.is_nan()) {
                 return Err("NaN after attn rms_norm".into());
@@ -58,12 +63,20 @@ impl RustGenomicBlock {
         };
 
         let projected_attn = if let Some(ref mut mla) = self.mla {
-            let q = self.q_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
-            let kv_latent = self.k_gen.forward_core(x_norm.clone(), modulation, activate_rna)?;
+            let q = self
+                .q_gen
+                .forward_core(x_norm.clone(), modulation, activate_rna)?;
+            let kv_latent = self
+                .k_gen
+                .forward_core(x_norm.clone(), modulation, activate_rna)?;
             let k_rope = self.v_gen.forward_core(x_norm, modulation, activate_rna)?;
             let nope_total = mla.n_head * mla.qk_nope_head_dim;
             let q_nope = &q[0..nope_total.min(q.len())];
-            let q_rope = if q.len() > nope_total { &q[nope_total..] } else { &[] };
+            let q_rope = if q.len() > nope_total {
+                &q[nope_total..]
+            } else {
+                &[]
+            };
             let attn_out = mla.forward_mla_core(q_nope, q_rope, kv_latent, k_rope, pos)?;
             self.w_o.forward_core(attn_out, modulation, activate_rna)?
         } else {
@@ -95,11 +108,18 @@ impl RustGenomicBlock {
             .zip(projected_attn.par_iter())
             .for_each(|(xi, &ai)| *xi += ai);
 
-        let x_ffn_n =
-            unsafe { crate::compute::kernels::rms_norm_offset(&x_post, &self.ffn_norm, self.eps, norm_offset) };
+        let x_ffn_n = unsafe {
+            crate::compute::kernels::rms_norm_offset(&x_post, &self.ffn_norm, self.eps, norm_offset)
+        };
 
         let projected_ffn = if let Some(ref moe) = self.moe {
-            moe.forward_moe(&x_ffn_n, modulation, activate_rna, &self.act_fn, self.h_scale)?
+            moe.forward_moe(
+                &x_ffn_n,
+                modulation,
+                activate_rna,
+                &self.act_fn,
+                self.h_scale,
+            )?
         } else {
             let (gate, up) = if let Some(ref gate_up_gen) = self.fused_gate_up {
                 let gate_up_out = gate_up_gen.forward_core(x_ffn_n, modulation, activate_rna)?;

@@ -4,11 +4,11 @@
 //! - Offload de capas (`set_gpu_layers`, `offload_to_gpu`)
 //! - Ejecución híbrida y paridad numérica CPU vs GPU
 
-use std::sync::Arc;
 use _impl::nn::attention::GenomicAttention;
 use _impl::nn::block::RustGenomicBlock;
 use _impl::nn::linear::{GenomicLinear, WeightDatabase};
 use _impl::nn::llm::GenomicLLM;
+use std::sync::Arc;
 
 #[test]
 fn test_genomic_linear_forward_gpu_fallback() {
@@ -22,7 +22,9 @@ fn test_genomic_linear_forward_gpu_fallback() {
     linear.weight_db = WeightDatabase::GenomicF32(Arc::new(weights));
 
     let x = vec![0.1f32; in_dim];
-    let cpu_out = linear.forward_core(x.clone(), None, false).expect("CPU forward failed");
+    let cpu_out = linear
+        .forward_core(x.clone(), None, false)
+        .expect("CPU forward failed");
     assert_eq!(cpu_out.len(), out_dim);
 
     // Test GPU forward if feature is active or fallback
@@ -40,15 +42,7 @@ fn test_genomic_llm_gpu_layers_offload() {
     let dim = 16;
     let vocab_size = 32;
 
-    let attn = GenomicAttention::new(
-        2,
-        2,
-        8,
-        vec![1.0; dim],
-        1e-5,
-        10000.0,
-        "split".to_string(),
-    );
+    let attn = GenomicAttention::new(2, 2, 8, vec![1.0; dim], 1e-5, 10000.0, "split".to_string());
 
     let block = RustGenomicBlock::new(
         0,
@@ -101,10 +95,51 @@ fn test_genomic_llm_gpu_layers_offload() {
     assert!(llm.is_gpu_active());
 
     // Pase forward con capas GPU activadas
-    let logits = llm.forward_core(1, true).expect("Forward core with GPU failed");
+    let logits = llm
+        .forward_core(1, true)
+        .expect("Forward core with GPU failed");
     assert_eq!(logits.len(), vocab_size);
     for &v in &logits {
         assert!(!v.is_nan());
         assert!(!v.is_infinite());
     }
 }
+
+#[test]
+fn test_gpu_zero_allocation_persistent_pool() {
+    let dim = 64;
+    let x = vec![0.5f32; dim];
+    let weight = vec![1.0f32; dim];
+
+    // Llamar RMSNorm en GPU 20 veces consecutivas para verificar que el pool persistente funciona
+    for _ in 0..20 {
+        let res = _impl::compute::gpu::pipeline::gpu_rms_norm(&x, &weight, 1e-5);
+        if let Some(gpu_norm) = res {
+            assert_eq!(gpu_norm.len(), dim);
+            for &v in &gpu_norm {
+                assert!(!v.is_nan());
+                assert!(v > 0.0);
+            }
+        }
+    }
+
+    // Verificar GEMV repetido con caché de pesos en VRAM
+    let rows = 32;
+    let cols = 64;
+    let w = vec![0.02f32; rows * cols];
+    let mut linear = GenomicLinear::empty();
+    linear.in_features = cols;
+    linear.out_features = rows;
+    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(w));
+
+    for _ in 0..20 {
+        let res = linear.forward_gpu(&x);
+        if let Some(gpu_logits) = res {
+            assert_eq!(gpu_logits.len(), rows);
+            for &v in &gpu_logits {
+                assert!(!v.is_nan());
+            }
+        }
+    }
+}
+

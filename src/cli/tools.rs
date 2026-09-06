@@ -265,10 +265,7 @@ pub fn benchmark_cmd(
 
     for (cat, p) in &prompt_battery {
         println!("\n🔍 Evaluando [{}]: \"{}\"", cat, p);
-        let chat_prompt = format!(
-            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-            p
-        );
+        let chat_prompt = format!("<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n", p);
         let prompt_tokens_u32 = tokenizer
             .encode(&chat_prompt, false)
             .map_err(|e| e.to_string())?;
@@ -302,9 +299,21 @@ pub fn benchmark_cmd(
                 total_decode_time += gen_time;
 
                 println!("   • Tokens: {} | TPS: \x1b[1;32m{:.2} tok/s\x1b[0m | Diversidad d1/d2: {:.2}/{:.2} | Degeneración: {}", tok_count, tps, d1, d2, if is_loop { "\x1b[1;31mLOOP\x1b[0m" } else { "\x1b[1;32m0%\x1b[0m" });
-                println!("   • Muestra: \"{}\"", clean.chars().take(70).collect::<String>());
+                println!(
+                    "   • Muestra: \"{}\"",
+                    clean.chars().take(70).collect::<String>()
+                );
 
-                results_table.push((cat.to_string(), tok_count, gen_time, tps, d1, d2, is_loop, clean));
+                results_table.push((
+                    cat.to_string(),
+                    tok_count,
+                    gen_time,
+                    tps,
+                    d1,
+                    d2,
+                    is_loop,
+                    clean,
+                ));
             }
             Err(e) => {
                 println!("   • \x1b[1;31mError en inferencia: {}\x1b[0m", e);
@@ -328,8 +337,15 @@ pub fn benchmark_cmd(
     println!("📊 RESUMEN GLOBAL DE EVALUACIÓN Y HARNESS");
     println!("===============================================================================");
     println!("   • Total Tokens Generados:   {}", total_generated_tokens);
-    println!("   • Throughput Promedio:      \x1b[1;32m{:.2} tokens/s\x1b[0m", avg_tps);
-    println!("   • Tasa de Degeneración:     \x1b[1;{}m{:.1}%\x1b[0m (0% esperado)", if loop_rate == 0.0 { "32" } else { "31" }, loop_rate);
+    println!(
+        "   • Throughput Promedio:      \x1b[1;32m{:.2} tokens/s\x1b[0m",
+        avg_tps
+    );
+    println!(
+        "   • Tasa de Degeneración:     \x1b[1;{}m{:.1}%\x1b[0m (0% esperado)",
+        if loop_rate == 0.0 { "32" } else { "31" },
+        loop_rate
+    );
     if peak_rss > 0.0 {
         println!("   • Peak RAM RSS:             {:.2} MB", peak_rss);
     }
@@ -381,7 +397,16 @@ pub fn benchmark_cmd(
         md.push_str("| Categoría | Tokens | Tiempo (s) | Throughput (tok/s) | Diversidad $d_1/d_2$ | Loop Detectado |\n");
         md.push_str("| :--- | :---: | :---: | :---: | :---: | :---: |\n");
         for (cat, toks, time, tps, d1, d2, is_loop, _) in &results_table {
-            md.push_str(&format!("| **{}** | {} | {:.3} | **{:.2}** | {:.2} / {:.2} | {} |\n", cat, toks, time, tps, d1, d2, if *is_loop { "❌ LOOP" } else { "✅ 0%" }));
+            md.push_str(&format!(
+                "| **{}** | {} | {:.3} | **{:.2}** | {:.2} / {:.2} | {} |\n",
+                cat,
+                toks,
+                time,
+                tps,
+                d1,
+                d2,
+                if *is_loop { "❌ LOOP" } else { "✅ 0%" }
+            ));
         }
 
         if let Some((toks, ce, ppl)) = ppl_metric {
@@ -389,9 +414,13 @@ pub fn benchmark_cmd(
         }
 
         if let Some(out_path) = output_path_opt {
-            let mut f = File::create(out_path).map_err(|e| format!("Error creando archivo de reporte: {}", e))?;
+            let mut f = File::create(out_path)
+                .map_err(|e| format!("Error creando archivo de reporte: {}", e))?;
             f.write_all(md.as_bytes()).map_err(|e| e.to_string())?;
-            println!("\n💾 Reporte Markdown exportado exitosamente a: \x1b[1;32m{}\x1b[0m", out_path);
+            println!(
+                "\n💾 Reporte Markdown exportado exitosamente a: \x1b[1;32m{}\x1b[0m",
+                out_path
+            );
         } else if format_type.eq_ignore_ascii_case("markdown") {
             println!("\n---\n{}", md);
         }
@@ -403,7 +432,9 @@ pub fn benchmark_cmd(
 
 fn chrono_timestamp() -> String {
     let now = std::time::SystemTime::now();
-    let dt = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let dt = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
     format!("POSIX: {}s", dt.as_secs())
 }
 

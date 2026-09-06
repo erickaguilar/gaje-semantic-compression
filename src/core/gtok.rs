@@ -492,7 +492,7 @@ impl GtokNativeTokenizer {
         // Inglés:  -ing, -ed, -es, -s, -tion, -ated
         for suffix in &[
             "ndo", "iendo", "ando", "aron", "ieron", "amos", "emos", "ado", "ido", "aba", "ía",
-            "ing", "ed", "tion", "ated"
+            "ing", "ed", "tion", "ated",
         ] {
             if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
                 let stem = &lower[..lower.len() - suffix.len()];
@@ -518,8 +518,8 @@ impl GtokNativeTokenizer {
         // Español: -mente, -ivo, -iva, -ito, -ita, -able, -ible
         // Inglés:  -ly, -ful, -less, -able, -ible, -ness, -ment, -ive
         for suffix in &[
-            "mente", "ivo", "iva", "ito", "ita", "able", "ible",
-            "ly", "ful", "less", "ness", "ment", "ive"
+            "mente", "ivo", "iva", "ito", "ita", "able", "ible", "ly", "ful", "less", "ness",
+            "ment", "ive",
         ] {
             if lower.ends_with(suffix) && lower.len() > suffix.len() + 2 {
                 let stem = &lower[..lower.len() - suffix.len()];
@@ -611,10 +611,9 @@ mod tests {
     #[test]
     fn test_gtok_v2_morphology_and_roundtrip() {
         let v1_data = vec![
-            b'G', b'T', b'O', b'K', 1, 0, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0,
-            1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 5, 0, 0, 0, 11, 0, 0, 0, 15, 0, 0, 0,
-            b'<', b'u', b'n', b'k', b'>', b'c', b'a', b'm', b'i', b'n', b'a', b'c', b'a', b's', b'a',
+            b'G', b'T', b'O', b'K', 1, 0, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 11, 0, 0, 0, 15, 0, 0, 0, b'<',
+            b'u', b'n', b'k', b'>', b'c', b'a', b'm', b'i', b'n', b'a', b'c', b'a', b's', b'a',
         ];
 
         let t1 = GtokNativeTokenizer::from_bytes(&v1_data).unwrap();
@@ -646,10 +645,9 @@ mod tests {
         // Token 0: "walk" (4 bytes: 0..4)
         // Token 1: "中" (3 bytes UTF-8: 4..7)
         let english_data = vec![
-            b'G', b'T', b'O', b'K', 2, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0,
-            1, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 4, 0, 0, 0, 7, 0, 0, 0,
-            b'w', b'a', b'l', b'k', 0xe4, 0xb8, 0xad,
+            b'G', b'T', b'O', b'K', 2, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 7, 0, 0, 0, b'w', b'a', b'l', b'k',
+            0xe4, 0xb8, 0xad,
         ];
         let t_en = GtokNativeTokenizer::from_bytes(&english_data).unwrap();
         let (id_walk, base_walk) = t_en.encode_morphological_codon("walking");

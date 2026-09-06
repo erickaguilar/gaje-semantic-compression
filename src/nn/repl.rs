@@ -71,10 +71,18 @@ pub fn run_repl(
         load_time.as_secs_f64() * 1000.0
     );
 
-    let mut memory_orch = crate::compute::island::IslandOrchestrator::try_load_paired_memory(&config.model_path, llm.dim() as u32);
+    let mut memory_orch = crate::compute::island::IslandOrchestrator::try_load_paired_memory(
+        &config.model_path,
+        llm.dim() as u32,
+    );
     if let Some(ref orch) = memory_orch {
-        let total_facts = orch.documental.entries.len() + orch.episodic.entries.len() + orch.conversational.entries.len();
-        println!("🧠 Hipocampo Congénito: {} hechos activos en memoria asociativa (.gmem)", total_facts);
+        let total_facts = orch.documental.entries.len()
+            + orch.episodic.entries.len()
+            + orch.conversational.entries.len();
+        println!(
+            "🧠 Hipocampo Congénito: {} hechos activos en memoria asociativa (.gmem)",
+            total_facts
+        );
     }
     println!();
     println!("Comandos disponibles:");
@@ -134,16 +142,37 @@ pub fn run_repl(
         // Búsqueda en Hipocampo Congénito (.gmem)
         let mut context_prefix = String::new();
         if let Some(ref orch) = memory_orch {
-            let q_vec = crate::compute::island::IslandOrchestrator::vector_from_text(input_trimmed, llm.dim());
+            let q_vec = crate::compute::island::IslandOrchestrator::vector_from_text(
+                input_trimmed,
+                llm.dim(),
+            );
             let matches = orch.retrieve_context(&q_vec, 2);
-            let relevant: Vec<_> = matches.into_iter().filter(|m| m.similarity >= 0.50).collect();
+            let relevant: Vec<_> = matches
+                .into_iter()
+                .filter(|m| m.similarity >= 0.50)
+                .collect();
             if !relevant.is_empty() {
-                context_prefix = format!("[Conocimiento Hipocampal: {}]\n", relevant.iter().map(|m| m.text.as_str()).collect::<Vec<_>>().join(" | "));
+                context_prefix = format!(
+                    "[Conocimiento Hipocampal: {}]\n",
+                    relevant
+                        .iter()
+                        .map(|m| m.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                );
             }
         }
 
         // Construir prompt con ChatML
-        let mut full_prompt = format!("<|im_start|>system\n{}{}<|im_end|>\n", config.system_prompt, if context_prefix.is_empty() { "".to_string() } else { format!("\n{}", context_prefix) });
+        let mut full_prompt = format!(
+            "<|im_start|>system\n{}{}<|im_end|>\n",
+            config.system_prompt,
+            if context_prefix.is_empty() {
+                "".to_string()
+            } else {
+                format!("\n{}", context_prefix)
+            }
+        );
         for (u, a) in history.iter().rev().take(3).rev() {
             full_prompt.push_str(&format!(
                 "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>\n",
@@ -203,8 +232,16 @@ pub fn run_repl(
         if let Some(ref mut orch) = memory_orch {
             let turn_id = (history.len() + 1) as u64;
             let entry_text = format!("U: {} | A: {}", input_trimmed, clean_reply);
-            let entry_vec = crate::compute::island::IslandOrchestrator::vector_from_text(&entry_text, llm.dim());
-            orch.add_memory(crate::compute::island::IslandNiche::Conversational, turn_id, entry_vec, entry_text);
+            let entry_vec = crate::compute::island::IslandOrchestrator::vector_from_text(
+                &entry_text,
+                llm.dim(),
+            );
+            orch.add_memory(
+                crate::compute::island::IslandNiche::Conversational,
+                turn_id,
+                entry_vec,
+                entry_text,
+            );
         }
 
         history.push((input_trimmed.to_string(), clean_reply));

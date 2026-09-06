@@ -1,8 +1,8 @@
 // =============================================================================
 // tensors — lectura y genomización de tensores (F32/F16/Q8_0) + unpermute
 // =============================================================================
-use crate::io::gguf::GGMLType;
 use super::GGUFLoader;
+use crate::io::gguf::GGMLType;
 use crate::nn::linear::GenomicLinear;
 
 impl GGUFLoader {

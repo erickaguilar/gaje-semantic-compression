@@ -225,7 +225,6 @@ impl GmemMemoryIndex {
             self.ivf = None;
             return;
         }
-        
 
         let dim = self.header.dim as usize;
         // Regla k~sqrt(N) acotada: mas clústeres = listas mas chicas y menos

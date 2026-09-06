@@ -408,7 +408,8 @@ pub fn genomize_f16_native(
     if bit_depth == 4 {
         // Convertir F16 a F32 para procesar con el core de 4 bits existente
         let f32_data: Vec<f32> = f16_data.iter().map(|v| v.to_f32()).collect();
-        let (_dna, _centroids, _anchors) = genomize_4bit_core(&f32_data, block_size, anchor_threshold);
+        let (_dna, _centroids, _anchors) =
+            genomize_4bit_core(&f32_data, block_size, anchor_threshold);
         #[cfg(feature = "python")]
         {
             use pyo3::types::PyBytes;

@@ -395,7 +395,10 @@ impl IslandOrchestrator {
         let mut vec = vec![0.0f32; dim];
         let mut norm_sq = 0.0f32;
         for (i, val) in vec.iter_mut().enumerate() {
-            let pseudo = ((seed.wrapping_add(i as u64).wrapping_mul(6364136223846793005)) >> 32) as i32;
+            let pseudo = ((seed
+                .wrapping_add(i as u64)
+                .wrapping_mul(6364136223846793005))
+                >> 32) as i32;
             let f = (pseudo as f32) / (i32::MAX as f32);
             *val = f;
             norm_sq += f * f;
@@ -420,7 +423,9 @@ impl IslandOrchestrator {
         if std::path::Path::new(&memory_dir).exists() {
             let mut orch = Self::new(dim);
             if orch.load_all(&memory_dir).is_ok() {
-                let total = orch.episodic.entries.len() + orch.documental.entries.len() + orch.conversational.entries.len();
+                let total = orch.episodic.entries.len()
+                    + orch.documental.entries.len()
+                    + orch.conversational.entries.len();
                 if total > 0 {
                     return Some(orch);
                 }

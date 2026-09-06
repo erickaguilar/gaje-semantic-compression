@@ -604,7 +604,7 @@ fn test_q2_0_ste_updates_and_conformal_birth() {
         raw_bytes,
         Vec::new(),
         Vec::new(),
-        1, // out_features = 1
+        1,  // out_features = 1
         32, // in_features = 32
         32, // block_size = 32
         Vec::new(),
@@ -627,7 +627,9 @@ fn test_q2_0_ste_updates_and_conformal_birth() {
     // 2. Verificar STE refine
     let input = vec![1.0f32; 32];
     let grads = vec![1.0f32];
-    linear.refine_with_grads_ste_core(input, grads, 0.1).unwrap();
+    linear
+        .refine_with_grads_ste_core(input, grads, 0.1)
+        .unwrap();
 
     // Las escalas o qs deben haberse actualizado
     let row_updated = linear.get_row_core(0).unwrap();

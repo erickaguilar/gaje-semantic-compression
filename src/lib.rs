@@ -6,14 +6,14 @@
     clippy::manual_div_ceil
 )]
 
+#[cfg(feature = "native")]
+pub mod cli;
 pub mod compute;
 pub mod core;
 pub mod ffi;
 pub mod io;
 pub mod nn;
 pub mod pyo3_shim;
-#[cfg(feature = "native")]
-pub mod cli;
 #[cfg(feature = "native")]
 pub mod server;
 #[cfg(feature = "wasm")]

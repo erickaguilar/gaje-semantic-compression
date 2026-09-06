@@ -1,9 +1,9 @@
 // =============================================================================
 // metadata — lecturas de metadatos e inferencia de configuración del modelo
 // =============================================================================
+use super::GGUFLoader;
 use crate::io::config::{default_dni, ArchConfig, ModelConfig};
 use crate::io::gguf::GGUFValue;
-use super::GGUFLoader;
 
 impl GGUFLoader {
     pub fn new(path: &str) -> std::io::Result<Self> {
@@ -57,7 +57,9 @@ impl GGUFLoader {
         let mut merges = Vec::new();
         let mut merges_map = HashMap::new();
 
-        if let Some(GGUFValue::Array(merges_arr)) = self.reader.metadata.get("tokenizer.ggml.merges") {
+        if let Some(GGUFValue::Array(merges_arr)) =
+            self.reader.metadata.get("tokenizer.ggml.merges")
+        {
             for val in merges_arr {
                 if let GGUFValue::String(m_str) = val {
                     let parts: Vec<&str> = m_str.split_whitespace().collect();
@@ -79,9 +81,15 @@ impl GGUFLoader {
             }
         }
 
-        let bos_id = self.get_metadata_u32("tokenizer.ggml.bos_token_id").unwrap_or(0);
-        let eos_id = self.get_metadata_u32("tokenizer.ggml.eos_token_id").unwrap_or(151645);
-        let pad_id = self.get_metadata_u32("tokenizer.ggml.padding_token_id").unwrap_or(eos_id);
+        let bos_id = self
+            .get_metadata_u32("tokenizer.ggml.bos_token_id")
+            .unwrap_or(0);
+        let eos_id = self
+            .get_metadata_u32("tokenizer.ggml.eos_token_id")
+            .unwrap_or(151645);
+        let pad_id = self
+            .get_metadata_u32("tokenizer.ggml.padding_token_id")
+            .unwrap_or(eos_id);
         let unk_id = 0;
 
         let mut extra_stop_ids = Vec::new();

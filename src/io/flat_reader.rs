@@ -420,6 +420,8 @@ pub fn load_genomic_auto(path: &str) -> std::io::Result<GenomicLLM> {
     }
     Err(std::io::Error::new(
         std::io::ErrorKind::InvalidData,
-        format!("El archivo '{path}' no tiene la firma binaria GAJE válida (magic bytes b\"GAJE\")."),
+        format!(
+            "El archivo '{path}' no tiene la firma binaria GAJE válida (magic bytes b\"GAJE\")."
+        ),
     ))
 }

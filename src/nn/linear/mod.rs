@@ -56,4 +56,3 @@ pub struct GenomicLinear {
     pub bias: Vec<f32>,
     pub stride: usize,
 }
-

@@ -2,11 +2,11 @@
 //!
 //! Valida el comportamiento de MlaAttention y MoeRouter según DEEPSEEK_GEMMA_SUPPORT_PLAN.md.
 
+use _impl::nn::attention::GenomicAttention;
 use _impl::nn::attention::MlaAttention;
+use _impl::nn::block::RustGenomicBlock;
 use _impl::nn::linear::GenomicLinear;
 use _impl::nn::moe::{MoeExpert, MoeRouter};
-use _impl::nn::block::RustGenomicBlock;
-use _impl::nn::attention::GenomicAttention;
 
 #[test]
 fn test_mla_attention_latent_cache_and_rope() {
@@ -36,7 +36,9 @@ fn test_mla_attention_latent_cache_and_rope() {
     let kv_latent = vec![0.2f32; kv_lora_rank];
     let k_rope = vec![0.05f32; qk_rope_head_dim];
 
-    let out0 = mla.forward_mla_core(&q_nope, &q_rope, kv_latent, k_rope, 0).expect("MLA forward failed");
+    let out0 = mla
+        .forward_mla_core(&q_nope, &q_rope, kv_latent, k_rope, 0)
+        .expect("MLA forward failed");
     assert_eq!(out0.len(), n_head * v_head_dim);
     assert_eq!(mla.cache_len(), 1);
 
@@ -48,7 +50,9 @@ fn test_mla_attention_latent_cache_and_rope() {
     // Forward for token 1 (should use cached token 0 and token 1)
     let kv_latent_1 = vec![0.15f32; kv_lora_rank];
     let k_rope_1 = vec![0.04f32; qk_rope_head_dim];
-    let out1 = mla.forward_mla_core(&q_nope, &q_rope, kv_latent_1, k_rope_1, 1).expect("MLA forward 1 failed");
+    let out1 = mla
+        .forward_mla_core(&q_nope, &q_rope, kv_latent_1, k_rope_1, 1)
+        .expect("MLA forward 1 failed");
     assert_eq!(out1.len(), n_head * v_head_dim);
     assert_eq!(mla.cache_len(), 2);
 
@@ -75,18 +79,12 @@ fn test_moe_router_topk_routing() {
         ));
     }
 
-    let router = MoeRouter::new(
-        n_routed,
-        n_active,
-        gate_weight,
-        experts,
-        None,
-        None,
-        true,
-    );
+    let router = MoeRouter::new(n_routed, n_active, gate_weight, experts, None, None, true);
 
     let x = vec![0.1f32; dim];
-    let out = router.forward_moe(&x, None, false, "swiglu", 1.0).expect("MoE forward failed");
+    let out = router
+        .forward_moe(&x, None, false, "swiglu", 1.0)
+        .expect("MoE forward failed");
     assert_eq!(out.len(), dim);
     for &v in &out {
         assert!(!v.is_nan());
@@ -163,7 +161,9 @@ fn test_block_with_mla_and_moe() {
     ));
 
     let x = vec![0.5f32; dim];
-    let out = block.forward_core(x, 0).expect("Block forward with MLA & MoE failed");
+    let out = block
+        .forward_core(x, 0)
+        .expect("Block forward with MLA & MoE failed");
     assert_eq!(out.len(), dim);
     for &v in &out {
         assert!(!v.is_nan());
