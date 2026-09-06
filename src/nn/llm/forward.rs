@@ -51,6 +51,37 @@ impl GenomicLLM {
     pub fn offload_to_gpu(&mut self, layers: usize) -> Result<usize, String> {
         let actual_layers = layers.min(self.blocks.len());
         self.set_gpu_layers(actual_layers);
+
+        // Precarga y anclaje persistente de pesos en VRAM
+        #[cfg(feature = "gpu")]
+        {
+            if let Some(ref pipes) = *crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES {
+                if let crate::nn::linear::WeightDatabase::GenomicF32(ref w) = self.lm_head.weight_db {
+                    let mut cache = pipes.gemv_weights_cache.lock().map_err(|e| e.to_string())?;
+                    let key = w.as_ptr() as usize;
+                    if !cache.contains_key(&key) {
+                        use wgpu::util::DeviceExt;
+                        let buf = std::sync::Arc::new(pipes.ctx.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("LM Head Persistent VRAM Buffer"),
+                                contents: bytemuck::cast_slice(w),
+                                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                            },
+                        ));
+                        cache.insert(
+                            key,
+                            (buf, self.lm_head.out_features, self.lm_head.in_features),
+                        );
+                        eprintln!(
+                            "🎮 [VRAM Offload] LM Head ({:.1} MB) anclado en VRAM de {}",
+                            (w.len() * 4) as f64 / (1024.0 * 1024.0),
+                            pipes.ctx.info.device_name
+                        );
+                    }
+                }
+            }
+        }
+
         Ok(actual_layers)
     }
 
@@ -383,6 +414,45 @@ impl GenomicLLM {
         Ok(total_loss / (tokens.len() - 1) as f32)
     }
 
+    /// Computa la normalización de salida (RMSNorm) y logits con aceleración GPU (WGPU/Vulkan) si está activa.
+    #[inline]
+    pub fn compute_output_norm_and_logits(
+        &self,
+        h: &[f32],
+        n_blocks: usize,
+    ) -> Result<(Vec<f32>, Vec<f32>), String> {
+        let h_norm = if self.is_gpu_active() {
+            if let Some(gpu_norm) =
+                crate::compute::gpu::pipeline::gpu_rms_norm(h, &self.output_norm, self.eps)
+            {
+                gpu_norm
+            } else {
+                unsafe { crate::compute::kernels::rms_norm(h, &self.output_norm, self.eps) }
+            }
+        } else {
+            unsafe { crate::compute::kernels::rms_norm(h, &self.output_norm, self.eps) }
+        };
+
+        let modulation = self
+            .topology
+            .as_ref()
+            .map(|t| t.get_modulation_factors(n_blocks.max(1), 2, 0.5));
+
+        let logits = if self.is_gpu_active() {
+            if let Some(gpu_logits) = self.lm_head.forward_gpu(&h_norm) {
+                gpu_logits
+            } else {
+                self.lm_head
+                    .forward_core(h_norm.clone(), modulation, false)?
+            }
+        } else {
+            self.lm_head
+                .forward_core(h_norm.clone(), modulation, false)?
+        };
+
+        Ok((h_norm, logits))
+    }
+
     /// Entrenamiento del cuerpo con **caché de activaciones** (sin doble-forward).
     /// Guarda las activaciones del forward original de cada bloque y hace el
     /// backward en orden inverso usando exactamente esas activaciones.
@@ -420,15 +490,7 @@ impl GenomicLLM {
                 caches.push(cache);
                 h = out;
             }
-            let h_norm =
-                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
-            let modulation = self
-                .topology
-                .as_ref()
-                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self
-                .lm_head
-                .forward_core(h_norm.clone(), modulation, false)?;
+            let (h_norm, logits) = self.compute_output_norm_and_logits(&h, n)?;
 
             // Loss CE + d_logits.
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
@@ -516,15 +578,7 @@ impl GenomicLLM {
                 caches.push(cache);
                 h = out;
             }
-            let h_norm =
-                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
-            let modulation = self
-                .topology
-                .as_ref()
-                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self
-                .lm_head
-                .forward_core(h_norm.clone(), modulation, false)?;
+            let (h_norm, logits) = self.compute_output_norm_and_logits(&h, n)?;
 
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_e = 0.0f32;
@@ -620,15 +674,7 @@ impl GenomicLLM {
                 caches.push(cache);
                 h = out;
             }
-            let h_norm =
-                unsafe { crate::compute::kernels::rms_norm(&h, &self.output_norm, self.eps) };
-            let modulation = self
-                .topology
-                .as_ref()
-                .map(|t| t.get_modulation_factors(n.max(1), 2, 0.5));
-            let logits = self
-                .lm_head
-                .forward_core(h_norm.clone(), modulation, false)?;
+            let (h_norm, logits) = self.compute_output_norm_and_logits(&h, n)?;
 
             let max_l = logits.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
             let mut sum_e = 0.0f32;
