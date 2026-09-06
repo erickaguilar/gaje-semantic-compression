@@ -372,20 +372,24 @@ impl GpuComputePipelines {
                 if *r == rows && *c == cols {
                     buf.clone()
                 } else {
-                    let buf = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Cached GEMV Weights"),
-                        contents: bytemuck::cast_slice(weights),
-                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                    }));
+                    let buf = Arc::new(device.create_buffer_init(
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("Cached GEMV Weights"),
+                            contents: bytemuck::cast_slice(weights),
+                            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                        },
+                    ));
                     cache.insert(weights_key, (buf.clone(), rows, cols));
                     buf
                 }
             } else {
-                let buf = Arc::new(device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Cached GEMV Weights"),
-                    contents: bytemuck::cast_slice(weights),
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                }));
+                let buf = Arc::new(
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Cached GEMV Weights"),
+                        contents: bytemuck::cast_slice(weights),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    }),
+                );
                 cache.insert(weights_key, (buf.clone(), rows, cols));
                 buf
             }

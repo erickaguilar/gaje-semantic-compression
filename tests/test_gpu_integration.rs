@@ -142,4 +142,3 @@ fn test_gpu_zero_allocation_persistent_pool() {
         }
     }
 }
-

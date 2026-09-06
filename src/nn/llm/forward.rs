@@ -51,6 +51,37 @@ impl GenomicLLM {
     pub fn offload_to_gpu(&mut self, layers: usize) -> Result<usize, String> {
         let actual_layers = layers.min(self.blocks.len());
         self.set_gpu_layers(actual_layers);
+
+        // Precarga y anclaje persistente de pesos en VRAM
+        #[cfg(feature = "gpu")]
+        {
+            if let Some(ref pipes) = *crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES {
+                if let crate::nn::linear::WeightDatabase::GenomicF32(ref w) = self.lm_head.weight_db {
+                    let mut cache = pipes.gemv_weights_cache.lock().map_err(|e| e.to_string())?;
+                    let key = w.as_ptr() as usize;
+                    if !cache.contains_key(&key) {
+                        use wgpu::util::DeviceExt;
+                        let buf = std::sync::Arc::new(pipes.ctx.device.create_buffer_init(
+                            &wgpu::util::BufferInitDescriptor {
+                                label: Some("LM Head Persistent VRAM Buffer"),
+                                contents: bytemuck::cast_slice(w),
+                                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                            },
+                        ));
+                        cache.insert(
+                            key,
+                            (buf, self.lm_head.out_features, self.lm_head.in_features),
+                        );
+                        eprintln!(
+                            "🎮 [VRAM Offload] LM Head ({:.1} MB) anclado en VRAM de {}",
+                            (w.len() * 4) as f64 / (1024.0 * 1024.0),
+                            pipes.ctx.info.device_name
+                        );
+                    }
+                }
+            }
+        }
+
         Ok(actual_layers)
     }
 

@@ -1269,7 +1269,11 @@ fn handle_train_born(args: &TrainBornArgs) -> Result<(), Box<dyn std::error::Err
         "  • Capas en Crianza    : {}/{} bloques superiores + LM Head{}",
         train_blocks,
         total_blocks,
-        if train_blocks < total_blocks { " (Ladder Training)" } else { " (Full Body)" }
+        if train_blocks < total_blocks {
+            " (Ladder Training)"
+        } else {
+            " (Full Body)"
+        }
     );
 
     println!("\n🔥 Iniciando bucle de entrenamiento STE cuaternario...");
