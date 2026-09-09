@@ -10,6 +10,7 @@ use crate::core::gtok::GtokNativeTokenizer;
 use crate::io::config::ModelConfig;
 use crate::io::flat_reader::GajeFlatFileReader;
 use crate::io::gmem::GmemMemoryIndex;
+use crate::io::header::FlatHeaderV2;
 use crate::nn::llm::GenomicLLM;
 use wasm_bindgen::prelude::*;
 
@@ -19,6 +20,9 @@ pub struct GajeWasmEngine {
     config: ModelConfig,
     tokenizer: Option<GtokNativeTokenizer>,
     memory: IslandOrchestrator,
+    header: FlatHeaderV2,
+    metadata_json: String,
+    last_rag_injected: Vec<String>,
 }
 
 /// Genera una representación vectorial determinista normalizada a partir de palabras y n-gramas de texto.
@@ -71,6 +75,9 @@ impl GajeWasmEngine {
         let reader = GajeFlatFileReader::from_bytes(bytes.to_vec())
             .map_err(|e| JsValue::from_str(&format!("Error leyendo formato .flat: {}", e)))?;
 
+        let header = reader.header;
+        let metadata_json = reader.metadata_json.clone();
+
         let config = reader.load_config().map_err(|e| {
             JsValue::from_str(&format!("Error leyendo metadatos de configuración: {}", e))
         })?;
@@ -88,6 +95,9 @@ impl GajeWasmEngine {
             config,
             tokenizer,
             memory,
+            header,
+            metadata_json,
+            last_rag_injected: Vec::new(),
         })
     }
 
@@ -250,22 +260,24 @@ impl GajeWasmEngine {
         repetition_penalty: f32,
         inject_rag: bool,
     ) -> Result<String, JsValue> {
-        let (prompt_ids, stop_ids) = {
+        let (prompt_ids, stop_ids, injected_snippets) = {
             let tok = self.tokenizer.as_ref().ok_or_else(|| {
                 JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado")
             })?;
 
             let mut relevant_context = String::new();
+            let mut injected_snippets = Vec::new();
             if inject_rag {
                 let q_vec = text_to_embedding(prompt, self.config.n_embd);
                 let contexts = self.memory.retrieve_context(&q_vec, 2);
                 let relevant_snippets: Vec<String> = contexts
                     .iter()
                     .filter(|c| c.similarity >= 0.50)
-                    .map(|c| format!("- {}", c.text))
+                    .map(|c| format!("- [sim={:.2}] {}", c.similarity, c.text))
                     .collect();
 
                 if !relevant_snippets.is_empty() {
+                    injected_snippets = relevant_snippets.clone();
                     relevant_context = format!(
                         "Información de memoria recuperada:\n{}\n\n",
                         relevant_snippets.join("\n")
@@ -315,8 +327,10 @@ impl GajeWasmEngine {
             if let Some(&eot) = tok.token_to_id.get("<end_of_turn>") {
                 s_ids.push(eot);
             }
-            (p_ids, s_ids)
+            (p_ids, s_ids, injected_snippets)
         };
+
+        self.last_rag_injected = injected_snippets;
 
         let gen_ids = self.generate(
             &prompt_ids,
@@ -487,7 +501,7 @@ impl GajeWasmEngine {
         Ok(cleaned)
     }
 
-    /// Retorna información arquitectónica del modelo como objeto JSON.
+    /// Retorna información arquitectónica y de linaje genómico del modelo como objeto JSON.
     #[wasm_bindgen]
     pub fn get_model_info(&self) -> String {
         serde_json::to_string(&serde_json::json!({
@@ -498,8 +512,23 @@ impl GajeWasmEngine {
             "vocab_size": self.config.vocab_size,
             "has_quantum_embeddings": self.llm.quantum_embeddings.is_some(),
             "has_gtok": self.tokenizer.is_some(),
+            "lineage_current_hash": format!("{:016x}", self.header.lineage_current_hash),
+            "lineage_parent_hash": format!("{:016x}", self.header.lineage_parent_hash),
+            "num_mutations": self.header.num_mutations,
+            "num_overrides": self.header.num_overrides,
+            "quant_format": self.header.quant_format,
+            "group_size": self.header.group_size,
+            "header_version": self.header.version,
+            "arch_family": self.header.arch_family,
+            "metadata_json": self.metadata_json,
         }))
         .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Retorna los últimos fragmentos de contexto RAG inyectados en formato JSON.
+    #[wasm_bindgen]
+    pub fn get_last_rag_injected(&self) -> String {
+        serde_json::to_string(&self.last_rag_injected).unwrap_or_else(|_| "[]".to_string())
     }
 
     /// Limpia el estado interno de KV Cache para reiniciar la conversación.
