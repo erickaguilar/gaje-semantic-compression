@@ -3,6 +3,7 @@
 //! High-performance, zero-external-dependency BPE tokenizer implementation in pure Rust std.
 //! Directly parses contiguous binary `.gtok` files with sub-millisecond cold-start.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
@@ -47,6 +48,32 @@ impl NucleotideBase {
             Self::Cytosine => 'C',
             Self::Guanine => 'G',
             Self::Thymine => 'T',
+        }
+    }
+}
+
+/// Plantilla canónica de diálogo soportada por el motor GAJE.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChatTemplate {
+    ChatML,
+    Llama3,
+    Llama2,
+    Gemma,
+    Phi3,
+    Classic,
+    Raw,
+}
+
+impl ChatTemplate {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ChatTemplate::ChatML => "chatml",
+            ChatTemplate::Llama3 => "llama3",
+            ChatTemplate::Llama2 => "llama2",
+            ChatTemplate::Gemma => "gemma",
+            ChatTemplate::Phi3 => "phi3",
+            ChatTemplate::Classic => "classic",
+            ChatTemplate::Raw => "raw",
         }
     }
 }
@@ -444,13 +471,160 @@ impl GtokNativeTokenizer {
         self.vocab.len()
     }
 
-    /// Retorna todos los IDs de detención de generación.
+    /// Retorna todos los IDs de detención de generación, incluyendo delimitadores especiales del vocabulario.
     pub fn get_stop_tokens(&self) -> Vec<u32> {
         let mut stops = self.extra_stop_ids.clone();
         if !stops.contains(&self.eos_id) {
             stops.push(self.eos_id);
         }
+        for token_name in &[
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|eot_id|>",
+            "<end_of_turn>",
+            "<|end|>",
+            "</s>",
+            "<eos>",
+        ] {
+            if let Some(&id) = self.token_to_id.get(*token_name) {
+                if !stops.contains(&id) {
+                    stops.push(id);
+                }
+            }
+        }
         stops
+    }
+
+    /// Detecta la plantilla conversacional adecuada inspeccionando el vocabulario de tokens especiales.
+    pub fn detect_chat_template(&self) -> ChatTemplate {
+        if self.token_to_id.contains_key("<|im_start|>") {
+            ChatTemplate::ChatML
+        } else if self.token_to_id.contains_key("<|start_header_id|>") {
+            ChatTemplate::Llama3
+        } else if self.token_to_id.contains_key("<start_of_turn>") {
+            ChatTemplate::Gemma
+        } else if self.token_to_id.contains_key("[INST]") {
+            ChatTemplate::Llama2
+        } else if self.token_to_id.contains_key("<|user|>") {
+            ChatTemplate::Phi3
+        } else {
+            ChatTemplate::Classic
+        }
+    }
+
+    /// Ensambla el prompt con delimitadores canónicos según la plantilla detectada o especificada.
+    pub fn format_chat_prompt(
+        &self,
+        prompt: &str,
+        system_prompt: &str,
+        relevant_context: &str,
+        forced_template: Option<ChatTemplate>,
+    ) -> String {
+        // Si el prompt ya viene formateado con delimitadores canónicos, respetarlo sin doble envoltura
+        if prompt.contains("<|im_start|>")
+            || prompt.contains("<|start_header_id|>")
+            || prompt.contains("<|begin_of_text|>")
+            || prompt.contains("<start_of_turn>")
+            || prompt.contains("[INST]")
+            || prompt.contains("<|user|>")
+        {
+            if !relevant_context.is_empty() {
+                return format!("{}\n{}", relevant_context.trim(), prompt);
+            }
+            return prompt.to_string();
+        }
+
+        let template = forced_template.unwrap_or_else(|| self.detect_chat_template());
+        let sys_content = if !relevant_context.is_empty() {
+            if !system_prompt.is_empty() {
+                format!("{}\n\n{}", relevant_context.trim(), system_prompt.trim())
+            } else {
+                relevant_context.trim().to_string()
+            }
+        } else {
+            system_prompt.trim().to_string()
+        };
+
+        match template {
+            ChatTemplate::ChatML => {
+                if !sys_content.is_empty() {
+                    format!(
+                        "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                        sys_content,
+                        prompt.trim()
+                    )
+                } else {
+                    format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                        prompt.trim()
+                    )
+                }
+            }
+            ChatTemplate::Llama3 => {
+                if !sys_content.is_empty() {
+                    format!(
+                        "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                        sys_content,
+                        prompt.trim()
+                    )
+                } else {
+                    format!(
+                        "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                        prompt.trim()
+                    )
+                }
+            }
+            ChatTemplate::Llama2 => {
+                if !sys_content.is_empty() {
+                    format!(
+                        "<s>[INST] <<SYS>>\n{}\n<</SYS>>\n\n{} [/INST] ",
+                        sys_content,
+                        prompt.trim()
+                    )
+                } else {
+                    format!("<s>[INST] {} [/INST] ", prompt.trim())
+                }
+            }
+            ChatTemplate::Gemma => {
+                if !sys_content.is_empty() {
+                    format!(
+                        "<start_of_turn>user\n{}\n\n{}<end_of_turn>\n<start_of_turn>model\n",
+                        sys_content,
+                        prompt.trim()
+                    )
+                } else {
+                    format!(
+                        "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
+                        prompt.trim()
+                    )
+                }
+            }
+            ChatTemplate::Phi3 => {
+                if !sys_content.is_empty() {
+                    format!(
+                        "<|system|>\n{}<|end|>\n<|user|>\n{}<|end|>\n<|assistant|>\n",
+                        sys_content,
+                        prompt.trim()
+                    )
+                } else {
+                    format!("<|user|>\n{}<|end|>\n<|assistant|>\n", prompt.trim())
+                }
+            }
+            ChatTemplate::Classic => {
+                if !sys_content.is_empty() {
+                    format!("{}\n\nUser: {}\nAssistant: ", sys_content, prompt.trim())
+                } else {
+                    format!("User: {}\nAssistant: ", prompt.trim())
+                }
+            }
+            ChatTemplate::Raw => {
+                if !sys_content.is_empty() {
+                    format!("{}\n\n{}", sys_content, prompt)
+                } else {
+                    prompt.to_string()
+                }
+            }
+        }
     }
 
     /// Retorna el formato activo del tokenizador (v1 Clásico vs v2 Genómico).
@@ -658,5 +832,76 @@ mod tests {
         let (id_cjk, base_cjk) = t_en.encode_morphological_codon("中");
         assert_eq!(id_cjk, Some(1));
         assert_eq!(base_cjk, NucleotideBase::Adenine);
+    }
+
+    #[test]
+    fn test_gtok_chat_template_detection_and_formatting() {
+        // Tokenizador simulado con tokens especiales ChatML
+        let mut t_chatml = GtokNativeTokenizer {
+            vocab: vec![
+                "<|im_start|>".to_string(),
+                "<|im_end|>".to_string(),
+                "<|endoftext|>".to_string(),
+                "hola".to_string(),
+            ],
+            token_to_id: HashMap::new(),
+            merges: Vec::new(),
+            merges_map: HashMap::new(),
+            bos_id: 0,
+            eos_id: 1,
+            unk_id: 2,
+            pad_id: 0,
+            extra_stop_ids: Vec::new(),
+            version: GTOK_VERSION,
+            flags: 0,
+        };
+        for (i, tok) in t_chatml.vocab.iter().enumerate() {
+            t_chatml.token_to_id.insert(tok.clone(), i as u32);
+        }
+
+        assert_eq!(t_chatml.detect_chat_template(), ChatTemplate::ChatML);
+        let stops = t_chatml.get_stop_tokens();
+        assert!(stops.contains(&1)); // <|im_end|>
+        assert!(stops.contains(&2)); // <|endoftext|>
+
+        let formatted = t_chatml.format_chat_prompt("¿Cómo estás?", "Eres un asistente.", "", None);
+        assert!(formatted.contains("<|im_start|>system\nEres un asistente.<|im_end|>"));
+        assert!(formatted.contains("<|im_start|>user\n¿Cómo estás?<|im_end|>"));
+        assert!(formatted.ends_with("<|im_start|>assistant\n"));
+
+        // Prueba de no duplicación / no doble envoltura
+        let double_formatted = t_chatml.format_chat_prompt(&formatted, "Eres un asistente.", "", None);
+        assert_eq!(double_formatted, formatted);
+
+        // Tokenizador simulado con tokens Llama3
+        let mut t_llama3 = GtokNativeTokenizer {
+            vocab: vec![
+                "<|start_header_id|>".to_string(),
+                "<|end_header_id|>".to_string(),
+                "<|eot_id|>".to_string(),
+            ],
+            token_to_id: HashMap::new(),
+            merges: Vec::new(),
+            merges_map: HashMap::new(),
+            bos_id: 0,
+            eos_id: 2,
+            unk_id: 0,
+            pad_id: 0,
+            extra_stop_ids: Vec::new(),
+            version: GTOK_VERSION,
+            flags: 0,
+        };
+        for (i, tok) in t_llama3.vocab.iter().enumerate() {
+            t_llama3.token_to_id.insert(tok.clone(), i as u32);
+        }
+
+        assert_eq!(t_llama3.detect_chat_template(), ChatTemplate::Llama3);
+        let stops_l3 = t_llama3.get_stop_tokens();
+        assert!(stops_l3.contains(&2)); // <|eot_id|>
+
+        let formatted_l3 = t_llama3.format_chat_prompt("Hola Llama", "System test", "", None);
+        assert!(formatted_l3.contains("<|start_header_id|>system<|end_header_id|>"));
+        assert!(formatted_l3.contains("<|start_header_id|>user<|end_header_id|>"));
+        assert!(formatted_l3.ends_with("<|start_header_id|>assistant<|end_header_id|>\n\n"));
     }
 }

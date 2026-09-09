@@ -40,6 +40,7 @@ Este archivo define la **descripción global del proyecto**, la arquitectura del
 1. **Memoria Eficiente:** Prohibidas las pre-asignaciones masivas innecesarias de tensores en loops críticos. Priorizar punteros, referencias y memoria compartida zero-copy (`Arc<Vec<u8>>`, `mmap`).
 2. **Soberanía Nativa:** Funcionalidades de alto rendimiento o herramientas CLI administrativas deben implementarse como comandos en `gaje-cli` (Rust), evitando scripts monolíticos descartables.
 3. **Sin Colisiones de Módulos:** En `python/gaje/`, no crear carpetas que colisionen con extensiones nativas binarias (`_impl`).
+4. **Resolución Soberana de Plantillas de Diálogo (Zero Heuristics):** Prohibido usar heurísticas basadas en nombres de archivo (`isBornModel`, `.includes('qwen')`, `.endsWith('.gaje')`) en el frontend o workers. Las plantillas de chat (`chat_template`) y tokens de parada (`stop_tokens`) deben resolverse canónicamente desde la cabecera binaria `FlatHeaderV2` o por introspección del vocabulario `GTOK`. Consultar la guía oficial: [`docs/guides/CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/docs/guides/CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md).
 
 ### B. Sistema de Diseño Y2K & Tri-Theme (Tres Temas Oficiales)
 

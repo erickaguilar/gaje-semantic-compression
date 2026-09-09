@@ -285,48 +285,19 @@ impl GajeWasmEngine {
                 }
             }
 
-            let formatted = if tok.token_to_id.contains_key("<|im_start|>") {
-                if !relevant_context.is_empty() {
-                    format!(
-                        "<|im_start|>system\n{}Responde al usuario de manera precisa y directa.<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                        relevant_context, prompt
-                    )
-                } else {
-                    format!(
-                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                        prompt
-                    )
-                }
-            } else if tok.token_to_id.contains_key("<|user|>") {
-                if !relevant_context.is_empty() {
-                    format!(
-                        "<|system|>\n{}<|end|>\n<|user|>\n{}<|end|>\n<|assistant|>\n",
-                        relevant_context, prompt
-                    )
-                } else {
-                    format!("<|user|>\n{}<|end|>\n<|assistant|>\n", prompt)
-                }
-            } else if !relevant_context.is_empty() {
-                format!("{}{}", relevant_context, prompt)
-            } else {
-                prompt.to_string()
-            };
+            let formatted = tok.format_chat_prompt(
+                prompt,
+                "Responde al usuario de manera precisa y directa.",
+                &relevant_context,
+                None,
+            );
 
             let p_ids = tok.encode(&formatted);
             if p_ids.is_empty() {
                 return Ok(String::new());
             }
 
-            let mut s_ids = vec![2];
-            if let Some(&im_end) = tok.token_to_id.get("<|im_end|>") {
-                s_ids.push(im_end);
-            }
-            if let Some(&eos) = tok.token_to_id.get("<|endoftext|>") {
-                s_ids.push(eos);
-            }
-            if let Some(&eot) = tok.token_to_id.get("<end_of_turn>") {
-                s_ids.push(eot);
-            }
+            let s_ids = tok.get_stop_tokens();
             (p_ids, s_ids, injected_snippets)
         };
 
@@ -442,32 +413,19 @@ impl GajeWasmEngine {
                 JsValue::from_str("Tokenizador GTOK no disponible en el modelo cargado")
             })?;
 
-            let formatted = if tok.token_to_id.contains_key("<|im_start|>") {
-                format!(
-                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                    prompt
-                )
-            } else if tok.token_to_id.contains_key("<|user|>") {
-                format!("<|user|>\n{}<|end|>\n<|assistant|>\n", prompt)
-            } else {
-                prompt.to_string()
-            };
+            let formatted = tok.format_chat_prompt(
+                prompt,
+                "Responde al usuario de manera precisa y directa.",
+                "",
+                None,
+            );
 
             let p_ids = tok.encode(&formatted);
             if p_ids.is_empty() {
                 return Ok(String::new());
             }
 
-            let mut s_ids = vec![2];
-            if let Some(&im_end) = tok.token_to_id.get("<|im_end|>") {
-                s_ids.push(im_end);
-            }
-            if let Some(&eos) = tok.token_to_id.get("<|endoftext|>") {
-                s_ids.push(eos);
-            }
-            if let Some(&eot) = tok.token_to_id.get("<end_of_turn>") {
-                s_ids.push(eot);
-            }
+            let s_ids = tok.get_stop_tokens();
             (p_ids, s_ids)
         };
 
@@ -520,9 +478,40 @@ impl GajeWasmEngine {
             "group_size": self.header.group_size,
             "header_version": self.header.version,
             "arch_family": self.header.arch_family,
+            "chat_template": self.get_chat_template(),
             "metadata_json": self.metadata_json,
         }))
         .unwrap_or_else(|_| "{}".to_string())
+    }
+
+    /// Retorna el identificador canónico de la plantilla de chat detectada desde la cabecera/GTOK.
+    #[wasm_bindgen]
+    pub fn get_chat_template(&self) -> String {
+        if let Some(ref tok) = self.tokenizer {
+            tok.detect_chat_template().as_str().to_string()
+        } else {
+            "raw".to_string()
+        }
+    }
+
+    /// Formatea un prompt con los delimitadores canónicos según la plantilla del organismo.
+    #[wasm_bindgen]
+    pub fn format_prompt(&self, prompt: &str, system_prompt: &str) -> String {
+        if let Some(ref tok) = self.tokenizer {
+            tok.format_chat_prompt(prompt, system_prompt, "", None)
+        } else {
+            prompt.to_string()
+        }
+    }
+
+    /// Retorna los IDs numéricos de los tokens de parada configurados para este organismo.
+    #[wasm_bindgen]
+    pub fn get_stop_tokens(&self) -> Vec<u32> {
+        if let Some(ref tok) = self.tokenizer {
+            tok.get_stop_tokens()
+        } else {
+            vec![2]
+        }
     }
 
     /// Retorna los últimos fragmentos de contexto RAG inyectados en formato JSON.
