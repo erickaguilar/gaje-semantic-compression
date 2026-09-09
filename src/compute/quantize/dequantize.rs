@@ -100,6 +100,54 @@ pub fn dequantize_q4_0_core(data_u8: &[u8], out_features: usize, in_features: us
     results
 }
 
+pub fn dequantize_q6_k_core(data_u8: &[u8], out_features: usize, in_features: usize) -> Vec<f32> {
+    let n_blocks = in_features / 256;
+    let block_size = 210; // 128 (ql) + 64 (qh) + 16 (scales) + 2 (d)
+    let mut results = vec![0.0f32; out_features * in_features];
+    results
+        .par_chunks_mut(in_features)
+        .enumerate()
+        .for_each(|(i, row)| {
+            let row_offset = i * n_blocks * block_size;
+            for b in 0..n_blocks {
+                let offset = row_offset + b * block_size;
+                if offset + block_size > data_u8.len() {
+                    break;
+                }
+                let block = &data_u8[offset..offset + block_size];
+                let ql = &block[0..128];
+                let qh = &block[128..192];
+                let scales = &block[192..208];
+                let d = half::f16::from_le_bytes([block[208], block[209]]).to_f32();
+
+                for half in 0..2 {
+                    let ql_h = &ql[half * 64..(half + 1) * 64];
+                    let qh_h = &qh[half * 32..(half + 1) * 32];
+                    let sc_h = &scales[half * 8..(half + 1) * 8];
+                    for l in 0..32 {
+                        let is_ = l / 16;
+                        let sc0 = (sc_h[is_ + 0] as i8) as f32;
+                        let sc2 = (sc_h[is_ + 2] as i8) as f32;
+                        let sc4 = (sc_h[is_ + 4] as i8) as f32;
+                        let sc6 = (sc_h[is_ + 6] as i8) as f32;
+
+                        let q1 = ((ql_h[l] & 0x0F) | (((qh_h[l] >> 0) & 0x03) << 4)) as i8 - 32;
+                        let q2 = ((ql_h[l + 32] & 0x0F) | (((qh_h[l] >> 2) & 0x03) << 4)) as i8 - 32;
+                        let q3 = (((ql_h[l] >> 4) & 0x0F) | (((qh_h[l] >> 4) & 0x03) << 4)) as i8 - 32;
+                        let q4 = (((ql_h[l + 32] >> 4) & 0x0F) | (((qh_h[l] >> 6) & 0x03) << 4)) as i8 - 32;
+
+                        let base_idx = b * 256 + half * 128 + l;
+                        row[base_idx + 0] = d * sc0 * (q1 as f32);
+                        row[base_idx + 32] = d * sc2 * (q2 as f32);
+                        row[base_idx + 64] = d * sc4 * (q3 as f32);
+                        row[base_idx + 96] = d * sc6 * (q4 as f32);
+                    }
+                }
+            }
+        });
+    results
+}
+
 pub fn generate_default_centroids(n_blocks: usize) -> Vec<f32> {
     let mut centroids = Vec::with_capacity(n_blocks * 4);
     for _ in 0..n_blocks {

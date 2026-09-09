@@ -83,6 +83,9 @@ impl GGUFLoader {
             GGMLType::Q4_0 => {
                 crate::compute::math::dequantize_q4_0_core(data, out_features, in_features)
             }
+            GGMLType::Q6_K => {
+                crate::compute::math::dequantize_q6_k_core(data, out_features, in_features)
+            }
             _ => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
