@@ -132,9 +132,13 @@ pub fn dequantize_q6_k_core(data_u8: &[u8], out_features: usize, in_features: us
                         let sc6 = (sc_h[is_ + 6] as i8) as f32;
 
                         let q1 = ((ql_h[l] & 0x0F) | (((qh_h[l] >> 0) & 0x03) << 4)) as i8 - 32;
-                        let q2 = ((ql_h[l + 32] & 0x0F) | (((qh_h[l] >> 2) & 0x03) << 4)) as i8 - 32;
-                        let q3 = (((ql_h[l] >> 4) & 0x0F) | (((qh_h[l] >> 4) & 0x03) << 4)) as i8 - 32;
-                        let q4 = (((ql_h[l + 32] >> 4) & 0x0F) | (((qh_h[l] >> 6) & 0x03) << 4)) as i8 - 32;
+                        let q2 =
+                            ((ql_h[l + 32] & 0x0F) | (((qh_h[l] >> 2) & 0x03) << 4)) as i8 - 32;
+                        let q3 =
+                            (((ql_h[l] >> 4) & 0x0F) | (((qh_h[l] >> 4) & 0x03) << 4)) as i8 - 32;
+                        let q4 = (((ql_h[l + 32] >> 4) & 0x0F) | (((qh_h[l] >> 6) & 0x03) << 4))
+                            as i8
+                            - 32;
 
                         let base_idx = b * 256 + half * 128 + l;
                         row[base_idx + 0] = d * sc0 * (q1 as f32);

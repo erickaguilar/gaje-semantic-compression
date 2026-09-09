@@ -56,7 +56,8 @@ impl GenomicLLM {
         #[cfg(feature = "gpu")]
         {
             if let Some(ref pipes) = *crate::compute::gpu::pipeline::GLOBAL_GPU_PIPELINES {
-                if let crate::nn::linear::WeightDatabase::GenomicF32(ref w) = self.lm_head.weight_db {
+                if let crate::nn::linear::WeightDatabase::GenomicF32(ref w) = self.lm_head.weight_db
+                {
                     let mut cache = pipes.gemv_weights_cache.lock().map_err(|e| e.to_string())?;
                     let key = w.as_ptr() as usize;
                     if !cache.contains_key(&key) {
