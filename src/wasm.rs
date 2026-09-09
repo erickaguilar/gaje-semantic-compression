@@ -287,7 +287,7 @@ impl GajeWasmEngine {
 
             let formatted = tok.format_chat_prompt(
                 prompt,
-                "Responde al usuario de manera precisa y directa.",
+                "Eres GAJE Helix, un modelo neuronal de compresión semántica y memoria genética. Responde al usuario de manera precisa, útil y siempre en primera persona ('Soy GAJE Helix...').",
                 &relevant_context,
                 None,
             );
@@ -415,7 +415,7 @@ impl GajeWasmEngine {
 
             let formatted = tok.format_chat_prompt(
                 prompt,
-                "Responde al usuario de manera precisa y directa.",
+                "Eres GAJE Helix, un modelo neuronal de compresión semántica y memoria genética. Responde al usuario de manera precisa, útil y siempre en primera persona ('Soy GAJE Helix...').",
                 "",
                 None,
             );

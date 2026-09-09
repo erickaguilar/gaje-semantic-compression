@@ -1,4 +1,5 @@
 use crate::core::tokenizer::GajeTokenizer;
+use crate::nn::linear::GenomicOperable;
 use crate::nn::llm::GenomicLLM;
 use serde::Deserialize;
 use serde_json::json;
@@ -283,6 +284,13 @@ pub fn handle_chat_stream_request(
     let elapsed_s = start_time.elapsed().as_secs_f64();
     let tok_count = generated_tokens.len();
     let tps = tok_count as f64 / elapsed_s.max(0.001);
+    let bit_depth = llm.embeddings.weight_db.bit_depth();
+    let compression_ratio = match bit_depth {
+        2 => "16.0x (Q2_0 Conformal 2-Bits)",
+        4 => "8.0x (Q4_0 Zero-Copy)",
+        8 => "4.0x (Q8_0 Native)",
+        _ => "4.0x (Zero-Copy Mmap)",
+    };
 
     let metrics_event = format!(
         "data: {}\n\n",
@@ -293,7 +301,7 @@ pub fn handle_chat_stream_request(
                 "prompt_tokens": prompt_tokens.len(),
                 "total_tokens": prompt_tokens.len() + tok_count,
                 "latency_ms": elapsed_s * 1000.0,
-                "compression_ratio": "4.0x (Q4_0 Zero-Copy)"
+                "compression_ratio": compression_ratio
             },
             "dna": "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
         })
