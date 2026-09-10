@@ -51,6 +51,7 @@ pub struct GenomicDistiller {
     pub council: CouncilOfTeachers,
     pub student_tokenizer: GajeTokenizer,
     pub distill_weight: f32,
+    pub temperature: f32,
 }
 
 impl GenomicDistiller {
@@ -59,6 +60,7 @@ impl GenomicDistiller {
             council,
             student_tokenizer,
             distill_weight: 0.5,
+            temperature: 1.0,
         }
     }
 
@@ -82,8 +84,15 @@ impl GenomicDistiller {
             tokens.truncate(512);
         }
 
+        let temp = if self.temperature > 0.0 {
+            self.temperature
+        } else {
+            1.0
+        };
         let student_vocab_size = student.lm_head.out_features;
-        let consensus_seq = self.council.get_consensus_probs(text, student_vocab_size);
+        let consensus_seq = self
+            .council
+            .get_consensus_probs_with_temp(text, student_vocab_size, temp);
 
         if consensus_seq.is_empty() {
             return Ok(0.0);
@@ -112,7 +121,7 @@ impl GenomicDistiller {
             let mut sum_exp = 0.0f32;
             let mut student_probs = vec![0.0f32; logits.len()];
             for (j, &l) in logits.iter().enumerate() {
-                let e = (l - max_l).exp();
+                let e = ((l - max_l) / temp).exp();
                 student_probs[j] = e;
                 sum_exp += e;
             }
@@ -131,14 +140,16 @@ impl GenomicDistiller {
                 }
             }
 
-            let loss = (1.0 - self.distill_weight) * ce_loss + self.distill_weight * kl_loss;
+            let loss = (1.0 - self.distill_weight) * ce_loss
+                + self.distill_weight * (temp * temp) * kl_loss;
             total_loss += loss;
 
             let mut d_logits = vec![0.0f32; logits.len()];
             for j in 0..logits.len() {
                 let grad_ce = student_probs[j] - (if j == target_id { 1.0 } else { 0.0 });
                 let grad_kl = student_probs[j] - teacher_probs[j];
-                d_logits[j] = (1.0 - self.distill_weight) * grad_ce + self.distill_weight * grad_kl;
+                d_logits[j] = (1.0 - self.distill_weight) * grad_ce
+                    + self.distill_weight * grad_kl;
             }
 
             student
@@ -274,3 +285,23 @@ impl GenomicDistiller {
         self.distill_step(student, text, lr)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_genomic_distiller_init() {
+        let council = CouncilOfTeachers::new();
+        let tok = GajeTokenizer::default();
+        let mut distiller = GenomicDistiller::new(council, tok);
+        assert_eq!(distiller.distill_weight, 0.5);
+        assert_eq!(distiller.temperature, 1.0);
+
+        distiller.temperature = 2.0;
+        distiller.distill_weight = 0.3;
+        assert_eq!(distiller.temperature, 2.0);
+        assert_eq!(distiller.distill_weight, 0.3);
+    }
+}
+

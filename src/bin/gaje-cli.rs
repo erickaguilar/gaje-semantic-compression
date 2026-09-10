@@ -468,9 +468,9 @@ struct TrainBornArgs {
 
 #[derive(Args, Debug)]
 struct DistillArgs {
-    /// Archivo del modelo maestro (.flat, .gaje o .gguf)
-    #[arg(short, long)]
-    teacher: String,
+    /// Archivo(s) del modelo maestro (.flat, .gaje o .gguf). Se puede repetir el flag (-t m1 -t m2) o separar por comas (-t m1,m2)
+    #[arg(short, long, value_delimiter = ',', num_args = 1..)]
+    teacher: Vec<String>,
 
     /// Archivo del modelo alumno (.flat o .gaje)
     #[arg(short, long)]
@@ -496,13 +496,17 @@ struct DistillArgs {
     #[arg(long, default_value_t = 1.0)]
     temperature: f32,
 
-    /// Tokenizador opcional para el maestro
-    #[arg(long)]
-    teacher_tokenizer: Option<String>,
+    /// Tokenizador(es) opcional(es) para los maestros (repetir flag o separar por comas)
+    #[arg(long, value_delimiter = ',', num_args = 1..)]
+    teacher_tokenizer: Option<Vec<String>>,
 
     /// Tokenizador opcional para el alumno
     #[arg(long)]
     student_tokenizer: Option<String>,
+
+    /// Acelerar destilación mediante GPU (WGPU / Vulkan)
+    #[arg(long)]
+    gpu: bool,
 
     /// Archivo de salida para el modelo refinado (.flat o .gaje)
     #[arg(short, long)]
@@ -1436,15 +1440,23 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
     use _impl::io::flat_writer::save_genomic_flat_q;
     use _impl::nn::distiller::{CouncilOfTeachers, GenomicDistiller, Teacher};
 
-    println!("\n🧬 GAJE PROTOCOLO DE DESTILACIÓN — DNI Online (Maestro ➔ Alumno)");
+    println!("\n🧬 GAJE PROTOCOLO DE DESTILACIÓN — DNI Online (Consejo de Maestros ➔ Alumno)");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("  • Modelo Maestro     : {}", args.teacher);
+    println!("  • Modelos Maestros   : {}", args.teacher.join(", "));
     println!("  • Modelo Alumno      : {}", args.student);
     println!("  • Dataset Destilación: {}", args.dataset);
     println!("  • Épocas             : {}", args.epochs);
     println!("  • Learning Rate (lr) : {:.4}", args.lr);
     println!("  • Ponderación Alpha  : {:.2} (KL vs CE)", args.alpha);
     println!("  • Temperatura        : {:.2}", args.temperature);
+    println!(
+        "  • Acelerador         : {}",
+        if args.gpu {
+            "⚡ GPU (Vulkan / WGPU)"
+        } else {
+            "🖥️  CPU (AVX2/NEON Rayon)"
+        }
+    );
 
     println!("\n⏳ Cargando modelo alumno...");
     let (mut student_model, student_tok) =
@@ -1460,46 +1472,72 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
         student_model.lm_head.out_features
     );
 
-    println!("\n⏳ Cargando modelo maestro...");
-    let teacher = if args.teacher.ends_with(".gguf") {
-        #[cfg(feature = "native")]
-        {
-            let tok_path = args
-                .teacher_tokenizer
-                .as_deref()
-                .unwrap_or("models/core/tokenizer.json");
-            Teacher::new(
-                "Maestro_GGUF".to_string(),
-                &args.teacher,
-                tok_path,
-                &student_tok,
-            )?
+    if args.gpu {
+        let n_blocks = student_model.blocks.len();
+        match student_model.offload_to_gpu(n_blocks) {
+            Ok(assigned) => {
+                println!(
+                    "⚡ Acelerador GPU activado: {}/{} capas asignadas a GPU (Vulkan/WGPU)",
+                    assigned, n_blocks
+                );
+            }
+            Err(e) => {
+                println!("⚠️ Advertencia GPU: {}. Continuando con fallback CPU.", e);
+            }
         }
-        #[cfg(not(feature = "native"))]
-        {
-            return Err("Soporte GGUF requiere feature 'native'".into());
-        }
-    } else {
-        let (teacher_model, teacher_tok) =
-            load_model_with_optional_tok(&args.teacher, args.teacher_tokenizer.as_deref())?;
-        Teacher::from_model(
-            "Maestro_Flat".to_string(),
-            teacher_model,
-            teacher_tok,
-            &student_tok,
-        )
-    };
+    }
 
     println!(
-        "✅ Maestro listo (vocabulario mapeado, identidad: {})",
-        teacher.is_identity_vocab
+        "\n⏳ Cargando consejo de maestros ({} maestro(s))...",
+        args.teacher.len()
     );
+    let mut council = CouncilOfTeachers::new();
+
+    for (idx, teacher_path) in args.teacher.iter().enumerate() {
+        let custom_tok = args
+            .teacher_tokenizer
+            .as_ref()
+            .and_then(|toks| toks.get(idx).map(|s| s.as_str()));
+        let teacher_name = format!(
+            "Maestro_{}_{}",
+            idx + 1,
+            std::path::Path::new(teacher_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("model")
+        );
+
+        let teacher = if teacher_path.ends_with(".gguf") {
+            #[cfg(feature = "native")]
+            {
+                let tok_path = custom_tok.unwrap_or("models/core/tokenizer.json");
+                Teacher::new(teacher_name, teacher_path, tok_path, &student_tok)?
+            }
+            #[cfg(not(feature = "native"))]
+            {
+                return Err("Soporte GGUF requiere feature 'native'".into());
+            }
+        } else {
+            let (teacher_model, teacher_tok) =
+                load_model_with_optional_tok(teacher_path, custom_tok)?;
+            Teacher::from_model(teacher_name, teacher_model, teacher_tok, &student_tok)
+        };
+
+        println!(
+            "  [{}/{}] ✅ Maestro listo: {} (vocabulario mapeado: {}, identidad: {})",
+            idx + 1,
+            args.teacher.len(),
+            teacher_path,
+            teacher.vocab_mapping.len(),
+            teacher.is_identity_vocab
+        );
+        council.add_teacher(teacher);
+    }
 
     // Configurar consejo y destilador
-    let mut council = CouncilOfTeachers::new();
-    council.add_teacher(teacher);
     let mut distiller = GenomicDistiller::new(council, student_tok.clone());
     distiller.distill_weight = args.alpha;
+    distiller.temperature = args.temperature;
 
     // Leer dataset de destilación
     println!("\n📖 Leyendo y preparando dataset de destilación...");
@@ -1515,22 +1553,42 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
         }
 
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            let cot_opt = val
+                .get("cot")
+                .or_else(|| val.get("thought"))
+                .or_else(|| val.get("reasoning"))
+                .and_then(|v| v.as_str());
+
             if let (Some(prompt), Some(resp)) = (
                 val.get("prompt").and_then(|v| v.as_str()),
                 val.get("response").and_then(|v| v.as_str()),
             ) {
-                texts.push(format!(
-                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
-                    prompt, resp
-                ));
+                if let Some(cot) = cot_opt {
+                    texts.push(format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n{}\n</think>\n{}<|im_end|>",
+                        prompt, cot, resp
+                    ));
+                } else {
+                    texts.push(format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
+                        prompt, resp
+                    ));
+                }
             } else if let (Some(inst), Some(resp)) = (
                 val.get("instruction").and_then(|v| v.as_str()),
                 val.get("response").and_then(|v| v.as_str()),
             ) {
-                texts.push(format!(
-                    "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
-                    inst, resp
-                ));
+                if let Some(cot) = cot_opt {
+                    texts.push(format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n<think>\n{}\n</think>\n{}<|im_end|>",
+                        inst, cot, resp
+                    ));
+                } else {
+                    texts.push(format!(
+                        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>",
+                        inst, resp
+                    ));
+                }
             } else if let Some(t) = val.get("text").and_then(|v| v.as_str()) {
                 texts.push(t.to_string());
             } else {

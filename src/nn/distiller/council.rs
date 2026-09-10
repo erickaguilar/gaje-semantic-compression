@@ -46,11 +46,23 @@ impl CouncilOfTeachers {
         self.teachers.push(teacher);
     }
 
-    /// Obtiene las probabilidades del consejo para una secuencia de texto.
+    /// Obtiene las probabilidades del consejo para una secuencia de texto con temperatura por defecto (1.0).
     pub fn get_consensus_probs(&self, text: &str, student_vocab_size: usize) -> Vec<Vec<f32>> {
+        self.get_consensus_probs_with_temp(text, student_vocab_size, 1.0)
+    }
+
+    /// Obtiene las probabilidades del consejo para una secuencia de texto con temperatura configurable.
+    pub fn get_consensus_probs_with_temp(
+        &self,
+        text: &str,
+        student_vocab_size: usize,
+        temperature: f32,
+    ) -> Vec<Vec<f32>> {
         if self.teachers.is_empty() {
             return Vec::new();
         }
+
+        let temp = if temperature > 0.0 { temperature } else { 1.0 };
 
         let teacher_results: Vec<Vec<Vec<f32>>> = self
             .teachers
@@ -78,7 +90,7 @@ impl CouncilOfTeachers {
                             let mut sum_exp = 0.0f32;
                             let mut probs = vec![0.0f32; logits.len()];
                             for (i, &l) in logits.iter().enumerate() {
-                                let e = (l - max_l).exp();
+                                let e = ((l - max_l) / temp).exp();
                                 probs[i] = e;
                                 sum_exp += e;
                             }
@@ -144,5 +156,20 @@ impl CouncilOfTeachers {
         }
 
         consensus
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_council_empty() {
+        let council = CouncilOfTeachers::new();
+        assert_eq!(council.teachers.len(), 0);
+        let probs = council.get_consensus_probs("hola", 100);
+        assert!(probs.is_empty());
+        let probs_temp = council.get_consensus_probs_with_temp("hola", 100, 2.0);
+        assert!(probs_temp.is_empty());
     }
 }

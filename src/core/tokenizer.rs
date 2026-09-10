@@ -9,7 +9,7 @@ use crate::core::gtok::GtokNativeTokenizer;
 use pyo3::prelude::*;
 
 #[cfg_attr(feature = "python", pyclass)]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct GajeTokenizer {
     #[cfg(feature = "native")]
     inner: Option<Tokenizer>,
