@@ -1031,7 +1031,12 @@ fn handle_birth(args: &BirthArgs) -> Result<(), Box<dyn std::error::Error + Send
 
     println!("💾 Escribiendo archivo .gaje zero-copy...");
     let tokenizer_obj = if let Some(path) = &args.tokenizer {
-        if path.ends_with(".json") {
+        if path.ends_with(".bin") || path.ends_with(".gtok") {
+            let bytes = std::fs::read(path).ok();
+            bytes
+                .and_then(|b| _impl::core::gtok::GtokNativeTokenizer::from_bytes(&b).ok())
+                .map(_impl::core::tokenizer::GajeTokenizer::from_gtok)
+        } else if path.ends_with(".json") {
             _impl::core::tokenizer::GajeTokenizer::from_file(path).ok()
         } else {
             None
