@@ -52,6 +52,14 @@ pub struct IslandOrchestrator {
     pub conversational: GmemMemoryIndex,
     pub niche_weights: [f32; 3], // [episodic, documental, conversational]
     pub min_similarity: f32,
+    /// Brecha de entropía mínima Delta_top = Sim_1 - Sim_2 para evitar ruido difuso (0.12)
+    pub entropy_gap_threshold: f32,
+    /// Relación de poda competitiva K-WTA (Sim >= kwta_ratio * Max_Sim, por defecto 0.90)
+    pub kwta_ratio: f32,
+    /// Umbral estricto para hechos del nicho documental (por defecto 0.82)
+    pub documental_min_sim: f32,
+    /// Umbral para nicho episódico y conversacional (por defecto 0.70)
+    pub episodic_min_sim: f32,
 }
 
 impl IslandOrchestrator {
@@ -63,6 +71,10 @@ impl IslandOrchestrator {
             conversational: GmemMemoryIndex::new(dim),
             niche_weights: [1.0, 1.2, 0.8],
             min_similarity: 0.65,
+            entropy_gap_threshold: 0.12,
+            kwta_ratio: 0.90,
+            documental_min_sim: 0.82,
+            episodic_min_sim: 0.70,
         }
     }
 
@@ -127,6 +139,91 @@ impl IslandOrchestrator {
         results
     }
 
+    /// Aplica una rotación / transformación ortogonal que desacopla los nichos en R^D
+    /// preservando la norma euclidiana del vector (R^T R = I).
+    pub fn project_niche_vector(niche: IslandNiche, vector: &[f32]) -> Vec<f32> {
+        match niche {
+            IslandNiche::Documental => vector.to_vec(),
+            IslandNiche::Episodic => {
+                // R_epi: alternancia de signos en índices impares
+                vector
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &v)| if i % 2 == 1 { -v } else { v })
+                    .collect()
+            }
+            IslandNiche::Conversational => {
+                // R_conv: alternancia de signos en bloques de 2 (patrón Walsh-Hadamard)
+                vector
+                    .iter()
+                    .enumerate()
+                    .map(|(i, &v)| if (i / 2) % 2 == 1 { -v } else { v })
+                    .collect()
+            }
+        }
+    }
+
+    /// Registra un nuevo recuerdo aplicando desacoplamiento ortogonal según el nicho
+    pub fn add_memory_orthogonal(&mut self, niche: IslandNiche, id: u64, vector: &[f32], text: String) {
+        let projected = Self::project_niche_vector(niche, vector);
+        self.add_memory(niche, id, projected, text);
+    }
+
+    /// Recupera contexto relevante proyectando la consulta ortogonalmente por cada nicho
+    pub fn retrieve_context_orthogonal(
+        &self,
+        query_vector: &[f32],
+        k_per_niche: usize,
+    ) -> Vec<IslandSearchResult> {
+        let v_doc = Self::project_niche_vector(IslandNiche::Documental, query_vector);
+        let v_epi = Self::project_niche_vector(IslandNiche::Episodic, query_vector);
+        let v_conv = Self::project_niche_vector(IslandNiche::Conversational, query_vector);
+
+        let (res_epi, (res_doc, res_conv)) = rayon::join(
+            || self.episodic.search_top_k(&v_epi, k_per_niche),
+            || {
+                rayon::join(
+                    || self.documental.search_top_k(&v_doc, k_per_niche),
+                    || self.conversational.search_top_k(&v_conv, k_per_niche),
+                )
+            },
+        );
+
+        let mut results = Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
+
+        for (entry, sim) in res_epi {
+            results.push(IslandSearchResult {
+                niche: IslandNiche::Episodic,
+                id: entry.id,
+                similarity: sim * self.niche_weights[0],
+                text: entry.text.clone(),
+            });
+        }
+        for (entry, sim) in res_doc {
+            results.push(IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: entry.id,
+                similarity: sim * self.niche_weights[1],
+                text: entry.text.clone(),
+            });
+        }
+        for (entry, sim) in res_conv {
+            results.push(IslandSearchResult {
+                niche: IslandNiche::Conversational,
+                id: entry.id,
+                similarity: sim * self.niche_weights[2],
+                text: entry.text.clone(),
+            });
+        }
+
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results
+    }
+
     /// Ensambla el prompt aumentado usando resultados previamente recuperados
     pub fn build_augmented_prompt_from_matches(
         &self,
@@ -138,12 +235,37 @@ impl IslandOrchestrator {
             return prompt.to_string();
         }
 
+        // 1. Entropy Gap Gating:
+        // Si hay al menos 2 matches, evaluar Delta_top = Sim_1 - Sim_2.
+        // Si Delta_top < entropy_gap_threshold && Sim_1 < 0.85, se clasifica como búsqueda difusa / ruido
+        // y se aborta la inyección para proteger al transformador de alucinaciones inducidas.
+        let top_sim = matches[0].similarity;
+        if matches.len() >= 2 {
+            let second_sim = matches[1].similarity;
+            let delta_top = top_sim - second_sim;
+            if delta_top < self.entropy_gap_threshold && top_sim < 0.85 {
+                return prompt.to_string();
+            }
+        }
+
+        // 2. Inhibición Lateral K-WTA: podar cualquier recuerdo que no alcance kwta_ratio * Max_Sim
+        let kwta_cutoff = top_sim * self.kwta_ratio;
+
         let mut context_snippets = Vec::new();
         let mut char_count = 0;
         let max_chars = max_tokens_context * 4; // Aproximación estándar 1 token ~ 4 chars
 
         for m in matches {
-            if m.similarity > self.min_similarity {
+            // Umbral estricto por nicho
+            let niche_min = match m.niche {
+                IslandNiche::Documental => self.documental_min_sim,
+                IslandNiche::Episodic | IslandNiche::Conversational => self.episodic_min_sim,
+            };
+
+            if m.similarity >= niche_min
+                && m.similarity >= self.min_similarity
+                && m.similarity >= kwta_cutoff
+            {
                 let prefix = match m.niche {
                     IslandNiche::Episodic => "[Memoria Episódica]",
                     IslandNiche::Documental => "[Conocimiento Base]",
@@ -177,6 +299,17 @@ impl IslandOrchestrator {
         max_tokens_context: usize,
     ) -> String {
         let matches = self.retrieve_context(query_vector, 2);
+        self.build_augmented_prompt_from_matches(prompt, &matches, max_tokens_context)
+    }
+
+    /// Genera la cadena de contexto enriquecida utilizando desacoplamiento ortogonal
+    pub fn build_augmented_prompt_orthogonal(
+        &self,
+        prompt: &str,
+        query_vector: &[f32],
+        max_tokens_context: usize,
+    ) -> String {
+        let matches = self.retrieve_context_orthogonal(query_vector, 2);
         self.build_augmented_prompt_from_matches(prompt, &matches, max_tokens_context)
     }
 
@@ -447,8 +580,16 @@ pub struct ConsolidationStats {
 #[pymethods]
 impl IslandOrchestrator {
     #[new]
-    #[pyo3(signature = (dim, niche_weights=None, min_similarity=None))]
-    pub fn py_new(dim: u32, niche_weights: Option<Vec<f32>>, min_similarity: Option<f32>) -> Self {
+    #[pyo3(signature = (dim, niche_weights=None, min_similarity=None, entropy_gap_threshold=None, kwta_ratio=None, documental_min_sim=None, episodic_min_sim=None))]
+    pub fn py_new(
+        dim: u32,
+        niche_weights: Option<Vec<f32>>,
+        min_similarity: Option<f32>,
+        entropy_gap_threshold: Option<f32>,
+        kwta_ratio: Option<f32>,
+        documental_min_sim: Option<f32>,
+        episodic_min_sim: Option<f32>,
+    ) -> Self {
         let mut orch = Self::new(dim);
         if let Some(w) = niche_weights {
             if w.len() == 3 {
@@ -457,6 +598,18 @@ impl IslandOrchestrator {
         }
         if let Some(ms) = min_similarity {
             orch.min_similarity = ms;
+        }
+        if let Some(eg) = entropy_gap_threshold {
+            orch.entropy_gap_threshold = eg;
+        }
+        if let Some(kr) = kwta_ratio {
+            orch.kwta_ratio = kr;
+        }
+        if let Some(ds) = documental_min_sim {
+            orch.documental_min_sim = ds;
+        }
+        if let Some(es) = episodic_min_sim {
+            orch.episodic_min_sim = es;
         }
         orch
     }
@@ -475,12 +628,37 @@ impl IslandOrchestrator {
         Ok(())
     }
 
+    pub fn add_memory_orthogonal_py(
+        &mut self,
+        niche: &str,
+        id: u64,
+        vector: Vec<f32>,
+        text: String,
+    ) -> PyResult<()> {
+        let n = IslandNiche::from_str(niche).ok_or_else(|| {
+            pyo3::exceptions::PyValueError::new_err(format!("Nicho inválido: {}", niche))
+        })?;
+        self.add_memory_orthogonal(n, id, &vector, text);
+        Ok(())
+    }
+
     pub fn retrieve_context_py(
         &self,
         query_vector: Vec<f32>,
         k_per_niche: usize,
     ) -> Vec<(String, u64, f32, String)> {
         self.retrieve_context(&query_vector, k_per_niche)
+            .into_iter()
+            .map(|r| (r.niche.as_str().to_string(), r.id, r.similarity, r.text))
+            .collect()
+    }
+
+    pub fn retrieve_context_orthogonal_py(
+        &self,
+        query_vector: Vec<f32>,
+        k_per_niche: usize,
+    ) -> Vec<(String, u64, f32, String)> {
+        self.retrieve_context_orthogonal(&query_vector, k_per_niche)
             .into_iter()
             .map(|r| (r.niche.as_str().to_string(), r.id, r.similarity, r.text))
             .collect()
@@ -493,6 +671,15 @@ impl IslandOrchestrator {
         max_tokens_context: usize,
     ) -> String {
         self.build_augmented_prompt(prompt, &query_vector, max_tokens_context)
+    }
+
+    pub fn build_augmented_prompt_orthogonal_py(
+        &self,
+        prompt: &str,
+        query_vector: Vec<f32>,
+        max_tokens_context: usize,
+    ) -> String {
+        self.build_augmented_prompt_orthogonal(prompt, &query_vector, max_tokens_context)
     }
 
     pub fn optimize_spsa_py(
@@ -520,6 +707,46 @@ impl IslandOrchestrator {
         }
         self.niche_weights = [weights[0], weights[1], weights[2]];
         Ok(())
+    }
+
+    #[getter]
+    pub fn get_entropy_gap_threshold(&self) -> f32 {
+        self.entropy_gap_threshold
+    }
+
+    #[setter]
+    pub fn set_entropy_gap_threshold(&mut self, val: f32) {
+        self.entropy_gap_threshold = val;
+    }
+
+    #[getter]
+    pub fn get_kwta_ratio(&self) -> f32 {
+        self.kwta_ratio
+    }
+
+    #[setter]
+    pub fn set_kwta_ratio(&mut self, val: f32) {
+        self.kwta_ratio = val;
+    }
+
+    #[getter]
+    pub fn get_documental_min_sim(&self) -> f32 {
+        self.documental_min_sim
+    }
+
+    #[setter]
+    pub fn set_documental_min_sim(&mut self, val: f32) {
+        self.documental_min_sim = val;
+    }
+
+    #[getter]
+    pub fn get_episodic_min_sim(&self) -> f32 {
+        self.episodic_min_sim
+    }
+
+    #[setter]
+    pub fn set_episodic_min_sim(&mut self, val: f32) {
+        self.episodic_min_sim = val;
     }
 
     /// Reconstruye el indice IVF-lite de cada isla (entradas >= umbral).
@@ -592,5 +819,93 @@ mod tests {
 
         assert!(context.contains("Contexto de Memoria Recolectado:"));
         assert!(context.contains("[Conocimiento Base] El formato .gmem mapea memoria a 0ms."));
+    }
+
+    #[test]
+    fn test_entropy_gap_gating_diffuse_noise() {
+        let orch = IslandOrchestrator::new(4);
+        let matches = vec![
+            IslandSearchResult {
+                niche: IslandNiche::Conversational,
+                id: 1,
+                similarity: 0.74,
+                text: "Recuerdo difuso 1".to_string(),
+            },
+            IslandSearchResult {
+                niche: IslandNiche::Conversational,
+                id: 2,
+                similarity: 0.72,
+                text: "Recuerdo difuso 2".to_string(),
+            },
+        ];
+        // Delta_top = 0.74 - 0.72 = 0.02 < 0.12 y top_sim = 0.74 < 0.85 -> Ruido Difuso abortado
+        let prompt = "¿Pregunta sobre tema desconocido?";
+        let augmented = orch.build_augmented_prompt_from_matches(prompt, &matches, 100);
+        assert_eq!(augmented, prompt, "Debe abortar la inyección ante ruido difuso");
+    }
+
+    #[test]
+    fn test_entropy_gap_high_resonance_override() {
+        let orch = IslandOrchestrator::new(4);
+        let matches = vec![
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 1,
+                similarity: 0.92,
+                text: "Hecho de alta certeza 1".to_string(),
+            },
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 2,
+                similarity: 0.89,
+                text: "Hecho de alta certeza 2".to_string(),
+            },
+        ];
+        // Delta_top = 0.03 < 0.12, pero top_sim = 0.92 >= 0.85 -> Resonancia clara permitida
+        let prompt = "¿Pregunta clave?";
+        let augmented = orch.build_augmented_prompt_from_matches(prompt, &matches, 100);
+        assert!(augmented.contains("Contexto de Memoria Recolectado:"));
+        assert!(augmented.contains("Hecho de alta certeza 1"));
+    }
+
+    #[test]
+    fn test_kwta_competitive_pruning() {
+        let orch = IslandOrchestrator::new(4);
+        let matches = vec![
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 1,
+                similarity: 0.95,
+                text: "Recuerdo dominante".to_string(),
+            },
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 2,
+                similarity: 0.83, // 0.83 < 0.90 * 0.95 (0.855) -> debe ser podado por K-WTA
+                text: "Recuerdo dominado".to_string(),
+            },
+        ];
+        let prompt = "¿Consulta?";
+        let augmented = orch.build_augmented_prompt_from_matches(prompt, &matches, 100);
+        assert!(augmented.contains("Recuerdo dominante"));
+        assert!(!augmented.contains("Recuerdo dominado"), "K-WTA debe podar el recuerdo dominado");
+    }
+
+    #[test]
+    fn test_orthogonal_subspace_isometry() {
+        let v = vec![0.5, -0.5, 0.5, -0.5];
+        let norm_orig: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        let v_doc = IslandOrchestrator::project_niche_vector(IslandNiche::Documental, &v);
+        let v_epi = IslandOrchestrator::project_niche_vector(IslandNiche::Episodic, &v);
+        let v_conv = IslandOrchestrator::project_niche_vector(IslandNiche::Conversational, &v);
+
+        let norm_doc: f32 = v_doc.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_epi: f32 = v_epi.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let norm_conv: f32 = v_conv.iter().map(|x| x * x).sum::<f32>().sqrt();
+
+        assert!((norm_doc - norm_orig).abs() < 1e-6);
+        assert!((norm_epi - norm_orig).abs() < 1e-6);
+        assert!((norm_conv - norm_orig).abs() < 1e-6);
     }
 }
