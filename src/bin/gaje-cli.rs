@@ -1559,9 +1559,14 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
                 .or_else(|| val.get("reasoning"))
                 .and_then(|v| v.as_str());
 
+            let resp_opt = val
+                .get("response")
+                .or_else(|| val.get("answer"))
+                .and_then(|v| v.as_str());
+
             if let (Some(prompt), Some(resp)) = (
                 val.get("prompt").and_then(|v| v.as_str()),
-                val.get("response").and_then(|v| v.as_str()),
+                resp_opt,
             ) {
                 if let Some(cot) = cot_opt {
                     texts.push(format!(
@@ -1576,7 +1581,7 @@ fn handle_distill(args: &DistillArgs) -> Result<(), Box<dyn std::error::Error + 
                 }
             } else if let (Some(inst), Some(resp)) = (
                 val.get("instruction").and_then(|v| v.as_str()),
-                val.get("response").and_then(|v| v.as_str()),
+                resp_opt,
             ) {
                 if let Some(cot) = cot_opt {
                     texts.push(format!(

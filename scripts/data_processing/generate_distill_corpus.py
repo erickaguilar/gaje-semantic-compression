@@ -22,7 +22,7 @@ import json
 import os
 import sys
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "python"))
 
 from gaje.nn.stabilized import GenomicLLM  # noqa: E402
@@ -143,6 +143,35 @@ DEGENERATE_MARKERS = [
 ]
 
 
+def format_teacher_input(prompt: str, include_cot: bool = False, system_prompt: str = None) -> str:
+    if include_cot:
+        sys_msg = system_prompt or (
+            "Eres un asistente reflexivo y analítico. Antes de responder la pregunta, "
+            "razona paso a paso dentro de etiquetas <think>...</think>. "
+            "Luego entrega una respuesta concisa, fáctica y gramaticalmente impecable."
+        )
+        return (
+            f"<|im_start|>system\n{sys_msg}<|im_end|>\n"
+            f"<|im_start|>user\n{prompt}<|im_end|>\n"
+            f"<|im_start|>assistant\n<think>\n"
+        )
+    return prompt
+
+
+def parse_cot_output(raw_output: str, primed_think: bool = False):
+    """Extrae (cot, response) a partir de la salida generada por el maestro."""
+    text = raw_output.strip()
+    if primed_think and not text.startswith("<think>"):
+        text = f"<think>\n{text}"
+
+    if "</think>" in text:
+        parts = text.split("</think>", 1)
+        cot = parts[0].replace("<think>", "").strip()
+        ans = parts[1].replace("<|im_end|>", "").strip()
+        return cot, ans
+    return None, text.replace("<|im_end|>", "").strip()
+
+
 def run(genomic, prompt, max_tokens):
     try:
         return "".join(genomic.generate(prompt, max_new_tokens=max_tokens))
@@ -168,14 +197,57 @@ def is_degenerate(text, prompt):
     return False
 
 
+def load_prompts(input_path: str = None, total_needed: int = 150):
+    if input_path and os.path.exists(input_path):
+        custom_prompts = []
+        with open(input_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.trim() if hasattr(line, "trim") else line.strip()
+                if not line:
+                    continue
+                if line.startswith("{"):
+                    try:
+                        data = json.loads(line)
+                        p = data.get("prompt") or data.get("instruction") or data.get("text")
+                        if p:
+                            custom_prompts.append(p)
+                    except Exception:
+                        pass
+                else:
+                    custom_prompts.append(line)
+        if custom_prompts:
+            return (custom_prompts * (total_needed // len(custom_prompts) + 1))[:total_needed]
+
+    # Fallback al banco predeterminado
+    return (PROMPT_BANK * (total_needed // len(PROMPT_BANK) + 1))[:total_needed]
+
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--teacher", default="models/production/qwen2_5_3b_q4_0_q8_0_embd.gaje.flat"
+    ap = argparse.ArgumentParser(
+        description="Generador de corpus de destilación con razonamiento CoT y soporte multi-formato."
     )
-    ap.add_argument("--prompts", type=int, default=150)
-    ap.add_argument("--max_tokens", type=int, default=96)
-    ap.add_argument("--out", default="data/distill/train_clean_150.jsonl")
+    ap.add_argument(
+        "--teacher", default="models/production/qwen2_5_3b_q4_0_q8_0_embd.gaje.flat",
+        help="Ruta al modelo maestro (.flat o .gaje)"
+    )
+    ap.add_argument("--prompts", type=int, default=150, help="Número de ejemplos a generar")
+    ap.add_argument("--max_tokens", type=int, default=128, help="Máximo de nuevos tokens por generación")
+    ap.add_argument("--out", default="data/distill/train_clean_150.jsonl", help="Ruta del archivo JSONL de salida")
+    ap.add_argument(
+        "--include-cot",
+        action="store_true",
+        help="Induce e incluye cadena de pensamiento (<think>...</think>) en los pares de destilación"
+    )
+    ap.add_argument(
+        "--system-prompt",
+        default=None,
+        help="Prompt del sistema opcional para guiar la deliberación CoT del maestro"
+    )
+    ap.add_argument(
+        "--input-prompts",
+        default=None,
+        help="Archivo JSONL o TXT opcional de donde extraer los prompts base"
+    )
     args = ap.parse_args()
 
     teacher_path = os.path.join(PROJECT_ROOT, args.teacher)
@@ -185,21 +257,43 @@ def main():
     print(f"[1/2] Cargando maestro: {teacher_path}")
     teacher = GenomicLLM.load_genomic(teacher_path)
 
-    # Ciclar el banco hasta alcanzar el número de prompts pedido.
-    prompts = (PROMPT_BANK * (args.prompts // len(PROMPT_BANK) + 1))[: args.prompts]
+    prompts = load_prompts(args.input_prompts, args.prompts)
+    print(f"[*] Preparados {len(prompts)} prompts (Modo CoT: {'ACTIVO' if args.include_cot else 'DESACTIVADO'})")
 
     records = []
     skipped = 0
     for i, p in enumerate(prompts):
-        ans = run(teacher, p, args.max_tokens)
-        if is_degenerate(ans, p):
-            skipped += 1
-            print(
-                f"  [{i + 1}/{len(prompts)}] (filtrado) {p[:50]} -> {ans.strip()[:40]!r}"
-            )
-            continue
-        records.append({"prompt": p, "answer": ans})
-        print(f"  [{i + 1}/{len(prompts)}] {p[:50]} -> {ans.strip()[:60]!r}")
+        formatted_prompt = format_teacher_input(
+            p, include_cot=args.include_cot, system_prompt=args.system_prompt
+        )
+        ans = run(teacher, formatted_prompt, args.max_tokens)
+
+        if args.include_cot:
+            cot, response = parse_cot_output(ans, primed_think=True)
+            eval_target = response if response else ans
+            if is_degenerate(eval_target, p):
+                skipped += 1
+                print(f"  [{i + 1}/{len(prompts)}] (filtrado) {p[:50]} -> {eval_target.strip()[:40]!r}")
+                continue
+
+            record = {
+                "prompt": p,
+                "response": response,
+                "answer": response,
+            }
+            if cot:
+                record["cot"] = cot
+                record["thought"] = cot
+            records.append(record)
+            cot_len = len(cot) if cot else 0
+            print(f"  [{i + 1}/{len(prompts)}] {p[:40]} -> [CoT: {cot_len} chars] {response[:40]!r}")
+        else:
+            if is_degenerate(ans, p):
+                skipped += 1
+                print(f"  [{i + 1}/{len(prompts)}] (filtrado) {p[:50]} -> {ans.strip()[:40]!r}")
+                continue
+            records.append({"prompt": p, "response": ans, "answer": ans})
+            print(f"  [{i + 1}/{len(prompts)}] {p[:50]} -> {ans.strip()[:60]!r}")
 
     with open(out_path, "w", encoding="utf-8") as f:
         for r in records:
