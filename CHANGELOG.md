@@ -3,7 +3,16 @@
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
 ## [1.7.3-alpha] - 2026-09-11
-### Changed
+### Added / Añadido
+- **Servidor HTTP Nativo de Producción Soberano (`gaje-server` / `gaje-cli serve`)**:
+  - Eliminación total del runtime de Python en producción: servidor HTTP nativo compilado en Rust (`tiny_http` + `rust-embed`), sirviendo la interfaz Web UI completa y assets estáticos embebidos en `.rodata`.
+  - Streaming SSE (*Server-Sent Events*) real token-por-token con empaquetamiento de chunks y telemetría HUD en tiempo real (`__gaje_metrics__`, TPS, latencia, ratio de compresión y DNA audit trail).
+  - Detección canónica de plantillas de diálogo (`ChatML`, `Llama3`, `Llama2`, `Gemma`, `Classic`) y tokens de parada vía introspección dinámica de `GTOK` y `FlatHeaderV2`, erradicando heurísticas basadas en nombres de archivo (`is_born`).
+  - Hot-swap dinámico seguro y concurrencia serializada mediante `active_model.write()` con desmapeo explícito zero-copy (`munmap`) de la memoria RAM del modelo anterior antes de cargar el nuevo organismo.
+  - Certificación empírica completa: auditoría de llamadas al sistema con `strace` certificando 0 invocaciones a subprocesos Python en tiempo de ejecución (`python_version: "None (Native Single-Binary)"`), y tests de estrés con múltiples streams concurrentes.
+  - Ordenamiento por prioridad/calidad de modelos (`max.gaje` insignia al inicio) y fechas reales de modificación de archivos provistas vía metadatos de disco y `chrono`.
+
+### Changed / Modificado
 - **Unificación de Nomenclatura y Extensión Canónica de Modelos (`.gaje`)**:
   - Consolidación terminológica: `.flat` y `.gaje` son sinónimos del mismo formato binario plano nativo zero-copy (cabecera de 4096 bytes `FlatHeaderV2` con magic `b"GAJE"`).
   - La extensión canónica para todos los modelos exportados o nacidos es formalmente **`.gaje`**.

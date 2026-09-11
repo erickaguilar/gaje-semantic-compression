@@ -1,6 +1,6 @@
-# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.2-alpha)
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.3-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.2--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.3--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
@@ -8,7 +8,7 @@
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](README.en.md)
 [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano unificado **`.gaje` v2** de acceso zero-copy por mapeo de memoria (mmap). Integra además capacidades adaptativas de mutación in-place y linaje genético, memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
+**GAJE (Genomic Adaptive Joint Embedding)** es un motor de inferencia nativa en Rust y compresión de alta densidad para Modelos de Lenguaje Masivos (LLMs). En producción comprime el cuerpo del transformer a **4-bits por peso (Q4_0, 16 centroides optimizados)** y mantiene los embeddings críticos (`token_embd` y `lm_head`) en **FP32**, dentro del formato plano unificado **`.gaje` v2** de acceso zero-copy por mapeo de memoria (mmap). Incluye el servidor HTTP de producción soberano **`gaje-server` (Zero-Python Runtime)** con streaming SSE token-a-token en tiempo real, hot-swap concurrente, capacidades adaptativas de mutación in-place, memoria persistente **Island Model `.gmem`**, cabeceras autodescriptivas dinámicas (**`ArchitectureDescriptor`**) y motor **WebAssembly In-Browser (Zero-Server)**.
 
 > **2-bits (experimental):** la cuantización de **2-bits por peso (4 estados `00=A`, `01=C`, `11=G`, `10=T`)** se desarrolla en el módulo neuromórfico (`src/nn/spiking`) y quedó documentada como frente de investigación (inviable en hardware comercial por costo de cómputo). **La ruta de producción certificada es Q4_0 + FP32.**
 
@@ -163,7 +163,7 @@ cargo build --release --bin gaje-cli
 ### 2. Comandos Principales de `gaje-cli`
 
 ```bash
-# Iniciar servidor HTTP con streaming SSE y Web UI de Chat embebida en memoria
+# Iniciar servidor HTTP nativo (Zero-Python) con streaming SSE en tiempo real y Web UI embebida
 ./target/release/gaje-cli serve --port 8080
 
 # Sesión interactiva de Chat REPL en terminal
@@ -208,4 +208,4 @@ cargo test --test cli_standalone_test
 Licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Ver [LICENSE](LICENSE) para más información.
 
 ---
-*Protocolo GAJE-Flow v1.7.0-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*
+*Protocolo GAJE-Flow v1.7.3-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*

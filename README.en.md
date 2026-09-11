@@ -1,6 +1,6 @@
-# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.2-alpha)
+# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.3-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.2--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.3--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
@@ -8,7 +8,7 @@
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](README.md)
 [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](README.zh.md)
 
-**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), in-place adaptive centroid mutations with lineage tracking, instant memory-mapped file loading (**unified `.gaje` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
+**GAJE (Genomic Adaptive Joint Embedding)** is an ultra-high-density research and computing protocol designed for the execution and compression of Large Language Models (LLMs). The protocol quantizes parameter spaces down to a discrete **4-bit per weight** representation (16 optimized centroids) and **2-bit per weight** (experimental neuromorphic front), integrating the sovereign **`gaje-server` (Zero-Python Runtime)** with real-time SSE token-by-token streaming and concurrent hot-swap, persistent zero-copy memory (**Island Model `.gmem`**), dynamic self-describing headers (**`ArchitectureDescriptor`**), in-place adaptive centroid mutations with lineage tracking, instant memory-mapped file loading (**unified `.gaje` v2**), and in-browser **WebAssembly inference (Zero-Server)**.
 
 ---
 
@@ -171,21 +171,29 @@ uv venv && source .venv/bin/activate
 maturin develop --release --features python
 ```
 
-### 2. Run the Interactive Web UI
-
+### 2. Sovereign Production HTTP Server (`gaje-server`) & CLI
 ```bash
-# Sovereign Native Rust Server (Zero-Python, minimal RAM, SSE streaming)
+# Compile optimized production binary
 cargo build --release --bin gaje-cli
-./target/release/gaje-cli serve --port 8080 --chat-only
 
-# Or via lightweight Python development server:
+# Start sovereign native HTTP server (Zero-Python, real-time SSE streaming, embedded UI)
+./target/release/gaje-cli serve --port 8080
+
+# Interactive terminal Chat REPL
+./target/release/gaje-cli chat --model models/production/gaje_pico_135m.gaje
+
+# Or optionally run lightweight Python development server:
 python examples/ui/web_ui/server.py
 ```
-Open `http://localhost:8080` in your browser and select your flat quantized model.
+Open `http://localhost:8080` in your browser to interact with the streaming chat and real-time HUD telemetry.
 
 ### 3. Run the Native Verification Suite
 ```bash
-# Execute python tests (21/21 tests passing successfully)
+# Execute pure Rust verification suite
+cargo test --lib
+cargo test --test cli_standalone_test
+
+# Execute python tests
 pytest tests/
 ```
 
@@ -195,4 +203,4 @@ pytest tests/
 Licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See [LICENSE](LICENSE) for more details.
 
 ---
-*GAJE-Flow Protocol v1.6.0-alpha (Silver Adult) — Toward Sovereign Edge Ultra-High-Density Inference.*
+*GAJE-Flow Protocol v1.7.3-alpha (Silver Adult) — Toward Sovereign Edge Ultra-High-Density Inference.*

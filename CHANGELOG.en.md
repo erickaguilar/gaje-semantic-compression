@@ -2,6 +2,24 @@
 
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.3-alpha] - 2026-09-11
+### Added
+- **Sovereign Native HTTP Production Server (`gaje-server` / `gaje-cli serve`)**:
+  - Total elimination of Python runtime in production: native Rust HTTP server (`tiny_http` + `rust-embed`), serving the full Web UI and static assets embedded directly in `.rodata` memory.
+  - Real token-by-token SSE (*Server-Sent Events*) streaming with chunked transfer and real-time HUD telemetry (`__gaje_metrics__`, TPS, latency, compression ratio, and DNA audit trail).
+  - Canonical conversational template detection (`ChatML`, `Llama3`, `Llama2`, `Gemma`, `Classic`) and stop tokens via dynamic GTOK introspection and `FlatHeaderV2`, eradicating filename heuristics (`is_born`).
+  - Safe dynamic hot-swap and serialized concurrency via `active_model.write()` with explicit zero-copy memory unmapping (`munmap`) of previous model RAM before loading a new organism.
+  - Comprehensive empirical certification: system call audit with `strace` certifying 0 Python subprocess calls at runtime (`python_version: "None (Native Single-Binary)"`), plus multi-stream concurrent stress tests.
+  - Model priority/quality sorting (flagship `max.gaje` ranked first) and real file modification dates queried from filesystem metadata via `chrono`.
+
+### Changed
+- **Nomenclature Unification & Canonical Model Extension (`.gaje`)**:
+  - Terminology consolidation: `.flat` and `.gaje` are formally recognized as synonyms for the same native zero-copy flat binary format (4096-byte `FlatHeaderV2` with magic `b"GAJE"`).
+  - Canonical extension for all exported and born models is formally **`.gaje`**.
+  - Clear semantic distinction between models (`.gaje`) and persistent associative memory indices (`.gmem` in satellite `<model>_memory/` folders).
+  - Web UI (`model_manager.py` and `toolbar.js`) now filters and lists both `.gaje` and `.flat` extensions without restrictions for backward compatibility.
+  - Transmutation scripts and CLI utilities updated to default to `.gaje`.
+
 ## [1.7.2-alpha] - 2026-09-04
 ### Added
 - **Sovereign Binary Format Unification (`.gaje` v2) & In-Place Adaptation**:
