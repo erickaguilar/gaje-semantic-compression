@@ -45,6 +45,25 @@ pub fn get_runtime_info(loaded_model_name: Option<&str>) -> serde_json::Value {
     })
 }
 
+fn model_quality(name: &str) -> f32 {
+    let n = name.to_lowercase();
+    if n == "max.gaje" || n.ends_with("max.gaje") || n == "max" {
+        200.0
+    } else if n.contains("3b") || n.contains("pro") || n.contains("qwen2_5_3b") {
+        100.0
+    } else if n.contains("deepseek") || n.contains("r1") {
+        80.0
+    } else if n.contains("gaje") && n.ends_with(".gaje") {
+        75.0
+    } else if n.contains("0_5b") || n.contains("turbo") {
+        50.0
+    } else if n.contains("smollm") || n.contains("135") || n.contains("nano") {
+        30.0
+    } else {
+        0.0
+    }
+}
+
 pub fn get_available_models(
     models_dir: &Path,
     loaded_model_name: Option<&str>,
@@ -54,22 +73,38 @@ pub fn get_available_models(
     let mut model_list = Vec::new();
     for m in models_res {
         let is_loaded = loaded_model_name.map(|n| n == m.filename).unwrap_or(false);
-        model_list.push(json!({
-            "name": m.filename,
-            "path": m.path.to_string_lossy(),
-            "size_bytes": (m.size_mb * 1024.0 * 1024.0) as u64,
-            "size_mb": m.size_mb,
-            "architecture": m.arch_name,
-            "quantization": m.quant_format,
-            "n_embd": m.n_embd,
-            "n_layers": m.n_layers,
-            "has_gtok": m.has_gtok,
-            "ram_mb": if is_loaded { m.size_mb } else { 0.0 },
-            "date": "2026-08-28"
-        }));
+        let date_str = std::fs::metadata(&m.path)
+            .and_then(|meta| meta.modified())
+            .map(|time| {
+                let dt: chrono::DateTime<chrono::Local> = time.into();
+                dt.format("%Y-%m-%d %H:%M").to_string()
+            })
+            .unwrap_or_else(|_| "2026-08-28 00:00".to_string());
+
+        let quality = model_quality(&m.filename);
+        model_list.push((
+            quality,
+            json!({
+                "name": m.filename,
+                "path": m.path.to_string_lossy(),
+                "size_bytes": (m.size_mb * 1024.0 * 1024.0) as u64,
+                "size_mb": m.size_mb,
+                "architecture": m.arch_name,
+                "quantization": m.quant_format,
+                "n_embd": m.n_embd,
+                "n_layers": m.n_layers,
+                "has_gtok": m.has_gtok,
+                "ram_mb": if is_loaded { m.size_mb } else { 0.0 },
+                "date": date_str
+            }),
+        ));
     }
 
-    json!({ "models": model_list })
+    // Ordenar descendentemente por calidad/prioridad de modelo
+    model_list.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    let sorted_models: Vec<serde_json::Value> = model_list.into_iter().map(|(_, v)| v).collect();
+
+    json!({ "models": sorted_models })
 }
 
 pub fn get_memory_info(model_path: Option<&str>, dim: usize) -> serde_json::Value {

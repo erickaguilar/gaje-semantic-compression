@@ -130,6 +130,31 @@ impl GajeTokenizer {
         None
     }
 
+    /// Retorna los IDs de tokens de parada canónicos (incluyendo <|im_end|>, <|endoftext|>, etc.)
+    pub fn get_stop_tokens(&self) -> Vec<u32> {
+        let mut stops = if let Some(ref gtok) = self.gtok {
+            gtok.get_stop_tokens()
+        } else {
+            Vec::new()
+        };
+        for token_name in &[
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|eot_id|>",
+            "<end_of_turn>",
+            "<|end|>",
+            "</s>",
+            "<eos>",
+        ] {
+            if let Some(id) = self.token_to_id(token_name) {
+                if !stops.contains(&id) {
+                    stops.push(id);
+                }
+            }
+        }
+        stops
+    }
+
     /// Serializa el tokenizador a una cadena JSON
     pub fn to_string(&self, pretty: bool) -> Result<String, Box<dyn Error>> {
         #[cfg(feature = "native")]

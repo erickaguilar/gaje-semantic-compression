@@ -97,14 +97,20 @@ pub fn run_server(
     // Precargar modelo inicial si se especificó o si existe max.gaje, gaje_coder_3b o gaje_pico
     let model_to_load = config.initial_model.clone().unwrap_or_else(|| {
         let max_born = config.models_dir.join("born/max.gaje");
-        let coder = config.models_dir.join("production/gaje_coder_3b.flat");
-        let pico = config.models_dir.join("production/gaje_pico_135m.flat");
+        let coder_gaje = config.models_dir.join("production/gaje_coder_3b.gaje");
+        let coder_flat = config.models_dir.join("production/gaje_coder_3b.flat");
+        let pico_gaje = config.models_dir.join("production/gaje_pico_135m.gaje");
+        let pico_flat = config.models_dir.join("production/gaje_pico_135m.flat");
         if max_born.exists() {
             max_born.to_string_lossy().to_string()
-        } else if coder.exists() {
-            coder.to_string_lossy().to_string()
-        } else if pico.exists() {
-            pico.to_string_lossy().to_string()
+        } else if coder_gaje.exists() {
+            coder_gaje.to_string_lossy().to_string()
+        } else if coder_flat.exists() {
+            coder_flat.to_string_lossy().to_string()
+        } else if pico_gaje.exists() {
+            pico_gaje.to_string_lossy().to_string()
+        } else if pico_flat.exists() {
+            pico_flat.to_string_lossy().to_string()
         } else {
             String::new()
         }
@@ -246,12 +252,17 @@ pub fn run_server(
                             .unwrap_or_default()
                             .to_string_lossy()
                             .to_string();
-                        *active_model.write().unwrap() = Some(LoadedModel {
-                            name: name.clone(),
-                            path: model_path,
-                            llm,
-                            tokenizer,
-                        });
+                        {
+                            let mut guard = active_model.write().unwrap();
+                            let old = guard.take();
+                            drop(old); // Forzar munmap inmediato del modelo previo
+                            *guard = Some(LoadedModel {
+                                name: name.clone(),
+                                path: model_path,
+                                llm,
+                                tokenizer,
+                            });
+                        }
                         let json_resp = serde_json::json!({ "status": "ok", "model": name });
                         let mut resp = Response::from_string(json_resp.to_string())
                             .with_status_code(StatusCode(200));
@@ -273,6 +284,10 @@ pub fn run_server(
                             Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..])
                                 .unwrap(),
                         );
+                        resp.add_header(
+                            Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..])
+                                .unwrap(),
+                        );
                         let _ = req.respond(resp);
                     }
                 }
@@ -283,13 +298,20 @@ pub fn run_server(
                 resp.add_header(
                     Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
                 );
+                resp.add_header(
+                    Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
+                );
                 let _ = req.respond(resp);
             }
             continue;
         }
 
         if url == "/api/unload_model" && method == Method::Post {
-            *active_model.write().unwrap() = None;
+            {
+                let mut guard = active_model.write().unwrap();
+                let old = guard.take();
+                drop(old); // Forzar munmap inmediato del modelo activo
+            }
             let json_resp = serde_json::json!({ "status": "ok", "unloaded": true });
             let mut resp =
                 Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));
@@ -371,39 +393,47 @@ pub fn run_server(
                         repetition_penalty: Some(1.15),
                     });
 
-                let prompt = chat_req.message.unwrap_or_default();
-                let sys_prompt = chat_req.system_prompt.unwrap_or_else(|| {
-                    "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.".to_string()
-                });
-                let chat_prompt = format!(
-                    "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                    sys_prompt, prompt
+                let user_msg = chat_req.message.as_deref().unwrap_or("");
+                let sys_prompt = chat_req.system_prompt.as_deref().unwrap_or(
+                    "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.",
                 );
+
+                let template = streaming::detect_chat_template_from_tokenizer(&loaded.tokenizer);
+                let chat_prompt = streaming::format_chat_prompt_from_template(
+                    template,
+                    sys_prompt,
+                    user_msg,
+                    chat_req.history.as_deref(),
+                );
+
                 let prompt_tokens = loaded
                     .tokenizer
                     .encode(&chat_prompt, false)
                     .unwrap_or_default();
                 let prompt_tokens_usize: Vec<usize> =
                     prompt_tokens.into_iter().map(|t| t as usize).collect();
-                let eos_ids = vec![0, 2, 151643, 151644, 151645];
+                let mut eos_ids = loaded
+                    .tokenizer
+                    .get_stop_tokens()
+                    .into_iter()
+                    .map(|t| t as usize)
+                    .collect::<Vec<_>>();
+                if eos_ids.is_empty() {
+                    eos_ids = vec![0, 2, 151643, 151644, 151645];
+                }
                 let gen = loaded
                     .llm
                     .generate_native_core(
                         prompt_tokens_usize,
                         chat_req.max_tokens.unwrap_or(256),
-                        chat_req.temperature.unwrap_or(0.4),
+                        chat_req.temperature.unwrap_or(0.3),
                         chat_req.repetition_penalty.unwrap_or(1.15),
                         eos_ids,
                     )
                     .unwrap_or_default();
                 let gen_u32: Vec<u32> = gen.into_iter().map(|t| t as u32).collect();
                 let reply = loaded.tokenizer.decode(&gen_u32, true).unwrap_or_default();
-                let clean = reply
-                    .replace("<|im_end|>", "")
-                    .replace("<|im_start|>", "")
-                    .replace("<|endoftext|>", "")
-                    .trim()
-                    .to_string();
+                let clean = streaming::clean_special_tokens(&reply).trim().to_string();
 
                 let json_resp = serde_json::json!({
                     "response": clean,

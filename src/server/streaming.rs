@@ -59,6 +59,157 @@ impl Read for ChannelReader {
     }
 }
 
+pub fn clean_special_tokens(text: &str) -> String {
+    text.replace("<|im_end|>", "")
+        .replace("<|im_start|>", "")
+        .replace("<|endoftext|>", "")
+        .replace("<|eot_id|>", "")
+        .replace("<|start_header_id|>", "")
+        .replace("<|end_header_id|>", "")
+        .replace("<start_of_turn>", "")
+        .replace("<end_of_turn>", "")
+        .replace("</s>", "")
+}
+
+pub fn detect_chat_template_from_tokenizer(tokenizer: &GajeTokenizer) -> crate::core::gtok::ChatTemplate {
+    if let Some(gtok) = tokenizer.gtok() {
+        gtok.detect_chat_template()
+    } else if tokenizer.token_to_id("<|im_start|>").is_some() {
+        crate::core::gtok::ChatTemplate::ChatML
+    } else if tokenizer.token_to_id("<|start_header_id|>").is_some() {
+        crate::core::gtok::ChatTemplate::Llama3
+    } else if tokenizer.token_to_id("<start_of_turn>").is_some() {
+        crate::core::gtok::ChatTemplate::Gemma
+    } else if tokenizer.token_to_id("[INST]").is_some() {
+        crate::core::gtok::ChatTemplate::Llama2
+    } else {
+        crate::core::gtok::ChatTemplate::Classic
+    }
+}
+
+pub fn format_chat_prompt_from_template(
+    template: crate::core::gtok::ChatTemplate,
+    effective_sys_prompt: &str,
+    user_msg: &str,
+    history: Option<&[ChatMessage]>,
+) -> String {
+    let mut full_prompt = String::new();
+    match template {
+        crate::core::gtok::ChatTemplate::ChatML => {
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role.as_deref().unwrap_or("user");
+                    let content = msg
+                        .content
+                        .as_deref()
+                        .or(msg.message.as_deref())
+                        .unwrap_or("");
+                    full_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, content));
+                }
+            }
+            full_prompt.push_str(&format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                user_msg.trim()
+            ));
+        }
+        crate::core::gtok::ChatTemplate::Llama3 => {
+            full_prompt.push_str("<|begin_of_text|>");
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!(
+                    "<|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|>",
+                    effective_sys_prompt
+                ));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role.as_deref().unwrap_or("user");
+                    let content = msg
+                        .content
+                        .as_deref()
+                        .or(msg.message.as_deref())
+                        .unwrap_or("");
+                    full_prompt.push_str(&format!(
+                        "<|start_header_id|>{}<|end_header_id|>\n\n{}<|eot_id|>",
+                        role, content
+                    ));
+                }
+            }
+            full_prompt.push_str(&format!(
+                "<|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                user_msg.trim()
+            ));
+        }
+        crate::core::gtok::ChatTemplate::Llama2 => {
+            full_prompt.push_str("<s>[INST] ");
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("<<SYS>>\n{}\n<</SYS>>\n\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role.as_deref().unwrap_or("user");
+                    let content = msg
+                        .content
+                        .as_deref()
+                        .or(msg.message.as_deref())
+                        .unwrap_or("");
+                    if role == "assistant" {
+                        full_prompt.push_str(&format!("{} </s><s>[INST] ", content));
+                    } else {
+                        full_prompt.push_str(&format!("{} [/INST] ", content));
+                    }
+                }
+            }
+            full_prompt.push_str(&format!("{} [/INST] ", user_msg.trim()));
+        }
+        crate::core::gtok::ChatTemplate::Gemma => {
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = if msg.role.as_deref() == Some("assistant") { "model" } else { "user" };
+                    let content = msg
+                        .content
+                        .as_deref()
+                        .or(msg.message.as_deref())
+                        .unwrap_or("");
+                    full_prompt.push_str(&format!("<start_of_turn>{}\n{}<end_of_turn>\n", role, content));
+                }
+            }
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!(
+                    "<start_of_turn>user\n{}\n\n{}<end_of_turn>\n<start_of_turn>model\n",
+                    effective_sys_prompt,
+                    user_msg.trim()
+                ));
+            } else {
+                full_prompt.push_str(&format!(
+                    "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
+                    user_msg.trim()
+                ));
+            }
+        }
+        _ => {
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("System: {}\n\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = if msg.role.as_deref() == Some("assistant") { "Assistant" } else { "User" };
+                    let content = msg
+                        .content
+                        .as_deref()
+                        .or(msg.message.as_deref())
+                        .unwrap_or("");
+                    full_prompt.push_str(&format!("{}: {}\n", role, content));
+                }
+            }
+            full_prompt.push_str(&format!("User: {}\nAssistant: ", user_msg.trim()));
+        }
+    }
+    full_prompt
+}
+
 pub fn handle_chat_stream_request(
     mut request: Request,
     llm: &mut GenomicLLM,
@@ -78,17 +229,15 @@ pub fn handle_chat_stream_request(
         repetition_penalty: Some(1.15),
     });
 
-    let user_msg = chat_req.message.unwrap_or_default();
-    let sys_prompt = chat_req.system_prompt.unwrap_or_else(|| {
-        "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.".to_string()
-    });
+    let user_msg = chat_req.message.as_deref().unwrap_or("");
+    let sys_prompt = chat_req.system_prompt.as_deref().unwrap_or(
+        "Tu nombre es GAJE. Eres un asistente de inteligencia artificial avanzado, servicial, conciso y preciso.",
+    );
 
-    let is_born = chat_req
-        .model
-        .as_deref()
-        .map(|m| m.contains("born_") || m.contains("/born/"))
-        .unwrap_or(false);
+    // 1. Detección Canónica de Plantilla de Diálogo (Zero Heuristics - Regla de Oro A.4)
+    let template = detect_chat_template_from_tokenizer(tokenizer);
 
+    // Búsqueda de memoria episódica/hipocampal
     let model_name_str = chat_req.model.as_deref().unwrap_or("");
     let mut context_prefix = String::new();
     if let Some(orch) = crate::compute::island::IslandOrchestrator::try_load_paired_memory(
@@ -96,7 +245,7 @@ pub fn handle_chat_stream_request(
         llm.dim() as u32,
     ) {
         let q_vec =
-            crate::compute::island::IslandOrchestrator::vector_from_text(&user_msg, llm.dim());
+            crate::compute::island::IslandOrchestrator::vector_from_text(user_msg, llm.dim());
         let matches = orch.retrieve_context(&q_vec, 2);
         let relevant: Vec<_> = matches
             .into_iter()
@@ -112,45 +261,25 @@ pub fn handle_chat_stream_request(
         }
     }
 
-    let mut full_prompt = if is_born {
-        if context_prefix.is_empty() {
-            String::new()
+    let effective_sys_prompt = if !context_prefix.is_empty() {
+        if !sys_prompt.is_empty() {
+            format!("{}\n\n{}", context_prefix.trim(), sys_prompt.trim())
         } else {
-            format!("<|im_start|>system\n{}<|im_end|>\n", context_prefix)
+            context_prefix.trim().to_string()
         }
     } else {
-        format!(
-            "<|im_start|>system\n{}{}<|im_end|>\n",
-            sys_prompt,
-            if context_prefix.is_empty() {
-                "".to_string()
-            } else {
-                format!("\n{}", context_prefix)
-            }
-        )
+        sys_prompt.trim().to_string()
     };
-    if let Some(hist) = chat_req.history {
-        for msg in hist.iter().rev().take(6).rev() {
-            let role = msg.role.as_deref().unwrap_or("user");
-            let content = msg
-                .content
-                .as_deref()
-                .or(msg.message.as_deref())
-                .unwrap_or("");
-            full_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, content));
-        }
-    }
-    full_prompt.push_str(&format!(
-        "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        user_msg
-    ));
+
+    let full_prompt = format_chat_prompt_from_template(
+        template,
+        &effective_sys_prompt,
+        user_msg,
+        chat_req.history.as_deref(),
+    );
 
     let max_tokens = chat_req.max_tokens.unwrap_or(256);
-    let temperature = if is_born {
-        chat_req.temperature.unwrap_or(0.15).min(0.25)
-    } else {
-        chat_req.temperature.unwrap_or(0.3)
-    };
+    let temperature = chat_req.temperature.unwrap_or(0.3);
     let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
 
     let prompt_tokens_u32 = tokenizer
@@ -206,7 +335,13 @@ pub fn handle_chat_stream_request(
         }
     };
 
-    let eos_ids: HashSet<usize> = [0, 2, 151643, 151644, 151645].iter().cloned().collect();
+    let eos_ids: HashSet<usize> = {
+        let mut stops = tokenizer.get_stop_tokens();
+        if stops.is_empty() {
+            stops = vec![0, 2, 151643, 151644, 151645];
+        }
+        stops.into_iter().map(|t| t as usize).collect()
+    };
     let mut generated_tokens = Vec::new();
     let mut generated_text = String::new();
     let mut seen_tokens: HashSet<usize> = HashSet::new();
@@ -259,10 +394,7 @@ pub fn handle_chat_stream_request(
                 false,
             )
             .unwrap_or_default();
-        let clean_full = full_curr
-            .replace("<|im_end|>", "")
-            .replace("<|im_start|>", "")
-            .replace("<|endoftext|>", "");
+        let clean_full = clean_special_tokens(&full_curr);
 
         if clean_full.len() > generated_text.len() {
             let piece = &clean_full[generated_text.len()..];
