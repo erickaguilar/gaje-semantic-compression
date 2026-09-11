@@ -949,6 +949,40 @@ class GenomicLLM:
     def clear_cache(self):
         self.rust_llm.clear_cache_py()
 
+    def extract_layer_activations(self, prompt_token_ids, clear_cache: bool = True):
+        """
+        Extrae las activaciones de cada bloque transformador para la secuencia de tokens dada.
+        Retorna: np.ndarray con dimensiones [T, L, D] (Tokens, Capas, Dimensión Oculta).
+        """
+        if isinstance(prompt_token_ids, str):
+            if self.tokenizer is None:
+                raise ValueError("Se requiere tokenizador para procesar cadenas de texto")
+            prompt_token_ids = self.tokenizer.encode(prompt_token_ids)
+            if hasattr(prompt_token_ids, "ids"):
+                prompt_token_ids = prompt_token_ids.ids
+
+        if hasattr(self.rust_llm, "extract_layer_activations"):
+            raw_acts = self.rust_llm.extract_layer_activations(list(prompt_token_ids), clear_cache)
+            return np.asarray(raw_acts, dtype=np.float32)
+
+        if clear_cache:
+            self.clear_cache()
+
+        token_ids = list(prompt_token_ids)
+        num_tokens = len(token_ids)
+        num_layers = len(self.rust_llm.blocks)
+        dim = self.n_embd
+
+        acts = np.zeros((num_tokens, num_layers, dim), dtype=np.float32)
+        for t_idx, tid in enumerate(token_ids):
+            pos = t_idx
+            h = self.rust_llm.embeddings.get_row(tid)
+            for l_idx, block in enumerate(self.rust_llm.blocks):
+                h = block.forward(h, pos)
+                acts[t_idx, l_idx, :] = h
+
+        return acts
+
     def set_k_wta_ratio(self, ratio: float):
         if hasattr(self, "rust_llm") and self.rust_llm:
             self.rust_llm.set_k_wta_ratio(ratio)

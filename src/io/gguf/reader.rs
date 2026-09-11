@@ -8,10 +8,25 @@ use std::io::{Cursor, Read};
 
 use crate::io::gguf::types::{GGMLType, GGUFTensorInfo, GGUFValue};
 
+pub enum GGUFStorage {
+    Mmap(Mmap),
+    Owned(Vec<u8>),
+}
+
+impl std::ops::Deref for GGUFStorage {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            GGUFStorage::Mmap(m) => m,
+            GGUFStorage::Owned(v) => v,
+        }
+    }
+}
+
 pub struct GGUFReader {
     pub metadata: HashMap<String, GGUFValue>,
     pub tensors: HashMap<String, GGUFTensorInfo>,
-    buffer: Vec<u8>,
+    storage: GGUFStorage,
     data_offset: u64,
 }
 
@@ -19,15 +34,33 @@ impl GGUFReader {
     pub fn open(path: &str) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
-        Self::parse(&mmap)
+        let (metadata, tensors, data_offset) = Self::parse_header(&mmap)?;
+        Ok(GGUFReader {
+            metadata,
+            tensors,
+            storage: GGUFStorage::Mmap(mmap),
+            data_offset,
+        })
     }
 
     /// Abre un GGUF desde un buffer en memoria (útil para pruebas y roundtrips).
     pub fn open_from_bytes(bytes: &[u8]) -> std::io::Result<Self> {
-        Self::parse(bytes)
+        let (metadata, tensors, data_offset) = Self::parse_header(bytes)?;
+        Ok(GGUFReader {
+            metadata,
+            tensors,
+            storage: GGUFStorage::Owned(bytes.to_vec()),
+            data_offset,
+        })
     }
 
-    fn parse(bytes: &[u8]) -> std::io::Result<Self> {
+    fn parse_header(
+        bytes: &[u8],
+    ) -> std::io::Result<(
+        HashMap<String, GGUFValue>,
+        HashMap<String, GGUFTensorInfo>,
+        u64,
+    )> {
         let mut reader = Cursor::new(bytes);
 
         // 1. Magic
@@ -118,12 +151,7 @@ impl GGUFReader {
 
         let data_offset = (current_pos + alignment - 1) / alignment * alignment;
 
-        Ok(GGUFReader {
-            metadata,
-            tensors,
-            buffer: bytes.to_vec(),
-            data_offset,
-        })
+        Ok((metadata, tensors, data_offset))
     }
 
     pub fn get_tensor_data(&self, name: &str) -> std::io::Result<&[u8]> {
@@ -138,14 +166,14 @@ impl GGUFReader {
         let start = (self.data_offset + info.offset) as usize;
         let end = start + size;
 
-        if end > self.buffer.len() {
+        if end > self.storage.len() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Tensor offset out of bounds",
             ));
         }
 
-        Ok(&self.buffer[start..end])
+        Ok(&self.storage[start..end])
     }
 
     #[allow(dead_code)]

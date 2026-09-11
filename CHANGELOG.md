@@ -2,6 +2,15 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.3-alpha] - 2026-09-11
+### Changed
+- **Unificación de Nomenclatura y Extensión Canónica de Modelos (`.gaje`)**:
+  - Consolidación terminológica: `.flat` y `.gaje` son sinónimos del mismo formato binario plano nativo zero-copy (cabecera de 4096 bytes `FlatHeaderV2` con magic `b"GAJE"`).
+  - La extensión canónica para todos los modelos exportados o nacidos es formalmente **`.gaje`**.
+  - Distinción semántica clara entre modelos (`.gaje`) y memorias vectoriales persistentes (`.gmem` del Island Model, ubicadas en carpetas satélites `<modelo>_memory/`).
+  - La Web UI (`model_manager.py` y `toolbar.js`) ahora reconoce y lista sin restricciones ambos sufijos (`.gaje` y `.flat`) para garantizar compatibilidad retroactiva.
+  - Actualización de los scripts de transmutación y herramientas CLI para usar `.gaje` por defecto.
+
 ## [1.7.2-alpha] - 2026-09-04
 ### Added
 - **Unificación de Formato Binario Soberano `.gaje` v2 y Adaptación In-Place**:

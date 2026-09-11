@@ -106,6 +106,16 @@ impl GenomicLLM {
         Ok(())
     }
 
+    #[pyo3(signature = (token_ids, clear_cache=true))]
+    pub fn extract_layer_activations(
+        &mut self,
+        token_ids: Vec<usize>,
+        clear_cache: bool,
+    ) -> PyResult<Vec<Vec<Vec<f32>>>> {
+        self.extract_sequence_activations(&token_ids, clear_cache)
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
     #[pyo3(signature = (prompt_tokens, max_new_tokens=30, temperature=0.7, repetition_penalty=1.0, eos_token_ids=vec![2, 151643, 151645]))]
     pub fn generate_native_py(
         &mut self,

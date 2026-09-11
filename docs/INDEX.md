@@ -10,9 +10,11 @@ Si buscas información específica sin recorrer todo el archivo de documentació
 
 | Tu Perfil u Objetivo | Ruta Recomendada | Documentos Clave |
 | :--- | :--- | :--- |
-| 🚀 **Desarrollador / Producción** | Cómo compilar, ejecutar inferencia en servidor o terminal y gestionar modelos `.flat`. | 1. [GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)<br>2. [GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)<br>3. [MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md) |
+| 🚀 **Desarrollador / Producción** | Cómo compilar, ejecutar inferencia en servidor o terminal y gestionar modelos `.gaje`. | 1. [GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)<br>2. [GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)<br>3. [MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md) |
 | 🔬 **Auditor Científico / Benchmarks** | Contrastar claims de rendimiento, paridad FP32, latencias sub-ms y perplejidad. | 1. [EMPIRICAL_TRUTH_STATE.md](meta/EMPIRICAL_TRUTH_STATE.md) ⭐<br>2. [BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)<br>3. [smollm2_fp32_parity.md](reports/smollm2_fp32_parity.md) |
 | 🧬 **Investigador / Bio-inspirado** | Comprensión profunda de la memoria de islas, espacios conformes y estandarización. | 1. [NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md](research/NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md)<br>2. [ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md](research/ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md)<br>3. [SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md) |
+
+> 📌 **Nota de Unificación Terminológica (v1.7.3+)**: Todos los modelos binarios planos mmap usan la extensión canónica **`.gaje`** (con soporte retroactivo para `.flat`). Las memorias semánticas vectoriales del *Island Model* se conservan estrictamente bajo la extensión **`.gmem`** en carpetas `<modelo>_memory/`. Reportes históricos pueden referirse a `.gaje.flat`.
 
 ---
 
@@ -30,6 +32,7 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[EMBRYO_10MB_DISTILLATION_STRATEGY.md](meta/EMBRYO_10MB_DISTILLATION_STRATEGY.md)**: Hallazgo empírico (preservación de ranking) y propuesta de destilación para un embrión de ~10 MB.
 
 ### 🔬 Investigación (`docs/research/`)
+* **[ASYMMETRIC_3BIT_FFN_ATTENTION_ABLATION_AND_TOKENIZATION_FINDINGS.md](research/ASYMMETRIC_3BIT_FFN_ATTENTION_ABLATION_AND_TOKENIZATION_FINDINGS.md)**: **AISLAMIENTO CAUSAL 2×2, FFN 3-BIT, TOKENIZACIÓN CHATML Y CALIBRACIÓN** — Demostración de que la atención en 2-bit es incondicionalmente letal ($S_c \approx 0.23$), viabilidad de FFN a 3-bit ($S_c = 0.9437$ en cuerpo, $0.9667$ en salida, $3.123\text{ b/w}$, 21.9% de reducción neta en cuerpo), corrección del bug de tokenización ChatML en GTOK y protocolo de calibración de prompts multilingües.
 * **[K2_HORIZON_MOVA_AND_GENOMIC_DISTILLATION_ANALYSIS.md](research/K2_HORIZON_MOVA_AND_GENOMIC_DISTILLATION_ANALYSIS.md)**: **K2 HORIZON (MBZUAI-IFM) Y ARQUITECTURA MoVA** — Evaluación técnica de la familia abierta K2 Horizon (0.9B a 375B, Apache 2.0), análisis del mecanismo *Mixture-of-Values Attention*, viabilidad del progenitor 0.9B para compresión conformal sub-260MB y aprovechamiento de checkpoints intermedios de pre-entrenamiento.
 * **[COT_GMEM_NEUROSYMBOLIC_VON_NEUMANN_ARCHITECTURE.md](research/COT_GMEM_NEUROSYMBOLIC_VON_NEUMANN_ARCHITECTURE.md)**: **ACOPLAMIENTO DINÁMICO CoT + .GMEM Y MÁQUINA DE VON NEUMANN SEMÁNTICA** — Arquitectura neurosimbólica para eliminación del *semantic drift* en modelos compactos, desacoplamiento ontológico (lógica/verbos en red vs. hechos/sustantivos en memoria) e inyección directa en KV-Cache con latencia sub-milisegundo.
 * **[GAJE_AGENTIC_RUNTIME_AND_FRONTIER_TOOLS_FINDINGS.md](research/GAJE_AGENTIC_RUNTIME_AND_FRONTIER_TOOLS_FINDINGS.md)**: **RUNTIME AGÉNTICO Y HERRAMIENTAS DE FRONTERA** — Análisis del stack de herramientas de modelos de frontera (Responses API / Claude / Astra), equivalencia soberana en Rust, integración MCP y catálogo hipocampal instantáneo en `tools.gmem`.
@@ -141,8 +144,14 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[QUALITY_EXPORT_PLAN.md](plans/completed/QUALITY_EXPORT_PLAN.md)**: **EXPORT DE CALIDAD** — Concluido (Fase 4b: optimización de held-out CE desacoplada de coherencia generativa).
 
 ### 🔬 Investigaciones y Topología Matemática (`docs/research/`)
+* **[HEXAGONAL_TOROIDAL_LATTICE_AND_ISLAND_ENTROPY_FOUNDATIONS.md](research/HEXAGONAL_TOROIDAL_LATTICE_AND_ISLAND_ENTROPY_FOUNDATIONS.md)**: **TOPOLOGÍA HEXAGONAL DE VORONOI, FLUJO CONFORME EN TOROIDE $\mathbb{T}^2$ E ISLAS DE MEMORIA ENTRÓPICAS.** Formalización matemática del empaquetamiento $A_2$ en el toroide de fase, transición de turbulencia a flujo laminar en el Residual Stream, óptica paraxial de haz gaussiano y calibración de entropía local por islas `.gmem`.
+* **[ASYMMETRIC_3BIT_FFN_ATTENTION_ABLATION_AND_TOKENIZATION_FINDINGS.md](research/ASYMMETRIC_3BIT_FFN_ATTENTION_ABLATION_AND_TOKENIZATION_FINDINGS.md)**: **DESCOMPOSICIÓN DE ATENCIÓN VS FFN, ABLACIÓN 3-BIT Y REPORTE DE ARBITRAJE BILINGÜE.** Aislamiento causal de 2-bit, demostración de invarianza de portadora en paso único ($S_c = 0.984$), evaluación autoregresiva bilingüe de 200 tokens en 6.24 horas, y certificación final de **Q4_0 como el piso físico real**.
+* **[Q3_0_BINARY_SPECIFICATION_AND_ASYMMETRIC_EXPORT_DESIGN.md](research/Q3_0_BINARY_SPECIFICATION_AND_ASYMMETRIC_EXPORT_DESIGN.md)**: **ESPECIFICACIÓN BINARIA Q3_0 (ARCHIVADA COMO REFERENCIA).** Layout de 16 bytes por bloque de 32 pesos (escala $f16$, mínimo $f16$, 12 bytes empaquetando 8 pesos de 3-bit en 3 bytes) y diseño branchless; archivada formalmente al rechazarse para producción en modelos de 0.5B.
+
+* **[Q2_0_DISSECTION_CANCELLATION_AND_KV_CACHE_FINDINGS.md](research/Q2_0_DISSECTION_CANCELLATION_AND_KV_CACHE_FINDINGS.md)**: **DISECCIÓN DE Q2_0, CANCELACIÓN DESTRUCTORA EN CAPA 21 Y DINÁMICA DE KV-CACHE.** Análisis empírico de la onda portadora residual, invarianza de RMSNorm, overshoot de cancelación en capa 21, amplificación exponencial de Softmax en contexto continuo y arquitectura asimétrica de 2.65 bits (FFN 2-bit + Atención 4-bit).
 * **[BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md](research/BORN_2BIT_TRAINING_AND_COHERENCE_FINDINGS.md)**: **NACIMIENTO Y ENTRENAMIENTO NATIVO EN 2-BITS.** Hallazgos de viabilidad de `max.gaje` ($99.19\%$ reducción de pérdida en CPU con STE), mapeo conforme y fases de coherencia.
 * **[ELECTRODYNAMICS_AND_COMPLEX_FLOW_TOPOLOGY.md](research/ELECTRODYNAMICS_AND_COMPLEX_FLOW_TOPOLOGY.md)**: Dinámica de electrodinámica, flujo potencial $\Omega(z)$, líneas de flujo en $\mathbb{C}$ y coeficiente de reflexión $\Gamma_b$.
+
 
 ### 🏷️ Registro y Nomenclatura (`docs/registry/`)
 * **[MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md)**: Regla estricta de nomenclatura (`.gaje` solo para organismos nacidos, `.flat` para modelos transmutados).

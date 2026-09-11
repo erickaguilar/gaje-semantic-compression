@@ -18,24 +18,24 @@ Official pre-packaged models are available at the [Official Hugging Face Hub (`e
 
 | Organism / Model | Format | Size | Optimal Runtime | Capabilities |
 | :--- | :---: | :---: | :---: | :--- |
-| **`gaje_nano_1.5b.flat`** | `.gaje.flat` v2 | **1.23 GB** | WebAssembly (Mobile / Web) | Ultra-fast, minimal RAM footprint, ideal for phones. |
-| **`gaje_prime_3b.flat`** | `.gaje.flat` v2 | **2.24 GB** | WASM Desktop / Cloud | Balanced, high general reasoning and contextual depth. |
-| **`gaje_ultra_7b.flat`** | `.gaje.flat` v2 | **4.88 GB** | Server / Cloud Native | Deep reasoning, multi-turn coding and complex analysis. |
+| **`gaje_nano_1.5b.gaje`** | `.gaje` v2 | **1.23 GB** | WebAssembly (Mobile / Web) | Ultra-fast, minimal RAM footprint, ideal for phones. |
+| **`gaje_prime_3b.gaje`** | `.gaje` v2 | **2.24 GB** | WASM Desktop / Cloud | Balanced, high general reasoning and contextual depth. |
+| **`gaje_ultra_7b.gaje`** | `.gaje` v2 | **4.88 GB** | Server / Cloud Native | Deep reasoning, multi-turn coding and complex analysis. |
 
 ---
 
-## 🔬 Empirical Status & Scientific Diagnosis (v1.7.1-alpha)
+## 🔬 Empirical Status & Scientific Diagnosis (v1.7.3-alpha)
 
 Following the principle of **Empirical Truth** ([`docs/meta/EMPIRICAL_TRUTH_STATE.md`](docs/meta/EMPIRICAL_TRUTH_STATE.md)), the system presents the following certified functional state:
 
 ### 🏆 1. A/B Parity Control Experiment (GAJE Q4_0 vs. HuggingFace PyTorch FP32)
 
-We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0.5B-Instruct`) in **PyTorch** against the native **GAJE 4-bit `.gaje.flat`** engine on an **AMD Ryzen 7 5800H** CPU:
+We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0.5B-Instruct`) in **PyTorch** against the native **GAJE 4-bit `.gaje`** engine on an **AMD Ryzen 7 5800H** CPU:
 
 | Inference Engine | Format / Precision | Exact Generated Response | Real E2E Throughput | RAM Consumption |
 | :--- | :---: | :--- | :---: | :--- |
 | **HuggingFace PyTorch** | **FP32 Original (Alibaba)** | *"El planeta más grande del Sistema Solar es la Tierra, con una"* | **`1.38 tok/s`** | $1,980\text{ MB}$ |
-| **GAJE Native Engine (`.flat`)** | **4-bit Genomic Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
+| **GAJE Native Engine (`.gaje`)** | **4-bit Genomic Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
 
 ---
 
@@ -43,12 +43,12 @@ We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0
 
 | Model / Architecture | Binary Format | Certified Factual Response | CPU Throughput | Cold Start Load Time | Live RAM RSS |
 | :--- | :---: | :--- | :---: | :---: | :---: |
-| **Qwen2.5 1.5B Instruct** | **`.gaje.flat` (Hybrid v2)** | Spanish: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (Virtual)** |
-| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Hybrid v2)** | Chinese: *"木星"* (Jupiter) / Spanish: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (~74% vs FP32)** |
-| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy)** | English: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB` (Q4_0 body + FP32 embeddings)** |
+| **Qwen2.5 1.5B Instruct** | **`.gaje` (Hybrid v2)** | Spanish: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (Virtual)** |
+| **Qwen2 0.5B Instruct** | **`.gaje` (Hybrid v2)** | Chinese: *"木星"* (Jupiter) / Spanish: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (~74% vs FP32)** |
+| **SmolLM2 135M Instruct** | **`.gaje` (Zero-Copy)** | English: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB` (Q4_0 body + FP32 embeddings)** |
 
 > [!IMPORTANT]
-> **Hybrid .flat v2 Layout**: To preserve semantic representation fidelity and avoid vocabulary collapse in high-density languages (like Chinese/Arabic), the `.flat` format stores the critical semantic layers (`token_embd` and `lm_head`) in **FP32** (4 bytes/weight), while the transformer body (attention and FFN projections) is quantized to **Q4_0** (4-bits).
+> **Hybrid .gaje v2 Layout**: To preserve semantic representation fidelity and avoid vocabulary collapse in high-density languages (like Chinese/Arabic), the `.gaje` format (with `.flat` retained as a backward-compatible alias) stores critical semantic layers (`token_embd` and `lm_head`) in **FP32** (4 bytes/weight), while the transformer body (attention and FFN projections) is quantized to **Q4_0** (4-bits) or **Q2_0** (2-bits).
 
 ---
 

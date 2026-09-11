@@ -20,9 +20,11 @@ Se certificó formalmente la equivalencia matemática entre el motor nativo en R
 | **Precisión Factual Inglés (EN)** | **`100.0%` (`"1, 2, 3, 4, 5"`)** | `100.0%` Exacto | ✅ **CERTIFICADO** |
 | **Consumo de Memoria RAM (Qwen2.5 1.5B)**| **`1.23 GB`** | `< 1.5 GB` (`52.0%` Ahorro) | ✅ **CERTIFICADO** |
 | **Consumo de Memoria RAM (Qwen2.5 3B)**  | **`2.24 GB`** | `< 2.5 GB` (`63.8%` Ahorro) | ✅ **CERTIFICADO** |
-| **Tiempo de Carga Mmap (`.gaje.flat`)** | **`0.75 ms`** | `< 5.0 ms` | ✅ **CERTIFICADO** |
+| **Tiempo de Carga Mmap (`.gaje`)** | **`0.75 ms`** | `< 5.0 ms` | ✅ **CERTIFICADO** |
 | **Persistencia RAG Island Model (`.gmem`)** | **`0.75 ms`** | `< 1.0 ms` | ✅ **CERTIFICADO** |
 | **Suite Nativa de Tests Rust** | **`26/26 Passing`** | `100%` Tests Pasando | ✅ **CERTIFICADO** |
+
+> 📌 **Unificación de Formato y Extensiones (v1.7.3+)**: Todos los modelos binarios planos mmap usan la extensión canónica **`.gaje`** (con soporte retroactivo idéntico para `.flat`, ya que comparten la misma cabecera `FlatHeaderV2` con magic `b"GAJE"`). Las memorias semánticas vectoriales del *Island Model* son archivos separados bajo formato binario **`.gmem`** (magic `b"GMEM"`).
 
 ---
 

@@ -18,8 +18,17 @@ pub struct ReplConfig {
 
 impl Default for ReplConfig {
     fn default() -> Self {
+        let default_path = if Path::new("models/production/gaje_pico_135m.gaje").exists() {
+            "models/production/gaje_pico_135m.gaje"
+        } else if Path::new("models/production/gaje_pico_135m.flat").exists() {
+            "models/production/gaje_pico_135m.flat"
+        } else if Path::new("models/production/qwen2_5_0_5b.gaje").exists() {
+            "models/production/qwen2_5_0_5b.gaje"
+        } else {
+            "models/production/gaje_pico_135m.gaje"
+        };
         Self {
-            model_path: "models/production/gaje_pico_135m.flat".to_string(),
+            model_path: default_path.to_string(),
             temperature: 0.4,
             repetition_penalty: 1.15,
             max_tokens: 256,

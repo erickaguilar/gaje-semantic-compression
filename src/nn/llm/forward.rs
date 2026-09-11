@@ -35,6 +35,42 @@ impl GenomicLLM {
         Ok(())
     }
 
+    /// Ejecuta el forward de un token extrayendo las activaciones post-bloque de cada capa neuronal (R^D).
+    #[inline]
+    pub fn forward_token_with_diagnostics(
+        &mut self,
+        token_id: usize,
+    ) -> Result<Vec<Vec<f32>>, String> {
+        let pos = if self.blocks.is_empty() {
+            0
+        } else {
+            self.blocks[0].attn.k_cache_len()
+        };
+        let mut h = self.get_token_embedding(token_id)?;
+        let mut layer_acts = Vec::with_capacity(self.blocks.len());
+        for block in &mut self.blocks {
+            h = block.forward_core(h, pos)?;
+            layer_acts.push(h.clone());
+        }
+        Ok(layer_acts)
+    }
+
+    /// Procesa una secuencia de tokens y extrae el tensor de activaciones [T, L, D].
+    pub fn extract_sequence_activations(
+        &mut self,
+        token_ids: &[usize],
+        clear_cache: bool,
+    ) -> Result<Vec<Vec<Vec<f32>>>, String> {
+        if clear_cache {
+            self.clear_cache_core();
+        }
+        let mut seq_acts = Vec::with_capacity(token_ids.len());
+        for &tid in token_ids {
+            seq_acts.push(self.forward_token_with_diagnostics(tid)?);
+        }
+        Ok(seq_acts)
+    }
+
     pub fn set_gpu_layers(&mut self, layers: usize) {
         self.gpu_layers = layers;
         self.use_gpu = layers > 0;

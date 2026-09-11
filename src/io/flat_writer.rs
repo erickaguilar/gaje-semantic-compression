@@ -4,6 +4,7 @@ use crate::io::flat_reader::FlatTensorEntry;
 use crate::io::header::FlatHeaderV2;
 use crate::nn::{GenomicAttention, GenomicLLM, GenomicLinear, RustGenomicBlock};
 use rayon::prelude::*;
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -51,24 +52,24 @@ fn write_at_offset(file: &std::fs::File, data: &[u8], offset: u64) -> std::io::R
     }
 }
 
-struct TensorWriteTask {
+struct TensorWriteTask<'a> {
     entry: FlatTensorEntry,
-    dna_data: Vec<u8>,
-    c_data: Vec<u8>,
-    anc_data: Vec<u8>,
-    bias_data: Vec<u8>,
+    dna_data: Cow<'a, [u8]>,
+    c_data: Cow<'a, [u8]>,
+    anc_data: Cow<'a, [u8]>,
+    bias_data: Cow<'a, [u8]>,
 }
 
-fn add_linear(
+fn add_linear<'a>(
     name: &str,
-    l: &GenomicLinear,
-    tasks: &mut Vec<TensorWriteTask>,
+    l: &'a GenomicLinear,
+    tasks: &mut Vec<TensorWriteTask<'a>>,
     current_offset: &mut usize,
 ) {
-    let dna = l.database_ref().to_vec();
-    let centroids = f32_u8(&l.centroids).to_vec();
-    let anchors = l.anchors_sparse_buffer().to_vec();
-    let bias = f32_u8(&l.bias).to_vec();
+    let dna = l.database_ref();
+    let centroids = f32_u8(&l.centroids);
+    let anchors = l.anchors_sparse_buffer();
+    let bias = f32_u8(&l.bias);
 
     let dna_off = *current_offset;
     *current_offset = align64_size(dna_off + dna.len());
@@ -82,6 +83,12 @@ fn add_linear(
     let bias_off = *current_offset;
     *current_offset = align64_size(bias_off + bias.len());
 
+    let anc_cow = if anchors.is_empty() {
+        Cow::Borrowed(&[] as &[u8])
+    } else {
+        Cow::Owned(anchors)
+    };
+
     tasks.push(TensorWriteTask {
         entry: FlatTensorEntry {
             name: name.to_string(),
@@ -93,24 +100,24 @@ fn add_linear(
             c_off,
             c_len: centroids.len(),
             anc_off,
-            anc_len: anchors.len(),
+            anc_len: anc_cow.len(),
             bias_off,
             bias_len: bias.len(),
         },
-        dna_data: dna,
-        c_data: centroids,
-        anc_data: anchors,
-        bias_data: bias,
+        dna_data: Cow::Borrowed(dna),
+        c_data: Cow::Borrowed(centroids),
+        anc_data: anc_cow,
+        bias_data: Cow::Borrowed(bias),
     });
 }
 
-fn add_raw_f32(
+fn add_raw_f32<'a>(
     name: &str,
-    f32_data: &[f32],
-    tasks: &mut Vec<TensorWriteTask>,
+    f32_data: &'a [f32],
+    tasks: &mut Vec<TensorWriteTask<'a>>,
     current_offset: &mut usize,
 ) {
-    let bytes = f32_u8(f32_data).to_vec();
+    let bytes = f32_u8(f32_data);
     let dna_off = *current_offset;
     *current_offset = align64_size(dna_off + bytes.len());
 
@@ -129,10 +136,10 @@ fn add_raw_f32(
             bias_off: *current_offset,
             bias_len: 0,
         },
-        dna_data: bytes,
-        c_data: Vec::new(),
-        anc_data: Vec::new(),
-        bias_data: Vec::new(),
+        dna_data: Cow::Borrowed(bytes),
+        c_data: Cow::Borrowed(&[]),
+        anc_data: Cow::Borrowed(&[]),
+        bias_data: Cow::Borrowed(&[]),
     });
 }
 

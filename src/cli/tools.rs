@@ -12,7 +12,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::time::Instant;
 
-/// 📦 Exporta cualquier modelo (.gaje, .gguf o .flat) al formato plano de producción `.flat` v2
+/// 📦 Exporta cualquier modelo (.gaje, .gguf o .flat) al formato plano unificado de producción `.gaje`
 pub fn export_flat_cmd(
     input_path: &str,
     output_path: &str,
@@ -22,10 +22,10 @@ pub fn export_flat_cmd(
     println!(
         "\n🧬 ==============================================================================="
     );
-    println!("📦 GAJE HELIX — Exportador de Modelos a Formato Plano Zero-Copy (.flat v2)");
+    println!("📦 GAJE HELIX — Exportador de Modelos a Formato Plano Zero-Copy (.gaje)");
     println!("===============================================================================\n");
     println!("📥 Modelo de Origen: {}", input_path);
-    println!("📤 Destino .flat:    {}", output_path);
+    println!("📤 Destino .gaje:    {}", output_path);
 
     let t0 = Instant::now();
 
@@ -37,8 +37,9 @@ pub fn export_flat_cmd(
         let mut config = loader
             .infer_config()
             .map_err(|e| format!("Error infiriendo config GGUF: {}", e))?;
+        let bit_depth = if quant_format == 3 { 2 } else { 4 };
         let model = loader
-            .load_genomic_llm(config.clone(), 0.0)
+            .load_genomic_llm_q(config.clone(), 0.0, bit_depth)
             .map_err(|e| format!("Error cargando LLM genómico desde GGUF: {}", e))?;
 
         config.vocab_size = Some(model.lm_head.out_features);
@@ -134,7 +135,12 @@ pub fn export_flat_cmd(
             "   • Tiempo de guardado: {:.2} ms",
             write_time.as_secs_f64() * 1000.0
         );
-        println!("   • Formato:            Q4_0 Híbrido v2 (Embeddings FP32 + Cuerpo Q4_0)");
+        let format_desc = match quant_format {
+            3 => "Q2_0 (ADN 2-bit Cuaternario)",
+            2 => "Q8_0 (8-bit)",
+            _ => "Q4_0 Híbrido v2 (Embeddings FP32 + Cuerpo Q4_0)",
+        };
+        println!("   • Formato:            {}", format_desc);
         println!("   • GTOK Incrustado:    🟢 SÍ");
     }
 

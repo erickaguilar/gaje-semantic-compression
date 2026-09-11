@@ -56,6 +56,7 @@ impl GGUFLoader {
         n_head: usize,
         head_dim: usize,
         bias: Option<Vec<f32>>,
+        bit_depth: usize,
     ) -> std::io::Result<GenomicLinear> {
         let data = self.reader.get_tensor_data(name)?;
         let info = self.reader.tensors.get(name).unwrap();
@@ -98,9 +99,6 @@ impl GGUFLoader {
             unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
         }
 
-        // Cuantización 4-bit consistente para preservar fidelidad en atención y FFN
-        let bit_depth = 4;
-
         let (dna, centroids, anchors_u8) = if bit_depth == 4 {
             crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold)
         } else {
@@ -122,7 +120,7 @@ impl GGUFLoader {
             Vec::new(),
             Vec::new(),
             bias.unwrap_or_default(),
-            bit_depth,
+            bit_depth as u8,
         ))
     }
 }

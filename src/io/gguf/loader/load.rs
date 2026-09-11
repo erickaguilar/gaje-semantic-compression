@@ -11,6 +11,15 @@ impl GGUFLoader {
         config: ModelConfig,
         anchor_threshold: f32,
     ) -> std::io::Result<GenomicLLM> {
+        self.load_genomic_llm_q(config, anchor_threshold, 4)
+    }
+
+    pub fn load_genomic_llm_q(
+        &self,
+        config: ModelConfig,
+        anchor_threshold: f32,
+        bit_depth: usize,
+    ) -> std::io::Result<GenomicLLM> {
         let block_size = 32;
 
         // Detectar si los pesos de entrada y salida están unidos (Tied Weights)
@@ -23,6 +32,7 @@ impl GGUFLoader {
             anchor_threshold
         };
 
+        println!("   • Genomizando embeddings (token_embd)...");
         let embd_dna = self.genomize_tensor(
             "token_embd.weight",
             block_size,
@@ -31,11 +41,15 @@ impl GGUFLoader {
             0,
             0,
             None,
+            bit_depth,
         )?;
 
         let mut blocks = Vec::new();
         let head_dim = config.n_embd / config.n_head;
         for i in 0..config.n_blocks {
+            if i == 0 || (i + 1) % 4 == 0 || i + 1 == config.n_blocks {
+                println!("   • Genomizando capa neuronal {}/{}...", i + 1, config.n_blocks);
+            }
             let p = format!("blk.{}.", i);
 
             // Carga de Bias (Opcional en GGUF)
@@ -52,6 +66,7 @@ impl GGUFLoader {
                 config.n_head,
                 head_dim,
                 q_bias,
+                bit_depth,
             )?;
             let k_gen = self.genomize_tensor(
                 &format!("{}attn_k.weight", p),
@@ -61,6 +76,7 @@ impl GGUFLoader {
                 config.n_head_kv,
                 head_dim,
                 k_bias,
+                bit_depth,
             )?;
             let v_gen = self.genomize_tensor(
                 &format!("{}attn_v.weight", p),
@@ -70,6 +86,7 @@ impl GGUFLoader {
                 0,
                 0,
                 v_bias,
+                bit_depth,
             )?;
             let o_gen = self.genomize_tensor(
                 &format!("{}attn_output.weight", p),
@@ -79,6 +96,7 @@ impl GGUFLoader {
                 0,
                 0,
                 o_bias,
+                bit_depth,
             )?;
 
             // FFN Tensors (Normalmente sin bias en Llama/SmolLM, pero Qwen puede tenerlos)
@@ -94,6 +112,7 @@ impl GGUFLoader {
                 0,
                 0,
                 gate_bias,
+                bit_depth,
             )?;
             let up_gen = self.genomize_tensor(
                 &format!("{}ffn_up.weight", p),
@@ -103,6 +122,7 @@ impl GGUFLoader {
                 0,
                 0,
                 up_bias,
+                bit_depth,
             )?;
             let down_gen = self.genomize_tensor(
                 &format!("{}ffn_down.weight", p),
@@ -112,6 +132,7 @@ impl GGUFLoader {
                 0,
                 0,
                 down_bias,
+                bit_depth,
             )?;
 
             let attn_norm = self.load_f32_tensor(&format!("{}attn_norm.weight", p))?;
@@ -146,6 +167,7 @@ impl GGUFLoader {
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
 
         let lm_head = if has_output_weight {
+            println!("   • Genomizando cabezal de salida (lm_head)...");
             let lm_head_bias = self.load_f32_tensor_optional("output.bias");
             self.genomize_tensor(
                 "output.weight",
@@ -155,6 +177,7 @@ impl GGUFLoader {
                 0,
                 0,
                 lm_head_bias,
+                bit_depth,
             )?
         } else {
             // Tied Weights: La salida es una copia exacta de la entrada

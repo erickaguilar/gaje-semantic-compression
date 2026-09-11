@@ -84,7 +84,7 @@ pub fn genomize_f32_core(
                 };
 
                 let residual = val - c_val;
-                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                if anchor_threshold > 0.0 && val.abs() >= actual_threshold {
                     anchor_indices.push((start + idx) as u32);
                     anchor_values.push(half::f16::from_f32(residual));
                 }
@@ -252,7 +252,7 @@ pub fn genomize_f16_core(
                 };
 
                 let residual = val - c_val;
-                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                if anchor_threshold > 0.0 && val.abs() >= actual_threshold {
                     anchor_indices.push((start + idx) as u32);
                     anchor_values.push(half::f16::from_f32(residual));
                 }
@@ -354,7 +354,7 @@ pub fn genomize_4bit_core(
                     byte |= best_idx as u8;
                 }
 
-                if anchor_threshold >= 0.0 && val.abs() >= actual_threshold {
+                if anchor_threshold > 0.0 && val.abs() >= actual_threshold {
                     anchor_indices.push((start + idx) as u32);
                     anchor_values.push(f16::from_f32(val));
                 }

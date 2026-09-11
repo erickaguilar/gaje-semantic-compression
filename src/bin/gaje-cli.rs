@@ -286,7 +286,7 @@ struct ExportFlatArgs {
     /// Archivo de entrada (.gaje, .gguf o .flat)
     input: String,
 
-    /// Archivo de salida (.flat)
+    /// Archivo de salida (.gaje)
     #[arg(short, long)]
     output: String,
 
@@ -519,19 +519,23 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
     }
     // Buscar en rutas comunes
     let candidates = [
+        "models/production/gaje_pico_135m.gaje",
         "models/production/gaje_pico_135m.flat",
+        "models/production/qwen2_5_0_5b.gaje",
+        "models/production/gaje_coder_3b.gaje",
         "models/production/gaje_coder_3b.flat",
-        "models/production/gaje_pico_135m.flat",
+        "models/production/gaje_nano_1.5b.gaje",
         "models/production/gaje_nano_1.5b.flat",
+        "models/born/max.gaje",
+        "models/gaje_pico_135m.gaje",
         "models/gaje_pico_135m.flat",
-        "models/gaje_nano_1.5b.flat",
     ];
     for c in &candidates {
         if Path::new(c).exists() {
             return c.to_string();
         }
     }
-    "models/production/gaje_pico_135m.flat".to_string()
+    "models/production/gaje_pico_135m.gaje".to_string()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

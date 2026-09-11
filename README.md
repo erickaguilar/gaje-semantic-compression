@@ -20,9 +20,9 @@ Los modelos oficiales listos para ejecución nativa en servidor o WebAssembly en
 
 | Organismo / Modelo | Formato | Tamaño | Entorno Óptimo | Precisión y Capacidad |
 | :--- | :---: | :---: | :---: | :--- |
-| **`gaje_nano_1.5b.flat`** | `.gaje.flat` v2 | **1.23 GB** | WebAssembly (Móvil / Web) | Ultra-rápido, bajo consumo RAM, ideal para teléfonos. |
-| **`gaje_prime_3b.flat`** | `.gaje.flat` v2 | **2.24 GB** | WASM Desktop / Cloud | Equilibrado, alta coherencia contextual y lógica general. |
-| **`gaje_ultra_7b.flat`** | `.gaje.flat` v2 | **4.88 GB** | Servidor / Cloud Nativo | Razonamiento profundo, codificación y tareas complejas. |
+| **`gaje_nano_1.5b.gaje`** | `.gaje` v2 | **1.23 GB** | WebAssembly (Móvil / Web) | Ultra-rápido, bajo consumo RAM, ideal para teléfonos. |
+| **`gaje_prime_3b.gaje`** | `.gaje` v2 | **2.24 GB** | WASM Desktop / Cloud | Equilibrado, alta coherencia contextual y lógica general. |
+| **`gaje_ultra_7b.gaje`** | `.gaje` v2 | **4.88 GB** | Servidor / Cloud Nativo | Razonamiento profundo, codificación y tareas complejas. |
 
 ---
 
@@ -55,27 +55,27 @@ Siguiendo el **Mandato de Verdad Empírica** ([`docs/meta/EMPIRICAL_TRUTH_STATE.
 
 | Modelo | Formato | Throughput CPU | Consumo RAM | Speedup vs FP32 |
 |--------|---------|----------------|-------------|-----------------|
-| **Qwen2.5 1.5B Instruct** | `.gaje.flat` Híbrido v2 | 11.31-12.13 tok/s | 2.6 GB Virtual | 8.2-8.8× |
-| **Qwen2 0.5B Instruct** | `.gaje.flat` Híbrido v2 | 19.20-23.00 tok/s | ~498 MiB | 13.9-16.7× |
-| **SmolLM2 135M Instruct** | `.gaje.flat` Zero-Copy | 28.28-32.10 tok/s | ~472 MB | 20.5-23.3× |
+| **Qwen2.5 1.5B Instruct** | `.gaje` Híbrido v2 | 11.31-12.13 tok/s | 2.6 GB Virtual | 8.2-8.8× |
+| **Qwen2 0.5B Instruct** | `.gaje` Híbrido v2 | 19.20-23.00 tok/s | ~498 MiB | 13.9-16.7× |
+| **SmolLM2 135M Instruct** | `.gaje` Zero-Copy | 28.28-32.10 tok/s | ~472 MB | 20.5-23.3× |
 
 ### 📈 Comparación vs PyTorch FP32
 
 | Formato | Throughput | Consumo Memoria | Speedup |
 |---------|------------|-----------------|---------|
 | **HuggingFace PyTorch FP32** | 1.38 tok/s | 1,980 MB | 1× |
-| **GAJE Engine nativo `.flat`** | 19-32 tok/s | 448 MB RSS (**77% menos**) | **14-23×** |
+| **GAJE Engine nativo `.gaje`** | 19-32 tok/s | 448 MB RSS (**77% menos**) | **14-23×** |
 
 ---
 
 ### 🏆 1. Experimento de Control A/B (GAJE Q4_0 vs. HuggingFace PyTorch FP32)
 
-Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el modelo original en FP32 (`Qwen/Qwen2-0.5B-Instruct`) en **PyTorch** contra el motor nativo **GAJE 4-bit `.gaje.flat`** sobre un procesador **AMD Ryzen 7 5800H**:
+Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el modelo original en FP32 (`Qwen/Qwen2-0.5B-Instruct`) en **PyTorch** contra el motor nativo **GAJE 4-bit `.gaje`** sobre un procesador **AMD Ryzen 7 5800H**:
 
 | Entorno de Inferencia | Formato / Precisión | Respuesta Generada Exacta | Throughput E2E Real | Consumo de RAM |
 | :--- | :---: | :--- | :---: | :---: |
 | **HuggingFace PyTorch** | **FP32 Original (Alibaba)** | *"El planeta más grande del Sistema Solar es la Tierra, con una"* | **`1.38 tok/s`** | $1,980\text{ MB}$ |
-| **GAJE Engine Nativo (`.flat`)** | **4-bit Genómico Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
+| **GAJE Engine Nativo (`.gaje`)** | **4-bit Genómico Zero-Copy** | *"El planeta más grande del Sistema Solar es la Tierra."* | **`19.2 - 23.0 tok/s`** | **`448 MB` (RSS, ~77% vs FP32)** |
 
 ---
 
@@ -83,12 +83,12 @@ Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el 
 
 | Modelo / Arquitectura | Formato Binario | Respuesta Factual Certificada | Throughput CPU | Tiempo de Carga Cold Start | Consumo de RAM Viva |
 | :--- | :---: | :--- | :---: | :---: | :---: |
-| **Qwen2.5 1.5B Instruct** | **`.gaje.flat` (Híbrido v2)** | Español: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (Virtual)** |
-| **Qwen2 0.5B Instruct** | **`.gaje.flat` (Híbrido v2)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (~74% vs FP32)** |
-| **SmolLM2 135M Instruct** | **`.gaje.flat` (Zero-Copy)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB` (cuerpo Q4_0 + embeddings FP32)** |
+| **Qwen2.5 1.5B Instruct** | **`.gaje` (Híbrido v2)** | Español: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (Virtual)** |
+| **Qwen2 0.5B Instruct** | **`.gaje` (Híbrido v2)** | Chino: *"木星"* (Júpiter) / Español: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (~74% vs FP32)** |
+| **SmolLM2 135M Instruct** | **`.gaje` (Zero-Copy)** | Inglés: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB` (cuerpo Q4_0 + embeddings FP32)** |
 
 > [!IMPORTANT]
-> **Formato .flat v2 Híbrido**: Para preservar la fidelidad semántica y evitar el colapso del vocabulario multilingüe en idiomas CJK y europeos, el formato `.flat` de GAJE almacena las capas críticas de embeddings (`token_embd` y `lm_head`) en **FP32** (4 bytes/peso), mientras que el cuerpo del transformador (los bloques de atención y FFN) se comprime en **Q4_0** (4-bits).
+> **Formato .gaje v2 Híbrido**: Para preservar la fidelidad semántica y evitar el colapso del vocabulario multilingüe en idiomas CJK y europeos, el formato binario `.gaje` (con alias retrocompatible `.flat`) almacena las capas críticas de embeddings (`token_embd` y `lm_head`) en **FP32** (4 bytes/peso), mientras que el cuerpo del transformador (los bloques de atención y FFN) se comprime en **Q4_0** (4-bits) o **Q2_0** (2-bits).
 
 ---
 
@@ -104,8 +104,8 @@ El sistema integra persistencia de contexto contextual mediante índices binario
 
 ## 🛠️ Fundamentos Arquitectónicos de GAJE-Flow
 
-### 1. Formato Binario Plano Zero-Copy Autodescriptivo (`.gaje.flat` v2)
-La cabecera binaria **`FlatHeaderV2`** contiene un descriptor dinámico de arquitectura (**`ArchitectureDescriptor`**). Al exportar un modelo con `export_gaje_flat.py`, se extraen automáticamente las dimensiones, constantes de RoPE y el tipo de permutación de atención ($Q/K$), eliminando la intervención manual y blindando la carga contra bugs de alineación de atención.
+### 1. Formato Binario Plano Zero-Copy Autodescriptivo (`.gaje` v2)
+La cabecera binaria **`FlatHeaderV2`** contiene un descriptor dinámico de arquitectura (**`ArchitectureDescriptor`**). Al exportar un modelo con `gaje-cli export-flat` (o transmutadores), se extraen automáticamente las dimensiones, constantes de RoPE y el tipo de permutación de atención ($Q/K$), eliminando la intervención manual y blindando la carga contra bugs de alineación de atención.
 
 ### 2. Estabilización de Algoritmos QAT (Quantization-Aware Training)
 GAJE incluye capacidades nativas de afinamiento y optimización local post-cuantización. Las actualizaciones del optimizador de centroides en Rust (`linear.rs`) se normalizan dividiendo el gradiente acumulado entre las activaciones reales de cada centroide (`centroid_counts`), erradicando pánicos de `NaN`/`Inf` y estabilizando la convergencia matemática del error de cuantización.
