@@ -875,6 +875,15 @@ impl GenomicLLM {
 
             let mut logits = last_logits.clone();
 
+            // Suprimir delimitadores EOS en el paso 0 para forzar al menos un token de respuesta (min_new_tokens = 1)
+            if generated.is_empty() {
+                for &eos_id in &eos_token_ids {
+                    if eos_id < logits.len() {
+                        logits[eos_id] = -1e9;
+                    }
+                }
+            }
+
             if repetition_penalty > 1.0 {
                 let mut seen_set = std::collections::HashSet::new();
                 for &t in &generated {
