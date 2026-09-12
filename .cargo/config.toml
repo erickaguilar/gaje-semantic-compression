@@ -1,5 +1,6 @@
-[build]
-# rustflags = ["-C", "target-feature=+avx2,+fma", "-C", "target-cpu=native"]
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "target-cpu=native", "-C", "link-arg=-fuse-ld=mold"]
 
 [target.wasm32-unknown-unknown]
 rustflags = ['--cfg', 'getrandom_backend="wasm_js"']
