@@ -206,8 +206,52 @@ cargo test --test cli_standalone_test
 
 ---
 
+## 🎯 Lo que GAJE no es
+
+Para prevenir expectativas desalineadas antes de evaluar o desplegar el sistema:
+
+* **No es un servidor multi-tenant empresarial:** Es una estación de inferencia y memoria soberana/edge diseñada para ejecución local, un solo usuario o hilo activo a la vez.
+* **No es un runtime de sentence-embeddings de alta precisión contextual:** Su extractor ligero prioriza latencia submilisegundo ($< 0.5\text{ ms}$) y cero sobrecarga de memoria sobre inferencia contextual profunda.
+* **No compite contra llama.cpp en throughput multi-hilo masivo en servidores:** Compite en huella mínima de memoria viva (`mmap` zero-copy), arranque en frío ultrarrápido y la integración de memoria asociativa persistente en un único binario autónomo.
+* **No resuelve la paráfrasis semántica pura sin solapamiento léxico:** Depende de vocabulario compartido; resolver equivalencias abstractas sin términos comunes requeriría un modelo encoder satélite dedicado.
+* **No ejecuta modelos > 3B en hardware de consumo sin degradación severa:** El catálogo certificado está enfocado estrictamente en la franja de 0.1B a 3B de parámetros.
+
+---
+
+## ⚠️ Limitaciones Conocidas y Alcance del Sistema
+
+Este proyecto se rige por la **Verdad Empírica Certificada**. Las siguientes restricciones no son descuidos de implementación, sino decisiones de diseño deliberadas y propiedades matemáticas medidas formalmente:
+
+### 1. Piso de Compresión Fiel: Q4_0
+La cuantización por debajo de 4 bits (Q3_0, Q2_0) colapsa la coherencia semántica en contextos autorregresivos largos. Certificado empíricamente con similitud semántica $S_c < 0.40$ en capas intermedias y de salida (`tests/test_attention_ablation.rs`, `tests/test_ffn_bitdepth_isolation.rs`). La amplificación angular acumulada en la función Softmax vuelve matemáticamente inviable la compresión a 2-bits en transformers autoregresivos estándar. **La ruta de producción certificada es Q4_0 + embeddings FP32.**
+
+### 2. Retrieval Semántico y Paráfrasis
+El extractor hipocampal (`embed_text`) ejecuta *Weighted Mean Pooling* sobre los embeddings de entrada ($W_E \in \mathbb{R}^{V \times D}$) sin pasar por los bloques del transformer, logrando una latencia $< 0.5\text{ ms}$ con $0\text{ MB}$ de RAM adicional.
+* **Compromiso / Decisión:** Depende de solapamiento léxico o léxico-semántico parcial. No recupera paráfrasis puras sin vocabulario común (ejemplos documentados en calibración: $P_6$, $P_{11}$, $P_{13}$ en `tests/test_threshold_calibration.rs`).
+* **Alternativa:** Integrar un encoder denso dedicado (ej. MiniLM, BGE, E5-small), lo cual queda fuera del alcance del binario único ligero actual.
+
+### 3. Concurrencia Serializada
+El modelo activo en memoria está protegido por un bloqueo de lectura/escritura (`active_model.write()`). Las peticiones entrantes de chat y streaming SSE se serializan una tras otra.
+* **Compromiso / Decisión:** Decisión de diseño orientada a hardware mononodo y edge modesto (Android/Termux, laptops de consumo) para garantizar cero carreras de memoria y estabilidad térmica.
+* **Alternativa:** La concurrencia multi-inquilino paralela requeriría paginación de KV-Cache (*PagedAttention* / slots independientes), planificada para futuras evoluciones de servidor de alta concurrencia.
+
+### 4. Vector de Centrado Satélite $\boldsymbol{\mu}$ y Degradación Controlada
+Los modelos de alta dimensionalidad (SmolLM2 576d, Qwen2.5 896d) sufren colapso de cono anisotrópico. El sistema utiliza vectores de centrado satélite persistidos en `data/calibration/<modelo>.mu.bin`.
+* **Degradación Controlada (Opción C Fallback):** Si el archivo `.mu.bin` no existe o está dañado, el motor conmuta automáticamente al umbral no blanqueado $\tau^* = 0.50$ y emite `whitening_missing: true` en la telemetría SSE.
+* **Efecto medible:** Mayor tasa de rechazo o falsos positivos en el retrieval, pero el sistema mantiene el 100% de operatividad y estabilidad sin interrumpir la inferencia.
+
+### 5. Alcance y Estado de los Componentes
+* ✅ **Certificado para Producción:** Inferencia Q4_0 pura, cabeceras `FlatHeaderV2`, servidor SSE soberano en Rust (Zero-Python), memoria RAG Island Model con gating de entropía ($\Delta_{top} \ge 0.12$).
+* 📁 **Cerrado con Rigor:** Cuantizaciones extremas Q2_0 y Q3_0 en pesos de atención/FFN (descartadas por inviabilidad matemática certificada).
+* 🔬 **I+D Separada:** Afinamiento adaptativo de centroides (`fit_lm_head` funcional sobre corpus limpio; optimización de cuerpo completo numéricamente inestable en contextos largos).
+
+### 6. Catálogo y Hardware Objetivo
+El rendimiento y la estabilidad están validados formalmente para organismos de 0.1B a 3B en CPUs de consumo estándar (AMD Ryzen 7 5800H, Intel Core i7-8550U, ARM Cortex en Android). Modelos mayores a 3B no están certificados para ejecución local en estas arquitecturas.
+
+---
+
 ## ⚖️ Licencia y Gobernanza
 Licenciado bajo la **GNU Affero General Public License v3.0 (AGPL-3.0)**. Ver [LICENSE](LICENSE) para más información.
 
 ---
-*Protocolo GAJE-Flow v1.7.3-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*
+*Protocolo GAJE-Flow v1.7.4-alpha (Silver Adult) — Hacia la Soberanía de la Inferencia de Ultra-Alta Densidad.*

@@ -201,8 +201,52 @@ pytest tests/
 
 ---
 
+## 🎯 What GAJE Is Not
+
+To set clear engineering expectations prior to evaluation or deployment:
+
+* **Not an enterprise multi-tenant server:** It is a sovereign edge inference and memory engine designed for local, single-user / single-stream execution.
+* **Not a high-dimensional contextual sentence-embedding runtime:** The lightweight extractor prioritizes sub-millisecond latency ($< 0.5\text{ ms}$) and zero additional memory over deep transformer-layer contextual inference.
+* **Not competing with llama.cpp on raw multi-socket server throughput:** It competes on minimal live RAM footprint (`mmap` zero-copy), instant cold-start, and native associative persistent memory integrated within a single standalone binary.
+* **Not a pure semantic paraphrase resolver without lexical overlap:** It relies on shared token vocabulary; resolving abstract paraphrases without common tokens requires an external dedicated encoder.
+* **Not designed to run models > 3B on consumer hardware without severe degradation:** The certified catalog is strictly bounded to the 0.1B to 3B parameter regime.
+
+---
+
+## ⚠️ Known Limitations & System Scope
+
+This project operates strictly under **Empirical Certified Truth**. The following boundaries are not implementation bugs, but deliberate architectural trade-offs and formally measured mathematical realities:
+
+### 1. Compression Floor: Q4_0
+Quantization below 4-bits (Q3_0, Q2_0) leads to semantic coherence collapse under autoregressive context. Empirically certified with semantic similarity $S_c < 0.40$ across intermediate and output projections (`tests/test_attention_ablation.rs`, `tests/test_ffn_bitdepth_isolation.rs`). Angular error accumulation in Softmax makes 2-bit quantization mathematically unviable for standard production transformers. **The certified production path is Q4_0 + FP32 embeddings.**
+
+### 2. Semantic Retrieval & Paraphrase Limits
+The hippocampal extractor (`embed_text`) performs *Weighted Mean Pooling* over input embeddings ($W_E \in \mathbb{R}^{V \times D}$) without forward passes through transformer layers, achieving $< 0.5\text{ ms}$ latency with $0\text{ MB}$ extra RAM.
+* **Trade-off / Design Decision:** It relies on partial lexical and lexical-semantic overlap. It will not retrieve pure paraphrases devoid of shared vocabulary (empirically documented in calibration pairs: $P_6$, $P_{11}$, $P_{13}$ in `tests/test_threshold_calibration.rs`).
+* **Alternative:** Integrating a heavy dedicated dense encoder (e.g. MiniLM, BGE, E5-small), which lies outside the scope of this lightweight single-binary architecture.
+
+### 3. Serialized Concurrency
+The active in-memory model is protected by a single read-write lock (`active_model.write()`). Incoming chat queries and SSE streams execute sequentially.
+* **Trade-off / Design Decision:** Deliberate single-tenant design tailored for edge, mobile, and consumer environments (Android/Termux, laptops) to guarantee absolute thread safety, zero pointer races, and thermal stability.
+* **Alternative:** Parallel multi-tenant concurrency requires paged KV-Cache architecture (*PagedAttention* / independent KV slots), planned for future multi-user server evolutions.
+
+### 4. Satellite Centering Vector $\boldsymbol{\mu}$ & Controlled Degradation
+Higher-dimensional models (SmolLM2 576d, Qwen2.5 896d) suffer from anisotropic cone collapse. The engine employs satellite centering vectors stored in `data/calibration/<model>.mu.bin`.
+* **Controlled Degradation (Option C Fallback):** If `.mu.bin` is missing or corrupted, the system automatically falls back to unwhitened threshold $\tau^* = 0.50$ and sets `whitening_missing: true` in SSE telemetry.
+* **Measurable Effect:** Higher rejection rate or false-positive rate during retrieval, but the system maintains 100% operational stability without dropping requests.
+
+### 5. Component Scope & Lifecycle Status
+* ✅ **Production Certified:** Pure Q4_0 inference, `FlatHeaderV2` binary format, sovereign Rust SSE server (Zero-Python runtime), Island Model RAG with entropy gap gating ($\Delta_{top} \ge 0.12$).
+* 📁 **Rigorously Closed:** Extreme Q2_0 and Q3_0 quantizations on attention/FFN weights (discarded due to certified mathematical infeasibility).
+* 🔬 **Separated R&D:** Adaptive centroid fine-tuning (`fit_lm_head` operational on clean corpora; full-body optimization numerically unstable over long context).
+
+### 6. Hardware & Model Envelope
+Performance and stability are certified for 0.1B to 3B parameter models on consumer CPUs (AMD Ryzen 7 5800H, Intel Core i7-8550U, ARM Cortex on Android). Models beyond 3B are not certified for edge execution on this hardware class.
+
+---
+
 ## ⚖️ License & Governance
 Licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**. See [LICENSE](LICENSE) for more details.
 
 ---
-*GAJE-Flow Protocol v1.7.3-alpha (Silver Adult) — Toward Sovereign Edge Ultra-High-Density Inference.*
+*GAJE-Flow Protocol v1.7.4-alpha (Silver Adult) — Toward Sovereign Edge Ultra-High-Density Inference.*
