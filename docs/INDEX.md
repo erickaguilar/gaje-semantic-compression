@@ -1,4 +1,4 @@
-# 🗺️ Índice Maestro: GAJE Semantic Compression (v1.7.0-alpha)
+# 🗺️ Índice Maestro: GAJE Semantic Compression (v1.7.4-alpha)
 
 Mapa central del repositorio consolidado. Define la estructura lógica actual, la documentación estratégica y la suite de validación.
 
@@ -10,11 +10,11 @@ Si buscas información específica sin recorrer todo el archivo de documentació
 
 | Tu Perfil u Objetivo | Ruta Recomendada | Documentos Clave |
 | :--- | :--- | :--- |
-| 🚀 **Desarrollador / Producción** | Cómo compilar, ejecutar inferencia en servidor o terminal y gestionar modelos `.gaje`. | 1. [GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)<br>2. [GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)<br>3. [MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md](registry/MODELS_NOMENCLATURE_AND_GAJE_CONVENTION.md) |
-| 🔬 **Auditor Científico / Benchmarks** | Contrastar claims de rendimiento, paridad FP32, latencias sub-ms y perplejidad. | 1. [EMPIRICAL_TRUTH_STATE.md](meta/EMPIRICAL_TRUTH_STATE.md) ⭐<br>2. [BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)<br>3. [smollm2_fp32_parity.md](reports/smollm2_fp32_parity.md) |
+| 🚀 **Desarrollador / Producción** | Cómo compilar, ejecutar inferencia en servidor o terminal y gestionar modelos `.gaje`. | 1. [ARCHITECTURE.md](guides/ARCHITECTURE.md) ⭐<br>2. [GAJE_CLI_GUIDE.md](guides/GAJE_CLI_GUIDE.md)<br>3. [GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)<br>4. [CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md](guides/CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md) |
+| 🔬 **Auditor Científico / Benchmarks** | Contrastar claims de rendimiento, paridad FP32, latencias sub-ms y perplejidad. | 1. [EMPIRICAL_TRUTH_STATE.md](meta/EMPIRICAL_TRUTH_STATE.md) ⭐<br>2. [BENCHMARK_OFFICIAL_v1_6.md](reports/BENCHMARK_OFFICIAL_v1_6.md)<br>3. [CE_VS_GENERATION.md](research/CE_VS_GENERATION.md) |
 | 🧬 **Investigador / Bio-inspirado** | Comprensión profunda de la memoria de islas, espacios conformes y estandarización. | 1. [NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md](research/NOMENCLATURE_AND_STANDARDIZATION_MAPPING.md)<br>2. [ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md](research/ISLAND_MEMORY_FIDELITY_AND_NOISE_ISOLATION_FINDINGS.md)<br>3. [SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md](research/SPECIALIZED_SWARM_AGENTS_AND_BIOMIMETIC_ORGANISMS_FINDINGS.md) |
 
-> 📌 **Nota de Unificación Terminológica (v1.7.3+)**: Todos los modelos binarios planos mmap usan la extensión canónica **`.gaje`** (con soporte retroactivo para `.flat`). Las memorias semánticas vectoriales del *Island Model* se conservan estrictamente bajo la extensión **`.gmem`** en carpetas `<modelo>_memory/`. Reportes históricos pueden referirse a `.gaje.flat`.
+> 📌 **Nota de Unificación Terminológica (v1.7.4+)**: Todos los modelos binarios planos mmap usan la extensión canónica **`.gaje`** (con soporte retroactivo para `.flat`). Las memorias semánticas vectoriales del *Island Model* se conservan estrictamente bajo la extensión **`.gmem`** en carpetas `<modelo>_memory/`. Los vectores satélite de centrado anisotrópico se almacenan en `data/calibration/<modelo>.mu.bin`.
 
 ---
 
@@ -78,6 +78,8 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[STEEL_SOUL_MVP_CREATION.md](reports/STEEL_SOUL_MVP_CREATION.md)**: Registro de creación del MVP Steel Soul.
 
 ### 🛠️ Guías Operativas (`docs/guides/`)
+* **[ARCHITECTURE.md](guides/ARCHITECTURE.md)**: **ARQUITECTURA SOBERANA DE TRES CAPAS.** Especificación técnica integral de GAJE Helix (Presentación/SSE, Motor LLM/RAG Hipocampal, Almacenamiento Zero-Copy mmap).
+* **[CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md](guides/CHAT_TEMPLATES_AND_TOKEN_DICTIONARY_GUIDE.md)**: **DICCIONARIO CANÓNICO DE PLANTILLAS Y TOKENS.** Norma oficial de resolución soberana de plantillas de diálogo (`ChatML`, `Llama3`, `Llama2`, `Gemma`, `Classic`) y stop tokens sin heurísticas de nombre.
 * **[GAJE_SERVE_DEPLOYMENT_GUIDE.md](guides/GAJE_SERVE_DEPLOYMENT_GUIDE.md)**: **DESPLIEGUE EN PRODUCCIÓN (7B ULTRA).** Guía oficial para Hugging Face Spaces (Docker), VPS Cloud y Túneles Cloudflare.
 * **[FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md](guides/FAST_MODEL_DOWNLOAD_AND_DNF_TECHNIQUES.md)**: **TÉCNICAS DNF Y MULTI-STREAM.** Protocolo de aceleración de red estilo Fedora librepo / hf_transfer.
 * **[FAST_MODEL_DOWNLOAD_GUIDE.md](guides/FAST_MODEL_DOWNLOAD_GUIDE.md)**: Guía práctica de descarga acelerada de modelos desde Hugging Face Hub.
@@ -86,7 +88,6 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[GAJE_CLI_CAPABILITIES_AND_LIMITS.md](guides/GAJE_CLI_CAPABILITIES_AND_LIMITS.md)**: Capacidades operativas y límites del CLI nativo.
 * **[GAJE_MODEL_CAPABILITIES_AND_LIMITS.md](guides/GAJE_MODEL_CAPABILITIES_AND_LIMITS.md)**: Matriz de capacidades por familia de modelos genómicos.
 * **[AUTOMATION_SUITE_GUIDE.md](guides/AUTOMATION_SUITE_GUIDE.md)**: Manual de ejecución de la suite de pruebas automatizada de regresión e integración continua.
-* **[ARCHITECTURE.md](guides/ARCHITECTURE.md)**: Arquitectura global del motor.
 * **[OPERATIONAL_WORKFLOWS_V1.1.0.md](guides/OPERATIONAL_WORKFLOWS_V1.1.0.md)**: Flujos de trabajo del protocolo GAJE-Flow.
 * **[UNIX_TIME_ARCHITECTURE.md](guides/UNIX_TIME_ARCHITECTURE.md)**: Estándar y arquitectura de marcas de tiempo Unix POSIX.
 * **[USER_GUIDE.md](guides/USER_GUIDE.md)**: Manual de usuario del ecosistema.
@@ -105,16 +106,19 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[LASER_SEMANTIC_WAVEGUIDE_PLAN.md](plans/LASER_SEMANTIC_WAVEGUIDE_PLAN.md)**: **EL LÁSER SEMÁNTICO (`max_laser.gaje`)** — Arquitectura colimada *Deep & Narrow* ($D=384, L=12, H=6, V=4096$) para máxima coherencia de fase en ~22 MB.
 * **[MASTER_ROADMAP_2026.md](plans/MASTER_ROADMAP_2026.md)**: Visión estratégica a largo plazo y arquitectura del motor.
 * **[NEXT_STEPS_2026.md](plans/NEXT_STEPS_2026.md)**: Próximos pasos operativos del ciclo de desarrollo.
-* **[Q4_0_NANO_PICO_PRODUCTION_PLAN.md](plans/Q4_0_NANO_PICO_PRODUCTION_PLAN.md)**: **PRODUCCIÓN Q4_0 NANO/PICO** — Consolidación de PPL < 10 y calibración factual en `gaje_nano_0_5b` y `gaje_pico_135m`.
 * **[DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md](plans/DISTILLATION_DEEPSEEK_GEMMA_STRATEGY.md)**: Estrategia de destilación y transferencia de conocimiento desde maestros Qwen2.5 / DeepSeek / Gemma.
 * **[GAJE_32MB_PLAN.md](plans/GAJE_32MB_PLAN.md)**: Plan de compresión extrema para modelos ultra-ligeros de 32 MB.
 * **[STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md](plans/STRATEGIC_OPPORTUNITIES_AND_NEXT_STEPS.md)**: Oportunidades estratégicas de alto rendimiento (WebGPU, sub-4bit y ecosistema).
 * **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
 * **[MILESTONE_ALGEBRAIC_INITIALIZATION.md](plans/MILESTONE_ALGEBRAIC_INITIALIZATION.md)**: Inicialización algebraica mediante campo ciclotómico $\mathbb{Q}(\zeta_{16})$.
 * **[TRAINING_PIPELINE_PLAN.md](plans/TRAINING_PIPELINE_PLAN.md)**: Hoja de ruta global para pipeline de entrenamiento y afinamiento.
-* **[WEB_UI_OPTIMIZATION_ROADMAP.md](plans/WEB_UI_OPTIMIZATION_ROADMAP.md)**: Roadmap de aceleración WebGPU, virtualización DOM en chat y suites E2E Playwright.
 
 ### ✅ Planes Implementados y Certificados (`docs/plans/completed/`)
+* **[UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md](plans/completed/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)**: **FORMATO PLANO UNIFICADO .GAJE v2** — Consolidación de `.flat` y `.gaje` en estándar binario zero-copy con cabecera `FlatHeaderV2`, descriptor `ArchitectureDescriptor` y mutación de centroides in-place.
+* **[CHAT_TEMPLATE_HEADER_RESOLUTION_PLAN.md](plans/completed/CHAT_TEMPLATE_HEADER_RESOLUTION_PLAN.md)**: **RESOLUCIÓN CANÓNICA DE CABECERAS Y PLANTILLAS** — Resolución soberana de plantillas de chat y stop tokens vía introspección de `FlatHeaderV2` y `GTOK`, eliminando heurísticas por nombre de archivo.
+* **[Q4_0_NANO_PICO_PRODUCTION_PLAN.md](plans/completed/Q4_0_NANO_PICO_PRODUCTION_PLAN.md)**: **PRODUCCIÓN Q4_0 NANO/PICO** — Consolidación de inferencia Q4_0 con embeddings FP32 en `gaje_nano_0_5b` y `gaje_pico_135m`.
+* **[WEB_UI_OPTIMIZATION_ROADMAP.md](plans/completed/WEB_UI_OPTIMIZATION_ROADMAP.md)**: **OPTIMIZACIÓN WEB UI Y Y2K HUD** — Virtualización DOM, streaming SSE token-a-token, empaquetamiento embebido en `.rodata` y telemetría HUD en tiempo real.
+* **[WEB_UI_TYPESCRIPT_JSDOC_ZERO_BUILD_PLAN.md](plans/completed/WEB_UI_TYPESCRIPT_JSDOC_ZERO_BUILD_PLAN.md)**: **TIPADO JSDOC ZERO-BUILD** — Arquitectura tipada nativa en JavaScript sin pasos de compilación ni dependencias NPM.
 * **[AGENTIC_GRAPH_RUST.md](plans/completed/AGENTIC_GRAPH_RUST.md)**: **ORQUESTACIÓN AGÉNTICA SOBERANA** — Tipos `AgentState`, `AgentNode` y orquestación Tokio sin dependencias (`gaje-cli swarm`).
 * **[PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md](plans/completed/PHASE_4_AGENTIC_GRAPH_EXECUTION_PLAN.md)**: Plan maestro ejecutado de grafos agénticos y enjambre asíncrono.
 * **[GPU_STE_ACCELERATION_AND_ONLINE_DISTILLATION_PLAN.md](plans/completed/GPU_STE_ACCELERATION_AND_ONLINE_DISTILLATION_PLAN.md)**: **ACELERACIÓN GPU STE & DESTILACIÓN DNI** — Shaders WGSL (`ste_q2_backward`, `kl_divergence`, `batched_gemv`) y pipeline GPU en Rust.
