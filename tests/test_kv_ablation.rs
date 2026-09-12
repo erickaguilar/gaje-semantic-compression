@@ -135,7 +135,7 @@ mod tests {
         for (start, end) in windows {
             let e = end.min(n_tokens);
             if start >= e { continue; }
-            let len = e - start;
+            let _len = e - start;
             println!("Tokens {:2}..{:2}  |  {:.4} / {:.4}   |   {:.4} / {:.4}    |   {:.4} / {:.4}    |   {:.4} / {:.4}",
                 start, e - 1,
                 mean(&sc_q2_c10[start..e]), mean(&sc_q2_c23[start..e]),

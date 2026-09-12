@@ -38,6 +38,33 @@ pub struct LoadedModel {
     pub path: PathBuf,
     pub llm: GenomicLLM,
     pub tokenizer: GajeTokenizer,
+    pub memory: crate::compute::island::IslandOrchestrator,
+    pub memory_threshold: f32,
+    pub memory_uses_whitening: bool,
+    pub memory_mu: Option<Vec<f32>>,
+    pub memory_whitening_missing: bool,
+    pub memory_dir: PathBuf,
+}
+
+impl LoadedModel {
+    pub fn memory_config(
+        &self,
+        use_memory: bool,
+        custom_threshold: Option<f32>,
+    ) -> crate::compute::island::MemoryConfig {
+        crate::compute::island::MemoryConfig {
+            use_memory,
+            threshold: custom_threshold.unwrap_or(self.memory_threshold),
+            uses_whitening: self.memory_uses_whitening,
+            mu_vector: self.memory_mu.clone(),
+            whitening_missing: self.memory_whitening_missing,
+            max_tokens_context: 128,
+        }
+    }
+}
+
+pub fn calibrate_memory_threshold(name_or_path: &str, dim: usize) -> f32 {
+    crate::compute::island::configure_model_memory(Path::new(name_or_path), dim).0
 }
 
 pub fn find_model_path(models_root: &Path, model_name: &str) -> Option<PathBuf> {
@@ -125,11 +152,26 @@ pub fn run_server(
                     .unwrap_or_default()
                     .to_string_lossy()
                     .to_string();
+                let dim = llm.dim() as u32;
+                let path = PathBuf::from(&model_to_load);
+                let (memory_threshold, memory_uses_whitening, memory_mu, memory_whitening_missing) =
+                    crate::compute::island::configure_model_memory(&path, dim as usize);
+                let (memory, memory_dir) = crate::compute::island::IslandOrchestrator::load_paired_for_model(
+                    &path,
+                    dim,
+                    memory_threshold,
+                );
                 *active_model.write().unwrap() = Some(LoadedModel {
                     name,
-                    path: PathBuf::from(&model_to_load),
+                    path,
                     llm,
                     tokenizer,
+                    memory,
+                    memory_threshold,
+                    memory_uses_whitening,
+                    memory_mu,
+                    memory_whitening_missing,
+                    memory_dir,
                 });
                 println!("✅ Organismo listo con mapeo mmap zero-copy.");
             }
@@ -215,12 +257,11 @@ pub fn run_server(
 
         if url == "/api/memory" && method == Method::Get {
             let active_guard = active_model.read().unwrap();
-            let (active_path, active_dim) = if let Some(ref m) = *active_guard {
-                (Some(m.path.to_string_lossy().to_string()), m.llm.dim())
+            let json_val = if let Some(ref m) = *active_guard {
+                api::get_loaded_memory_info(&m.memory, &m.memory_dir, m.memory_threshold)
             } else {
-                (None, 384)
+                api::get_memory_info(None, 384)
             };
-            let json_val = api::get_memory_info(active_path.as_deref(), active_dim);
             let body = json_val.to_string();
             let mut resp = Response::from_string(body).with_status_code(StatusCode(200));
             resp.add_header(
@@ -252,6 +293,14 @@ pub fn run_server(
                             .unwrap_or_default()
                             .to_string_lossy()
                             .to_string();
+                        let dim = llm.dim() as u32;
+                        let (memory_threshold, memory_uses_whitening, memory_mu, memory_whitening_missing) =
+                            crate::compute::island::configure_model_memory(&model_path, dim as usize);
+                        let (memory, memory_dir) = crate::compute::island::IslandOrchestrator::load_paired_for_model(
+                            &model_path,
+                            dim,
+                            memory_threshold,
+                        );
                         {
                             let mut guard = active_model.write().unwrap();
                             let old = guard.take();
@@ -261,6 +310,12 @@ pub fn run_server(
                                 path: model_path,
                                 llm,
                                 tokenizer,
+                                memory,
+                                memory_threshold,
+                                memory_uses_whitening,
+                                memory_mu,
+                                memory_whitening_missing,
+                                memory_dir,
                             });
                         }
                         let json_resp = serde_json::json!({ "status": "ok", "model": name });
@@ -359,8 +414,7 @@ pub fn run_server(
             if let Some(ref mut loaded) = *guard {
                 let _ = streaming::handle_chat_stream_request(
                     request,
-                    &mut loaded.llm,
-                    &loaded.tokenizer,
+                    loaded,
                 );
             } else {
                 let err_json =
@@ -391,6 +445,8 @@ pub fn run_server(
                         temperature: Some(0.3),
                         top_p: Some(0.9),
                         repetition_penalty: Some(1.15),
+                        use_memory: Some(false),
+                        memory_threshold: None,
                     });
 
                 let user_msg = chat_req.message.as_deref().unwrap_or("");
@@ -399,11 +455,19 @@ pub fn run_server(
                 );
 
                 let template = streaming::detect_chat_template_from_tokenizer(&loaded.tokenizer);
-                let chat_prompt = streaming::format_chat_prompt_from_template(
-                    template,
-                    sys_prompt,
+                let mem_config = loaded.memory_config(
+                    chat_req.use_memory.unwrap_or(false),
+                    chat_req.memory_threshold,
+                );
+                let (chat_prompt, telemetry) = crate::compute::island::prepare_prompt_with_memory(
                     user_msg,
                     chat_req.history.as_deref(),
+                    sys_prompt,
+                    template,
+                    &loaded.llm,
+                    &loaded.tokenizer,
+                    Some(&loaded.memory),
+                    &mem_config,
                 );
 
                 let prompt_tokens = loaded
@@ -438,7 +502,8 @@ pub fn run_server(
                 let json_resp = serde_json::json!({
                     "response": clean,
                     "status": "ok",
-                    "model": loaded.name
+                    "model": loaded.name,
+                    "memory": &telemetry,
                 });
                 let mut resp =
                     Response::from_string(json_resp.to_string()).with_status_code(StatusCode(200));

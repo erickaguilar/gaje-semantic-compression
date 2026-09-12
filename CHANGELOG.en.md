@@ -2,6 +2,18 @@
 
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.4-alpha] - 2026-09-12
+### Added
+- **Real-Time Sovereign Hippocampal Memory (Native Rust Island Model RAG)**:
+  - **Sovereign Semantic Extractor (`embed_text`)**: Mathematical replacement of deterministic hashing by *Weighted Mean Pooling* over the input token embedding matrix ($W_E \in \mathbb{R}^{V \times D}$) without LLM block forward inference (~0.1-0.2 ms). Total exclusion of special tokens (`<|im_start|>`, `<|endoftext|>`) and stopword attenuation (0.15 weight) with unit $L_2$ normalization.
+  - **Empirical Threshold Calibration & Anisotropic Whitening**: Detection and mitigation of cone collapse in higher-dimensional models (`qwen2_5_0_5b_q2_0` 896d, `gaje_pico_135m` 576d) using satellite centering vectors $\boldsymbol{\mu} \in \mathbb{R}^D$ stored in `data/calibration/*.mu.bin`.
+  - **Entropy Gap Gating ($\Delta_{top} \ge 0.12$)**: K-WTA competitive pruning joined with strict entropy gap validation, eradicating false positives and competitive trap cases ($N_{18}$, $N_9$, $N_4$) while admitting genuine pairs ($P_{18}$).
+  - **Safe Hippocampal Injection & Turn Ordering**: Strict context injection inside the system prompt (`<|im_start|>system ... [Activated Hippocampal Memories: ...] <|im_end|>`) across ChatML, Llama3, and canonical templates before user/assistant turns, preventing hallucinations and prompt corruption.
+  - **Canonical 6-State Telemetry**: Real-time SSE events (`type: "memory"`) and server metrics reporting: `memory_disabled`, `memory_empty`, `memory_dim_mismatch`, `memory_injected`, `rejected_low_similarity`, and `rejected_entropy_gap`.
+  - **Graceful Satellite Degradation (Option C Fallback)**: In the absence or corruption of satellite `.mu.bin`, the engine automatically falls back to unwhitened $\tau^* = 0.50$ and signals `whitening_missing: true` without crashing or dropping inference.
+  - **Single Source of Truth (`prepare_prompt_with_memory`)**: Unified and synchronized prompt preparation across SSE streaming (`/api/chat/stream`), synchronous HTTP (`/api/chat`), and the terminal interactive REPL (`gaje-cli chat` with `/memory`, `/memory on`, `/memory off`).
+  - **Safe Default Mode**: Memory disabled by default (`use_memory: false`), guaranteeing zero overhead on standard inference calls.
+
 ## [1.7.3-alpha] - 2026-09-11
 ### Added
 - **Sovereign Native HTTP Production Server (`gaje-server` / `gaje-cli serve`)**:

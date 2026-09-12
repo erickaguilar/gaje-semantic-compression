@@ -1,6 +1,6 @@
-# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.3-alpha)
+# 🧬 GAJE Protocol: Semantic Adaptation & Genomic Compression (v1.7.4-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.3--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.4--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
@@ -52,13 +52,15 @@ We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0
 
 ---
 
-### 🏝️ 3. Island Model (.gmem): Sub-Millisecond Persistence
+### 🏝️ 3. Island Model (.gmem): Sub-Millisecond Hippocampal RAG
 
-The system integrates contextual memory persistence through 64-byte aligned flat binary indices (`.gmem`):
+The system integrates real-time contextual memory retrieval and persistence through 64-byte aligned flat binary indices (`.gmem`):
 
-* **Vector Retrieval Latency (RAG)**: **`0.75 ms`** ($750\text{ µs}$) per multi-niche query.
-* **Cold Start Latency (`.gmem`)**: **`0.12 ms`** ($120\text{ µs}$) from file.
-* **Context Budget**: Automatic injection of $128\text{ tokens}$ of high resonance ($\text{CosSim} = 0.9998$).
+* **Vector Retrieval Latency (RAG)**: **`< 0.5 ms`** per multi-niche query via sovereign *Weighted Mean Pooling* over input token embeddings ($W_E$).
+* **Entropy Gap Gating ($\Delta_{top} \ge 0.12$)**: K-WTA competitive lateral inhibition and mathematical rejection of ambiguous or competitive trap queries.
+* **Satellite Whitening Calibration**: Anisotropic centering ($\boldsymbol{\mu} \in \mathbb{R}^D$) persisted under `data/calibration/` with graceful fallback (Option C).
+* **Canonical 6-State Telemetry**: Real-time monitoring across SSE and server metrics (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap`, etc.).
+* **Context Budget**: Protected injection strictly within the system prompt block (`ChatML` / `Llama3`) preserving turn fidelity.
 
 ---
 

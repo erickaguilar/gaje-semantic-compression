@@ -641,7 +641,7 @@ fn bits_from_ordered(u: u32) -> f32 {
 }
 
 #[inline(always)]
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     let mut dot = 0.0f32;
     let mut norm_a = 0.0f32;
     let mut norm_b = 0.0f32;

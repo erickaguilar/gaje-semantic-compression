@@ -1,6 +1,6 @@
-# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.3-alpha)
+# 🧬 Protocolo GAJE: Adaptación Semántica y Compresión Genómica (v1.7.4-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.3--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.4--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
@@ -92,13 +92,15 @@ Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el 
 
 ---
 
-### 🏝️ 3. Island Model (.gmem): Persistencia Submilisegundo
+### 🏝️ 3. Island Model (.gmem): Memoria Hipocampal RAG Submilisegundo
 
-El sistema integra persistencia de contexto contextual mediante índices binarios planos `.gmem` alineados a 64 bytes:
+El sistema integra recuperación y persistencia de memoria contextual en tiempo real mediante índices binarios planos `.gmem` alineados a 64 bytes:
 
-* **Latencia de Recuperación RAG**: **`0.75 ms`** ($750\text{ µs}$) por consulta multinicho.
-* **Arranque en Frío (Cold Start `.gmem`)**: **`0.12 ms`** ($120\text{ µs}$) desde archivo en disco.
-* **Presupuesto de Contexto**: Inyección automática de $128\text{ tokens}$ de alta resonancia ($\text{CosSim} = 0.9998$).
+* **Latencia de Recuperación RAG**: **`< 0.5 ms`** por consulta multinicho mediante *Weighted Mean Pooling* sobre embeddings de entrada ($W_E$).
+* **Gating de Brecha de Entropía ($\Delta_{top} \ge 0.12$)**: Pruning competitivo K-WTA y descarte matemático de consultas ambiguas o casos trampa.
+* **Calibración Satélite por Whitening**: Centrado anisotrópico ($\boldsymbol{\mu} \in \mathbb{R}^D$) persistido en `data/calibration/` con fallback automático (Opción C).
+* **Telemetría Canónica de 6 Estados**: Supervisión en tiempo real en SSE y HUD (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap`, etc.).
+* **Presupuesto de Contexto**: Inyección protegida dentro del bloque de sistema (`ChatML` / `Llama3`) preservando la fidelidad de turnos.
 
 ---
 

@@ -2,6 +2,18 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.4-alpha] - 2026-09-12
+### Added / Añadido
+- **Memoria Hipocampal Soberana en Tiempo Real (Island Model RAG nativo en Rust)**:
+  - **Extractor Semántico Soberano (`embed_text`)**: Sustitución matemática del hash determinista por *Weighted Mean Pooling* sobre los embeddings de entrada del modelo ($W_E \in \mathbb{R}^{V \times D}$) sin inferencia de bloques del LLM (~0.1-0.2 ms). Exclusión total de tokens especiales (`<|im_start|>`, `<|endoftext|>`) y atenuación de palabras vacías (peso 0.15) con normalización euclídea $L_2$.
+  - **Calibración Empírica de Umbrales y Centrado Anisotrópico (Whitening)**: Detección y corrección del colapso de cono en modelos de alta dimensionalidad (`qwen2_5_0_5b_q2_0` 896d, `gaje_pico_135m` 576d) mediante vectores de centrado satélite $\boldsymbol{\mu} \in \mathbb{R}^D$ persistidos en `data/calibration/*.mu.bin`.
+  - **Gating de Brecha de Entropía ($\Delta_{top} \ge 0.12$)**: Pruning competitivo K-WTA combinado con validación estricta de separación de entropía, erradicando falsos positivos y casos trampa competitivos ($N_{18}$, $N_9$, $N_4$) frente a consultas verdaderas ($P_{18}$).
+  - **Inyección Hipocampal Segura y Orden de Turnos**: Integración estricta dentro del prompt de sistema (`<|im_start|>system ... [Recuerdos Hipocampales Activados: ...] <|im_end|>`) en ChatML, Llama3 y plantillas canónicas antes de los turnos de diálogo, previniendo alucinaciones y desalineaciones de contexto.
+  - **Telemetría Canónica de 6 Estados**: Eventos en tiempo real vía SSE (`type: "memory"`) y métricas de servidor reportando: `memory_disabled`, `memory_empty`, `memory_dim_mismatch`, `memory_injected`, `rejected_low_similarity` y `rejected_entropy_gap`.
+  - **Degradación Suave Satélite (Opción C Fallback)**: En ausencia o daño del vector satélite `.mu.bin`, el motor conmuta automáticamente a $\tau^* = 0.50$ sin whitening y señaliza `whitening_missing: true` sin interrumpir la inferencia.
+  - **Fuente Única de Verdad (`prepare_prompt_with_memory`)**: Canalización compartida y sincronizada entre el endpoint de streaming SSE (`/api/chat/stream`), endpoints síncronos (`/api/chat`) y la consola interactiva REPL de terminal (`gaje-cli chat` con comandos `/memory`, `/memory on`, `/memory off`).
+  - **Modo Seguro por Defecto**: Inferencia sin memoria por defecto (`use_memory: false`), garantizando cero consumo adicional en peticiones estándar.
+
 ## [1.7.3-alpha] - 2026-09-11
 ### Added / Añadido
 - **Servidor HTTP Nativo de Producción Soberano (`gaje-server` / `gaje-cli serve`)**:

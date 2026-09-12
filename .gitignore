@@ -46,6 +46,8 @@ inspect
 /data/*
 !/data/eval
 !/data/eval/**
+!/data/calibration
+!/data/calibration/**
 /models/
 /scripts/maintenance/local_artifacts/
 
@@ -55,6 +57,7 @@ inspect
 *.gmem
 *.gguf
 *.bin
+!*.mu.bin
 *.pth
 *.ckpt
 *.npy

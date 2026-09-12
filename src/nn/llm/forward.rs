@@ -21,6 +21,82 @@ impl GenomicLLM {
         }
     }
 
+    /// Extrae una representación semántica en R^D para un texto mediante Weighted Mean Pooling sobre los embeddings
+    /// de tokens de entrada (sin ejecutar el transformer), excluyendo tokens especiales y atenuando palabras vacías.
+    pub fn embed_text(
+        &self,
+        text: &str,
+        tokenizer: &crate::core::tokenizer::GajeTokenizer,
+    ) -> Result<Vec<f32>, String> {
+        let tokens_u32 = tokenizer
+            .encode(text, false)
+            .map_err(|e| e.to_string())?;
+
+        let stop_tokens = tokenizer.get_stop_tokens();
+        let dim = self.dim();
+        let mut sum_vec = vec![0.0f32; dim];
+        let mut total_w = 0.0f32;
+
+        let is_stopword = |w: &str| -> bool {
+            matches!(
+                w,
+                "de" | "la" | "el" | "en" | "es" | "y" | "a" | "un" | "una" | "unos" | "unas"
+                    | "con" | "por" | "para" | "que" | "del" | "los" | "las" | "the" | "is"
+                    | "of" | "and" | "in" | "to" | "," | "." | ";" | ":" | "¿" | "?" | "!" | "¡"
+            )
+        };
+
+        for &tok_u32 in &tokens_u32 {
+            let tok = tok_u32 as usize;
+            // Omitir tokens especiales para no contaminar el vector de significado
+            if stop_tokens.contains(&tok_u32) {
+                continue;
+            }
+            let tok_str = tokenizer
+                .decode(&[tok_u32], true)
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase();
+            let w = if is_stopword(&tok_str) { 0.15f32 } else { 1.0f32 };
+
+            if let Ok(emb) = self.get_token_embedding(tok) {
+                if emb.len() == dim {
+                    let mut has_nan = false;
+                    for &v in &emb {
+                        if v.is_nan() || v.is_infinite() {
+                            has_nan = true;
+                            break;
+                        }
+                    }
+                    if !has_nan {
+                        for i in 0..dim {
+                            sum_vec[i] += emb[i] * w;
+                        }
+                        total_w += w;
+                    }
+                }
+            }
+        }
+
+        if total_w <= 0.0 {
+            // Fallback a hash si el texto estaba vacío o solo contenía tokens especiales
+            return Ok(crate::compute::island::IslandOrchestrator::vector_from_text(text, dim));
+        }
+
+        // L2 Normalización
+        let mut norm_sq = 0.0f32;
+        for i in 0..dim {
+            sum_vec[i] /= total_w;
+            norm_sq += sum_vec[i] * sum_vec[i];
+        }
+        let norm = norm_sq.sqrt().max(1e-8);
+        for val in sum_vec.iter_mut() {
+            *val /= norm;
+        }
+
+        Ok(sum_vec)
+    }
+
     #[inline]
     pub fn forward_blocks_only(&mut self, token_id: usize) -> Result<(), String> {
         let pos = if self.blocks.is_empty() {

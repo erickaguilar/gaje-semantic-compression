@@ -5,7 +5,12 @@
 //! - **Documental**: Base de conocimiento de referencia rápida.
 //! - **Conversacional**: Historial de diálogo y contexto de sesión activo.
 
+use crate::core::gtok::ChatTemplate;
+use crate::core::tokenizer::GajeTokenizer;
 use crate::io::gmem::GmemMemoryIndex;
+use crate::nn::llm::GenomicLLM;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
 
@@ -41,6 +46,113 @@ pub struct IslandSearchResult {
     pub id: u64,
     pub similarity: f32,
     pub text: String,
+}
+
+/// Mensaje de diálogo estructurado para templates de chat
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ChatMessage {
+    pub role: Option<String>,
+    pub content: Option<String>,
+    pub message: Option<String>,
+}
+
+impl ChatMessage {
+    pub fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: Some(role.into()),
+            content: Some(content.into()),
+            message: None,
+        }
+    }
+
+    pub fn text(&self) -> &str {
+        self.content
+            .as_deref()
+            .or(self.message.as_deref())
+            .unwrap_or("")
+    }
+
+    pub fn role_str(&self) -> &str {
+        self.role.as_deref().unwrap_or("user")
+    }
+}
+
+/// Los 6 estados canónicos de decisión del subsistema de memoria hipocampal
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum MemoryDecision {
+    #[serde(rename = "memory_disabled")]
+    Disabled,
+    #[serde(rename = "memory_empty")]
+    Empty,
+    #[serde(rename = "memory_dim_mismatch")]
+    DimMismatch { expected: usize, found: usize },
+    #[serde(rename = "memory_injected")]
+    Injected {
+        facts_count: usize,
+        top_sim: f32,
+        delta_top: f32,
+    },
+    #[serde(rename = "rejected_low_similarity")]
+    RejectedLowSimilarity {
+        top_sim: f32,
+        threshold: f32,
+    },
+    #[serde(rename = "rejected_entropy_gap")]
+    RejectedEntropyGap {
+        top_sim: f32,
+        delta_top: f32,
+        threshold: f32,
+    },
+}
+
+impl MemoryDecision {
+    pub fn state_str(&self) -> &'static str {
+        match self {
+            MemoryDecision::Disabled => "memory_disabled",
+            MemoryDecision::Empty => "memory_empty",
+            MemoryDecision::DimMismatch { .. } => "memory_dim_mismatch",
+            MemoryDecision::Injected { .. } => "memory_injected",
+            MemoryDecision::RejectedLowSimilarity { .. } => "rejected_low_similarity",
+            MemoryDecision::RejectedEntropyGap { .. } => "rejected_entropy_gap",
+        }
+    }
+}
+
+/// Telemetría completa del subsistema de memoria para SSE, HTTP y REPL
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MemoryTelemetry {
+    pub decision: MemoryDecision,
+    pub state: String,
+    pub latency_ms: f32,
+    pub whitening_active: bool,
+    pub whitening_missing: bool,
+    pub facts_injected: usize,
+    pub retrieved_facts: Vec<String>,
+}
+
+/// Configuración de inferencia con memoria hipocampal
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MemoryConfig {
+    pub use_memory: bool,
+    pub threshold: f32,
+    pub uses_whitening: bool,
+    pub mu_vector: Option<Vec<f32>>,
+    pub whitening_missing: bool,
+    pub max_tokens_context: usize,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            use_memory: false,
+            threshold: 0.50,
+            uses_whitening: false,
+            mu_vector: None,
+            whitening_missing: false,
+            max_tokens_context: 128,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -237,13 +349,13 @@ impl IslandOrchestrator {
 
         // 1. Entropy Gap Gating:
         // Si hay al menos 2 matches, evaluar Delta_top = Sim_1 - Sim_2.
-        // Si Delta_top < entropy_gap_threshold && Sim_1 < 0.85, se clasifica como búsqueda difusa / ruido
+        // Si Delta_top < entropy_gap_threshold, se clasifica como búsqueda difusa / colisión ambigua
         // y se aborta la inyección para proteger al transformador de alucinaciones inducidas.
         let top_sim = matches[0].similarity;
         if matches.len() >= 2 {
             let second_sim = matches[1].similarity;
             let delta_top = top_sim - second_sim;
-            if delta_top < self.entropy_gap_threshold && top_sim < 0.85 {
+            if delta_top < self.entropy_gap_threshold {
                 return prompt.to_string();
             }
         }
@@ -311,6 +423,138 @@ impl IslandOrchestrator {
     ) -> String {
         let matches = self.retrieve_context_orthogonal(query_vector, 2);
         self.build_augmented_prompt_from_matches(prompt, &matches, max_tokens_context)
+    }
+
+    /// Ensambla el bloque de sistema enriquecido con recuerdos episódicos/documentales/conversacionales
+    /// aplicando el filtro de umbral global, Entropy Gap y poda competitiva K-WTA.
+    pub fn build_augmented_system_prompt(
+        &self,
+        system_prompt: &str,
+        matches: &[IslandSearchResult],
+        max_tokens_context: usize,
+    ) -> (String, MemoryDecision, Vec<String>) {
+        self.build_augmented_system_prompt_with_threshold(
+            system_prompt,
+            matches,
+            self.min_similarity,
+            max_tokens_context,
+        )
+    }
+
+    /// Ensambla el bloque de sistema enriquecido especificando un umbral tau personalizado
+    pub fn build_augmented_system_prompt_with_threshold(
+        &self,
+        system_prompt: &str,
+        matches: &[IslandSearchResult],
+        threshold: f32,
+        max_tokens_context: usize,
+    ) -> (String, MemoryDecision, Vec<String>) {
+        if matches.is_empty() {
+            return (
+                system_prompt.to_string(),
+                MemoryDecision::RejectedLowSimilarity {
+                    top_sim: 0.0,
+                    threshold,
+                },
+                Vec::new(),
+            );
+        }
+
+        let top_sim = matches[0].similarity;
+        if top_sim < threshold {
+            return (
+                system_prompt.to_string(),
+                MemoryDecision::RejectedLowSimilarity {
+                    top_sim,
+                    threshold,
+                },
+                Vec::new(),
+            );
+        }
+
+        let delta_top = if matches.len() >= 2 {
+            top_sim - matches[1].similarity
+        } else {
+            1.0
+        };
+
+        if matches.len() >= 2 && delta_top < self.entropy_gap_threshold {
+            return (
+                system_prompt.to_string(),
+                MemoryDecision::RejectedEntropyGap {
+                    top_sim,
+                    delta_top,
+                    threshold: self.entropy_gap_threshold,
+                },
+                Vec::new(),
+            );
+        }
+
+        let kwta_cutoff = top_sim * self.kwta_ratio;
+        let mut retrieved_facts = Vec::new();
+        let mut total_chars = 0;
+        let max_chars = max_tokens_context * 4;
+
+        let doc_min = if threshold < 0.65 {
+            (threshold + 0.10).min(0.85)
+        } else {
+            self.documental_min_sim.max(threshold)
+        };
+        let epi_min = threshold.min(self.episodic_min_sim);
+
+        for m in matches {
+            let niche_min = match m.niche {
+                IslandNiche::Documental => doc_min,
+                IslandNiche::Episodic | IslandNiche::Conversational => epi_min,
+            };
+            if m.similarity >= niche_min
+                && m.similarity >= threshold
+                && m.similarity >= kwta_cutoff
+            {
+                let prefix = match m.niche {
+                    IslandNiche::Episodic => "[Memoria Episódica]",
+                    IslandNiche::Documental => "[Conocimiento Base]",
+                    IslandNiche::Conversational => "[Historial Previo]",
+                };
+                let snippet = format!("- {} {}", prefix, m.text.trim());
+                if total_chars + snippet.len() > max_chars && !retrieved_facts.is_empty() {
+                    break;
+                }
+                total_chars += snippet.len();
+                retrieved_facts.push(snippet);
+            }
+        }
+
+        if retrieved_facts.is_empty() {
+            return (
+                system_prompt.to_string(),
+                MemoryDecision::RejectedLowSimilarity {
+                    top_sim,
+                    threshold,
+                },
+                Vec::new(),
+            );
+        }
+
+        let knowledge_block = format!(
+            "[Conocimiento Recuperado:\n{}]",
+            retrieved_facts.join("\n")
+        );
+        let effective_sys = if system_prompt.trim().is_empty() {
+            knowledge_block
+        } else {
+            format!("{}\n\n{}", system_prompt.trim(), knowledge_block)
+        };
+
+        (
+            effective_sys,
+            MemoryDecision::Injected {
+                facts_count: retrieved_facts.len(),
+                top_sim,
+                delta_top,
+            },
+            retrieved_facts,
+        )
     }
 
     /// Optimización SPSA de orden cero para calibrar pesos de nichos de memoria
@@ -458,13 +702,34 @@ impl IslandOrchestrator {
         let conv_path = format!("{}/conversational.gmem", dir_path);
 
         if std::path::Path::new(&epi_path).exists() {
-            self.episodic = crate::io::gmem::GmemMemoryIndex::load_from_file(&epi_path)?;
+            let idx = crate::io::gmem::GmemMemoryIndex::load_from_file(&epi_path)?;
+            if idx.header.dim != self.dim && idx.header.num_entries > 0 {
+                eprintln!(
+                    "⚠️ [Island Memory] Dimensión no coincidente en {}: archivo dim={}, modelo dim={}",
+                    epi_path, idx.header.dim, self.dim
+                );
+            }
+            self.episodic = idx;
         }
         if std::path::Path::new(&doc_path).exists() {
-            self.documental = crate::io::gmem::GmemMemoryIndex::load_from_file(&doc_path)?;
+            let idx = crate::io::gmem::GmemMemoryIndex::load_from_file(&doc_path)?;
+            if idx.header.dim != self.dim && idx.header.num_entries > 0 {
+                eprintln!(
+                    "⚠️ [Island Memory] Dimensión no coincidente en {}: archivo dim={}, modelo dim={}",
+                    doc_path, idx.header.dim, self.dim
+                );
+            }
+            self.documental = idx;
         }
         if std::path::Path::new(&conv_path).exists() {
-            self.conversational = crate::io::gmem::GmemMemoryIndex::load_from_file(&conv_path)?;
+            let idx = crate::io::gmem::GmemMemoryIndex::load_from_file(&conv_path)?;
+            if idx.header.dim != self.dim && idx.header.num_entries > 0 {
+                eprintln!(
+                    "⚠️ [Island Memory] Dimensión no coincidente en {}: archivo dim={}, modelo dim={}",
+                    conv_path, idx.header.dim, self.dim
+                );
+            }
+            self.conversational = idx;
         }
         Ok(())
     }
@@ -543,25 +808,89 @@ impl IslandOrchestrator {
         vec
     }
 
-    /// Intenta localizar y cargar el directorio de memoria asociado a un modelo
-    pub fn try_load_paired_memory(model_path: &str, dim: u32) -> Option<Self> {
-        let memory_dir = if model_path.ends_with(".gaje") {
-            model_path.strip_suffix(".gaje").unwrap().to_string() + "_memory"
-        } else if model_path.ends_with(".flat") {
-            model_path.strip_suffix(".flat").unwrap().to_string() + "_memory"
-        } else {
-            format!("{}_memory", model_path)
-        };
+    /// Resuelve la ruta canónica del directorio de memoria para un modelo
+    pub fn resolve_memory_dir(model_path: &Path) -> PathBuf {
+        let parent = model_path.parent().unwrap_or_else(|| Path::new("."));
+        let stem = model_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("default");
 
-        if std::path::Path::new(&memory_dir).exists() {
-            let mut orch = Self::new(dim);
-            if orch.load_all(&memory_dir).is_ok() {
+        // Candidato 1: <parent>/<stem>_memory (e.g. models/born/max_laser_memory)
+        let c1 = parent.join(format!("{}_memory", stem));
+        if c1.is_dir() {
+            return c1;
+        }
+
+        // Candidato 2: models/memory/<stem>
+        let c2 = PathBuf::from("models/memory").join(stem);
+        if c2.is_dir() {
+            return c2;
+        }
+
+        // Candidato 3: data/memory/<stem>
+        let c3 = PathBuf::from("data/memory").join(stem);
+        if c3.is_dir() {
+            return c3;
+        }
+
+        // Por defecto para inicialización o persistencia
+        c1
+    }
+
+    /// Carga el orquestador de memoria vinculado al modelo o inicializa uno nuevo
+    pub fn load_paired_for_model(
+        model_path: &Path,
+        dim: u32,
+        threshold: f32,
+    ) -> (Self, PathBuf) {
+        let mem_dir = Self::resolve_memory_dir(model_path);
+        let mut orch = Self::new(dim);
+        orch.min_similarity = threshold;
+
+        // Calibrar submárgenes por nicho según el umbral global del modelo
+        if threshold < 0.65 {
+            orch.documental_min_sim = (threshold + 0.10).min(0.85);
+            orch.episodic_min_sim = threshold;
+        } else if threshold > 0.70 {
+            orch.documental_min_sim = (threshold + 0.08).min(0.92);
+            orch.episodic_min_sim = threshold;
+        }
+
+        if mem_dir.is_dir() {
+            let dir_str = mem_dir.to_string_lossy();
+            if let Err(e) = orch.load_all(&dir_str) {
+                eprintln!("⚠️ [Island Memory] Error leyendo memoria en {:?}: {}", mem_dir, e);
+            } else {
                 let total = orch.episodic.entries.len()
                     + orch.documental.entries.len()
                     + orch.conversational.entries.len();
                 if total > 0 {
-                    return Some(orch);
+                    println!(
+                        "🧠 [Island Memory] Vinculados {} recuerdos desde {:?} (E:{}, D:{}, C:{})",
+                        total,
+                        mem_dir,
+                        orch.episodic.entries.len(),
+                        orch.documental.entries.len(),
+                        orch.conversational.entries.len()
+                    );
                 }
+            }
+        }
+
+        (orch, mem_dir)
+    }
+
+    /// Intenta localizar y cargar el directorio de memoria asociado a un modelo
+    pub fn try_load_paired_memory(model_path: &str, dim: u32) -> Option<Self> {
+        let p = Path::new(model_path);
+        let (orch, mem_dir) = Self::load_paired_for_model(p, dim, 0.65);
+        if mem_dir.is_dir() {
+            let total = orch.episodic.entries.len()
+                + orch.documental.entries.len()
+                + orch.conversational.entries.len();
+            if total > 0 {
+                return Some(orch);
             }
         }
         None
@@ -793,6 +1122,415 @@ impl IslandOrchestrator {
     }
 }
 
+/// Detección canónica de la plantilla de diálogo por introspección de tokens de parada o vocabulario
+pub fn detect_chat_template_from_tokenizer(tokenizer: &GajeTokenizer) -> ChatTemplate {
+    if let Some(gtok) = tokenizer.gtok() {
+        gtok.detect_chat_template()
+    } else if tokenizer.token_to_id("<|im_start|>").is_some() {
+        ChatTemplate::ChatML
+    } else if tokenizer.token_to_id("<|start_header_id|>").is_some() {
+        ChatTemplate::Llama3
+    } else if tokenizer.token_to_id("<start_of_turn>").is_some() {
+        ChatTemplate::Gemma
+    } else if tokenizer.token_to_id("[INST]").is_some() {
+        ChatTemplate::Llama2
+    } else if tokenizer.token_to_id("<|system|>").is_some() {
+        ChatTemplate::Phi3
+    } else {
+        ChatTemplate::Classic
+    }
+}
+
+/// Formatea un prompt de chat aplicando la plantilla de diálogo adecuada al organismo
+pub fn format_chat_prompt_from_template(
+    template: ChatTemplate,
+    effective_sys_prompt: &str,
+    user_msg: &str,
+    history: Option<&[ChatMessage]>,
+) -> String {
+    let mut full_prompt = String::new();
+    match template {
+        ChatTemplate::ChatML => {
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role_str();
+                    let content = msg.text();
+                    full_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, content));
+                }
+            }
+            full_prompt.push_str(&format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                user_msg.trim()
+            ));
+        }
+        ChatTemplate::Llama3 => {
+            full_prompt.push_str("<|begin_of_text|>");
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!(
+                    "<|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|>",
+                    effective_sys_prompt
+                ));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role_str();
+                    let content = msg.text();
+                    full_prompt.push_str(&format!(
+                        "<|start_header_id|>{}<|end_header_id|>\n\n{}<|eot_id|>",
+                        role, content
+                    ));
+                }
+            }
+            full_prompt.push_str(&format!(
+                "<|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+                user_msg.trim()
+            ));
+        }
+        ChatTemplate::Llama2 => {
+            full_prompt.push_str("<s>[INST] ");
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("<<SYS>>\n{}\n<</SYS>>\n\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role_str();
+                    let content = msg.text();
+                    if role == "assistant" {
+                        full_prompt.push_str(&format!("{} </s><s>[INST] ", content));
+                    } else {
+                        full_prompt.push_str(&format!("{} [/INST] ", content));
+                    }
+                }
+            }
+            full_prompt.push_str(&format!("{} [/INST] ", user_msg.trim()));
+        }
+        ChatTemplate::Gemma => {
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = if msg.role_str() == "assistant" { "model" } else { "user" };
+                    let content = msg.text();
+                    full_prompt.push_str(&format!("<start_of_turn>{}\n{}<end_of_turn>\n", role, content));
+                }
+            }
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!(
+                    "<start_of_turn>user\n{}\n\n{}<end_of_turn>\n<start_of_turn>model\n",
+                    effective_sys_prompt,
+                    user_msg.trim()
+                ));
+            } else {
+                full_prompt.push_str(&format!(
+                    "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
+                    user_msg.trim()
+                ));
+            }
+        }
+        ChatTemplate::Phi3 => {
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("<|system|>\n{}<|end|>\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = msg.role_str();
+                    let content = msg.text();
+                    full_prompt.push_str(&format!("<|{}|>\n{}<|end|>\n", role, content));
+                }
+            }
+            full_prompt.push_str(&format!(
+                "<|user|>\n{}<|end|>\n<|assistant|>\n",
+                user_msg.trim()
+            ));
+        }
+        _ => {
+            if !effective_sys_prompt.is_empty() {
+                full_prompt.push_str(&format!("System: {}\n\n", effective_sys_prompt));
+            }
+            if let Some(hist) = history {
+                for msg in hist.iter().rev().take(6).rev() {
+                    let role = if msg.role_str() == "assistant" { "Assistant" } else { "User" };
+                    let content = msg.text();
+                    full_prompt.push_str(&format!("{}: {}\n", role, content));
+                }
+            }
+            full_prompt.push_str(&format!("User: {}\nAssistant: ", user_msg.trim()));
+        }
+    }
+    full_prompt
+}
+
+/// Descubre la ruta del archivo satélite .mu.bin asociado al modelo
+pub fn resolve_mu_vector_path(model_path: &Path) -> Option<PathBuf> {
+    let stem = model_path.file_stem()?.to_str()?;
+
+    // Candidato 1: Mismo directorio que el modelo, con extensión .mu.bin
+    let c1 = model_path.with_extension("mu.bin");
+    if c1.is_file() {
+        return Some(c1);
+    }
+
+    // Candidato 2: <parent>/<stem>.mu.bin
+    if let Some(parent) = model_path.parent() {
+        let c2 = parent.join(format!("{}.mu.bin", stem));
+        if c2.is_file() {
+            return Some(c2);
+        }
+    }
+
+    // Candidato 3: models/production/<stem>.mu.bin
+    let c3 = PathBuf::from("models/production").join(format!("{}.mu.bin", stem));
+    if c3.is_file() {
+        return Some(c3);
+    }
+
+    // Candidato 4: models/born/<stem>.mu.bin
+    let c4 = PathBuf::from("models/born").join(format!("{}.mu.bin", stem));
+    if c4.is_file() {
+        return Some(c4);
+    }
+
+    // Candidato 5: data/calibration/<stem>.mu.bin
+    let c5 = PathBuf::from("data/calibration").join(format!("{}.mu.bin", stem));
+    if c5.is_file() {
+        return Some(c5);
+    }
+
+    None
+}
+
+/// Carga el vector satélite μ en f32 little-endian verificando dimensión
+pub fn load_mu_vector(mu_path: &Path, expected_dim: usize) -> Result<Vec<f32>, String> {
+    let bytes = std::fs::read(mu_path)
+        .map_err(|e| format!("Error leyendo {}: {}", mu_path.display(), e))?;
+    if bytes.len() != expected_dim * 4 {
+        return Err(format!(
+            "Dimensión inválida en .mu.bin: se esperaban {} bytes (dim={}), encontrados {} bytes",
+            expected_dim * 4,
+            expected_dim,
+            bytes.len()
+        ));
+    }
+    let mut mu = Vec::with_capacity(expected_dim);
+    for chunk in bytes.chunks_exact(4) {
+        let val = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        if val.is_nan() || val.is_infinite() {
+            return Err("El archivo .mu.bin contiene valores NaN o Inf".to_string());
+        }
+        mu.push(val);
+    }
+    Ok(mu)
+}
+
+/// Configura umbrales calibrados y vector satélite μ según el modelo (Opción C de fallback)
+pub fn configure_model_memory(
+    model_path: &Path,
+    dim: usize,
+) -> (f32, bool, Option<Vec<f32>>, bool) {
+    let stem = model_path
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_lowercase();
+
+    // 1. max.gaje (Llama Q2_0 256d): Weighted pooling nativo, sin whitening, tau*=0.42
+    if stem.contains("max") || dim <= 384 {
+        return (0.42, false, None, false);
+    }
+
+    // 2. Modelos que requieren whitening: Qwen (896d) o Pico/Smol (576d)
+    let needs_whitening = stem.contains("qwen") || stem.contains("pico") || stem.contains("smol") || dim > 384;
+    let (whitened_tau, unwhitened_tau) = if stem.contains("qwen") || dim >= 896 {
+        (0.33, 0.50)
+    } else if stem.contains("pico") || stem.contains("smol") {
+        (0.27, 0.65)
+    } else {
+        (0.30, 0.65)
+    };
+
+    if needs_whitening {
+        if let Some(mu_path) = resolve_mu_vector_path(model_path) {
+            match load_mu_vector(&mu_path, dim) {
+                Ok(mu) => {
+                    println!("🧬 [Island Memory] Vector satélite μ cargado ({:?}, dim={}) -> Whitening activo (τ*={:.2})", mu_path, dim, whitened_tau);
+                    return (whitened_tau, true, Some(mu), false);
+                }
+                Err(e) => {
+                    eprintln!("⚠️ [Island Memory] Error leyendo .mu.bin {:?}: {}. Fallback Opción C activo.", mu_path, e);
+                    return (unwhitened_tau, false, None, true);
+                }
+            }
+        } else {
+            eprintln!("⚠️ [Island Memory] Archivo .mu.bin no encontrado para {:?}. Fallback Opción C activo (sin whitening, τ*={:.2}).", model_path, unwhitened_tau);
+            return (unwhitened_tau, false, None, true);
+        }
+    }
+
+    (0.65, false, None, false)
+}
+
+/// Único punto de verdad para recuperar contexto asociativo, aplicar filtros de gating,
+/// ensamblar el prompt enriquecido y generar telemetría de 6 estados.
+pub fn prepare_prompt_with_memory(
+    user_message: &str,
+    history: Option<&[ChatMessage]>,
+    system_prompt: &str,
+    template: ChatTemplate,
+    llm: &GenomicLLM,
+    tokenizer: &GajeTokenizer,
+    memory: Option<&IslandOrchestrator>,
+    config: &MemoryConfig,
+) -> (String, MemoryTelemetry) {
+    // 1. Si la memoria no está habilitada explícitamente:
+    if !config.use_memory {
+        let prompt = format_chat_prompt_from_template(template, system_prompt, user_message, history);
+        return (
+            prompt,
+            MemoryTelemetry {
+                decision: MemoryDecision::Disabled,
+                state: "memory_disabled".to_string(),
+                latency_ms: 0.0,
+                whitening_active: false,
+                whitening_missing: config.whitening_missing,
+                facts_injected: 0,
+                retrieved_facts: Vec::new(),
+            },
+        );
+    }
+
+    let t0 = Instant::now();
+
+    // 2. Verificar existencia y contenido del orquestador de memoria:
+    let orch = match memory {
+        Some(o) => o,
+        None => {
+            let prompt = format_chat_prompt_from_template(template, system_prompt, user_message, history);
+            return (
+                prompt,
+                MemoryTelemetry {
+                    decision: MemoryDecision::Empty,
+                    state: "memory_empty".to_string(),
+                    latency_ms: t0.elapsed().as_secs_f64() as f32 * 1000.0,
+                    whitening_active: false,
+                    whitening_missing: config.whitening_missing,
+                    facts_injected: 0,
+                    retrieved_facts: Vec::new(),
+                },
+            );
+        }
+    };
+
+    let total_entries = orch.episodic.entries.len()
+        + orch.documental.entries.len()
+        + orch.conversational.entries.len();
+    if total_entries == 0 {
+        let prompt = format_chat_prompt_from_template(template, system_prompt, user_message, history);
+        return (
+            prompt,
+            MemoryTelemetry {
+                decision: MemoryDecision::Empty,
+                state: "memory_empty".to_string(),
+                latency_ms: t0.elapsed().as_secs_f64() as f32 * 1000.0,
+                whitening_active: false,
+                whitening_missing: config.whitening_missing,
+                facts_injected: 0,
+                retrieved_facts: Vec::new(),
+            },
+        );
+    }
+
+    // 3. Verificar congruencia de dimensión:
+    let expected_dim = llm.dim();
+    let memory_dim = orch.dim as usize;
+    if memory_dim != expected_dim {
+        let prompt = format_chat_prompt_from_template(template, system_prompt, user_message, history);
+        return (
+            prompt,
+            MemoryTelemetry {
+                decision: MemoryDecision::DimMismatch {
+                    expected: expected_dim,
+                    found: memory_dim,
+                },
+                state: "memory_dim_mismatch".to_string(),
+                latency_ms: t0.elapsed().as_secs_f64() as f32 * 1000.0,
+                whitening_active: false,
+                whitening_missing: config.whitening_missing,
+                facts_injected: 0,
+                retrieved_facts: Vec::new(),
+            },
+        );
+    }
+
+    // 4. Extracción de embedding semántico de la consulta:
+    let (query_vec, whitening_active) = match (&config.mu_vector, config.uses_whitening) {
+        (Some(mu), true) if mu.len() == expected_dim => {
+            let raw = llm
+                .embed_text(user_message, tokenizer)
+                .unwrap_or_else(|_| vec![0.0; expected_dim]);
+            let mut centered = vec![0.0f32; expected_dim];
+            let mut norm_sq = 0.0f32;
+            for i in 0..expected_dim {
+                let diff = raw[i] - mu[i];
+                centered[i] = diff;
+                norm_sq += diff * diff;
+            }
+            let norm = norm_sq.sqrt().max(1e-8);
+            for val in centered.iter_mut() {
+                *val /= norm;
+            }
+            (centered, true)
+        }
+        _ => {
+            let raw = llm
+                .embed_text(user_message, tokenizer)
+                .unwrap_or_else(|_| vec![0.0; expected_dim]);
+            (raw, false)
+        }
+    };
+
+    // 5. Búsqueda top-k asociativa en islas:
+    let matches = orch.retrieve_context(&query_vec, 2);
+
+    // 6. Gating & ensamblado del bloque de sistema enriquecido con umbral de config
+    let (effective_sys_prompt, decision, retrieved_facts) = orch
+        .build_augmented_system_prompt_with_threshold(
+            system_prompt,
+            &matches,
+            config.threshold,
+            config.max_tokens_context,
+        );
+
+    // 7. Formateo de plantilla de chat nativa (ChatML, Llama3, etc.)
+    let full_prompt = format_chat_prompt_from_template(
+        template,
+        &effective_sys_prompt,
+        user_message,
+        history,
+    );
+
+    let latency_ms = t0.elapsed().as_secs_f64() as f32 * 1000.0;
+    let state_str = decision.state_str().to_string();
+    let facts_injected = if let MemoryDecision::Injected { facts_count, .. } = &decision {
+        *facts_count
+    } else {
+        0
+    };
+
+    (
+        full_prompt,
+        MemoryTelemetry {
+            decision,
+            state: state_str,
+            latency_ms,
+            whitening_active,
+            whitening_missing: config.whitening_missing,
+            facts_injected,
+            retrieved_facts,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -838,34 +1576,52 @@ mod tests {
                 text: "Recuerdo difuso 2".to_string(),
             },
         ];
-        // Delta_top = 0.74 - 0.72 = 0.02 < 0.12 y top_sim = 0.74 < 0.85 -> Ruido Difuso abortado
+        // Delta_top = 0.74 - 0.72 = 0.02 < 0.12 -> Ruido Difuso abortado por Entropy Gap
         let prompt = "¿Pregunta sobre tema desconocido?";
         let augmented = orch.build_augmented_prompt_from_matches(prompt, &matches, 100);
         assert_eq!(augmented, prompt, "Debe abortar la inyección ante ruido difuso");
     }
 
     #[test]
-    fn test_entropy_gap_high_resonance_override() {
+    fn test_entropy_gap_close_competition_aborted() {
         let orch = IslandOrchestrator::new(4);
         let matches = vec![
             IslandSearchResult {
                 niche: IslandNiche::Documental,
                 id: 1,
                 similarity: 0.92,
-                text: "Hecho de alta certeza 1".to_string(),
+                text: "Hecho ambiguo 1".to_string(),
             },
             IslandSearchResult {
                 niche: IslandNiche::Documental,
                 id: 2,
                 similarity: 0.89,
-                text: "Hecho de alta certeza 2".to_string(),
+                text: "Hecho ambiguo 2".to_string(),
             },
         ];
-        // Delta_top = 0.03 < 0.12, pero top_sim = 0.92 >= 0.85 -> Resonancia clara permitida
+        // Delta_top = 0.03 < 0.12 -> Competencia cerrada sin ganador claro: debe abortar
         let prompt = "¿Pregunta clave?";
         let augmented = orch.build_augmented_prompt_from_matches(prompt, &matches, 100);
-        assert!(augmented.contains("Contexto de Memoria Recolectado:"));
-        assert!(augmented.contains("Hecho de alta certeza 1"));
+        assert_eq!(augmented, prompt, "Debe abortar la inyección ante competencia cerrada");
+
+        // Caso con margen claro: Delta_top = 0.92 - 0.70 = 0.22 >= 0.12 -> Ganador claro permitido
+        let clear_matches = vec![
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 1,
+                similarity: 0.92,
+                text: "Hecho ganador claro".to_string(),
+            },
+            IslandSearchResult {
+                niche: IslandNiche::Documental,
+                id: 2,
+                similarity: 0.70,
+                text: "Hecho secundario".to_string(),
+            },
+        ];
+        let augmented_clear = orch.build_augmented_prompt_from_matches(prompt, &clear_matches, 100);
+        assert!(augmented_clear.contains("Contexto de Memoria Recolectado:"));
+        assert!(augmented_clear.contains("Hecho ganador claro"));
     }
 
     #[test]

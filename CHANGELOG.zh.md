@@ -2,6 +2,18 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
 
+## [1.7.4-alpha] - 2026-09-12
+### 新增 (Added)
+- **实时主权海马记忆系统 (Rust 原生 Island Model RAG)**:
+  - **主权语义提取器 (`embed_text`)**：以词嵌入输入矩阵 ($W_E \in \mathbb{R}^{V \times D}$) 上的*加权平均池化 (Weighted Mean Pooling)* 全面取代确定性字符串哈希，无需执行 Transformer 前向计算即可在约 0.1-0.2 ms 内生成稠密向量。彻底剔除特殊 Token (`<|im_start|>`, `<|endoftext|>`)，对停用词应用 0.15 权重衰减并强制 $L_2$ 欧几里得范数归一化。
+  - **经验阈值标定与各向异性白化居中 (Whitening)**：实证检测并纠正高维模型 (`qwen2_5_0_5b_q2_0` 896维, `gaje_pico_135m` 576维) 中的锥体坍缩效应，通过持久化于 `data/calibration/*.mu.bin` 的卫星居中向量 $\boldsymbol{\mu} \in \mathbb{R}^D$ 扩展语义动态范围。
+  - **熵隙门控机制 ($\Delta_{top} \ge 0.12$)**：结合 K-WTA 侧向竞争抑制与严格的熵分离门控，杜绝任何启发式后门，彻底消除相似度相近的竞争陷阱对 ($N_{18}$, $N_9$, $N_4$)，确保仅放行明确相关的记忆 ($P_{18}$)。
+  - **安全海马注入与对话轮次保序**：在 ChatML、Llama3 等规范模板中将检索到的知识严格注入到系统提示词区块 (`<|im_start|>system ... [激活的海马记忆: ...] <|im_end|>`)，绝不破坏用户与助手轮次顺序，杜绝幻觉与提示词污染。
+  - **规范化 6 状态实时遥测**：通过 SSE 独立事件 (`type: "memory"`) 与服务端指标即时报告：`memory_disabled`, `memory_empty`, `memory_dim_mismatch`, `memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap`。
+  - **卫星平滑降级 (方案 C Fallback)**：当卫星 `.mu.bin` 文件缺失或损坏时，系统自动无损降级为未白化阈值 $\tau^* = 0.50$ 并标记 `whitening_missing: true`，确保推理永不断流。
+  - **单一真理来源 (`prepare_prompt_with_memory`)**：在 SSE 流式端点 (`/api/chat/stream`)、同步端点 (`/api/chat`) 与终端交互式 REPL (`gaje-cli chat`，支持 `/memory`, `/memory on`, `/memory off`) 之间共享一致的提示词装配逻辑。
+  - **安全默认模式**：默认关闭记忆检索 (`use_memory: false`)，确保标准推理请求零额外计算开销。
+
 ## [1.7.3-alpha] - 2026-09-11
 ### 新增 (Added)
 - **生产级原生主权 HTTP 服务器 (`gaje-server` / `gaje-cli serve`)**:

@@ -81,7 +81,7 @@ fn test_vram_allocation_and_bandwidth_viability() {
     let size_200mb = 200 * 1024 * 1024;
     println!("\n⏳ [Prueba 2] Asignando búfer persistente de 200 MB en VRAM (Tamaño del modelo completo)...");
     let t1 = Instant::now();
-    let buf_200 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+    let _buf_200 = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("GAJE 200MB Full Model VRAM Buffer"),
         size: size_200mb as u64,
         usage: wgpu::BufferUsages::STORAGE

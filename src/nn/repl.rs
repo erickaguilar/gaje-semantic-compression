@@ -22,6 +22,8 @@ impl Default for ReplConfig {
             "models/production/gaje_pico_135m.gaje"
         } else if Path::new("models/production/gaje_pico_135m.flat").exists() {
             "models/production/gaje_pico_135m.flat"
+        } else if Path::new("models/production/qwen2_5_0_5b_q2_0.gaje").exists() {
+            "models/production/qwen2_5_0_5b_q2_0.gaje"
         } else if Path::new("models/production/qwen2_5_0_5b.gaje").exists() {
             "models/production/qwen2_5_0_5b.gaje"
         } else {
@@ -80,23 +82,30 @@ pub fn run_repl(
         load_time.as_secs_f64() * 1000.0
     );
 
-    let mut memory_orch = crate::compute::island::IslandOrchestrator::try_load_paired_memory(
-        &config.model_path,
+    let (memory_threshold, memory_uses_whitening, memory_mu, memory_whitening_missing) =
+        crate::compute::island::configure_model_memory(Path::new(&config.model_path), llm.dim());
+    let (mut memory_orch, memory_dir) = crate::compute::island::IslandOrchestrator::load_paired_for_model(
+        Path::new(&config.model_path),
         llm.dim() as u32,
+        memory_threshold,
     );
-    if let Some(ref orch) = memory_orch {
-        let total_facts = orch.documental.entries.len()
-            + orch.episodic.entries.len()
-            + orch.conversational.entries.len();
+    let mut use_memory = false; // Modo "sin memoria" por defecto (Regla de Oro)
+
+    let total_facts = memory_orch.documental.entries.len()
+        + memory_orch.episodic.entries.len()
+        + memory_orch.conversational.entries.len();
+    if total_facts > 0 {
         println!(
-            "🧠 Hipocampo Congénito: {} hechos activos en memoria asociativa (.gmem)",
-            total_facts
+            "🧠 Hipocampo Congénito: {} hechos activos en memoria asociativa (.gmem, τ*={:.2})",
+            total_facts,
+            memory_threshold
         );
     }
     println!();
     println!("Comandos disponibles:");
     println!("  /reset   - Limpia el historial de conversación y el KV-Cache");
-    println!("  /stats   - Muestra las estadísticas de memoria y configuración");
+    println!("  /stats   - Muestra las estadísticas del modelo");
+    println!("  /memory  - Consulta o alterna la memoria hipocampal (/memory on | off)");
     println!("  /help    - Muestra este menú de ayuda");
     println!("  /exit    - Finaliza la sesión interactiva\n");
     println!("-------------------------------------------------------------------------------");
@@ -134,7 +143,34 @@ pub fn run_repl(
                 println!("\nComandos disponibles:");
                 println!("  /reset   - Limpia el historial de conversación");
                 println!("  /stats   - Muestra métricas del modelo");
+                println!("  /memory  - Estado de memoria (/memory on | off)");
                 println!("  /exit    - Salir del REPL\n");
+                continue;
+            }
+            "/memory" | "/memory status" => {
+                println!("\n🧠 Estado de Memoria Hipocampal:");
+                println!("   • Activa:              {}", if use_memory { "SÍ (on)" } else { "NO (off)" });
+                println!("   • Directorio:          {:?}", memory_dir);
+                let total = memory_orch.episodic.entries.len()
+                    + memory_orch.documental.entries.len()
+                    + memory_orch.conversational.entries.len();
+                println!("   • Recuerdos cargados:  {}", total);
+                println!("   • Umbral τ*:           {:.2}", memory_threshold);
+                println!("   • Whitening:           {}", if memory_uses_whitening { "Activo (μ cargado)" } else { "Inactivo" });
+                if memory_whitening_missing {
+                    println!("   ⚠️ Aviso:              .mu.bin faltante/corrupto (Fallback Opción C)");
+                }
+                println!("   💡 Tip: Usa `/memory on` o `/memory off` para cambiar el estado.\n");
+                continue;
+            }
+            "/memory on" => {
+                use_memory = true;
+                println!("🧠 Memoria Hipocampal ACTIVADA (use_memory: true).");
+                continue;
+            }
+            "/memory off" => {
+                use_memory = false;
+                println!("🧠 Memoria Hipocampal DESACTIVADA (use_memory: false).");
                 continue;
             }
             "/stats" => {
@@ -142,56 +178,52 @@ pub fn run_repl(
                 println!("   • Archivo:             {}", config.model_path);
                 println!("   • Turnos en Memoria:   {}", history.len());
                 println!("   • Temperatura:         {}", config.temperature);
-                println!("   • Repetition Penalty:  {}\n", config.repetition_penalty);
+                println!("   • Repetition Penalty:  {}", config.repetition_penalty);
+                println!("   • Memoria Hipocampal:  {}\n", if use_memory { "Activa" } else { "Inactiva" });
                 continue;
             }
             _ => {}
         }
 
-        // Búsqueda en Hipocampo Congénito (.gmem)
-        let mut context_prefix = String::new();
-        if let Some(ref orch) = memory_orch {
-            let q_vec = crate::compute::island::IslandOrchestrator::vector_from_text(
-                input_trimmed,
-                llm.dim(),
-            );
-            let matches = orch.retrieve_context(&q_vec, 2);
-            let relevant: Vec<_> = matches
-                .into_iter()
-                .filter(|m| m.similarity >= 0.50)
-                .collect();
-            if !relevant.is_empty() {
-                context_prefix = format!(
-                    "[Conocimiento Hipocampal: {}]\n",
-                    relevant
-                        .iter()
-                        .map(|m| m.text.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                );
-            }
-        }
+        let chat_history: Vec<crate::compute::island::ChatMessage> = history
+            .iter()
+            .flat_map(|(u, a)| {
+                vec![
+                    crate::compute::island::ChatMessage::new("user", u.clone()),
+                    crate::compute::island::ChatMessage::new("assistant", a.clone()),
+                ]
+            })
+            .collect();
 
-        // Construir prompt con ChatML
-        let mut full_prompt = format!(
-            "<|im_start|>system\n{}{}<|im_end|>\n",
-            config.system_prompt,
-            if context_prefix.is_empty() {
-                "".to_string()
-            } else {
-                format!("\n{}", context_prefix)
-            }
+        let template = crate::compute::island::detect_chat_template_from_tokenizer(&tokenizer);
+        let mem_config = crate::compute::island::MemoryConfig {
+            use_memory,
+            threshold: memory_threshold,
+            uses_whitening: memory_uses_whitening,
+            mu_vector: memory_mu.clone(),
+            whitening_missing: memory_whitening_missing,
+            max_tokens_context: 128,
+        };
+
+        let (full_prompt, telemetry) = crate::compute::island::prepare_prompt_with_memory(
+            input_trimmed,
+            Some(&chat_history),
+            &config.system_prompt,
+            template,
+            &llm,
+            &tokenizer,
+            Some(&memory_orch),
+            &mem_config,
         );
-        for (u, a) in history.iter().rev().take(3).rev() {
-            full_prompt.push_str(&format!(
-                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}<|im_end|>\n",
-                u, a
-            ));
+
+        if use_memory {
+            println!(
+                "🧠 [Memoria: {} | Inyectados: {} | Latencia: {:.1} ms]",
+                telemetry.state,
+                telemetry.facts_injected,
+                telemetry.latency_ms
+            );
         }
-        full_prompt.push_str(&format!(
-            "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-            input_trimmed
-        ));
 
         print!("\n🧬 GAJE: ");
         io::stdout().flush()?;
@@ -238,14 +270,13 @@ pub fn run_repl(
             tps, tok_count, elapsed
         );
 
-        if let Some(ref mut orch) = memory_orch {
+        if use_memory {
             let turn_id = (history.len() + 1) as u64;
             let entry_text = format!("U: {} | A: {}", input_trimmed, clean_reply);
-            let entry_vec = crate::compute::island::IslandOrchestrator::vector_from_text(
-                &entry_text,
-                llm.dim(),
-            );
-            orch.add_memory(
+            let entry_vec = llm
+                .embed_text(&entry_text, &tokenizer)
+                .unwrap_or_else(|_| crate::compute::island::IslandOrchestrator::vector_from_text(&entry_text, llm.dim()));
+            memory_orch.add_memory(
                 crate::compute::island::IslandNiche::Conversational,
                 turn_id,
                 entry_vec,

@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod tests {
     use _impl::io::flat_reader::GajeFlatFileReader;
-    use std::fs::File;
-    use std::io::Write;
 
     const PROMPTS: &[&str] = &[
         "Demuestra por que la raiz cuadrada de 2 es un numero irracional usando el metodo de reduccion al absurdo paso a paso. Comienza asumiendo que existen dos enteros coprimos p y q tales que su cociente al cuadrado es 2.",

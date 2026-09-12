@@ -1,6 +1,4 @@
-use crate::core::tokenizer::GajeTokenizer;
 use crate::nn::linear::GenomicOperable;
-use crate::nn::llm::GenomicLLM;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashSet;
@@ -10,12 +8,7 @@ use std::thread;
 use std::time::Instant;
 use tiny_http::{Header, Request, Response, StatusCode};
 
-#[derive(Deserialize, Debug)]
-pub struct ChatMessage {
-    pub role: Option<String>,
-    pub content: Option<String>,
-    pub message: Option<String>,
-}
+pub use crate::compute::island::ChatMessage;
 
 #[derive(Deserialize, Debug)]
 pub struct ChatRequest {
@@ -27,6 +20,8 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     pub top_p: Option<f32>,
     pub repetition_penalty: Option<f32>,
+    pub use_memory: Option<bool>,
+    pub memory_threshold: Option<f32>,
 }
 
 pub struct ChannelReader {
@@ -71,149 +66,13 @@ pub fn clean_special_tokens(text: &str) -> String {
         .replace("</s>", "")
 }
 
-pub fn detect_chat_template_from_tokenizer(tokenizer: &GajeTokenizer) -> crate::core::gtok::ChatTemplate {
-    if let Some(gtok) = tokenizer.gtok() {
-        gtok.detect_chat_template()
-    } else if tokenizer.token_to_id("<|im_start|>").is_some() {
-        crate::core::gtok::ChatTemplate::ChatML
-    } else if tokenizer.token_to_id("<|start_header_id|>").is_some() {
-        crate::core::gtok::ChatTemplate::Llama3
-    } else if tokenizer.token_to_id("<start_of_turn>").is_some() {
-        crate::core::gtok::ChatTemplate::Gemma
-    } else if tokenizer.token_to_id("[INST]").is_some() {
-        crate::core::gtok::ChatTemplate::Llama2
-    } else {
-        crate::core::gtok::ChatTemplate::Classic
-    }
-}
-
-pub fn format_chat_prompt_from_template(
-    template: crate::core::gtok::ChatTemplate,
-    effective_sys_prompt: &str,
-    user_msg: &str,
-    history: Option<&[ChatMessage]>,
-) -> String {
-    let mut full_prompt = String::new();
-    match template {
-        crate::core::gtok::ChatTemplate::ChatML => {
-            if !effective_sys_prompt.is_empty() {
-                full_prompt.push_str(&format!("<|im_start|>system\n{}<|im_end|>\n", effective_sys_prompt));
-            }
-            if let Some(hist) = history {
-                for msg in hist.iter().rev().take(6).rev() {
-                    let role = msg.role.as_deref().unwrap_or("user");
-                    let content = msg
-                        .content
-                        .as_deref()
-                        .or(msg.message.as_deref())
-                        .unwrap_or("");
-                    full_prompt.push_str(&format!("<|im_start|>{}\n{}<|im_end|>\n", role, content));
-                }
-            }
-            full_prompt.push_str(&format!(
-                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-                user_msg.trim()
-            ));
-        }
-        crate::core::gtok::ChatTemplate::Llama3 => {
-            full_prompt.push_str("<|begin_of_text|>");
-            if !effective_sys_prompt.is_empty() {
-                full_prompt.push_str(&format!(
-                    "<|start_header_id|>system<|end_header_id|>\n\n{}<|eot_id|>",
-                    effective_sys_prompt
-                ));
-            }
-            if let Some(hist) = history {
-                for msg in hist.iter().rev().take(6).rev() {
-                    let role = msg.role.as_deref().unwrap_or("user");
-                    let content = msg
-                        .content
-                        .as_deref()
-                        .or(msg.message.as_deref())
-                        .unwrap_or("");
-                    full_prompt.push_str(&format!(
-                        "<|start_header_id|>{}<|end_header_id|>\n\n{}<|eot_id|>",
-                        role, content
-                    ));
-                }
-            }
-            full_prompt.push_str(&format!(
-                "<|start_header_id|>user<|end_header_id|>\n\n{}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
-                user_msg.trim()
-            ));
-        }
-        crate::core::gtok::ChatTemplate::Llama2 => {
-            full_prompt.push_str("<s>[INST] ");
-            if !effective_sys_prompt.is_empty() {
-                full_prompt.push_str(&format!("<<SYS>>\n{}\n<</SYS>>\n\n", effective_sys_prompt));
-            }
-            if let Some(hist) = history {
-                for msg in hist.iter().rev().take(6).rev() {
-                    let role = msg.role.as_deref().unwrap_or("user");
-                    let content = msg
-                        .content
-                        .as_deref()
-                        .or(msg.message.as_deref())
-                        .unwrap_or("");
-                    if role == "assistant" {
-                        full_prompt.push_str(&format!("{} </s><s>[INST] ", content));
-                    } else {
-                        full_prompt.push_str(&format!("{} [/INST] ", content));
-                    }
-                }
-            }
-            full_prompt.push_str(&format!("{} [/INST] ", user_msg.trim()));
-        }
-        crate::core::gtok::ChatTemplate::Gemma => {
-            if let Some(hist) = history {
-                for msg in hist.iter().rev().take(6).rev() {
-                    let role = if msg.role.as_deref() == Some("assistant") { "model" } else { "user" };
-                    let content = msg
-                        .content
-                        .as_deref()
-                        .or(msg.message.as_deref())
-                        .unwrap_or("");
-                    full_prompt.push_str(&format!("<start_of_turn>{}\n{}<end_of_turn>\n", role, content));
-                }
-            }
-            if !effective_sys_prompt.is_empty() {
-                full_prompt.push_str(&format!(
-                    "<start_of_turn>user\n{}\n\n{}<end_of_turn>\n<start_of_turn>model\n",
-                    effective_sys_prompt,
-                    user_msg.trim()
-                ));
-            } else {
-                full_prompt.push_str(&format!(
-                    "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
-                    user_msg.trim()
-                ));
-            }
-        }
-        _ => {
-            if !effective_sys_prompt.is_empty() {
-                full_prompt.push_str(&format!("System: {}\n\n", effective_sys_prompt));
-            }
-            if let Some(hist) = history {
-                for msg in hist.iter().rev().take(6).rev() {
-                    let role = if msg.role.as_deref() == Some("assistant") { "Assistant" } else { "User" };
-                    let content = msg
-                        .content
-                        .as_deref()
-                        .or(msg.message.as_deref())
-                        .unwrap_or("");
-                    full_prompt.push_str(&format!("{}: {}\n", role, content));
-                }
-            }
-            full_prompt.push_str(&format!("User: {}\nAssistant: ", user_msg.trim()));
-        }
-    }
-    full_prompt
-}
+pub use crate::compute::island::{
+    detect_chat_template_from_tokenizer, format_chat_prompt_from_template,
+};
 
 pub fn handle_chat_stream_request(
     mut request: Request,
-    llm: &mut GenomicLLM,
-    tokenizer: &GajeTokenizer,
+    loaded: &mut crate::server::LoadedModel,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut body = String::new();
     request.as_reader().read_to_string(&mut body)?;
@@ -227,6 +86,8 @@ pub fn handle_chat_stream_request(
         temperature: Some(0.4),
         top_p: Some(0.9),
         repetition_penalty: Some(1.15),
+        use_memory: Some(false),
+        memory_threshold: None,
     });
 
     let user_msg = chat_req.message.as_deref().unwrap_or("");
@@ -235,54 +96,30 @@ pub fn handle_chat_stream_request(
     );
 
     // 1. Detección Canónica de Plantilla de Diálogo (Zero Heuristics - Regla de Oro A.4)
-    let template = detect_chat_template_from_tokenizer(tokenizer);
+    let template = detect_chat_template_from_tokenizer(&loaded.tokenizer);
 
-    // Búsqueda de memoria episódica/hipocampal
-    let model_name_str = chat_req.model.as_deref().unwrap_or("");
-    let mut context_prefix = String::new();
-    if let Some(orch) = crate::compute::island::IslandOrchestrator::try_load_paired_memory(
-        model_name_str,
-        llm.dim() as u32,
-    ) {
-        let q_vec =
-            crate::compute::island::IslandOrchestrator::vector_from_text(user_msg, llm.dim());
-        let matches = orch.retrieve_context(&q_vec, 2);
-        let relevant: Vec<_> = matches
-            .into_iter()
-            .filter(|m| m.similarity >= 0.50)
-            .collect();
-        if !relevant.is_empty() {
-            let facts_str = relevant
-                .iter()
-                .map(|m| m.text.as_str())
-                .collect::<Vec<_>>()
-                .join(" | ");
-            context_prefix = format!("[Conocimiento Hipocampal: {}]\n", facts_str);
-        }
-    }
-
-    let effective_sys_prompt = if !context_prefix.is_empty() {
-        if !sys_prompt.is_empty() {
-            format!("{}\n\n{}", context_prefix.trim(), sys_prompt.trim())
-        } else {
-            context_prefix.trim().to_string()
-        }
-    } else {
-        sys_prompt.trim().to_string()
-    };
-
-    let full_prompt = format_chat_prompt_from_template(
-        template,
-        &effective_sys_prompt,
+    // 2. Preparación canónica del prompt con memoria (Paso 3)
+    let mem_config = loaded.memory_config(
+        chat_req.use_memory.unwrap_or(false),
+        chat_req.memory_threshold,
+    );
+    let (full_prompt, telemetry) = crate::compute::island::prepare_prompt_with_memory(
         user_msg,
         chat_req.history.as_deref(),
+        sys_prompt,
+        template,
+        &loaded.llm,
+        &loaded.tokenizer,
+        Some(&loaded.memory),
+        &mem_config,
     );
 
     let max_tokens = chat_req.max_tokens.unwrap_or(256);
     let temperature = chat_req.temperature.unwrap_or(0.3);
     let rep_penalty = chat_req.repetition_penalty.unwrap_or(1.15);
 
-    let prompt_tokens_u32 = tokenizer
+    let prompt_tokens_u32 = loaded
+        .tokenizer
         .encode(&full_prompt, false)
         .map_err(|e| e.to_string())?;
     let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
@@ -296,6 +133,21 @@ pub fn handle_chat_stream_request(
 
     let (tx, rx) = channel::<Vec<u8>>();
     let reader = ChannelReader::new(rx);
+
+    // Enviar evento de telemetría de memoria al cliente web si la memoria está habilitada
+    if chat_req.use_memory.unwrap_or(false) {
+        let mem_evt = format!(
+            "data: {}\n\n",
+            json!({
+                "type": "memory",
+                "telemetry": &telemetry
+            })
+        );
+        let _ = tx.send(mem_evt.into_bytes());
+    }
+
+    let llm = &mut loaded.llm;
+    let tokenizer = &loaded.tokenizer;
 
     let response = Response::new(
         StatusCode(200),
@@ -433,7 +285,8 @@ pub fn handle_chat_stream_request(
                 "prompt_tokens": prompt_tokens.len(),
                 "total_tokens": prompt_tokens.len() + tok_count,
                 "latency_ms": elapsed_s * 1000.0,
-                "compression_ratio": compression_ratio
+                "compression_ratio": compression_ratio,
+                "memory": &telemetry
             },
             "dna": "GGCCCCCGCCCGCCGCCGCGGCGCGGGCCCGTCGGGGCGCGCCCCGGCGGCCGGCGGGGCCCCCCCCCGCCCCGCGCCCGCCGGGGCGGGCGCGGCGGCCAGCGGGCCCGGGGGCCGGGCGGGCGCGC"
         })

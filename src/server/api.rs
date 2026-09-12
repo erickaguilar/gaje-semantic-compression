@@ -81,6 +81,9 @@ pub fn get_available_models(
             })
             .unwrap_or_else(|_| "2026-08-28 00:00".to_string());
 
+        let mem_dir = crate::compute::island::IslandOrchestrator::resolve_memory_dir(&m.path);
+        let has_memory = mem_dir.is_dir();
+
         let quality = model_quality(&m.filename);
         model_list.push((
             quality,
@@ -94,6 +97,7 @@ pub fn get_available_models(
                 "n_embd": m.n_embd,
                 "n_layers": m.n_layers,
                 "has_gtok": m.has_gtok,
+                "has_memory": has_memory,
                 "ram_mb": if is_loaded { m.size_mb } else { 0.0 },
                 "date": date_str
             }),
@@ -107,36 +111,50 @@ pub fn get_available_models(
     json!({ "models": sorted_models })
 }
 
+pub fn get_loaded_memory_info(
+    memory: &crate::compute::island::IslandOrchestrator,
+    mem_dir: &std::path::Path,
+    threshold: f32,
+) -> serde_json::Value {
+    let doc_count = memory.documental.entries.len();
+    let epi_count = memory.episodic.entries.len();
+    let conv_count = memory.conversational.entries.len();
+    let total = doc_count + epi_count + conv_count;
+
+    let sample_facts: Vec<_> = memory
+        .documental
+        .entries
+        .iter()
+        .take(5)
+        .map(|e| e.text.clone())
+        .collect();
+
+    json!({
+        "status": if total > 0 { "connected" } else { "empty" },
+        "dim": memory.dim,
+        "total_facts": total,
+        "memory_dir": mem_dir.to_string_lossy(),
+        "memory_threshold": threshold,
+        "entropy_gap_threshold": memory.entropy_gap_threshold,
+        "kwta_ratio": memory.kwta_ratio,
+        "niches": {
+            "documental": doc_count,
+            "episodic": epi_count,
+            "conversational": conv_count,
+        },
+        "niche_weights": memory.niche_weights,
+        "sample_facts": sample_facts
+    })
+}
+
 pub fn get_memory_info(model_path: Option<&str>, dim: usize) -> serde_json::Value {
     if let Some(path) = model_path {
         if let Some(orch) =
             crate::compute::island::IslandOrchestrator::try_load_paired_memory(path, dim as u32)
         {
-            let doc_count = orch.documental.entries.len();
-            let epi_count = orch.episodic.entries.len();
-            let conv_count = orch.conversational.entries.len();
-            let total = doc_count + epi_count + conv_count;
-
-            let sample_facts: Vec<_> = orch
-                .documental
-                .entries
-                .iter()
-                .take(5)
-                .map(|e| e.text.clone())
-                .collect();
-
-            return json!({
-                "status": "connected",
-                "dim": dim,
-                "total_facts": total,
-                "niches": {
-                    "documental": doc_count,
-                    "episodic": epi_count,
-                    "conversational": conv_count,
-                },
-                "niche_weights": orch.niche_weights,
-                "sample_facts": sample_facts
-            });
+            let p = std::path::Path::new(path);
+            let mem_dir = crate::compute::island::IslandOrchestrator::resolve_memory_dir(p);
+            return get_loaded_memory_info(&orch, &mem_dir, 0.65);
         }
     }
 

@@ -521,6 +521,8 @@ fn resolve_default_model(model_opt: Option<String>) -> String {
     let candidates = [
         "models/production/gaje_pico_135m.gaje",
         "models/production/gaje_pico_135m.flat",
+        "models/production/qwen2_5_0_5b_q2_0.gaje",
+        "models/qwen2_5_0_5b_q2_0.gaje",
         "models/production/qwen2_5_0_5b.gaje",
         "models/production/gaje_coder_3b.gaje",
         "models/production/gaje_coder_3b.flat",

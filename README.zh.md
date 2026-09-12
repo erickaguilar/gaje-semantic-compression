@@ -1,6 +1,6 @@
-# 🧬 GAJE 协议：语义自适应与基因组压缩 (v1.7.3-alpha)
+# 🧬 GAJE 协议：语义自适应与基因组压缩 (v1.7.4-alpha)
 
-[![Version](https://img.shields.io/badge/version-1.7.3--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
+[![Version](https://img.shields.io/badge/version-1.7.4--alpha_Helix_Ecosystem-purple)](docs/meta/EMPIRICAL_TRUTH_STATE.md)
 [![Engine](https://img.shields.io/badge/Engine-Pure_Rust_PyO3_WASM-orange.svg)](src/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Format](https://img.shields.io/badge/Format-Zero--Copy_GAJE_mmap-brightgreen.svg)](docs/plans/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)
@@ -42,6 +42,18 @@
 | **Qwen2.5 1.5B Instruct** | **`.gaje` 混合 v2** | 西班牙语: *"La capital de Francia es París."* | **`11.31 - 12.13 tok/s`** | **`< 0.75 ms` (mmap)** | **`2.6 GB` (虚拟内存)** |
 | **Qwen2 0.5B Instruct** | **`.gaje` 混合 v2** | 中文: *"木星"* / 西班牙语: *"París"* | **`19.20 - 23.00 tok/s`** | **`< 0.75 ms` (mmap)** | **`~498 MiB` (节省 74%)** |
 | **SmolLM2 135M Instruct** | **`.gaje` 零拷贝** | 英语: *"Berlin."* / *"100°C"* | **`28.28 - 32.10 tok/s`** | **`< 0.75 ms` (mmap)** | **`~472 MB`** |
+
+---
+
+### 🏝️ 3. Island Model (.gmem)：亚毫秒级海马 RAG 记忆检索
+
+系统通过 64 字节内存对齐的平面二进制索引 (`.gmem`) 实现实时上下文关联检索与持久化：
+
+* **RAG 向量检索延迟**：多生态位每次查询 **`< 0.5 ms`**，采用针对输入词向量表 ($W_E$) 的原生*加权平均池化 (Weighted Mean Pooling)*。
+* **熵隙门控机制 ($\Delta_{top} \ge 0.12$)**：结合 K-WTA 侧向竞争抑制，在数学层面直接剔除模糊或竞争陷阱对。
+* **卫星白化标定**：各向异性居中向量 ($\boldsymbol{\mu} \in \mathbb{R}^D$) 持久化于 `data/calibration/`，支持平滑降级（方案 C）。
+* **规范化 6 状态实时遥测**：在 SSE 与服务端指标中实时监控 (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap` 等)。
+* **安全系统级注入**：在 ChatML 与 Llama3 对话模板中严格注入于系统提示词区块，杜绝轮次错乱与提示词污染。
 
 ---
 
