@@ -1,3 +1,4 @@
+pub mod bf2;
 pub mod diagnostics;
 #[cfg(feature = "native")]
 pub mod doctor;
