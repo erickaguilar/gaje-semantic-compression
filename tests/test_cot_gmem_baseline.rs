@@ -446,4 +446,221 @@ mod tests {
         println!("Tiempo Total:                {:.2?}", elapsed);
         println!("========================================================\n");
     }
+
+    /// CONDICIÓN C5: Canal System con Formato CoT [THINKING][QUERY]->fact [ANSWER]
+    /// Aísla si el formato estructurado ayuda cuando se inyecta en el system prompt (vs D que es texto plano)
+    #[test]
+    fn test_condition_c5_system_cot() {
+        println!("\n========================================================");
+        println!("🏛️ EVALUACIÓN EMPÍRICA — CONDICIÓN C5: CANAL SYSTEM CON FORMATO CoT");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let mut correct_count = 0;
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let chat_prompt = format!(
+                "<|im_start|>system\n[THINKING] [QUERY: {}] -> {}\n[ANSWER]<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                tc.query_term, tc.fact, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_hit {
+                correct_count += 1;
+            }
+
+            let status_emoji = if is_hit { "✅ ACIERTO" } else { "❌ FALLO  " };
+            println!("[{:02}/20] {} [{}] Q: {}", tc.id, status_emoji, tc.domain, tc.question);
+            println!("       C5 Output: \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let accuracy_pct = (correct_count as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — CONDICIÓN C5 (SYSTEM + FORMATO CoT)");
+        println!("========================================================");
+        println!("Aciertos Válidos:            {} / {}", correct_count, test_cases.len());
+        println!("Exactitud Condición C5:      {:.1}%", accuracy_pct);
+        println!("Tiempo Total:                {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
+
+    /// CONDICIÓN C4: Canal Assistant Plano ({fact}\nAnswer: )
+    /// Aísla si el canal assistant es el único responsable del salto (eliminando todo andamiaje CoT)
+    #[test]
+    fn test_condition_c4_assistant_plain() {
+        println!("\n========================================================");
+        println!("⚡ EVALUACIÓN EMPÍRICA — CONDICIÓN C4: CANAL ASSISTANT PLANO");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let mut correct_count = 0;
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let chat_prompt = format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n{}\nAnswer: ",
+                tc.question, tc.fact
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_hit {
+                correct_count += 1;
+            }
+
+            let status_emoji = if is_hit { "✅ ACIERTO" } else { "❌ FALLO  " };
+            println!("[{:02}/20] {} [{}] Q: {}", tc.id, status_emoji, tc.domain, tc.question);
+            println!("       C4 Output: \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let accuracy_pct = (correct_count as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — CONDICIÓN C4 (ASSISTANT PLANO)");
+        println!("========================================================");
+        println!("Aciertos Válidos:            {} / {}", correct_count, test_cases.len());
+        println!("Exactitud Condición C4:      {:.1}%", accuracy_pct);
+        println!("Tiempo Total:                {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
+
+    /// CONDICIÓN C3: Canal Assistant Estructurado Sin Tags (Fact: {fact}\nAnswer: )
+    /// Aísla si los tags especiales aportan algo vs formato estructurado genérico
+    #[test]
+    fn test_condition_c3_assistant_structure_no_tags() {
+        println!("\n========================================================");
+        println!("🏷️ EVALUACIÓN EMPÍRICA — CONDICIÓN C3: ESTRUCTURA SIN TAGS");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let mut correct_count = 0;
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let chat_prompt = format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\nFact: {}\nAnswer: ",
+                tc.question, tc.fact
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_hit {
+                correct_count += 1;
+            }
+
+            let status_emoji = if is_hit { "✅ ACIERTO" } else { "❌ FALLO  " };
+            println!("[{:02}/20] {} [{}] Q: {}", tc.id, status_emoji, tc.domain, tc.question);
+            println!("       C3 Output: \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let accuracy_pct = (correct_count as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — CONDICIÓN C3 (ESTRUCTURA SIN TAGS)");
+        println!("========================================================");
+        println!("Aciertos Válidos:            {} / {}", correct_count, test_cases.len());
+        println!("Exactitud Condición C3:      {:.1}%", accuracy_pct);
+        println!("Tiempo Total:                {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
+
+    /// CONDICIÓN C2: Canal Assistant con Tags SIN [THINKING] ([QUERY: X] -> fact\n[ANSWER] )
+    /// Aísla si la palabra/etiqueta [THINKING] aporta algo sobre el enlace asociativo directo
+    #[test]
+    fn test_condition_c2_assistant_no_thinking() {
+        println!("\n========================================================");
+        println!("🔍 EVALUACIÓN EMPÍRICA — CONDICIÓN C2: TAGS SIN [THINKING]");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let mut correct_count = 0;
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let chat_prompt = format!(
+                "<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n[QUERY: {}] -> {}\n[ANSWER] ",
+                tc.question, tc.query_term, tc.fact
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_hit {
+                correct_count += 1;
+            }
+
+            let status_emoji = if is_hit { "✅ ACIERTO" } else { "❌ FALLO  " };
+            println!("[{:02}/20] {} [{}] Q: {}", tc.id, status_emoji, tc.domain, tc.question);
+            println!("       C2 Output: \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let accuracy_pct = (correct_count as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — CONDICIÓN C2 (TAGS SIN THINKING)");
+        println!("========================================================");
+        println!("Aciertos Válidos:            {} / {}", correct_count, test_cases.len());
+        println!("Exactitud Condición C2:      {:.1}%", accuracy_pct);
+        println!("Tiempo Total:                {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
 }
+

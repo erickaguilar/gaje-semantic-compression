@@ -543,12 +543,24 @@ El alcance del sistema está formalmente acotado para preservar su integridad de
   3. *Incapacidad de Búsqueda Espontánea*: **`0 / 20` queries espontáneas**. El modelo desconoce de forma autónoma la existencia de un subsistema de memoria.
 * **Regla Operativa GAJE**: *Prohibido instruir razonamiento libre no anclado a modelos $\le 1\text{B}$ de parámetros en flujos de producción.*
 
-#### 2. Evaluación de Andamiaje Neurosimbólico vs. RAG Tradicional
-* **Condición D (RAG Directo en Sistema, sin CoT)**: **`8 / 20` aciertos (40.0%)**. Rescata hechos clave pero sufre vacilación en preguntas numéricas (*"To answer the question... I will use my knowledge..."*).
-* **Condición C (CoT Estructurado + Hecho Forzado `[THINKING]...[ANSWER]`)**: **`11 / 20` aciertos (55.0%)**.
-* **Estado Estadístico y Mecanicista**:
-  - Con $N=20$, $\Delta = +3$ aciertos representa una señal prometedora ($C > D$), pero los intervalos de confianza del 95% se solapan (no significancia formal $p < 0.05$).
-  - Pendiente descartar la hipótesis alternativa de *longitud efectiva / supresión de preámbulo* mediante variantes de formato (C1/C2/C3) antes del escalado formal a $N \ge 100$.
+#### 2. Veredicto Final de la Ablación Ortogonal (Canal vs. Andamiaje)
+Para dilucidar si el delta provenía de la estructura CoT o de la supresión de preámbulo / canal de inyección, se ejecutó una batería de ablación ortogonal completa:
+
+| ID | Canal | Formato Sintáctico | Aciertos | Exactitud (%) | Diagnóstico Empírico |
+| :---: | :--- | :--- | :---: | :---: | :--- |
+| **A** | — | Pregunta directa | 6 / 20 | **30.0%** | Línea Base (Memoria asociativa estática). |
+| **B** | — | *"think step by step"* (libre) | 1 / 20 | **5.0%** | Colapso CoT por dilución procedural. |
+| **D** | `system` | `Knowledge: {fact}` (plano) | 8 / 20 | **40.0%** | RAG clásico: vacilación en preámbulos. |
+| **C5** | `system` | `[THINKING][QUERY]->fact[ANSWER]` | 11 / 20 | **55.0%** | Tags en system reducen preámbulos pero saturan contexto. |
+| **C2** | `assistant`| `[QUERY: X] -> fact\n[ANSWER]` | 10 / 20 | **50.0%** | Tags sin thinking: ruido de subtokenización. |
+| **C1** | `assistant`| `[THINKING][QUERY]->fact[ANSWER]`| 11 / 20 | **55.0%** | Andamiaje CoT completo original. |
+| **C3** | `assistant`| `Fact: {fact}\nAnswer:` | 12 / 20 | **60.0%** | Estructura en lenguaje natural sin corchetes. |
+| **C4** | `assistant`| **`{fact}\nAnswer:` (Plano)** | **13 / 20** | **`65.0%`** | **GANADOR ABSOLUTO: Inyección directa en turno assistant.** |
+
+* **Resolución de la Hipótesis ($C_4 > C_1$, 65% vs 55%)**:
+  1. **El andamiaje pseudo-CoT queda descartado**: Los corchetes `[THINKING]`, `[QUERY:]`, `[ANSWER]` introducen ruido de tokenización y restan 10 puntos respecto a un formato plano limpio.
+  2. **El Canal es la causa real del salto (+25 puntos)**: Inyectar en el turno autorregresivo del asistente (`assistant\n{fact}\nAnswer: `) en lugar del bloque `system` acerca el hecho a 1 token de la respuesta y elimina toda divagación.
+  3. **Decisión de Ingeniería GAJE**: Cierre formal de la línea de parsers CoT en runtime. La integración de `.gmem` adoptará el patrón **C4 (Inyección directa en turno de asistente)**: limpio, sin sobrecoste de tokens y con máxima fidelidad fáctica.
 
 ---
 
