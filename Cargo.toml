@@ -74,3 +74,7 @@ debug = false
 inherits = "dev"
 opt-level = 3
 debug = true
+
+[dev-dependencies]
+regex = "1.10"
+
