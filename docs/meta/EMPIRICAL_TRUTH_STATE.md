@@ -530,5 +530,28 @@ El alcance del sistema está formalmente acotado para preservar su integridad de
 
 ---
 
+### 20. Dinámica Neurosimbólica CoT + Memoria Externa: Colapso de CoT Libre y Evaluación de Andamiaje (2026-09-15)
+
+**Contexto**: Evaluación de la interacción entre la Cadena de Pensamiento (CoT) y el anclaje factual de memoria en modelos compactos sobre [`models/production/qwen2_5_0_5b.gaje`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/models/production/qwen2_5_0_5b.gaje) (Q4_0, greedy `temp=0.0`). Batería controlada de 20 preguntas canónicas con distractores competitivos ([`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs)).
+
+#### 1. Verdad Empírica Certificada: El CoT Libre en Modelos Sub-1B Destruye la Precisión ($B \ll A$)
+* **Condición A (Línea Base Directa)**: **`6 / 20` aciertos (30.0%)**. Recupera datos de alta frecuencia léxica (Canberra, Lead/Pb, Gold/Au, Mercurio, Venus, 1945).
+* **Condición B (CoT Libre *"think step by step"* sin memoria)**: **`1 / 20` aciertos (5.0%)**, caída de -25 puntos porcentuales.
+* **Mecanismo del Colapso**:
+  1. *Trampa de Dilución Procedimental*: Con 60 tokens de presupuesto, el modelo gasta entre 40 y 55 tokens en plantillas de meta-planificación vacías (*"1. Identify the key elements... 2. Determine the scope..."*) sin llegar a la respuesta.
+  2. *Deriva y Confabulación*: Sin anclaje externo, los logits derivan rápidamente hacia atractores espurios (*"WWII: I willed to end in 2023..."*).
+  3. *Incapacidad de Búsqueda Espontánea*: **`0 / 20` queries espontáneas**. El modelo desconoce de forma autónoma la existencia de un subsistema de memoria.
+* **Regla Operativa GAJE**: *Prohibido instruir razonamiento libre no anclado a modelos $\le 1\text{B}$ de parámetros en flujos de producción.*
+
+#### 2. Evaluación de Andamiaje Neurosimbólico vs. RAG Tradicional
+* **Condición D (RAG Directo en Sistema, sin CoT)**: **`8 / 20` aciertos (40.0%)**. Rescata hechos clave pero sufre vacilación en preguntas numéricas (*"To answer the question... I will use my knowledge..."*).
+* **Condición C (CoT Estructurado + Hecho Forzado `[THINKING]...[ANSWER]`)**: **`11 / 20` aciertos (55.0%)**.
+* **Estado Estadístico y Mecanicista**:
+  - Con $N=20$, $\Delta = +3$ aciertos representa una señal prometedora ($C > D$), pero los intervalos de confianza del 95% se solapan (no significancia formal $p < 0.05$).
+  - Pendiente descartar la hipótesis alternativa de *longitud efectiva / supresión de preámbulo* mediante variantes de formato (C1/C2/C3) antes del escalado formal a $N \ge 100$.
+
+---
+
 *Estado verificado, ratificado y auditado empíricamente bajo el Protocolo GAJE Helix (Septiembre 2026).*
+
 
