@@ -569,6 +569,8 @@ Se testeó el pipeline de producción en condiciones reales ([`tests/test_cot_gm
    * **Fallo de Retrieval (`1 / 20`, 5.0%)**: Colisión en el índice vectorial.
    * **Síntesis Correcta (`8 / 20`, 40.0%)**: Respuestas directas y exactas.
 3. **Validación del Marcador Neutro (`Answer:`)**: Al añadir el marcador neutro `Answer: ` en el turno del asistente (manteniendo el hecho en `system`, sin el hecho en el asistente), **se recuperaron 4 de 4 casos de parálisis (100%)** elevando la exactitud de esas preguntas específicas al instante, mientras que los 7 casos de confabulación permanecieron intactos, confirmando la frontera exacta entre el formato y la capacidad del modelo.
+4. **Declaración Canónica de Rendimiento**:
+   > *El sistema RAG completo (retrieval + síntesis) sobre Qwen2.5-0.5B Q4_0 alcanza un techo de 12/20 (60%) cuando se inyecta el hecho recuperado en el bloque system y se delimita el turno del asistente con un marcador neutro. De los 8 fallos restantes, 7 son pérdida intrínseca de capacidad del modelo base y 1 es error puntual de retrieval. El subsistema de memoria .gmem tiene recall 19/20 (95%) independientemente del modelo.*
 
 ---
 
