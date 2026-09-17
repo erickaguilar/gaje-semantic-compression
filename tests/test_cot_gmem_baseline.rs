@@ -811,6 +811,85 @@ mod tests {
         println!("Tiempo Total:                   {:.2?}", elapsed);
         println!("========================================================\n");
     }
+
+    /// TEST DE CONTROL: HECHO EN SYSTEM + PREFIJO NEUTRO "Answer: " (Sin el hecho en el asistente)
+    /// Aísla si la parálisis por preámbulo se resuelve con un mero marcador de formato
+    /// mientras el modelo sigue obligado a extraer el hecho desde el bloque System.
+    #[test]
+    fn test_e2e_real_gmem_rag_with_neutral_answer_prefix() {
+        println!("\n========================================================");
+        println!("🎯 EVALUACIÓN EMPÍRICA — RAG CON PREFIJO NEUTRO \"Answer: \"");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let dim = model.dim() as u32;
+        let mut memory_index = GmemMemoryIndex::new(dim);
+
+        for tc in &test_cases {
+            let vec = embed_text_gtok(tc.fact, &model, &tokenizer);
+            memory_index.add_entry(tc.id as u64, vec, tc.fact.to_string());
+        }
+
+        let mut generation_hits = 0;
+        let mut recovered_paralysis_count = 0;
+        let total_start = Instant::now();
+
+        // IDs que en la condición sin prefijo sufrieron parálisis por preámbulo: 16, 17, 19, 20
+        let paralysis_ids = vec![16, 17, 19, 20];
+
+        for tc in &test_cases {
+            let q_vec = embed_text_gtok(tc.question, &model, &tokenizer);
+            let matches = memory_index.search_top_k(&q_vec, 1);
+            let retrieved_entry = matches[0].0;
+
+            // Formato: Hecho en System, Turno de Asistente con marcador neutro "Answer: "
+            let chat_prompt = format!(
+                "<|im_start|>system\nKnowledge: {}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\nAnswer: ",
+                retrieved_entry.text, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_gen_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_gen_hit {
+                generation_hits += 1;
+                if paralysis_ids.contains(&tc.id) {
+                    recovered_paralysis_count += 1;
+                }
+            }
+
+            let gen_emoji = if is_gen_hit { "✅ HIT " } else { "❌ MISS" };
+            println!(
+                "[{:02}/20] {} [{}] Q: {}",
+                tc.id, gen_emoji, tc.domain, tc.question
+            );
+            println!("       Output: \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let gen_pct = (generation_hits as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — RAG CON PREFIJO NEUTRO \"Answer: \"");
+        println!("========================================================");
+        println!("Exactitud Generación:           {} / {} ({:.1}%)", generation_hits, test_cases.len(), gen_pct);
+        println!("Casos Parálisis Recuperados:    {} / 4", recovered_paralysis_count);
+        println!("Tiempo Total:                   {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
 }
+
 
 

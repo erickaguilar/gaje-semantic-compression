@@ -560,11 +560,15 @@ Se evaluó una batería de ablación para aislar formato sintáctico y canal:
   3. $C_1$ (assistant) y $C_5$ (system) arrojaron exactamente el mismo resultado (11/20 vs 11/20), descartando que el canal por sí solo sea el motor cuando la estructura es compleja.
   4. La condición C4 (`{fact}\nAnswer:`) evalúa **prefix-completion** (copia a 1 token de distancia atencional), no un proceso de razonamiento o síntesis RAG abierta.
 
-#### 3. Certificación de RAG Real con Memoria `.gmem` (Retrieval + Generación Libre)
-Se testeó el pipeline de producción sin hechos cableados a mano ni prefijos forzados ([`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs)):
-1. **Top-1 Retrieval Recall (.gmem en 896d)**: **`19 / 20` (95.0%)**. El extractor semántico nativo (`embed_text_gtok`) y la búsqueda por similitud coseno recuperan con altísima fidelidad el hecho pertinente en 120 ms.
-2. **Generación Libre del LLM (0.5B)**: **`8 / 20` (40.0%)**. El modelo recibe el contexto en `system` y responde abiertamente. Falla en el 60% restante debido a parálisis por preámbulos vacíos (*"To answer the question... I will use my knowledge..."*) o colapso en números específicos.
-3. **Veredicto Operativo**: El subsistema de memoria `.gmem` es sólido (95% recall). El cuello de botella en edge devices es la capacidad generativa de modelos de 0.5B sin constreñimiento de salida.
+#### 3. Certificación de RAG Real con Memoria `.gmem` y Descomposición Causal
+Se testeó el pipeline de producción en condiciones reales ([`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs)):
+1. **Top-1 Retrieval Recall (.gmem en 896d)**: **`19 / 20` (95.0%)**. El extractor semántico nativo (`embed_text_gtok`) y la búsqueda por similitud coseno recuperan con altísima fidelidad el hecho pertinente en 120 ms. Solo 1 miss aislado por colisión léxica (Gold vs. Lead).
+2. **Descomposición Causal del Rendimiento E2E (Generación Abierta 8/20 = 40.0%)**:
+   * **Parálisis por Preámbulo (`4 / 20`, 20.0%)**: El modelo posee el hecho en contexto pero consume los tokens en preámbulos procedimentales (*"To answer the question..."*).
+   * **Confabulación Intrínseca (`7 / 20`, 35.0%)**: El hecho está en contexto pero la red de 0.5B genera datos falsos (SuN, Kuwait). Techo duro del modelo.
+   * **Fallo de Retrieval (`1 / 20`, 5.0%)**: Colisión en el índice vectorial.
+   * **Síntesis Correcta (`8 / 20`, 40.0%)**: Respuestas directas y exactas.
+3. **Validación del Marcador Neutro (`Answer:`)**: Al añadir el marcador neutro `Answer: ` en el turno del asistente (manteniendo el hecho en `system`, sin el hecho en el asistente), **se recuperaron 4 de 4 casos de parálisis (100%)** elevando la exactitud de esas preguntas específicas al instante, mientras que los 7 casos de confabulación permanecieron intactos, confirmando la frontera exacta entre el formato y la capacidad del modelo.
 
 ---
 
