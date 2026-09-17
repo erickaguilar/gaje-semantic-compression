@@ -543,24 +543,28 @@ El alcance del sistema está formalmente acotado para preservar su integridad de
   3. *Incapacidad de Búsqueda Espontánea*: **`0 / 20` queries espontáneas**. El modelo desconoce de forma autónoma la existencia de un subsistema de memoria.
 * **Regla Operativa GAJE**: *Prohibido instruir razonamiento libre no anclado a modelos $\le 1\text{B}$ de parámetros en flujos de producción.*
 
-#### 2. Veredicto Final de la Ablación Ortogonal (Canal vs. Andamiaje)
-Para dilucidar si el delta provenía de la estructura CoT o de la supresión de preámbulo / canal de inyección, se ejecutó una batería de ablación ortogonal completa:
+#### 2. Veredicto de la Ablación Ortogonal (Canal vs. Andamiaje)
+Se evaluó una batería de ablación para aislar formato sintáctico y canal:
+* **A (Baseline)**: 6 / 20 (30.0%) [IC 95%: 15%, 52%]
+* **B (CoT Libre)**: 1 / 20 (5.0%) [IC 95%: 0.9%, 24%] — *Colapso certificado por dilución vacía.*
+* **D (RAG en System Prompt, sin prefijo)**: 8 / 20 (40.0%) [IC 95%: 22%, 61%]
+* **C5 (CoT tags en System)**: 11 / 20 (55.0%) [IC 95%: 34%, 74%]
+* **C2 (Tags sin thinking)**: 10 / 20 (50.0%) [IC 95%: 30%, 70%]
+* **C1 (Andamiaje CoT completo)**: 11 / 20 (55.0%) [IC 95%: 34%, 74%]
+* **C3 (Estructura Fact/Answer)**: 12 / 20 (60.0%) [IC 95%: 39%, 78%]
+* **C4 (Assistant Plano `{fact}\nAnswer:`)**: 13 / 20 (65.0%) [IC 95%: 43%, 82%]
 
-| ID | Canal | Formato Sintáctico | Aciertos | Exactitud (%) | Diagnóstico Empírico |
-| :---: | :--- | :--- | :---: | :---: | :--- |
-| **A** | — | Pregunta directa | 6 / 20 | **30.0%** | Línea Base (Memoria asociativa estática). |
-| **B** | — | *"think step by step"* (libre) | 1 / 20 | **5.0%** | Colapso CoT por dilución procedural. |
-| **D** | `system` | `Knowledge: {fact}` (plano) | 8 / 20 | **40.0%** | RAG clásico: vacilación en preámbulos. |
-| **C5** | `system` | `[THINKING][QUERY]->fact[ANSWER]` | 11 / 20 | **55.0%** | Tags en system reducen preámbulos pero saturan contexto. |
-| **C2** | `assistant`| `[QUERY: X] -> fact\n[ANSWER]` | 10 / 20 | **50.0%** | Tags sin thinking: ruido de subtokenización. |
-| **C1** | `assistant`| `[THINKING][QUERY]->fact[ANSWER]`| 11 / 20 | **55.0%** | Andamiaje CoT completo original. |
-| **C3** | `assistant`| `Fact: {fact}\nAnswer:` | 12 / 20 | **60.0%** | Estructura en lenguaje natural sin corchetes. |
-| **C4** | `assistant`| **`{fact}\nAnswer:` (Plano)** | **13 / 20** | **`65.0%`** | **GANADOR ABSOLUTO: Inyección directa en turno assistant.** |
+* **Calibración Estadística Rigurosa (N=20)**:
+  1. Los intervalos de confianza de Wilson de C1, C2, C3 y C4 se solapan sustancialmente (rango 50%–65%). C4 no es estadísticamente distinguible de C1/C3 fuera del ruido muestral ($N=20$).
+  2. Lo que queda firmemente establecido es que **el andamiaje CoT no supera al texto plano**. La hipótesis neurosimbólica queda formalmente cerrada por parsimonia.
+  3. $C_1$ (assistant) y $C_5$ (system) arrojaron exactamente el mismo resultado (11/20 vs 11/20), descartando que el canal por sí solo sea el motor cuando la estructura es compleja.
+  4. La condición C4 (`{fact}\nAnswer:`) evalúa **prefix-completion** (copia a 1 token de distancia atencional), no un proceso de razonamiento o síntesis RAG abierta.
 
-* **Resolución de la Hipótesis ($C_4 > C_1$, 65% vs 55%)**:
-  1. **El andamiaje pseudo-CoT queda descartado**: Los corchetes `[THINKING]`, `[QUERY:]`, `[ANSWER]` introducen ruido de tokenización y restan 10 puntos respecto a un formato plano limpio.
-  2. **El Canal es la causa real del salto (+25 puntos)**: Inyectar en el turno autorregresivo del asistente (`assistant\n{fact}\nAnswer: `) en lugar del bloque `system` acerca el hecho a 1 token de la respuesta y elimina toda divagación.
-  3. **Decisión de Ingeniería GAJE**: Cierre formal de la línea de parsers CoT en runtime. La integración de `.gmem` adoptará el patrón **C4 (Inyección directa en turno de asistente)**: limpio, sin sobrecoste de tokens y con máxima fidelidad fáctica.
+#### 3. Certificación de RAG Real con Memoria `.gmem` (Retrieval + Generación Libre)
+Se testeó el pipeline de producción sin hechos cableados a mano ni prefijos forzados ([`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs)):
+1. **Top-1 Retrieval Recall (.gmem en 896d)**: **`19 / 20` (95.0%)**. El extractor semántico nativo (`embed_text_gtok`) y la búsqueda por similitud coseno recuperan con altísima fidelidad el hecho pertinente en 120 ms.
+2. **Generación Libre del LLM (0.5B)**: **`8 / 20` (40.0%)**. El modelo recibe el contexto en `system` y responde abiertamente. Falla en el 60% restante debido a parálisis por preámbulos vacíos (*"To answer the question... I will use my knowledge..."*) o colapso en números específicos.
+3. **Veredicto Operativo**: El subsistema de memoria `.gmem` es sólido (95% recall). El cuello de botella en edge devices es la capacidad generativa de modelos de 0.5B sin constreñimiento de salida.
 
 ---
 

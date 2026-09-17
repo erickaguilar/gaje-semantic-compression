@@ -1,6 +1,9 @@
 #[cfg(test)]
 mod tests {
     use _impl::io::flat_reader::GajeFlatFileReader;
+    use _impl::io::gmem::GmemMemoryIndex;
+    use _impl::nn::llm::GenomicLLM;
+    use _impl::core::gtok::GtokNativeTokenizer;
     use std::time::Instant;
 
     #[derive(Clone)]
@@ -662,5 +665,152 @@ mod tests {
         println!("Tiempo Total:                {:.2?}", elapsed);
         println!("========================================================\n");
     }
+
+    fn embed_text_gtok(
+        text: &str,
+        model: &GenomicLLM,
+        tokenizer: &GtokNativeTokenizer,
+    ) -> Vec<f32> {
+        let tokens_u32 = tokenizer.encode(text);
+        let stop_tokens = tokenizer.get_stop_tokens();
+        let dim = model.dim();
+        let mut sum_vec = vec![0.0f32; dim];
+        let mut total_w = 0.0f32;
+
+        let is_stopword = |w: &str| -> bool {
+            matches!(
+                w,
+                "de" | "la" | "el" | "en" | "es" | "y" | "a" | "un" | "una" | "unos" | "unas"
+                    | "con" | "por" | "para" | "que" | "del" | "los" | "las" | "the" | "is"
+                    | "of" | "and" | "in" | "to" | "," | "." | ";" | ":" | "¿" | "?" | "!" | "¡"
+            )
+        };
+
+        for &tok_u32 in &tokens_u32 {
+            let tok = tok_u32 as usize;
+            if stop_tokens.contains(&tok_u32) {
+                continue;
+            }
+            let tok_str = tokenizer.decode(&[tok_u32]).trim().to_lowercase();
+            let w = if is_stopword(&tok_str) { 0.15f32 } else { 1.0f32 };
+
+            if let Ok(emb) = model.get_token_embedding(tok) {
+                if emb.len() == dim {
+                    for i in 0..dim {
+                        sum_vec[i] += emb[i] * w;
+                    }
+                    total_w += w;
+                }
+            }
+        }
+
+        if total_w > 0.0 {
+            let inv_w = 1.0 / total_w;
+            for v in &mut sum_vec {
+                *v *= inv_w;
+            }
+        }
+
+        let norm = sum_vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if norm > 1e-9 {
+            let inv_norm = 1.0 / norm;
+            for v in &mut sum_vec {
+                *v *= inv_norm;
+            }
+        }
+
+        sum_vec
+    }
+
+    /// TEST DE RETRIEVAL REAL .GMEM + GENERACIÓN SIN PREFIJO (RAG E2E Auténtico)
+    /// 1. Ingesta los 20 hechos en un índice .gmem mediante embed_text_gtok.
+    /// 2. Para cada pregunta, busca el vecino más cercano por similitud coseno (Recall@1).
+    /// 3. Inyecta el hecho recuperado en el System Prompt.
+    /// 4. El asistente responde LIBREMENTE desde <|im_start|>assistant\n (sin prefijo ni completion).
+    #[test]
+    fn test_e2e_real_gmem_rag_retrieval_and_generation() {
+        println!("\n========================================================");
+        println!("🧠 EVALUACIÓN EMPÍRICA — RAG E2E REAL (.GMEM RETRIEVAL + SYSTEM)");
+        println!("Modelo: Qwen2.5-0.5B-Instruct (models/production/qwen2_5_0_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let dim = model.dim() as u32;
+        let mut memory_index = GmemMemoryIndex::new(dim);
+
+        println!("📥 1. Ingestando los 20 hechos en .gmem usando embed_text_gtok ({}d)...", dim);
+        let t_embed_start = Instant::now();
+        for tc in &test_cases {
+            let vec = embed_text_gtok(tc.fact, &model, &tokenizer);
+            memory_index.add_entry(tc.id as u64, vec, tc.fact.to_string());
+        }
+        println!("   ✅ Ingesta completada en {:.2?}\n", t_embed_start.elapsed());
+
+        let mut retrieval_hits = 0;
+        let mut generation_hits = 0;
+        let total_start = Instant::now();
+
+        println!("🔍 2. Ejecutando Retrieval Vectorial y Generación Libre sin Prefijo...");
+        for tc in &test_cases {
+            // A. Retrieval
+            let q_vec = embed_text_gtok(tc.question, &model, &tokenizer);
+            let matches = memory_index.search_top_k(&q_vec, 1);
+            assert!(!matches.is_empty(), "Matches should not be empty");
+
+            let retrieved_entry = matches[0].0;
+            let sim = matches[0].1;
+            let is_retrieval_correct = retrieved_entry.id == tc.id as u64;
+            if is_retrieval_correct {
+                retrieval_hits += 1;
+            }
+
+            // B. Generación Libre RAG (sin prefijo en el turno del asistente)
+            let chat_prompt = format!(
+                "<|im_start|>system\nKnowledge: {}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+                retrieved_entry.text, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_gen_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_gen_hit {
+                generation_hits += 1;
+            }
+
+            let ret_emoji = if is_retrieval_correct { "🎯 MATCH" } else { "⚠️ MISS " };
+            let gen_emoji = if is_gen_hit { "✅ HIT " } else { "❌ MISS" };
+
+            println!(
+                "[{:02}/20] Ret: {} (sim: {:.3}) | Gen: {} [{}] Q: {}",
+                tc.id, ret_emoji, sim, gen_emoji, tc.domain, tc.question
+            );
+            println!("       Retrieved: \"{}\"", retrieved_entry.text);
+            println!("       Output:    \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let ret_pct = (retrieval_hits as f32 / test_cases.len() as f32) * 100.0;
+        let gen_pct = (generation_hits as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — RAG E2E REAL (.GMEM + GENERACIÓN LIBRE)");
+        println!("========================================================");
+        println!("Top-1 Retrieval Recall (.gmem): {} / {} ({:.1}%)", retrieval_hits, test_cases.len(), ret_pct);
+        println!("Exactitud Generación E2E (LLM): {} / {} ({:.1}%)", generation_hits, test_cases.len(), gen_pct);
+        println!("Tiempo Total:                   {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
 }
+
 

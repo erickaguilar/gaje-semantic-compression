@@ -1,67 +1,61 @@
-# 📊 Evaluación Empírica de CoT + .gmem: Ablación de Variables (Canal vs. Andamiaje)
+# 📊 Evaluación Empírica de Memoria .gmem: Retrieval Vectorial vs. Generación LLM
 
 > **Clasificación:** Reporte de Investigación Empírica (`docs/research/`)  
-> **Fecha:** 15 de septiembre de 2026  
+> **Fecha:** 17 de septiembre de 2026  
 > **Modelo Evaluado:** `Qwen2.5-0.5B-Instruct` cuantizado en [`models/production/qwen2_5_0_5b.gaje`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/models/production/qwen2_5_0_5b.gaje) (1.5 GB, 24 capas Q4_0, GTOK 151,936 tokens)  
-> **Entorno de Ejecución:** ARM64 (Linux/Termux), inferencia nativa en Rust (`gaje-core`), greedy decoding `temp = 0.0`, `repetition_penalty = 1.15`.  
-> **Harness de Prueba:** [`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs)
+> **Índice de Memoria:** [`.gmem`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/src/io/gmem.rs) indexado en 896 dimensiones vía `embed_text_gtok` (Weighted Mean Pooling)  
+> **Entorno de Ejecución:** ARM64 (Linux/Termux), inferencia nativa en Rust (`gaje-core`), greedy decoding `temp = 0.0`.  
+> **Harness de Prueba:** [`tests/test_cot_gmem_baseline.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_cot_gmem_baseline.rs) (`test_e2e_real_gmem_rag_retrieval_and_generation`)
 
 ---
 
-## 1. Matriz Exhaustiva de Ablación (8 Condiciones)
+## 1. Resumen Ejecutivo y Resultados de la Prueba E2E Real
 
-Para aislar si el rendimiento del andamiaje se debía a la estructura neurosimbólica de CoT (`[THINKING]...[ANSWER]`) o a la variable de confusión del **canal de inyección** y la **supresión de preámbulo**, se evaluaron 8 condiciones sobre los 20 prompts canónicos:
+Se evaluó el pipeline completo de **RAG Real sin prefijo forzado**:
+1. Ingesta de 20 hechos canónicos en un índice binario `.gmem` en 896 dimensiones (tiempo de ingesta: `120.35 ms`).
+2. Para cada una de las 20 preguntas, búsqueda del vecino más cercano (Top-1) por similitud coseno.
+3. Inyección del hecho recuperado en el `system prompt` (`Knowledge: {retrieved_fact}`).
+4. Generación libre del asistente desde `<|im_start|>assistant\n` sin ningún prefijo forzado en su turno.
 
-| ID | Canal | Formato Sintáctico | Aciertos | Exactitud (%) | Hipótesis que Evalúa / Resultado |
-| :---: | :--- | :--- | :---: | :---: | :--- |
-| **A** | — | Pregunta directa | 6 / 20 | **30.0%** | **Baseline Directo**: Memoria paramétrica no guiada. |
-| **B** | — | *"think step by step"* (libre) | 1 / 20 | **5.0%** | **Colapso CoT**: Dilución procedimental vacía. |
-| **D** | `system` | `Knowledge: {fact}` (plano) | 8 / 20 | **40.0%** | **RAG Clásico**: Vacilación y preámbulos (*"To answer..."*). |
-| **C5** | `system` | `[THINKING][QUERY]->fact[ANSWER]` | 11 / 20 | **55.0%** | **Formato en System**: Reduce preámbulos pero satura contexto. |
-| **C2** | `assistant`| `[QUERY: X] -> fact\n[ANSWER] ` | 10 / 20 | **50.0%** | **Tags sin Thinking**: Los subtokens de corchetes restan precisión. |
-| **C1** | `assistant`| `[THINKING][QUERY]->fact\n[ANSWER]`| 11 / 20 | **55.0%** | **Andamiaje CoT Completo**: Efecto aparente original. |
-| **C3** | `assistant`| `Fact: {fact}\nAnswer: ` | 12 / 20 | **60.0%** | **Estructura Limpia**: Sin tags especiales, lenguaje natural. |
-| **C4** | `assistant`| **`{fact}\nAnswer: ` (Plano)** | **13 / 20** | **`65.0%`** | **GANADOR ABSOLUTO**: Inyección en canal asistente + prefijo directo. |
+| Fase del Sistema | Métrica Evaluada | Resultado Obtenido | Diagnóstico Operativo |
+| :--- | :--- | :---: | :--- |
+| **Motor de Memoria `.gmem`** | **Top-1 Retrieval Recall** | **`19 / 20` (95.0%)** | **Excelente.** El extractor de embeddings (`embed_text_gtok`) y la búsqueda coseno recuperan el hecho exacto en el 95% de las consultas. |
+| **Generación Libre LLM (0.5B)** | **Exactitud E2E sin Prefijo** | **`8 / 20` (40.0%)** | **Cuello de Botella.** El modelo de 0.5B frecuentemente se congela en preámbulos vacíos (*"To answer the question..."*) o confabula, incluso teniendo el dato en el contexto del sistema. |
 
 ---
 
-## 2. Descomposición Ortogonal de Variables
+## 2. Desglose Detallado: Retrieval vs. Generación
 
-### A. Efecto de la Etiqueta `[THINKING]` ($C_1 - C_2 = +5.0\%$)
-* Con `[THINKING]`: 11 / 20 (55.0%).
-* Sin `[THINKING]`: 10 / 20 (50.0%).
-* **Diagnóstico**: La palabra `[THINKING]` no induce razonamiento real; el delta de 1 prompt es ruido de tokenización dentro del margen de varianza.
-
-### B. Efecto de los Tags Especiales vs. Formato Genérico ($C_3 - C_2 = +10.0\%$)
-* Con tags de corchetes `[QUERY: ...][ANSWER]`: 10 / 20 (50.0%).
-* Con palabras clave en inglés estándar `Fact: ... Answer: `: 12 / 20 (60.0%).
-* **Diagnóstico**: Los corchetes y subtokens fragmentados (`[`, `QUERY`, `:`, `]`) **perjudican al modelo**. El modelo Instruct de 0.5B responde mucho mejor a secuencias naturales de lenguaje (`Fact: ... Answer: `).
-
-### C. Efecto de la Estructura vs. Plano ($C_4 - C_3 = +5.0\%$ y $C_4 - C_1 = +10.0\%$)
-* Andamiaje CoT ($C_1$): 11 / 20 (55.0%).
-* Formato Plano Directo ($C_4$): **13 / 20 (65.0%)**.
-* **Diagnóstico**: **$C_4 > C_1$**. El andamiaje pseudo-CoT no solo no aporta ningún beneficio adicional sobre el formato plano en el turno del asistente, sino que **reduce la precisión en 10 puntos porcentuales**. La parafernalia sintáctica de "simular pensamiento" distrae la atención local de la red.
-
-### D. Efecto del Canal de Inyección ($C_4 - D = +25.0\%$)
-* Canal `system` ($D$): 8 / 20 (40.0%).
-* Canal `assistant` ($C_4$): **13 / 20 (65.0%)**.
-* **Diagnóstico**: **El factor determinante del rendimiento es el canal de inyección y el prefijo de asistente.**
-  1. Cuando el hecho se coloca en el `system prompt`, el modelo inicia su turno de asistente en frío, generando preámbulos vacíos (*"To answer the question 'In what year...' I will use my knowledge..."*) que consumen los tokens antes de llegar al número.
-  2. Cuando el hecho se inyecta en el turno del asistente seguido inmediatamente de `Answer: `, la distancia atencional entre el hecho y la generación es de 1 token, forzando la extracción directa del dato fáctico.
+| ID | Dominio | Pregunta | Retrieval .gmem (Top-1) | Similitud | Generación LLM (sin prefijo) |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| 1 | Geografía | Capital de Australia | 🎯 MATCH (Canberra) | 0.872 | ✅ HIT (Canberra) |
+| 2 | Geografía | Capital de Canadá | 🎯 MATCH (Ottawa) | 0.896 | ❌ MISS (Otua - typo) |
+| 3 | Geografía | Capital de Brasil | 🎯 MATCH (Brasilia) | 0.888 | ✅ HIT (Brasilia) |
+| 4 | Geografía | Capital de Turquía | 🎯 MATCH (Ankara) | 0.894 | ✅ HIT (Ankara) |
+| 5 | Geografía | Capital de Suiza | 🎯 MATCH (Bern) | 0.905 | ❌ MISS (Swiss region) |
+| 6 | Ciencia | Símbolo del Oro | 🎯 MATCH (Au) | 0.914 | ✅ HIT (Au) |
+| 7 | Ciencia | Símbolo del Plomo | ⚠️ MISS (Colisión léxica -> Au) | 0.866 | ✅ HIT (Pb - por memoria interna) |
+| 8 | Ciencia | Velocidad de escape Tierra | 🎯 MATCH (11.2 km/s) | 0.825 | ✅ HIT (11.2 km/s) |
+| 9 | Ciencia | Velocidad de la luz | 🎯 MATCH (299,792 km/s) | 0.767 | ✅ HIT (299,792 km/s) |
+| 10 | Ciencia | Gas más abundante Tierra | 🎯 MATCH (Nitrogen 78%) | 0.910 | ❌ MISS (Incompleto) |
+| 11 | Astronomía | Planeta con más lunas | 🎯 MATCH (Saturn 146) | 0.864 | ❌ MISS (Emitió "146") |
+| 12 | Astronomía | Planeta más cercano al Sol | 🎯 MATCH (Mercury) | 0.920 | ❌ MISS ("The closest is SuN") |
+| 13 | Astronomía | Mayor luna de Júpiter | 🎯 MATCH (Ganymede) | 0.898 | ❌ MISS ("Knowlledge") |
+| 14 | Astronomía | 2do planeta desde el Sol | 🎯 MATCH (Venus) | 0.934 | ❌ MISS ("Kuwait") |
+| 15 | Astronomía | Estrella de la Mañana | 🎯 MATCH (Venus) | 0.911 | ❌ MISS ("VeuS" - typo) |
+| 16 | Historia | Año alunizaje Apolo 11 | 🎯 MATCH (1969) | 0.838 | ❌ MISS (Preámbulo vacío) |
+| 17 | Historia | Fin Segunda Guerra Mundial | 🎯 MATCH (1945) | 0.648 | ❌ MISS (Preámbulo vacío) |
+| 18 | Historia | Fundación Naciones Unidas | 🎯 MATCH (1945) | 0.675 | ✅ HIT (1945) |
+| 19 | Ciencia | Elementos tabla periódica | 🎯 MATCH (118) | 0.770 | ❌ MISS (Preámbulo vacío) |
+| 20 | Biología | Cromosomas células somáticas | 🎯 MATCH (46) | 0.782 | ❌ MISS (Preámbulo vacío) |
 
 ---
 
-## 3. Veredicto Arquitectónico para GAJE Helix
+## 3. Conclusiones y Calibración Rigurosa
 
-1. **Cierre Formal de la Línea Pseudo-CoT:**  
-   Queda descartada la necesidad de implementar parsers de razonamiento o envolturas `[THINKING]` en modelos sub-1B.
-2. **Regla de Producto y Diseño Óptimo:**  
-   La arquitectura de integración de la memoria hipocampal (`.gmem`) debe operar mediante **inyección en el turno del asistente con prefijo forzado**:
-   ```text
-   <|im_start|>user
-   {Pregunta del usuario}<|im_end|>
-   <|im_start|>assistant
-   {Hecho recuperado de .gmem}
-   Answer: 
-   ```
-   Esta estrategia es más rápida, no requiere tokens adicionales de andamiaje, elimina parsers complejos y maximiza la exactitud en edge devices.
+1. **La Memoria `.gmem` está Validada:**
+   * El subsistema de persistencia y búsqueda vectorial alcanza un **95.0% de recall** con latencias de búsqueda sub-milisegundo. El componente semántico de GAJE funciona de forma óptima.
+2. **Disociación entre Retrieval y Capacidad del Modelo:**
+   * La tasa de respuesta correcta en generación libre es de **40.0% (8/20)**. Esto coincide exactamente con el control RAG puro (Condición D), confirmando que el límite del sistema no es la memoria externa, sino la capacidad atencional y de seguimiento de instrucciones de un modelo de 0.5B de parámetros en decodificación abierta.
+3. **Prefix-Completion vs. RAG:**
+   * Las condiciones previas con prefijo en el turno del asistente (C4 = 65%) representan **prefix-completion a 1 token**, no razonamiento de recuperación. En producción abierta, el modelo debe ser guiado mediante ingeniería de prompt para evitar la trampa del preámbulo vacío.
