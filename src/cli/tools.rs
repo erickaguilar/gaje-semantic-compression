@@ -3,7 +3,6 @@
 //! Implementación de `export-flat`, `benchmark`, `dataset-build` y `audit`.
 
 use crate::core::tokenizer::GajeTokenizer;
-use crate::io::config::{ArchConfig, ModelConfig};
 use crate::io::flat_reader::GajeFlatFileReader;
 use crate::io::flat_writer::save_genomic_flat_q;
 use crate::nn::repl::load_model_and_tokenizer;
@@ -18,6 +17,8 @@ pub fn export_flat_cmd(
     output_path: &str,
     tokenizer_opt: Option<&str>,
     quant_format: u32,
+    lm_head_quant: Option<u32>,
+    lm_head_weights: Option<&str>,
 ) -> Result<(), String> {
     println!(
         "\n🧬 ==============================================================================="
@@ -30,7 +31,7 @@ pub fn export_flat_cmd(
     let t0 = Instant::now();
 
     // 1. Cargar modelo base y configuración
-    let (model, tokenizer, config) = if input_path.ends_with(".gguf") {
+    let (mut model, tokenizer, config) = if input_path.ends_with(".gguf") {
         println!("🔮 Detectado formato de entrada GGUF. Analizando metadatos y tensores...");
         let loader = crate::io::gguf::loader::GGUFLoader::new(input_path)
             .map_err(|e| format!("Error abriendo GGUF: {}", e))?;
@@ -38,8 +39,13 @@ pub fn export_flat_cmd(
             .infer_config()
             .map_err(|e| format!("Error infiriendo config GGUF: {}", e))?;
         let bit_depth = if quant_format == 3 { 2 } else { 4 };
+        let lm_head_bit_depth = lm_head_quant.map(|q| match q {
+            2 => 8,
+            3 => 2,
+            _ => 4,
+        });
         let model = loader
-            .load_genomic_llm_q(config.clone(), 0.0, bit_depth)
+            .load_genomic_llm_q_selective(config.clone(), 0.0, bit_depth, lm_head_bit_depth)
             .map_err(|e| format!("Error cargando LLM genómico desde GGUF: {}", e))?;
 
         config.vocab_size = Some(model.lm_head.out_features);
@@ -66,49 +72,22 @@ pub fn export_flat_cmd(
 
         (model, tokenizer, config)
     } else {
-        let (model, default_tok) = load_model_and_tokenizer(input_path)?;
+        let reader = crate::io::flat_reader::GajeFlatFileReader::open(input_path)
+            .map_err(|e| format!("Error abriendo modelo GAJE: {}", e))?;
+        let config = reader
+            .load_config()
+            .map_err(|e| format!("Error leyendo ModelConfig del modelo origen: {}", e))?;
+        let model = reader
+            .load_genomic()
+            .map_err(|e| format!("Error cargando LLM: {}", e))?;
         let tokenizer = if let Some(tok_path) = tokenizer_opt {
             println!("📚 Cargando tokenizador externo desde: {}", tok_path);
             GajeTokenizer::from_file(Path::new(tok_path)).map_err(|e| e.to_string())?
+        } else if let Some(gtok) = reader.get_embedded_gtok() {
+            GajeTokenizer::from_gtok(gtok)
         } else {
+            let (_, default_tok) = crate::nn::repl::load_model_and_tokenizer(input_path)?;
             default_tok
-        };
-
-        // 3. Sintetizar ModelConfig
-        let n_embd = model.embeddings.out_features;
-        let n_head = model.blocks.first().map(|b| b.attn.n_head).unwrap_or(8);
-        let n_head_kv = model
-            .blocks
-            .first()
-            .map(|b| b.attn.n_head_kv)
-            .unwrap_or(n_head);
-        let n_blocks = model.blocks.len();
-        let vocab_size = model.lm_head.out_features;
-
-        let config = ModelConfig {
-            config: ArchConfig {
-                name: "GAJE-Model".to_string(),
-                version: "1.7.0-alpha".to_string(),
-                tokenizer_id: "gtok".to_string(),
-                rope_base: 10000.0,
-                ffn_act: "silu".to_string(),
-                use_genomic_norm: false,
-                rope_style: "split".to_string(),
-                anchor_threshold: 0.1,
-                ffn_anchor_threshold: 0.1,
-                rna_threshold: 0.5,
-                unpermute_weights: false,
-                apply_smollm_rope_patch: false,
-                tie_word_embeddings: false,
-                dni: "GAJE-DNI-NATIVE".to_string(),
-                state: "stable".to_string(),
-            },
-            n_embd,
-            n_head,
-            n_head_kv,
-            n_blocks,
-            vocab_size: Some(vocab_size),
-            eps: model.eps,
         };
         (model, tokenizer, config)
     };
@@ -118,6 +97,92 @@ pub fn export_flat_cmd(
         "✅ Modelo origen cargado en {:.2} ms",
         load_time.as_secs_f64() * 1000.0
     );
+
+    // 2. Procesamiento selectivo de lm_head si se solicita
+    if let Some(w_path) = lm_head_weights {
+        println!("🧬 Actualizando lm_head con pesos de alta fidelidad desde: {}", w_path);
+        let raw_bytes = std::fs::read(w_path)
+            .map_err(|e| format!("Error leyendo archivo de pesos '{}': {}", w_path, e))?;
+        let out_f = model.lm_head.out_features;
+        let in_f = model.lm_head.in_features;
+        let expected_bf16_len = out_f * in_f * 2;
+        let expected_f32_len = out_f * in_f * 4;
+        let expected_q8_len = (out_f * in_f / 32) * std::mem::size_of::<crate::io::header::Q8_0Block>();
+
+        let target_quant = lm_head_quant.unwrap_or(2);
+        if target_quant == 2 {
+            let blocks = if raw_bytes.len() == expected_q8_len {
+                println!("   • Formato detectado: Q8_0 pre-cuantizado ({} bytes)", raw_bytes.len());
+                let ptr = raw_bytes.as_ptr() as *const crate::io::header::Q8_0Block;
+                let count = raw_bytes.len() / std::mem::size_of::<crate::io::header::Q8_0Block>();
+                unsafe { std::slice::from_raw_parts(ptr, count).to_vec() }
+            } else if raw_bytes.len() == expected_bf16_len {
+                println!("⚡ Cuantizando {} bytes a Q8_0 (out={}, in={}) con Rayon...", raw_bytes.len(), out_f, in_f);
+                println!("   • Formato detectado: BF16 (bfloat16 nativo sin pérdida previa)");
+                crate::compute::quantize::quantize_bf16_to_q8_0(&raw_bytes)
+            } else if raw_bytes.len() == expected_f32_len {
+                println!("⚡ Cuantizando {} bytes a Q8_0 (out={}, in={}) con Rayon...", raw_bytes.len(), out_f, in_f);
+                println!("   • Formato detectado: FP32 (float32 nativo sin pérdida previa)");
+                let f32_slice = unsafe {
+                    std::slice::from_raw_parts(raw_bytes.as_ptr() as *const f32, raw_bytes.len() / 4)
+                };
+                crate::compute::quantize::quantize_to_q8_0(f32_slice)
+            } else {
+                return Err(format!(
+                    "Tamaño de pesos lm_head inesperado: {} bytes (esperado: {} para Q8_0, {} para BF16 o {} para FP32)",
+                    raw_bytes.len(),
+                    expected_q8_len,
+                    expected_bf16_len,
+                    expected_f32_len
+                ));
+            };
+
+            let bias = model.lm_head.bias.clone();
+            model.lm_head = crate::nn::GenomicLinear::from_weight_storage(
+                crate::nn::linear::WeightStorage::GenomicQ8_0(
+                    crate::nn::linear::storage::WeightBuffer::from(blocks),
+                ),
+                &[],
+                crate::nn::linear::storage::WeightBuffer::from(Vec::new()),
+                out_f,
+                in_f,
+                32,
+                bias,
+                8,
+            );
+            println!("✅ lm_head actualizado exitosamente a Q8_0 ({} bloques, 8 bits).", model.lm_head.database_ref().len() / 34);
+        } else {
+            return Err(format!("Formato de cuantización {} para lm_head aún no soportado con pesos externos", target_quant));
+        }
+    } else if let Some(target_quant) = lm_head_quant {
+        if target_quant == 2 && model.lm_head.bit_depth() != 8 {
+            println!("⚠️ Advertencia: Convirtiendo lm_head existente a Q8_0 por des-cuantización interna (el ruido previo de {} bits se conservará).", model.lm_head.bit_depth());
+            let out_f = model.lm_head.out_features;
+            let in_f = model.lm_head.in_features;
+            use rayon::prelude::*;
+            let mut f32_all = vec![0.0f32; out_f * in_f];
+            f32_all.par_chunks_mut(in_f).enumerate().for_each(|(r, row_buf)| {
+                if let Ok(decomp) = model.lm_head.get_row_core(r) {
+                    row_buf.copy_from_slice(&decomp);
+                }
+            });
+            let blocks = crate::compute::quantize::quantize_to_q8_0(&f32_all);
+            let bias = model.lm_head.bias.clone();
+            model.lm_head = crate::nn::GenomicLinear::from_weight_storage(
+                crate::nn::linear::WeightStorage::GenomicQ8_0(
+                    crate::nn::linear::storage::WeightBuffer::from(blocks),
+                ),
+                &[],
+                crate::nn::linear::storage::WeightBuffer::from(Vec::new()),
+                out_f,
+                in_f,
+                32,
+                bias,
+                8,
+            );
+            println!("✅ lm_head convertido internamente a Q8_0.");
+        }
+    }
 
     println!("⚡ Serializando tensores con alineación SIMD a 64 bytes y Rayon...");
     let write_t0 = Instant::now();
@@ -140,7 +205,15 @@ pub fn export_flat_cmd(
             2 => "Q8_0 (8-bit)",
             _ => "Q4_0 Híbrido v2 (Embeddings FP32 + Cuerpo Q4_0)",
         };
-        println!("   • Formato:            {}", format_desc);
+        let lm_format_desc = match model.lm_head.bit_depth() {
+            8 => "Q8_0 (8-bit)",
+            4 => "Q4_0 (4-bit)",
+            2 => "Q2_0 (2-bit)",
+            32 => "FP32 (32-bit)",
+            _ => "Otro",
+        };
+        println!("   • Formato Cuerpo:     {}", format_desc);
+        println!("   • Formato lm_head:    {}", lm_format_desc);
         println!("   • GTOK Incrustado:    🟢 SÍ");
     }
 

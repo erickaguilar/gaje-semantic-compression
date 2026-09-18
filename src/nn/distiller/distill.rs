@@ -265,7 +265,7 @@ impl GenomicDistiller {
                             let rows = student.lm_head.out_features;
                             let cols = student.lm_head.in_features;
                             let db_mut: &mut Vec<crate::io::header::blocks::Q2_0Block> =
-                                std::sync::Arc::make_mut(q2_db);
+                                q2_db.make_mut();
                             if let Ok(loss) = distiller.distill_step_online(
                                 &teacher_batch,
                                 &student_batch,

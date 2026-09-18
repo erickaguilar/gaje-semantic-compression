@@ -30,7 +30,7 @@ fn test_lm_head_fp32_update() {
     assert!(matches!(linear.weight_db, WeightDatabase::GenomicF32(_)));
 
     let w_before: Vec<f32> = match &linear.weight_db {
-        WeightDatabase::GenomicF32(db) => db.as_ref().clone(),
+        WeightDatabase::GenomicF32(db) => db.as_ref().to_vec(),
         _ => unreachable!(),
     };
 
@@ -42,7 +42,7 @@ fn test_lm_head_fp32_update() {
     linear.refine_with_grads_core(input, grads, 1e-2).unwrap();
 
     let w_after: Vec<f32> = match &linear.weight_db {
-        WeightDatabase::GenomicF32(db) => db.as_ref().clone(),
+        WeightDatabase::GenomicF32(db) => db.as_ref().to_vec(),
         _ => unreachable!(),
     };
     let max_delta = w_before

@@ -889,7 +889,276 @@ mod tests {
         println!("Tiempo Total:                   {:.2?}", elapsed);
         println!("========================================================\n");
     }
+
+    /// TEST COMPARATIVO CRÍTICO: QWEN 2.5 1.5B SOBRE EL MISMO PIPELINE RAG
+    /// Mide si el modelo de 1.5B rompe el techo del 60% (12/20) del 0.5B y alcanza >= 80%
+    #[test]
+    fn test_qwen_1_5b_real_gmem_rag_with_neutral_answer_prefix() {
+        println!("\n========================================================");
+        println!("🚀 EVALUACIÓN EMPÍRICA CRÍTICA — QWEN 2.5 1.5B (RAG REAL + PREFIJO NEUTRO)");
+        println!("Modelo: Qwen2.5-1.5B-Instruct (models/production/qwen2_5_1_5b.gaje) [Q4_0]");
+        println!("========================================================\n");
+
+        let test_cases = get_test_cases();
+        let path = "models/production/qwen2_5_1_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen 1.5B Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let dim = model.dim() as u32;
+        let mut memory_index = GmemMemoryIndex::new(dim);
+
+        println!("📥 1. Ingestando los 20 hechos en .gmem usando embed_text_gtok ({}d)...", dim);
+        let t_embed_start = Instant::now();
+        for tc in &test_cases {
+            let vec = embed_text_gtok(tc.fact, &model, &tokenizer);
+            memory_index.add_entry(tc.id as u64, vec, tc.fact.to_string());
+        }
+        println!("   ✅ Ingesta completada en {:.2?}\n", t_embed_start.elapsed());
+
+        let mut retrieval_hits = 0;
+        let mut generation_hits = 0;
+        let total_start = Instant::now();
+
+        println!("🔍 2. Ejecutando Retrieval Vectorial y Generación con Marcador Neutro 'Answer: '...");
+        for tc in &test_cases {
+            let q_vec = embed_text_gtok(tc.question, &model, &tokenizer);
+            let matches = memory_index.search_top_k(&q_vec, 1);
+            assert!(!matches.is_empty(), "Matches should not be empty");
+
+            let retrieved_entry = matches[0].0;
+            let sim = matches[0].1;
+            let is_ret_hit = retrieved_entry.id == tc.id as u64;
+            if is_ret_hit {
+                retrieval_hits += 1;
+            }
+
+            // Formato: Hecho en System, Turno de Asistente con marcador neutro "Answer: "
+            let chat_prompt = format!(
+                "<|im_start|>system\nKnowledge: {}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\nAnswer: ",
+                retrieved_entry.text, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            let output_ids = model.generate_native_core(input_ids, 25, 0.0, 1.15, stop_tokens.clone())
+                .expect("Generation failed");
+
+            let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+            let response_text = tokenizer.decode(&output_u32);
+
+            let is_gen_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+            if is_gen_hit {
+                generation_hits += 1;
+            }
+
+            let ret_emoji = if is_ret_hit { "🎯 MATCH" } else { "⚠️ MISS " };
+            let gen_emoji = if is_gen_hit { "✅ HIT " } else { "❌ MISS" };
+            println!(
+                "[{:02}/20] Ret: {} (sim: {:.3}) | Gen: {} [{}] Q: {}",
+                tc.id, ret_emoji, sim, gen_emoji, tc.domain, tc.question
+            );
+            println!("       Retrieved: \"{}\"", retrieved_entry.text);
+            println!("       Output:    \"{}\"", response_text.trim().replace('\n', " "));
+        }
+
+        let elapsed = total_start.elapsed();
+        let ret_pct = (retrieval_hits as f32 / test_cases.len() as f32) * 100.0;
+        let gen_pct = (generation_hits as f32 / test_cases.len() as f32) * 100.0;
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN FINAL — QWEN 2.5 1.5B (RAG REAL + PREFIJO NEUTRO)");
+        println!("========================================================");
+        println!("Top-1 Retrieval Recall (.gmem): {} / {} ({:.1}%)", retrieval_hits, test_cases.len(), ret_pct);
+        println!("Exactitud Generación E2E (1.5B): {} / {} ({:.1}%)", generation_hits, test_cases.len(), gen_pct);
+        println!("Tiempo Total:                   {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
+
+    /// TEST DE RECUPERACIÓN POR MUESTREO (TOP-K=5, T=0.2):
+    /// Evalúa 5 pasadas sobre los 3 casos con typo (IDs 13, 14, 15)
+    /// y 5 pasadas sobre 3 controles sólidos (IDs 1, 16, 20)
+    #[test]
+    fn test_qwen_1_5b_sampling_recovery_evaluation() {
+        println!("\n========================================================");
+        println!("🎲 EVALUACIÓN DE MUESTREO (T=0.2, Top-K=5, Top-P=0.9)");
+        println!("Modelo: Qwen2.5-1.5B-Instruct | 6 prompts × 5 pasadas = 30 runs");
+        println!("========================================================\n");
+
+        let all_cases = get_test_cases();
+        let target_ids = vec![13, 14, 15, 1, 16, 20];
+        let test_cases: Vec<_> = all_cases.into_iter().filter(|tc| target_ids.contains(&tc.id)).collect();
+
+        let path = "models/production/qwen2_5_1_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen 1.5B Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let dim = model.dim() as u32;
+        let mut memory_index = GmemMemoryIndex::new(dim);
+        for tc in &test_cases {
+            let vec = embed_text_gtok(tc.fact, &model, &tokenizer);
+            memory_index.add_entry(tc.id as u64, vec, tc.fact.to_string());
+        }
+
+        let num_passes = 5;
+        let mut typo_hits = 0;
+        let mut typo_total = 0;
+        let mut control_hits = 0;
+        let mut control_total = 0;
+
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let is_typo_case = matches!(tc.id, 13 | 14 | 15);
+            let category_label = if is_typo_case { "TYPO TARGET" } else { "CONTROL    " };
+
+            let q_vec = embed_text_gtok(tc.question, &model, &tokenizer);
+            let matches = memory_index.search_top_k(&q_vec, 1);
+            let retrieved_entry = matches[0].0;
+
+            let chat_prompt = format!(
+                "<|im_start|>system\nKnowledge: {}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\nAnswer: ",
+                retrieved_entry.text, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            println!("\n[{}] ID {:02} [{}]: \"{}\"", category_label, tc.id, tc.domain, tc.question);
+            println!("  Fact: \"{}\"", retrieved_entry.text);
+
+            for pass in 1..=num_passes {
+                let output_ids = model.generate_native_with_sampler(
+                    input_ids.clone(),
+                    25,
+                    0.2, // Temperature
+                    5,   // Top-K
+                    0.9, // Top-P
+                    1.15,// Repetition penalty
+                    stop_tokens.clone(),
+                ).expect("Generation failed");
+
+                let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+                let response_text = tokenizer.decode(&output_u32);
+                let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+
+                if is_typo_case {
+                    typo_total += 1;
+                    if is_hit { typo_hits += 1; }
+                } else {
+                    control_total += 1;
+                    if is_hit { control_hits += 1; }
+                }
+
+                let icon = if is_hit { "✅ HIT " } else { "❌ MISS" };
+                println!("    Pass {}/{}: {} -> Output: \"{}\"", pass, num_passes, icon, response_text.trim().replace('\n', " "));
+            }
+        }
+
+        let elapsed = total_start.elapsed();
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN EXPERIMENTAL — SAMPLING TOP-K=5, T=0.2");
+        println!("========================================================");
+        println!("Casos con Typo recuperados: {} / {} ({:.1}%)", typo_hits, typo_total, (typo_hits as f32 / typo_total as f32) * 100.0);
+        println!("Controles sólidos intactos: {} / {} ({:.1}%)", control_hits, control_total, (control_hits as f32 / control_total as f32) * 100.0);
+        println!("Tiempo Total de Muestreo:   {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
+
+    /// TEST DE RECUPERACIÓN POR MUESTREO EN 0.5B (TOP-K=5, T=0.2):
+    /// Evalúa 5 pasadas sobre los casos con typo/fallo (IDs 13, 14, 15)
+    /// y 5 pasadas sobre 3 controles sólidos (IDs 1, 16, 20) en Qwen 0.5B.
+    #[test]
+    fn test_qwen_0_5b_sampling_recovery_evaluation() {
+        println!("\n========================================================");
+        println!("🎲 EVALUACIÓN DE MUESTREO (T=0.2, Top-K=5, Top-P=0.9) — 0.5B");
+        println!("Modelo: Qwen2.5-0.5B-Instruct | 6 prompts × 5 pasadas = 30 runs");
+        println!("========================================================\n");
+
+        let all_cases = get_test_cases();
+        let target_ids = vec![13, 14, 15, 1, 16, 20];
+        let test_cases: Vec<_> = all_cases.into_iter().filter(|tc| target_ids.contains(&tc.id)).collect();
+
+        let path = "models/production/qwen2_5_0_5b.gaje";
+        let reader = GajeFlatFileReader::open(path).expect("Open Qwen 0.5B Q4_0");
+        let tokenizer = reader.get_embedded_gtok().expect("Get GTOK");
+        let mut model = reader.load_genomic().expect("Load GenomicLLM");
+        let stop_tokens = vec![151645, 151643];
+
+        let dim = model.dim() as u32;
+        let mut memory_index = GmemMemoryIndex::new(dim);
+        for tc in &test_cases {
+            let vec = embed_text_gtok(tc.fact, &model, &tokenizer);
+            memory_index.add_entry(tc.id as u64, vec, tc.fact.to_string());
+        }
+
+        let num_passes = 5;
+        let mut typo_hits = 0;
+        let mut typo_total = 0;
+        let mut control_hits = 0;
+        let mut control_total = 0;
+
+        let total_start = Instant::now();
+
+        for tc in &test_cases {
+            let is_typo_case = matches!(tc.id, 13 | 14 | 15);
+            let category_label = if is_typo_case { "TYPO TARGET" } else { "CONTROL    " };
+
+            let q_vec = embed_text_gtok(tc.question, &model, &tokenizer);
+            let matches = memory_index.search_top_k(&q_vec, 1);
+            let retrieved_entry = matches[0].0;
+
+            let chat_prompt = format!(
+                "<|im_start|>system\nKnowledge: {}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\nAnswer: ",
+                retrieved_entry.text, tc.question
+            );
+            let input_ids: Vec<usize> = tokenizer.encode(&chat_prompt).into_iter().map(|t| t as usize).collect();
+
+            println!("\n[{}] ID {:02} [{}]: \"{}\"", category_label, tc.id, tc.domain, tc.question);
+            println!("  Fact: \"{}\"", retrieved_entry.text);
+
+            for pass in 1..=num_passes {
+                let output_ids = model.generate_native_with_sampler(
+                    input_ids.clone(),
+                    25,
+                    0.2, // Temperature
+                    5,   // Top-K
+                    0.9, // Top-P
+                    1.15,// Repetition penalty
+                    stop_tokens.clone(),
+                ).expect("Generation failed");
+
+                let output_u32: Vec<u32> = output_ids.iter().map(|&t| t as u32).collect();
+                let response_text = tokenizer.decode(&output_u32);
+                let is_hit = check_answer(&response_text, tc.correct_pattern, tc.distractor_pattern);
+
+                if is_typo_case {
+                    typo_total += 1;
+                    if is_hit { typo_hits += 1; }
+                } else {
+                    control_total += 1;
+                    if is_hit { control_hits += 1; }
+                }
+
+                let icon = if is_hit { "✅ HIT " } else { "❌ MISS" };
+                println!("    Pass {}/{}: {} -> Output: \"{}\"", pass, num_passes, icon, response_text.trim().replace('\n', " "));
+            }
+        }
+
+        let elapsed = total_start.elapsed();
+
+        println!("\n========================================================");
+        println!("📊 RESUMEN EXPERIMENTAL 0.5B — SAMPLING TOP-K=5, T=0.2");
+        println!("========================================================");
+        println!("Casos con Typo recuperados: {} / {} ({:.1}%)", typo_hits, typo_total, (typo_hits as f32 / typo_total as f32) * 100.0);
+        println!("Controles sólidos intactos: {} / {} ({:.1}%)", control_hits, control_total, (control_hits as f32 / control_total as f32) * 100.0);
+        println!("Tiempo Total de Muestreo:   {:.2?}", elapsed);
+        println!("========================================================\n");
+    }
 }
+
+
 
 
 

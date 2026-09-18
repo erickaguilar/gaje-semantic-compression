@@ -2,7 +2,6 @@
 // backward — Gradientes, refine con gradientes y mutaciones de GenomicLinear
 // =============================================================================
 use rayon::prelude::*;
-use std::sync::Arc;
 
 use crate::nn::linear::database::WeightDatabase;
 use crate::nn::linear::GenomicLinear;
@@ -287,7 +286,7 @@ impl GenomicLinear {
         // Fase 2 (serial): aplicar lr a escala/min y a q via STE.
         match &mut self.weight_db {
             WeightDatabase::GenomicQ2_0(db) => {
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 for (i, per_row) in row_updates.iter().enumerate() {
                     if per_row.is_empty() {
                         continue;
@@ -318,7 +317,7 @@ impl GenomicLinear {
                 }
             }
             WeightDatabase::GenomicQ4_0(db) => {
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 for (i, per_row) in row_updates.iter().enumerate() {
                     if per_row.is_empty() {
                         continue;
@@ -349,7 +348,7 @@ impl GenomicLinear {
                 }
             }
             WeightDatabase::GenomicQ8_0(db) => {
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 for (i, per_row) in row_updates.iter().enumerate() {
                     if per_row.is_empty() {
                         continue;
@@ -448,9 +447,10 @@ impl GenomicLinear {
                     }
                 }
 
-                for c_idx in 0..self.centroids.len() {
+                let centroids = self.centroids.make_mut();
+                for c_idx in 0..centroids.len() {
                     if centroid_counts[c_idx] > 0.0 {
-                        self.centroids[c_idx] -=
+                        centroids[c_idx] -=
                             lr * (centroid_grads[c_idx] / centroid_counts[c_idx]);
                     }
                 }
@@ -499,13 +499,14 @@ impl GenomicLinear {
                         }
                     }
                 }
-                for c_idx in 0..self.centroids.len() {
+                let centroids = self.centroids.make_mut();
+                for c_idx in 0..centroids.len() {
                     if centroid_counts[c_idx] > 0.0 {
                         // Gradiente verdadero del centroide: la SUMA de
                         // g_val*x_val (los pesos comparten el valor c, así que
                         // dL/dc = Σ contribuciones). NO dividir por el conteo.
                         let delta = (lr * centroid_grads[c_idx]).clamp(-0.05, 0.05);
-                        self.centroids[c_idx] = (self.centroids[c_idx] - delta).clamp(-20.0, 20.0);
+                        centroids[c_idx] = (centroids[c_idx] - delta).clamp(-20.0, 20.0);
                     }
                 }
             }
@@ -514,7 +515,7 @@ impl GenomicLinear {
                 // Layout row-major: W[i,j] = db[i*in_features + j], y el gradiente
                 // `grads` es ∂L/∂logits (tamaño = out_features). SGD por token:
                 //   W[i,j] -= lr * grads[i] * input[j]
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 let in_f = self.in_features;
                 if in_f == 0 {
                     return Ok(());
@@ -584,7 +585,7 @@ impl GenomicLinear {
                     })
                     .collect();
                 // Fase 2 (serial, barata): aplicar lr a escala/min.
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 for (i, per_row) in row_updates.iter().enumerate() {
                     if per_row.is_empty() {
                         continue;
@@ -604,7 +605,7 @@ impl GenomicLinear {
             WeightDatabase::GenomicQ8_0(db) => {
                 // QAT de escala: mantiene `q8` fijo. W = q8*scale.
                 //   grad_scale[i,b] += Σ_k grad_W[i,b·bs+k] * q8[i,b,k]
-                let db_mut = Arc::make_mut(db);
+                let db_mut = db.make_mut();
                 let bs = self.block_size;
                 if bs == 0 || self.in_features == 0 {
                     return Ok(());

@@ -217,3 +217,70 @@ pub fn sample_min_p(logits: &[f32], temperature: f32, min_p: f32) -> Result<usiz
     }
     Ok(probs.len() - 1)
 }
+
+/// Muestreo conjunto Top-K y Top-P (Nucleus Sampling) con temperatura controlada.
+pub fn sample_top_k_top_p(
+    logits: &[f32],
+    temperature: f32,
+    top_k: usize,
+    top_p: f32,
+) -> Result<usize, String> {
+    if logits.is_empty() {
+        return Ok(0);
+    }
+    if temperature <= 1e-5 {
+        return Ok(logits
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map(|(idx, _)| idx)
+            .unwrap_or(0));
+    }
+
+    // 1. Filtrar Top-K
+    let mut indexed: Vec<(usize, f32)> = logits.iter().cloned().enumerate().collect();
+    indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
+    if top_k > 0 && indexed.len() > top_k {
+        indexed.truncate(top_k);
+    }
+
+    // 2. Softmax sobre el subconjunto Top-K
+    let max_logit = indexed.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b.1));
+    let mut probs: Vec<(usize, f32)> = indexed
+        .into_iter()
+        .map(|(id, l)| (id, ((l - max_logit) / temperature).exp()))
+        .collect();
+    let sum_probs: f32 = probs.iter().map(|p| p.1).sum();
+    if sum_probs <= 0.0 {
+        return Ok(0);
+    }
+    for p in &mut probs {
+        p.1 /= sum_probs;
+    }
+
+    // 3. Filtrar Top-P (Nucleus)
+    if top_p < 1.0 {
+        let mut cum = 0.0f32;
+        let mut cutoff = probs.len();
+        for (i, p) in probs.iter().enumerate() {
+            cum += p.1;
+            if cum >= top_p {
+                cutoff = i + 1;
+                break;
+            }
+        }
+        probs.truncate(cutoff);
+    }
+
+    let final_sum: f32 = probs.iter().map(|p| p.1).sum();
+    let mut rng = rand::thread_rng();
+    let r = rng.gen::<f32>() * final_sum;
+    let mut cum = 0.0f32;
+    for (id, p) in probs {
+        cum += p;
+        if r <= cum {
+            return Ok(id);
+        }
+    }
+    Ok(0)
+}

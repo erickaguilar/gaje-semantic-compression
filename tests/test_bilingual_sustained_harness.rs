@@ -131,7 +131,7 @@ mod tests {
                 }
                 new_blocks.push(new_block);
             }
-            new_linear.weight_db = WeightDatabase::GenomicQ4_0(Arc::new(new_blocks));
+            new_linear.weight_db = WeightDatabase::GenomicQ4_0(Arc::new(new_blocks).into());
         }
         new_linear
     }

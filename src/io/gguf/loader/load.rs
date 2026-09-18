@@ -20,6 +20,16 @@ impl GGUFLoader {
         anchor_threshold: f32,
         bit_depth: usize,
     ) -> std::io::Result<GenomicLLM> {
+        self.load_genomic_llm_q_selective(config, anchor_threshold, bit_depth, None)
+    }
+
+    pub fn load_genomic_llm_q_selective(
+        &self,
+        config: ModelConfig,
+        anchor_threshold: f32,
+        bit_depth: usize,
+        lm_head_bit_depth: Option<usize>,
+    ) -> std::io::Result<GenomicLLM> {
         let block_size = 32;
 
         // Detectar si los pesos de entrada y salida están unidos (Tied Weights)
@@ -167,7 +177,8 @@ impl GGUFLoader {
         let output_norm = self.load_f32_tensor("output_norm.weight")?;
 
         let lm_head = if has_output_weight {
-            println!("   • Genomizando cabezal de salida (lm_head)...");
+            let lm_bit = lm_head_bit_depth.unwrap_or(bit_depth);
+            println!("   • Genomizando cabezal de salida (lm_head) con {} bits...", lm_bit);
             let lm_head_bias = self.load_f32_tensor_optional("output.bias");
             self.genomize_tensor(
                 "output.weight",
@@ -177,11 +188,29 @@ impl GGUFLoader {
                 0,
                 0,
                 lm_head_bias,
-                bit_depth,
+                lm_bit,
             )?
         } else {
-            // Tied Weights: La salida es una copia exacta de la entrada
-            embd_dna.clone()
+            // Tied Weights: si lm_head_bit_depth difiere de bit_depth, genomizar lm_head independientemente
+            if let Some(lm_bit) = lm_head_bit_depth {
+                if lm_bit != bit_depth {
+                    println!("   • Tied weights detectado: creando lm_head dedicado con {} bits...", lm_bit);
+                    self.genomize_tensor(
+                        "token_embd.weight",
+                        block_size,
+                        anchor_threshold,
+                        false,
+                        0,
+                        0,
+                        None,
+                        lm_bit,
+                    )?
+                } else {
+                    embd_dna.clone()
+                }
+            } else {
+                embd_dna.clone()
+            }
         };
 
         Ok(GenomicLLM {

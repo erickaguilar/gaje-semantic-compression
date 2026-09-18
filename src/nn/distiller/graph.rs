@@ -254,7 +254,7 @@ impl DistillationGraph {
                         _ => None,
                     } {
                         let db_mut: &mut Vec<crate::io::header::blocks::Q2_0Block> =
-                            std::sync::Arc::make_mut(q2_db);
+                            q2_db.make_mut();
                         if d.distill_step_online(
                             &teacher_batch,
                             &student_batch,

@@ -26,12 +26,13 @@ pub fn merge_genomic_models(models: &[GenomicLLM]) -> Result<GenomicLLM, String>
     // Helper para promediar centroides de una capa lineal
     let average_centroids = |target: &mut GenomicLinear, sources: &[&GenomicLinear]| {
         let n_centroids = target.centroids.len();
+        let target_c = target.centroids.make_mut();
         for i in 0..n_centroids {
             let mut sum = 0.0;
             for s in sources {
                 sum += s.centroids[i];
             }
-            target.centroids[i] = sum / n;
+            target_c[i] = sum / n;
         }
     };
 

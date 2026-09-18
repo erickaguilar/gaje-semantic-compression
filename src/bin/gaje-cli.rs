@@ -297,6 +297,14 @@ struct ExportFlatArgs {
     /// Esquema de cuantización: 1=Q4_0 (default), 2=Q8_0, 3=Q2_0
     #[arg(long, default_value_t = 1)]
     quant_format: u32,
+
+    /// Esquema de cuantización específico para lm_head (opcional: 1=Q4_0, 2=Q8_0, 3=Q2_0)
+    #[arg(long)]
+    lm_head_quant: Option<u32>,
+
+    /// Archivo de pesos sin cuantizar para lm_head (.bin en BF16 o FP32)
+    #[arg(long)]
+    lm_head_weights: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -664,6 +672,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 &export_args.output,
                 export_args.tokenizer.as_deref(),
                 export_args.quant_format,
+                export_args.lm_head_quant,
+                export_args.lm_head_weights.as_deref(),
             )?;
             Ok(())
         }
@@ -772,7 +782,11 @@ fn run_single_prompt(
     let prompt_tokens: Vec<usize> = prompt_tokens_u32.into_iter().map(|t| t as usize).collect();
 
     let gen_t0 = Instant::now();
-    let eos_ids = vec![2, 0];
+    let eos_ids: Vec<usize> = tokenizer
+        .get_stop_tokens()
+        .into_iter()
+        .map(|t| t as usize)
+        .collect();
     let generated_tokens = llm
         .generate_native_core(
             prompt_tokens,

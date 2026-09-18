@@ -365,23 +365,40 @@ pub fn save_genomic_flat_q(
     write_at_offset(&file_arc, &metadata_json, 4096)?;
     write_at_offset(&file_arc, &dir_json, 4096 + metadata_json.len() as u64)?;
 
-    // 6. Escritura masiva en paralelo de tensores usando Rayon
+    // 6. Escritura masiva en paralelo de tensores usando Rayon con propagación estricta de errores
     let base_weights = weights_offset as u64;
-    tasks.into_par_iter().for_each(|task| {
+    tasks.into_par_iter().try_for_each(|task| -> std::io::Result<()> {
         let e = &task.entry;
         if !task.dna_data.is_empty() {
-            let _ = write_at_offset(&file_arc, &task.dna_data, base_weights + e.dna_off as u64);
+            write_at_offset(&file_arc, &task.dna_data, base_weights + e.dna_off as u64)
+                .map_err(|err| {
+                    eprintln!("❌ [flat_writer] Error fatal al escribir dna para tensor '{}': {}", e.name, err);
+                    err
+                })?;
         }
         if !task.c_data.is_empty() {
-            let _ = write_at_offset(&file_arc, &task.c_data, base_weights + e.c_off as u64);
+            write_at_offset(&file_arc, &task.c_data, base_weights + e.c_off as u64)
+                .map_err(|err| {
+                    eprintln!("❌ [flat_writer] Error fatal al escribir centroids para tensor '{}': {}", e.name, err);
+                    err
+                })?;
         }
         if !task.anc_data.is_empty() {
-            let _ = write_at_offset(&file_arc, &task.anc_data, base_weights + e.anc_off as u64);
+            write_at_offset(&file_arc, &task.anc_data, base_weights + e.anc_off as u64)
+                .map_err(|err| {
+                    eprintln!("❌ [flat_writer] Error fatal al escribir anchors para tensor '{}': {}", e.name, err);
+                    err
+                })?;
         }
         if !task.bias_data.is_empty() {
-            let _ = write_at_offset(&file_arc, &task.bias_data, base_weights + e.bias_off as u64);
+            write_at_offset(&file_arc, &task.bias_data, base_weights + e.bias_off as u64)
+                .map_err(|err| {
+                    eprintln!("❌ [flat_writer] Error fatal al escribir bias para tensor '{}': {}", e.name, err);
+                    err
+                })?;
         }
-    });
+        Ok(())
+    })?;
 
     // 7. Escribir GTOK si está presente
     if !gtok_bytes.is_empty() {

@@ -88,6 +88,6 @@ impl GenomicLinear {
     }
     #[getter]
     pub fn centroids(&self) -> PyResult<Vec<f32>> {
-        Ok(self.centroids.clone())
+        Ok(self.centroids.to_vec())
     }
 }

@@ -32,25 +32,25 @@ impl GenomicLinear {
                     let ptr = database.as_ptr() as *const Q4_0Block;
                     let count = database.len() / std::mem::size_of::<Q4_0Block>();
                     let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
-                    WeightDatabase::GenomicQ4_0(Arc::new(blocks))
+                    WeightDatabase::GenomicQ4_0(blocks.into())
                 } else {
-                    WeightDatabase::Genomic4Bit(Arc::new(database))
+                    WeightDatabase::Genomic4Bit(database.into())
                 }
             }
             8 => {
                 let ptr = database.as_ptr() as *const Q8_0Block;
                 let count = database.len() / std::mem::size_of::<Q8_0Block>();
                 let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
-                WeightDatabase::GenomicQ8_0(Arc::new(blocks))
+                WeightDatabase::GenomicQ8_0(blocks.into())
             }
             2 => {
                 if centroids.is_empty() {
                     let ptr = database.as_ptr() as *const Q2_0Block;
                     let count = database.len() / std::mem::size_of::<Q2_0Block>();
                     let blocks = unsafe { std::slice::from_raw_parts(ptr, count).to_vec() };
-                    WeightDatabase::GenomicQ2_0(Arc::new(blocks))
+                    WeightDatabase::GenomicQ2_0(blocks.into())
                 } else {
-                    WeightDatabase::Genomic2Bit(Arc::new(database))
+                    WeightDatabase::Genomic2Bit(database.into())
                 }
             }
             32 => {
@@ -58,9 +58,9 @@ impl GenomicLinear {
                     std::slice::from_raw_parts(database.as_ptr() as *const f32, database.len() / 4)
                         .to_vec()
                 };
-                WeightDatabase::GenomicF32(Arc::new(f32_data))
+                WeightDatabase::GenomicF32(f32_data.into())
             }
-            _ => WeightDatabase::Genomic2Bit(Arc::new(database)),
+            _ => WeightDatabase::Genomic2Bit(database.into()),
         };
         let stride = match bit_depth {
             4 => block_size / 2,
@@ -157,7 +157,7 @@ impl GenomicLinear {
             anchor_indices: Arc::new(anchor_indices),
             anchor_values: Arc::new(anchor_values),
             anchor_row_ptrs: Arc::new(anchor_row_ptrs),
-            centroids: final_centroids,
+            centroids: final_centroids.into(),
             epigenetic_centroids,
             triplet_centroids,
             out_features,
@@ -172,8 +172,8 @@ impl GenomicLinear {
 
     pub fn database_mut(&mut self) -> &mut Vec<u8> {
         match &mut self.weight_db {
-            WeightDatabase::Genomic2Bit(db) => Arc::make_mut(db),
-            WeightDatabase::Genomic4Bit(db) => Arc::make_mut(db),
+            WeightDatabase::Genomic2Bit(db) => db.make_mut(),
+            WeightDatabase::Genomic4Bit(db) => db.make_mut(),
             WeightDatabase::GenomicQ4_0(_) => panic!("Q4_0 is read-only"),
             WeightDatabase::GenomicQ8_0(_) => panic!("Q8_0 is read-only"),
             WeightDatabase::GenomicQ2_0(_) => panic!("Q2_0 is read-only"),
@@ -220,7 +220,7 @@ impl GenomicLinear {
 
     pub fn empty() -> Self {
         GenomicLinear {
-            weight_db: WeightDatabase::GenomicF32(Arc::new(Vec::new())),
+            weight_db: WeightDatabase::GenomicF32(crate::nn::linear::storage::WeightBuffer::from(Vec::new())),
             epi_strands: Arc::new(Vec::new()),
             tri_strands: Arc::new(Vec::new()),
             epi_cols: Arc::new(Vec::new()),
@@ -228,7 +228,7 @@ impl GenomicLinear {
             anchor_indices: Arc::new(Vec::new()),
             anchor_values: Arc::new(Vec::new()),
             anchor_row_ptrs: Arc::new(vec![0]),
-            centroids: Vec::new(),
+            centroids: Vec::new().into(),
             epigenetic_centroids: Vec::new(),
             triplet_centroids: Vec::new(),
             out_features: 0,
@@ -238,6 +238,96 @@ impl GenomicLinear {
             rmsnorm_weight: Vec::new(),
             eps: 1e-6,
             bias: Vec::new(),
+        }
+    }
+
+    pub fn from_weight_storage(
+        weight_db: WeightDatabase,
+        anchors_u8: &[u8],
+        centroids: crate::nn::linear::storage::WeightBuffer<f32>,
+        out_features: usize,
+        in_features: usize,
+        block_size: usize,
+        bias: Vec<f32>,
+        bit_depth: u8,
+    ) -> Self {
+        let stride = match bit_depth {
+            4 => block_size / 2,
+            8 => block_size,
+            32 => block_size,
+            _ => block_size / 4,
+        };
+        let (anchor_indices, anchor_values, anchor_row_ptrs) =
+            if anchors_u8.len() >= 4 && &anchors_u8[0..4] == b"GAJE" {
+                let count = u32::from_le_bytes(anchors_u8[4..8].try_into().unwrap()) as usize;
+                let mut indices = Vec::with_capacity(count);
+                let mut values = Vec::with_capacity(count);
+                let mut row_ptrs = vec![0; out_features + 1];
+                let idx_s = 8;
+                let val_s = idx_s + count * 4;
+                let ptr_s = val_s + count * 2;
+                for i in 0..count {
+                    indices.push(u32::from_le_bytes(
+                        anchors_u8[idx_s + i * 4..idx_s + (i + 1) * 4]
+                            .try_into()
+                            .unwrap(),
+                    ));
+                    values.push(f16::from_le_bytes(
+                        anchors_u8[val_s + i * 2..val_s + (i + 1) * 2]
+                            .try_into()
+                            .unwrap(),
+                    ));
+                }
+                if anchors_u8.len() >= ptr_s + (out_features + 1) * 8 {
+                    for i in 0..=out_features {
+                        row_ptrs[i] = u64::from_le_bytes(
+                            anchors_u8[ptr_s + i * 8..ptr_s + (i + 1) * 8]
+                                .try_into()
+                                .unwrap(),
+                        ) as usize;
+                    }
+                } else {
+                    let mut current_row = 0;
+                    for (anchor_idx, &flat_idx) in indices.iter().enumerate() {
+                        let r = flat_idx as usize / in_features;
+                        while current_row < r {
+                            row_ptrs[current_row + 1] = anchor_idx;
+                            current_row += 1;
+                        }
+                    }
+                    while current_row < out_features {
+                        row_ptrs[current_row + 1] = indices.len();
+                        current_row += 1;
+                    }
+                }
+                (Arc::new(indices), Arc::new(values), Arc::new(row_ptrs))
+            } else {
+                (
+                    Arc::new(Vec::new()),
+                    Arc::new(Vec::new()),
+                    Arc::new(vec![0]),
+                )
+            };
+
+        GenomicLinear {
+            weight_db,
+            epi_strands: Arc::new(Vec::new()),
+            tri_strands: Arc::new(Vec::new()),
+            epi_cols: Arc::new(Vec::new()),
+            tri_cols: Arc::new(Vec::new()),
+            anchor_indices,
+            anchor_values,
+            anchor_row_ptrs,
+            centroids,
+            epigenetic_centroids: Vec::new(),
+            triplet_centroids: Vec::new(),
+            out_features,
+            in_features,
+            block_size,
+            stride,
+            rmsnorm_weight: Vec::new(),
+            eps: 1e-6,
+            bias,
         }
     }
 }

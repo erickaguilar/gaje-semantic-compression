@@ -380,3 +380,153 @@ pub fn genomize_4bit_core(
 
     (dna_database, all_centroids, anchors_buf)
 }
+
+/// Cuantiza datos en f32 a bloques `Q8_0Block` en paralelo con Rayon.
+pub fn quantize_to_q8_0(f32_data: &[f32]) -> Vec<crate::io::header::Q8_0Block> {
+    use rayon::prelude::*;
+    let n_blocks = f32_data.len() / 32;
+    (0..n_blocks)
+        .into_par_iter()
+        .map(|i| {
+            let start = i * 32;
+            let block_f32 = &f32_data[start..start + 32];
+
+            let mut max_abs = 0.0f32;
+            for &v in block_f32 {
+                let abs_v = v.abs();
+                if abs_v > max_abs {
+                    max_abs = abs_v;
+                }
+            }
+
+            let scale = max_abs / 127.0;
+            let f16_scale = half::f16::from_f32(scale);
+            let eff_scale = f16_scale.to_f32();
+            let inv_scale = if eff_scale > 1e-7 { 1.0 / eff_scale } else { 0.0 };
+
+            let mut qs = [0i8; 32];
+            for k in 0..32 {
+                let q = if eff_scale > 1e-7 {
+                    (block_f32[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
+                } else {
+                    0
+                };
+                qs[k] = q;
+            }
+
+            crate::io::header::Q8_0Block {
+                scale: f16_scale,
+                qs,
+            }
+        })
+        .collect()
+}
+
+/// Cuantiza bytes BF16 directamente a bloques `Q8_0Block` en paralelo con Rayon sin asignar f32 en heap.
+pub fn quantize_bf16_to_q8_0(bf16_bytes: &[u8]) -> Vec<crate::io::header::Q8_0Block> {
+    use rayon::prelude::*;
+    let n_elements = bf16_bytes.len() / 2;
+    let n_blocks = n_elements / 32;
+    (0..n_blocks)
+        .into_par_iter()
+        .map(|i| {
+            let start_byte = i * 32 * 2;
+            let mut block_f32 = [0.0f32; 32];
+            let mut max_abs = 0.0f32;
+
+            for k in 0..32 {
+                let b_idx = start_byte + k * 2;
+                let u_val = u16::from_le_bytes([bf16_bytes[b_idx], bf16_bytes[b_idx + 1]]);
+                let f_val = f32::from_bits((u_val as u32) << 16);
+                block_f32[k] = f_val;
+                let abs_v = f_val.abs();
+                if abs_v > max_abs {
+                    max_abs = abs_v;
+                }
+            }
+
+            let scale = max_abs / 127.0;
+            let f16_scale = half::f16::from_f32(scale);
+            let eff_scale = f16_scale.to_f32();
+            let inv_scale = if eff_scale > 1e-7 { 1.0 / eff_scale } else { 0.0 };
+
+            let mut qs = [0i8; 32];
+            for k in 0..32 {
+                let q = if eff_scale > 1e-7 {
+                    (block_f32[k] * inv_scale).round().clamp(-128.0, 127.0) as i8
+                } else {
+                    0
+                };
+                qs[k] = q;
+            }
+
+            crate::io::header::Q8_0Block {
+                scale: f16_scale,
+                qs,
+            }
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quantize_to_q8_0_fidelity() {
+        let mut original = vec![0.0f32; 64];
+        for (i, v) in original.iter_mut().enumerate() {
+            *v = (i as f32 - 32.0) * 0.125;
+        }
+
+        let blocks = quantize_to_q8_0(&original);
+        assert_eq!(blocks.len(), 2);
+
+        for (i, &orig_val) in original.iter().enumerate() {
+            let block_idx = i / 32;
+            let within_block = i % 32;
+            let dequant = blocks[block_idx].dequantize_weight(within_block);
+            let diff = (orig_val - dequant).abs();
+            assert!(
+                diff < 0.05,
+                "Error en idx {}: orig={}, dequant={}, diff={}",
+                i,
+                orig_val,
+                dequant,
+                diff
+            );
+        }
+    }
+
+    #[test]
+    fn test_quantize_bf16_to_q8_0_equivalence() {
+        let mut f32_vals = vec![0.0f32; 32];
+        let mut bf16_bytes = vec![0u8; 64];
+
+        for i in 0..32 {
+            let val = (i as f32 - 15.5) * 0.25;
+            let f32_bits = val.to_bits();
+            let bf16_bits = (f32_bits >> 16) as u16;
+            let reconstructed_f32 = f32::from_bits((bf16_bits as u32) << 16);
+            f32_vals[i] = reconstructed_f32;
+
+            let b = bf16_bits.to_le_bytes();
+            bf16_bytes[i * 2] = b[0];
+            bf16_bytes[i * 2 + 1] = b[1];
+        }
+
+        let blocks_from_f32 = quantize_to_q8_0(&f32_vals);
+        let blocks_from_bf16 = quantize_bf16_to_q8_0(&bf16_bytes);
+
+        assert_eq!(blocks_from_f32.len(), 1);
+        assert_eq!(blocks_from_bf16.len(), 1);
+
+        assert_eq!(
+            blocks_from_f32[0].scale.to_bits(),
+            blocks_from_bf16[0].scale.to_bits()
+        );
+        assert_eq!(blocks_from_f32[0].qs, blocks_from_bf16[0].qs);
+    }
+}
+
+

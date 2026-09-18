@@ -74,46 +74,55 @@ impl GajeFlatFileReader {
     /// Se puede desactivar con GAJE_MMAP_WARMUP=0.
     #[cfg(feature = "native")]
     fn spawn_warmup(mmap: &std::sync::Arc<memmap2::Mmap>) {
-        use std::sync::atomic::{AtomicU64, Ordering};
-
         if std::env::var("GAJE_MMAP_WARMUP").as_deref() == Ok("0") {
             return;
         }
 
-        // Hint al kernel: readahead del mapeo completo (no bloquea).
+        // Hint al kernel: readahead asíncrono del mapeo completo (no bloquea la memoria).
         #[cfg(unix)]
         let _ = mmap.advise(memmap2::Advice::WillNeed);
 
-        let mmap = std::sync::Arc::clone(mmap);
-        let spawned = std::thread::Builder::new()
-            .name("gaje-mmap-warmup".into())
-            .spawn(move || {
-                let start = std::time::Instant::now();
-                let slice = &mmap[..];
-                let len = slice.len();
-                const PAGE: usize = 4096;
-                // Contador atómico como black-box: impide que el optimizador
-                // elimine las lecturas de las páginas.
-                let touched = AtomicU64::new(0);
-                let mut offset = 0usize;
-                while offset < len {
-                    touched.fetch_add(slice[offset] as u64, Ordering::Relaxed);
-                    offset += PAGE;
-                }
-                let pages = (len / PAGE) + 1;
-                let checksum = touched.load(Ordering::Relaxed);
-                println!(
-                    "🔥 [Warm-up mmap] {} páginas ({:.1} GB) precargadas en {:.2}s (checksum interno: {}) — primera inferencia sin penalización de page-faults",
-                    pages,
-                    len as f32 / 1024.0 / 1024.0 / 1024.0,
-                    start.elapsed().as_secs_f32(),
-                    checksum % 1000
+        // En Android / ARM evitamos el bucle de toque forzado de páginas (page-touching),
+        // ya que satura la memoria ZRAM/page-cache y provoca que el LMKD liquide el proceso por OOM.
+        #[cfg(any(target_os = "android", target_arch = "aarch64"))]
+        {
+            return;
+        }
+
+        #[cfg(not(any(target_os = "android", target_arch = "aarch64")))]
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            let mmap = std::sync::Arc::clone(mmap);
+            let spawned = std::thread::Builder::new()
+                .name("gaje-mmap-warmup".into())
+                .spawn(move || {
+                    let start = std::time::Instant::now();
+                    let slice = &mmap[..];
+                    let len = slice.len();
+                    const PAGE: usize = 4096;
+                    // Contador atómico como black-box: impide que el optimizador
+                    // elimine las lecturas de las páginas.
+                    let touched = AtomicU64::new(0);
+                    let mut offset = 0usize;
+                    while offset < len {
+                        touched.fetch_add(slice[offset] as u64, Ordering::Relaxed);
+                        offset += PAGE;
+                    }
+                    let pages = (len / PAGE) + 1;
+                    let checksum = touched.load(Ordering::Relaxed);
+                    println!(
+                        "🔥 [Warm-up mmap] {} páginas ({:.1} GB) precargadas en {:.2}s (checksum interno: {}) — primera inferencia sin penalización de page-faults",
+                        pages,
+                        len as f32 / 1024.0 / 1024.0 / 1024.0,
+                        start.elapsed().as_secs_f32(),
+                        checksum % 1000
+                    );
+                });
+            if spawned.is_err() {
+                eprintln!(
+                    "⚠️ [Warm-up mmap] No se pudo crear el hilo de precarga; continuando sin warm-up"
                 );
-            });
-        if spawned.is_err() {
-            eprintln!(
-                "⚠️ [Warm-up mmap] No se pudo crear el hilo de precarga; continuando sin warm-up"
-            );
+            }
         }
     }
 
@@ -240,27 +249,65 @@ impl GajeFlatFileReader {
             )
         })?;
 
-        let dna = self.get_slice(entry.dna_off, entry.dna_len).to_vec();
-        let centroids = self.get_f32_slice(entry.c_off, entry.c_len);
-        let anchors = self.get_slice(entry.anc_off, entry.anc_len).to_vec();
+        let centroids = if entry.c_len > 0 {
+            let slice = self.get_slice(entry.c_off, entry.c_len);
+            let ptr = slice.as_ptr() as *const f32;
+            let count = entry.c_len / 4;
+            crate::nn::linear::WeightBuffer::from_slice(self.source.clone(), ptr, count)
+        } else {
+            crate::nn::linear::WeightBuffer::from(Vec::new())
+        };
+        let anchors = self.get_slice(entry.anc_off, entry.anc_len);
         let bias = self.get_f32_slice(entry.bias_off, entry.bias_len);
+        let dna_bytes = self.get_slice(entry.dna_off, entry.dna_len);
+        let bit_depth = entry.bit_depth as u8;
 
-        Ok(GenomicLinear::new(
-            dna,
+        let weight_db = match bit_depth {
+            4 => {
+                if centroids.is_empty() {
+                    let ptr = dna_bytes.as_ptr() as *const crate::io::header::Q4_0Block;
+                    let count = dna_bytes.len() / std::mem::size_of::<crate::io::header::Q4_0Block>();
+                    crate::nn::linear::WeightStorage::from_q4_0_slice(self.source.clone(), ptr, count)
+                } else {
+                    let ptr = dna_bytes.as_ptr();
+                    crate::nn::linear::WeightStorage::from_4bit_slice(self.source.clone(), ptr, dna_bytes.len())
+                }
+            }
+            8 => {
+                let ptr = dna_bytes.as_ptr() as *const crate::io::header::Q8_0Block;
+                let count = dna_bytes.len() / std::mem::size_of::<crate::io::header::Q8_0Block>();
+                crate::nn::linear::WeightStorage::from_q8_0_slice(self.source.clone(), ptr, count)
+            }
+            2 => {
+                if centroids.is_empty() {
+                    let ptr = dna_bytes.as_ptr() as *const crate::io::header::Q2_0Block;
+                    let count = dna_bytes.len() / std::mem::size_of::<crate::io::header::Q2_0Block>();
+                    crate::nn::linear::WeightStorage::from_q2_0_slice(self.source.clone(), ptr, count)
+                } else {
+                    let ptr = dna_bytes.as_ptr();
+                    crate::nn::linear::WeightStorage::from_2bit_slice(self.source.clone(), ptr, dna_bytes.len())
+                }
+            }
+            32 => {
+                let ptr = dna_bytes.as_ptr() as *const f32;
+                let count = dna_bytes.len() / 4;
+                crate::nn::linear::WeightStorage::from_f32_slice(self.source.clone(), ptr, count)
+            }
+            _ => {
+                let ptr = dna_bytes.as_ptr();
+                crate::nn::linear::WeightStorage::from_2bit_slice(self.source.clone(), ptr, dna_bytes.len())
+            }
+        };
+
+        Ok(GenomicLinear::from_weight_storage(
+            weight_db,
             anchors,
             centroids,
             entry.out_features,
             entry.in_features,
             block_size,
-            Vec::new(),
-            1e-6,
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
-            Vec::new(),
             bias,
-            entry.bit_depth as u8,
+            bit_depth,
         ))
     }
 
@@ -296,7 +343,20 @@ impl GajeFlatFileReader {
             )
         })?;
         let output_norm = self.get_f32_slice(output_norm_entry.dna_off, output_norm_entry.dna_len);
-        let lm_head = self.get_linear("lm_head", block_size)?;
+        let mut lm_head = self.get_linear("lm_head", block_size)?;
+
+        // Defensa secundaria: si lm_head contiene únicamente ceros y la arquitectura
+        // tiene tied_word_embeddings (como Qwen2_5), rescatar con advertencia explícita
+        let is_qwen2_5 = self
+            .header
+            .architecture_descriptor()
+            .map(|d| d.family == crate::io::arch::ModelFamily::Qwen2_5)
+            .unwrap_or(false);
+        let lm_head_empty = lm_head.database_ref().iter().all(|&b| b == 0);
+        if lm_head_empty && is_qwen2_5 {
+            eprintln!("⚠️ [flat_reader] lm_head corrupto/vacío detectado en modelo Qwen2_5. Aplicando Tied Word Embeddings de respaldo (token_embd -> lm_head).");
+            lm_head = embd_dna.clone();
+        }
 
         let mut blocks = Vec::with_capacity(config.n_blocks);
         for i in 0..config.n_blocks {

@@ -19,7 +19,7 @@ fn test_genomic_linear_forward_gpu_fallback() {
     let mut linear = GenomicLinear::empty();
     linear.in_features = in_dim;
     linear.out_features = out_dim;
-    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(weights));
+    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(weights).into());
 
     let x = vec![0.1f32; in_dim];
     let cpu_out = linear
@@ -65,12 +65,12 @@ fn test_genomic_llm_gpu_layers_offload() {
     let mut embeddings = GenomicLinear::empty();
     embeddings.in_features = dim;
     embeddings.out_features = vocab_size;
-    embeddings.weight_db = WeightDatabase::GenomicF32(Arc::new(vec![0.02f32; vocab_size * dim]));
+    embeddings.weight_db = WeightDatabase::GenomicF32(Arc::new(vec![0.02f32; vocab_size * dim]).into());
 
     let mut lm_head = GenomicLinear::empty();
     lm_head.in_features = dim;
     lm_head.out_features = vocab_size;
-    lm_head.weight_db = WeightDatabase::GenomicF32(Arc::new(vec![0.02f32; vocab_size * dim]));
+    lm_head.weight_db = WeightDatabase::GenomicF32(Arc::new(vec![0.02f32; vocab_size * dim]).into());
 
     let mut llm = GenomicLLM {
         embeddings,
@@ -130,7 +130,7 @@ fn test_gpu_zero_allocation_persistent_pool() {
     let mut linear = GenomicLinear::empty();
     linear.in_features = cols;
     linear.out_features = rows;
-    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(w));
+    linear.weight_db = WeightDatabase::GenomicF32(Arc::new(w).into());
 
     for _ in 0..20 {
         let res = linear.forward_gpu(&x);

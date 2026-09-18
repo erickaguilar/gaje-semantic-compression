@@ -45,7 +45,7 @@ pub struct GenomicLinear {
     pub anchor_indices: Arc<Vec<u32>>,
     pub anchor_values: Arc<Vec<f16>>,
     pub anchor_row_ptrs: Arc<Vec<usize>>,
-    pub centroids: Vec<f32>,
+    pub centroids: WeightBuffer<f32>,
     pub epigenetic_centroids: Vec<f32>,
     pub triplet_centroids: Vec<f32>,
     pub out_features: usize,

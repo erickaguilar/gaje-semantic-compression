@@ -69,7 +69,7 @@ pub fn create_born_q2_0_linear(out_features: usize, in_features: usize) -> Genom
     }
 
     GenomicLinear {
-        weight_db: WeightDatabase::GenomicQ2_0(Arc::new(blocks)),
+        weight_db: WeightDatabase::GenomicQ2_0(Arc::new(blocks).into()),
         epi_strands: Arc::new(Vec::new()),
         tri_strands: Arc::new(Vec::new()),
         epi_cols: Arc::new(Vec::new()),
@@ -77,7 +77,7 @@ pub fn create_born_q2_0_linear(out_features: usize, in_features: usize) -> Genom
         anchor_indices: Arc::new(Vec::new()),
         anchor_values: Arc::new(Vec::new()),
         anchor_row_ptrs: Arc::new(Vec::new()),
-        centroids: Vec::new(),
+        centroids: Vec::new().into(),
         epigenetic_centroids: Vec::new(),
         triplet_centroids: Vec::new(),
         out_features,
@@ -115,7 +115,7 @@ pub fn create_born_q4_0_linear(out_features: usize, in_features: usize) -> Genom
         }
     }
     GenomicLinear {
-        weight_db: WeightDatabase::GenomicQ4_0(Arc::new(blocks)),
+        weight_db: WeightDatabase::GenomicQ4_0(Arc::new(blocks).into()),
         epi_strands: Arc::new(Vec::new()),
         tri_strands: Arc::new(Vec::new()),
         epi_cols: Arc::new(Vec::new()),
@@ -123,7 +123,7 @@ pub fn create_born_q4_0_linear(out_features: usize, in_features: usize) -> Genom
         anchor_indices: Arc::new(Vec::new()),
         anchor_values: Arc::new(Vec::new()),
         anchor_row_ptrs: Arc::new(Vec::new()),
-        centroids: Vec::new(),
+        centroids: Vec::new().into(),
         epigenetic_centroids: Vec::new(),
         triplet_centroids: Vec::new(),
         out_features,
@@ -150,7 +150,7 @@ pub fn create_born_fp32_linear(out_features: usize, in_features: usize) -> Genom
     }
 
     GenomicLinear {
-        weight_db: WeightDatabase::GenomicF32(Arc::new(weights)),
+        weight_db: WeightDatabase::GenomicF32(Arc::new(weights).into()),
         epi_strands: Arc::new(Vec::new()),
         tri_strands: Arc::new(Vec::new()),
         epi_cols: Arc::new(Vec::new()),
@@ -158,7 +158,7 @@ pub fn create_born_fp32_linear(out_features: usize, in_features: usize) -> Genom
         anchor_indices: Arc::new(Vec::new()),
         anchor_values: Arc::new(Vec::new()),
         anchor_row_ptrs: Arc::new(Vec::new()),
-        centroids: Vec::new(),
+        centroids: Vec::new().into(),
         epigenetic_centroids: Vec::new(),
         triplet_centroids: Vec::new(),
         out_features,

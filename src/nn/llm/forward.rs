@@ -1046,4 +1046,98 @@ impl GenomicLLM {
 
         Ok(generated)
     }
+
+    pub fn generate_native_with_sampler(
+        &mut self,
+        prompt_tokens: Vec<usize>,
+        max_new_tokens: usize,
+        temperature: f32,
+        top_k: usize,
+        top_p: f32,
+        repetition_penalty: f32,
+        eos_token_ids: Vec<usize>,
+    ) -> Result<Vec<usize>, String> {
+        let n_prompt = prompt_tokens.len();
+        if n_prompt == 0 {
+            return Err("Prompt tokens cannot be empty".to_string());
+        }
+
+        self.clear_cache_core();
+
+        for i in 0..n_prompt - 1 {
+            self.forward_blocks_only(prompt_tokens[i])?;
+        }
+
+        let mut last_logits = self.forward_core(prompt_tokens[n_prompt - 1], false)?;
+        let mut generated = Vec::new();
+
+        for _ in 0..max_new_tokens {
+            if last_logits.is_empty() {
+                break;
+            }
+
+            let mut logits = last_logits.clone();
+
+            if generated.is_empty() {
+                for &eos_id in &eos_token_ids {
+                    if eos_id < logits.len() {
+                        logits[eos_id] = -1e9;
+                    }
+                }
+            }
+
+            if repetition_penalty > 1.0 {
+                let mut seen_set = std::collections::HashSet::new();
+                for &t in &generated {
+                    seen_set.insert(t);
+                }
+                for &eos_id in &eos_token_ids {
+                    seen_set.remove(&eos_id);
+                }
+                for &t in &seen_set {
+                    if t < logits.len() {
+                        if logits[t] < 0.0 {
+                            logits[t] *= repetition_penalty;
+                        } else {
+                            logits[t] /= repetition_penalty;
+                        }
+                    }
+                }
+            }
+
+            let next_tok = crate::compute::sampling::sample_top_k_top_p(
+                &logits,
+                temperature,
+                top_k,
+                top_p,
+            )
+            .unwrap_or(0);
+
+            generated.push(next_tok);
+
+            if eos_token_ids.contains(&next_tok) {
+                break;
+            }
+
+            let mut repeated = false;
+            for w in 2..=48 {
+                if generated.len() >= w * 3 {
+                    let last_chunk = &generated[generated.len() - w..];
+                    let prev1 = &generated[generated.len() - w * 2..generated.len() - w];
+                    let prev2 = &generated[generated.len() - w * 3..generated.len() - w * 2];
+                    if last_chunk == prev1 && last_chunk == prev2 {
+                        repeated = true;
+                        break;
+                    }
+                }
+            }
+            if repeated {
+                break;
+            }
+
+            last_logits = self.forward_core(next_tok, false)?;
+        }
+
+        Ok(generated)
+    }
 }
