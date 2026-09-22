@@ -112,6 +112,10 @@ La documentación se organiza por función. La **investigación exploratoria** y
 * **[OPPORTUNITIES_FROM_CACTUS_NEEDLE.md](plans/OPPORTUNITIES_FROM_CACTUS_NEEDLE.md)**: Lecciones y oportunidades arquitectónicas aprendidas de Cactus Needle.
 * **[MILESTONE_ALGEBRAIC_INITIALIZATION.md](plans/MILESTONE_ALGEBRAIC_INITIALIZATION.md)**: Inicialización algebraica mediante campo ciclotómico $\mathbb{Q}(\zeta_{16})$.
 * **[TRAINING_PIPELINE_PLAN.md](plans/TRAINING_PIPELINE_PLAN.md)**: Hoja de ruta global para pipeline de entrenamiento y afinamiento.
+* **[MCP_NATIVE_SERVER_PLAN.md](plans/MCP_NATIVE_SERVER_PLAN.md)**: **SERVIDOR MCP NATIVO (`gaje-cli mcp`)** — Especificación SDD stdio-first para exponer `.gmem` como tools/resources MCP con telemetría honesta de 6 estados y gating `Δ_top ≥ 0.12`.
+* **[MEMORY_STATION_PRODUCT_PLAN.md](plans/MEMORY_STATION_PRODUCT_PLAN.md)**: **PRODUCTO MEMORY STATION** — Agente local single-user con memoria persistente: `POST /api/memory/remember`, modos extracción/síntesis, panel de curación y empaquetado `.deb`.
+* **[MODEL_CATALOG_SCALING_PLAN.md](plans/MODEL_CATALOG_SCALING_PLAN.md)**: **ESCALADO DE CATÁLOGO** — Decisión por modelo (SmolLM2-360M → Qwen3-0.6B → DeepSeek → Gemma 4 E2B), gap `qwen3→Unknown` en `arch.rs:94` y checklist de certificación sin duplicar registry/estrategia existentes.
+* **[PUBLICATION_PLAN.md](plans/PUBLICATION_PLAN.md)**: **PLAN DE PUBLICACIÓN** — Tech report + post de 3 hallazgos (zero-copy 132×, paradoja codebook Q4_0/Q8_0, greedy-RAG Canberra/Sydney) con evidencia en `EMPIRICAL_TRUTH_STATE.md` y checklist de reproducibilidad.
 
 ### ✅ Planes Implementados y Certificados (`docs/plans/completed/`)
 * **[UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md](plans/completed/UNIFIED_GAJE_ADAPTIVE_FORMAT_PLAN.md)**: **FORMATO PLANO UNIFICADO .GAJE v2** — Consolidación de `.flat` y `.gaje` en estándar binario zero-copy con cabecera `FlatHeaderV2`, descriptor `ArchitectureDescriptor` y mutación de centroides in-place.
