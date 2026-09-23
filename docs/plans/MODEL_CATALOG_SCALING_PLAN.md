@@ -46,3 +46,13 @@ Feature: Nuevo modelo en catálogo
 ```
 
 *Pregunta guía: no "¿puedo exportarlo?" sino "¿qué aporta que el 1.5B no tenga?". Orden: SmolLM2-360M → Qwen3-0.6B (tras parche) → DeepSeek solo si falta variante → Gemma 4 E2B directo último.*
+
+## 4. Hallazgo 2026-09-22 — SmolLM2-360M: fix real + resultado negativo (no ship)
+
+Fuente: `mradermacher/SmolLM2-360M-Instruct-GGUF`. Q4_K_M descartado como fuente (contiene tensores Q5_0 no soportados por el exportador); Q8_0 usado como fuente.
+
+**Fix aplicado (bug real):** `src/io/flat_writer.rs` decidía familia por `n_embd` y solo conocía 576→SmolLM; 960 caía en Llama → `rope_base` 10000 (debía 100000) y plantilla `llama` (debía `chatml`) al cargar (`flat_reader.rs:329` + `header/flat.rs:124`). Parche: `n_embd == 960` → SmolLM. Cabecera re-exportada verificada: `SmolLM, RoPE 100000, chatml, GTOK 49152, audit 0 NaN/Inf`.
+
+**Resultado negativo (verdad empírica, no se publica modelo):** con cabecera ya correcta, el cuerpo **Q4_0 colapsa** (repetición `ectable…`, corte a 6 tokens, 0.68 tok/s) mientras el cuerpo **Q8_0 genera texto real** (135 tokens, 2.16 tok/s, 0% degeneración). Conclusión: bug en la ruta de cuantización genómica Q4_0 (centroides) para este checkpoint, pendiente de aislamiento causal (comparar salidas por capa Q4_0 vs Q8_0). Los ficheros `.gaje` de 360M se eliminaron de `models/production/`; se conserva la fuente Q8_0 en `models/source/` para el debug.
+
+**Calibración de hardware:** en este dispositivo Termux el 0.5B de referencia da **2.28 tok/s** (vs 19–23 certificados en Ryzen 5800H). Los TPS de catálogo son clase-Ryzen; en edge-ARM dividir ~×10.
