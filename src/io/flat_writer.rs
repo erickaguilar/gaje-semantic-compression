@@ -301,7 +301,8 @@ pub fn save_genomic_flat_q(
     let total_file_size = (weights_offset + total_weights_len + gtok_bytes.len()) as u64;
 
     // Detectar familia de arquitectura
-    let arch_family = if config.n_embd == 576 {
+    // SmolLM2: 135M (n_embd=576), 360M (n_embd=960). Otros n_embd → Llama/Qwen por tamaño.
+    let arch_family = if config.n_embd == 576 || config.n_embd == 960 {
         2 // SmolLM
     } else if config.n_embd == 896
         || config.n_embd == 1536
