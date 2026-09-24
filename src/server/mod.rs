@@ -1,4 +1,5 @@
 pub mod api;
+pub mod mcp;
 pub mod static_files;
 pub mod streaming;
 
@@ -204,7 +205,7 @@ pub fn run_server(
             resp.add_header(
                 Header::from_bytes(
                     &b"Access-Control-Allow-Methods"[..],
-                    &b"GET, POST, OPTIONS"[..],
+                    &b"GET, POST, DELETE, OPTIONS"[..],
                 )
                 .unwrap(),
             );
@@ -258,7 +259,15 @@ pub fn run_server(
         if url == "/api/memory" && method == Method::Get {
             let active_guard = active_model.read().unwrap();
             let json_val = if let Some(ref m) = *active_guard {
-                api::get_loaded_memory_info(&m.memory, &m.memory_dir, m.memory_threshold)
+                let mu_path = crate::compute::island::resolve_mu_vector_path(&m.path);
+                api::get_loaded_memory_info(
+                    &m.memory,
+                    &m.memory_dir,
+                    m.memory_threshold,
+                    m.memory_uses_whitening,
+                    m.memory_whitening_missing,
+                    mu_path.as_deref(),
+                )
             } else {
                 api::get_memory_info(None, 384)
             };
@@ -271,6 +280,490 @@ pub fn run_server(
                 Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap(),
             );
             let _ = request.respond(resp);
+            continue;
+        }
+
+        if url == "/api/memory/remember" && method == Method::Post {
+            let mut body = String::new();
+            let mut req = request;
+            let _ = req.as_reader().read_to_string(&mut body);
+
+            // T5: Límite de payload > 8192 bytes
+            if body.len() > 8192 {
+                let mut resp = Response::from_string(
+                    serde_json::json!({
+                        "error": "Payload excede el límite máximo de 8192 bytes"
+                    }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let req_data: serde_json::Value = match serde_json::from_str(&body) {
+                Ok(v) => v,
+                Err(_) => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "JSON malformado" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let text = req_data.get("text").and_then(|v| v.as_str()).unwrap_or("").trim();
+            if text.is_empty() {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": "El campo 'text' es obligatorio" }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            // T6: Anti path traversal
+            let raw_niche = req_data.get("niche").and_then(|v| v.as_str()).unwrap_or("auto");
+            if text.contains("..") || raw_niche.contains("..") {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": "Secuencia no permitida ('..') detectada" }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let target_niche = match raw_niche.to_lowercase().as_str() {
+                "documental" | "document" => crate::compute::island::IslandNiche::Documental,
+                "episodic" => crate::compute::island::IslandNiche::Episodic,
+                "conversational" => crate::compute::island::IslandNiche::Conversational,
+                "auto" => crate::compute::island::IslandNiche::Documental,
+                _ => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({
+                            "error": "Nicho inválido. Valores permitidos: 'documental', 'episodic', 'conversational', 'auto'"
+                        }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let mut active_guard = active_model.write().unwrap();
+            let m = match active_guard.as_mut() {
+                Some(m) => m,
+                None => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "No hay ningún modelo activo cargado en el servidor" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            // Whitening estricto: rechazo con 400 si falta el vector de calibración
+            if m.memory_uses_whitening && m.memory_whitening_missing {
+                let mut resp = Response::from_string(
+                    serde_json::json!({
+                        "error": "El modelo activo requiere vector de blanqueamiento (.mu.bin) para proyectar recuerdos homogéneos y no fue encontrado. Operación cancelada para prevenir contaminación del espacio latente."
+                    }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let expected_dim = m.llm.dim();
+            let raw_vec = match m.llm.embed_text(text, &m.tokenizer) {
+                Ok(v) => v,
+                Err(e) => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": format!("Error extrayendo embedding: {}", e) }).to_string()
+                    ).with_status_code(StatusCode(500));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            // Aplicar blanqueamiento si está configurado y mu_vector está presente
+            let final_vector = match (&m.memory_mu, m.memory_uses_whitening) {
+                (Some(mu), true) if mu.len() == expected_dim => {
+                    let mut centered = vec![0.0f32; expected_dim];
+                    let mut norm_sq = 0.0f32;
+                    for i in 0..expected_dim {
+                        let diff = raw_vec[i] - mu[i];
+                        centered[i] = diff;
+                        norm_sq += diff * diff;
+                    }
+                    let norm = norm_sq.sqrt().max(1e-8);
+                    for val in centered.iter_mut() {
+                        *val /= norm;
+                    }
+                    centered
+                }
+                _ => raw_vec,
+            };
+
+            let id = m.memory.generate_next_id();
+            m.memory.add_memory(target_niche, id, final_vector, text.to_string());
+            if let Err(e) = m.memory.save_all(&m.memory_dir.to_string_lossy()) {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": format!("Error persistiendo memoria en disco: {}", e) }).to_string()
+                ).with_status_code(StatusCode(500));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let total_facts = m.memory.documental.entries.len()
+                + m.memory.episodic.entries.len()
+                + m.memory.conversational.entries.len();
+
+            let resp_json = serde_json::json!({
+                "status": "ok",
+                "id": id,
+                "niche": target_niche.as_str(),
+                "total_facts": total_facts,
+                "text": text,
+            });
+            let mut resp = Response::from_string(resp_json.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = req.respond(resp);
+            continue;
+        }
+
+        if url == "/api/memory/entry" && method == Method::Delete {
+            let mut body = String::new();
+            let mut req = request;
+            let _ = req.as_reader().read_to_string(&mut body);
+
+            let req_data: serde_json::Value = match serde_json::from_str(&body) {
+                Ok(v) => v,
+                Err(_) => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "JSON malformado" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let id = match req_data.get("id").and_then(|v| v.as_u64()) {
+                Some(id) => id,
+                None => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "El campo 'id' numérico es obligatorio" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let niche_opt = req_data.get("niche").and_then(|v| v.as_str()).and_then(|s| {
+                match s.to_lowercase().as_str() {
+                    "documental" => Some(crate::compute::island::IslandNiche::Documental),
+                    "episodic" => Some(crate::compute::island::IslandNiche::Episodic),
+                    "conversational" => Some(crate::compute::island::IslandNiche::Conversational),
+                    _ => None,
+                }
+            });
+
+            let mut active_guard = active_model.write().unwrap();
+            let m = match active_guard.as_mut() {
+                Some(m) => m,
+                None => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "No hay ningún modelo activo cargado en el servidor" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let removed = m.memory.remove_memory(niche_opt, id);
+            if !removed {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": format!("Recuerdo con id {} no encontrado", id) }).to_string()
+                ).with_status_code(StatusCode(404));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            if let Err(e) = m.memory.save_all(&m.memory_dir.to_string_lossy()) {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": format!("Error persistiendo memoria tras borrado: {}", e) }).to_string()
+                ).with_status_code(StatusCode(500));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let total_facts = m.memory.documental.entries.len()
+                + m.memory.episodic.entries.len()
+                + m.memory.conversational.entries.len();
+
+            let resp_json = serde_json::json!({
+                "status": "ok",
+                "removed": true,
+                "id": id,
+                "total_facts": total_facts,
+            });
+            let mut resp = Response::from_string(resp_json.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = req.respond(resp);
+            continue;
+        }
+
+        if url == "/api/memory/consolidate" && method == Method::Post {
+            let mut body = String::new();
+            let mut req = request;
+            let _ = req.as_reader().read_to_string(&mut body);
+
+            let req_data: serde_json::Value = if body.trim().is_empty() {
+                serde_json::json!({})
+            } else {
+                match serde_json::from_str(&body) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        let mut resp = Response::from_string(
+                            serde_json::json!({ "error": "JSON malformado" }).to_string()
+                        ).with_status_code(StatusCode(400));
+                        resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                        resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                        let _ = req.respond(resp);
+                        continue;
+                    }
+                }
+            };
+
+            let dedup_threshold = req_data.get("dedup_threshold")
+                .and_then(|v| v.as_f64())
+                .map(|f| f as f32)
+                .unwrap_or(0.97);
+
+            if dedup_threshold < 0.5 || dedup_threshold > 1.0 {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": "El threshold de consolidación debe estar en el rango [0.5, 1.0]" }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let mut active_guard = active_model.write().unwrap();
+            let m = match active_guard.as_mut() {
+                Some(m) => m,
+                None => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "No hay ningún modelo activo cargado en el servidor" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let stats = m.memory.consolidate_memory(dedup_threshold);
+            if let Err(e) = m.memory.save_all(&m.memory_dir.to_string_lossy()) {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": format!("Error persistiendo memoria tras consolidación: {}", e) }).to_string()
+                ).with_status_code(StatusCode(500));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let total_facts = m.memory.documental.entries.len()
+                + m.memory.episodic.entries.len()
+                + m.memory.conversational.entries.len();
+
+            let resp_json = serde_json::json!({
+                "status": "ok",
+                "removed": stats.duplicates_pruned,
+                "dedup_threshold": dedup_threshold,
+                "total_facts": total_facts,
+                "stats": {
+                    "episodic_transferred": stats.episodic_transferred,
+                    "conversational_transferred": stats.conversational_transferred,
+                    "duplicates_pruned": stats.duplicates_pruned,
+                    "total_documental_entries": stats.total_documental_entries,
+                }
+            });
+            let mut resp = Response::from_string(resp_json.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = req.respond(resp);
+            continue;
+        }
+
+        if url == "/api/memory/query" && method == Method::Post {
+            let mut body = String::new();
+            let mut req = request;
+            let _ = req.as_reader().read_to_string(&mut body);
+
+            if body.len() > 8192 {
+                let mut resp = Response::from_string(
+                    serde_json::json!({
+                        "error": "Payload excede el límite máximo de 8192 bytes"
+                    }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let req_data: serde_json::Value = match serde_json::from_str(&body) {
+                Ok(v) => v,
+                Err(_) => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "JSON malformado" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let text = req_data
+                .get("text")
+                .or_else(|| req_data.get("query"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim();
+            if text.is_empty() {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": "El campo 'text' o 'query' es obligatorio" }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            if text.contains("..") {
+                let mut resp = Response::from_string(
+                    serde_json::json!({ "error": "Secuencia no permitida ('..') detectada" }).to_string()
+                ).with_status_code(StatusCode(400));
+                resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                let _ = req.respond(resp);
+                continue;
+            }
+
+            let top_k = req_data.get("top_k")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(5)
+                .clamp(1, 20) as usize;
+
+            let niche_filter = req_data.get("niche").and_then(|v| v.as_str());
+
+            let active_guard = active_model.read().unwrap();
+            let m = match active_guard.as_ref() {
+                Some(m) => m,
+                None => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": "No hay ningún modelo activo cargado en el servidor" }).to_string()
+                    ).with_status_code(StatusCode(400));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let expected_dim = m.llm.dim();
+            let raw_vec = match m.llm.embed_text(text, &m.tokenizer) {
+                Ok(v) => v,
+                Err(e) => {
+                    let mut resp = Response::from_string(
+                        serde_json::json!({ "error": format!("Error extrayendo embedding: {}", e) }).to_string()
+                    ).with_status_code(StatusCode(500));
+                    resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                    resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+                    let _ = req.respond(resp);
+                    continue;
+                }
+            };
+
+            let query_vec = match (&m.memory_mu, m.memory_uses_whitening) {
+                (Some(mu), true) if mu.len() == expected_dim => {
+                    let mut centered = vec![0.0f32; expected_dim];
+                    let mut norm_sq = 0.0f32;
+                    for i in 0..expected_dim {
+                        let diff = raw_vec[i] - mu[i];
+                        centered[i] = diff;
+                        norm_sq += diff * diff;
+                    }
+                    let norm = norm_sq.sqrt().max(1e-8);
+                    for val in centered.iter_mut() {
+                        *val /= norm;
+                    }
+                    centered
+                }
+                _ => raw_vec,
+            };
+
+            let all_matches = m.memory.retrieve_context(&query_vec, top_k);
+            let filtered_matches: Vec<_> = all_matches.into_iter()
+                .filter(|m_item| {
+                    if let Some(target) = niche_filter {
+                        if target != "auto" && !target.is_empty() {
+                            return m_item.niche.as_str().eq_ignore_ascii_case(target);
+                        }
+                    }
+                    true
+                })
+                .take(top_k)
+                .map(|m_item| {
+                    serde_json::json!({
+                        "id": m_item.id,
+                        "niche": m_item.niche.as_str(),
+                        "similarity": m_item.similarity,
+                        "text": m_item.text,
+                    })
+                })
+                .collect();
+
+            let resp_json = serde_json::json!({
+                "status": "ok",
+                "query": text,
+                "count": filtered_matches.len(),
+                "matches": &filtered_matches,
+                "results": &filtered_matches,
+                "whitened": m.memory_uses_whitening && !m.memory_whitening_missing,
+            });
+            let mut resp = Response::from_string(resp_json.to_string()).with_status_code(StatusCode(200));
+            resp.add_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            resp.add_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+            let _ = req.respond(resp);
             continue;
         }
 

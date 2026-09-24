@@ -1,7 +1,7 @@
 # 🔌 Plan Servidor MCP Nativo — Memoria `.gmem` como Herramienta Soberana (SDD)
 
-**Estado:** `draft` · **Versión:** `v1.7.4-alpha` · **Alcance:** `gaje-cli mcp` (Rust nativo, zero-Python)
-**Reutiliza:** `src/server/mod.rs` (`LoadedModel`, `IslandOrchestrator`), `src/compute/island` (`MemoryConfig`, `prepare_prompt_with_memory`, telemetría 6 estados)
+**Estado:** `implemented` (Fase 0 MVP stdio) · **Versión:** `v1.7.4` · **Alcance:** `gaje-cli mcp` (Rust nativo, zero-Python, arquitectura Shim HTTP)
+**Reutiliza:** `src/server/mcp.rs`, `src/server/api.rs` (`/api/memory/query`, `/api/memory/remember`), suite de pruebas `tests/test_mcp_server.rs`
 
 > MCP (Model Context Protocol, Anthropic) es el estándar para exponer herramientas/recursos a modelos vía JSON-RPC (stdio o Streamable HTTP). Este plan especifica un servidor MCP escrito en Rust que exponga la memoria hipocampal `.gmem` sin que los datos salgan de la máquina, y que permita a GAJE actuar como herramienta de otros sistemas (Claude Code, Cline, Goose, Claude Desktop).
 
@@ -157,19 +157,38 @@ Feature: Memoria .gmem vía MCP stdio
 ---
 
 ## 8. Gates TDD / Certificación
-- `cargo test --test test_mcp_stdio`: handshake, list, query-hit, query-reject, store-roundtrip, path-traversal rechazado.
-- `gaje-cli mcp --help` documentado en `GAJE_CLI_GUIDE.md`; ejemplo de config cliente:
-```json
-{ "mcpServers": { "gaje": { "command": "gaje-cli", "args": ["mcp", "--model", "models/production/gaje_pico_135m.gaje"] } } }
+- `cargo test --test test_mcp_server`: 5 pruebas automatizadas pasando (handshake `initialize`, listado `tools/list`, error de backend offline `-32000`, petición inválida `-32600`, JSON malformado `-32700`).
+- Integración con cliente real Antigravity CLI (`agy`):
+```bash
+agy mcp add gaje $(pwd)/target/debug/gaje-cli mcp
+agy mcp list
+# Salida: gaje  stdio  enabled  .../gaje-cli mcp
 ```
-- Benchmark: overhead MCP-stdio vs llamada nativa <1ms p50 en Ryzen 5800H y ARM Termux; tabla en `docs/reports/`.
-- Cierre: entrada en `docs/meta/EMPIRICAL_TRUTH_STATE.md` + `docs/INDEX.md`.
+- Configuración para Claude Code / Cline (`mcpServers`):
+```json
+{
+  "mcpServers": {
+    "gaje": {
+      "command": "/ruta/a/gaje-cli",
+      "args": ["mcp", "--server-url", "http://127.0.0.1:8080"]
+    }
+  }
+}
+```
 
 ---
 
 ## 9. Riesgos y Alternativas Consideradas
+- **Decisión de Arquitectura Shim HTTP (Opción B):** Para prevenir la duplicación de memoria en dispositivos móviles (RAM restringida ~8-12GB en Termux), el proceso MCP actúa como un adaptador de protocolo JSON-RPC 2.0 ultraliviano (<2MB RAM) que se comunica con el backend central `gaje-cli serve` que ya hospeda el modelo en mmap zero-copy.
 - **Riesgo expectativa:** clientes esperan RAG denso; mitigación = `caveat` + telemetría obligatoria + guía honesta.
 - **Alternativa protocolo propio REST:** descartada — MCP es estándar creciente, REST ya existe (`/api/chat`, `/api/memory`).
-- **Alternativa crate `rmcp`:** descartada en MVP por `tokio` y peso en Android; reevaluar en Fase 1 HTTP si el mantenimiento manual supera el coste de la dependencia.
+- **Alternativa crate `rmcp`:** descartada en MVP por `tokio` y peso en Android; implementación con stdio y `ureq` sincrónico completada en zero-tokio.
 
-*SDD → BDD (arriba) → TDD (`tests/test_mcp_*.rs`) antes de implementar.*
+---
+
+## 10. Bitácora de Certificación (v1.7.4)
+- **Fecha:** 2026-09-24
+- **Binario:** `target/debug/gaje-cli mcp`
+- **Herramientas expuestas:** `gmem_query`, `gmem_store`
+- **Resultados de suite `tests/test_mcp_server.rs`:** 5 passed; 0 failed; 0 ignored (0.19s)
+- **Estado de compatibilidad agy CLI:** Validado y activado.

@@ -199,6 +199,41 @@ impl IslandOrchestrator {
         }
     }
 
+    /// Genera un identificador monotónico persistente sincronizado entre los 3 nichos.
+    pub fn generate_next_id(&mut self) -> u64 {
+        let current_max = self.episodic.header.next_seq
+            .max(self.documental.header.next_seq)
+            .max(self.conversational.header.next_seq);
+        let next_val = if current_max == 0 {
+            let max_id = self.episodic.entries.iter().map(|e| e.id).max().unwrap_or(0)
+                .max(self.documental.entries.iter().map(|e| e.id).max().unwrap_or(0))
+                .max(self.conversational.entries.iter().map(|e| e.id).max().unwrap_or(0));
+            (max_id + 1) as u32
+        } else {
+            current_max
+        };
+        let id = next_val as u64;
+        let inc = next_val + 1;
+        self.episodic.header.next_seq = inc;
+        self.documental.header.next_seq = inc;
+        self.conversational.header.next_seq = inc;
+        id
+    }
+
+    /// Elimina un recuerdo por ID. Si se especifica niche busca en él, si no busca en los 3 nichos.
+    pub fn remove_memory(&mut self, niche: Option<IslandNiche>, id: u64) -> bool {
+        match niche {
+            Some(IslandNiche::Episodic) => self.episodic.remove_entry(id),
+            Some(IslandNiche::Documental) => self.documental.remove_entry(id),
+            Some(IslandNiche::Conversational) => self.conversational.remove_entry(id),
+            None => {
+                self.documental.remove_entry(id)
+                    || self.episodic.remove_entry(id)
+                    || self.conversational.remove_entry(id)
+            }
+        }
+    }
+
     /// Recupera contexto relevante consultando las 3 islas en paralelo mediante Rayon
     pub fn retrieve_context(
         &self,
@@ -215,40 +250,52 @@ impl IslandOrchestrator {
             },
         );
 
-        let mut results = Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
+        let mut results: Vec<(IslandSearchResult, f32)> =
+            Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
 
         for (entry, sim) in res_epi {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Episodic,
-                id: entry.id,
-                similarity: sim * self.niche_weights[0],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Episodic,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[0],
+            ));
         }
         for (entry, sim) in res_doc {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Documental,
-                id: entry.id,
-                similarity: sim * self.niche_weights[1],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Documental,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[1],
+            ));
         }
         for (entry, sim) in res_conv {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Conversational,
-                id: entry.id,
-                similarity: sim * self.niche_weights[2],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Conversational,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[2],
+            ));
         }
 
-        // Ordenar globalmente por similitud decreciente
+        // Ordenar globalmente por ranking ponderado decreciente (prioridad evolutiva de nicho)
         results.sort_by(|a, b| {
-            b.similarity
-                .partial_cmp(&a.similarity)
+            b.1.partial_cmp(&a.1)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        results
+        results.into_iter().map(|(res, _)| res).collect()
     }
 
     /// Aplica una rotación / transformación ortogonal que desacopla los nichos en R^D
@@ -301,39 +348,51 @@ impl IslandOrchestrator {
             },
         );
 
-        let mut results = Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
+        let mut results: Vec<(IslandSearchResult, f32)> =
+            Vec::with_capacity(res_epi.len() + res_doc.len() + res_conv.len());
 
         for (entry, sim) in res_epi {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Episodic,
-                id: entry.id,
-                similarity: sim * self.niche_weights[0],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Episodic,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[0],
+            ));
         }
         for (entry, sim) in res_doc {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Documental,
-                id: entry.id,
-                similarity: sim * self.niche_weights[1],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Documental,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[1],
+            ));
         }
         for (entry, sim) in res_conv {
-            results.push(IslandSearchResult {
-                niche: IslandNiche::Conversational,
-                id: entry.id,
-                similarity: sim * self.niche_weights[2],
-                text: entry.text.clone(),
-            });
+            let pure_sim = sim.clamp(-1.0, 1.0);
+            results.push((
+                IslandSearchResult {
+                    niche: IslandNiche::Conversational,
+                    id: entry.id,
+                    similarity: pure_sim,
+                    text: entry.text.clone(),
+                },
+                pure_sim * self.niche_weights[2],
+            ));
         }
 
         results.sort_by(|a, b| {
-            b.similarity
-                .partial_cmp(&a.similarity)
+            b.1.partial_cmp(&a.1)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
-        results
+        results.into_iter().map(|(res, _)| res).collect()
     }
 
     /// Ensambla el prompt aumentado usando resultados previamente recuperados
@@ -660,12 +719,48 @@ impl IslandOrchestrator {
         self.episodic.refresh_ivf();
         self.documental.refresh_ivf();
         self.conversational.refresh_ivf();
-        self.episodic
-            .save_to_file(&format!("{}/episodic.gmem", dir_path))?;
-        self.documental
-            .save_to_file(&format!("{}/documental.gmem", dir_path))?;
-        self.conversational
-            .save_to_file(&format!("{}/conversational.gmem", dir_path))?;
+
+        let pid = std::process::id();
+        let epi_path = format!("{}/episodic.gmem", dir_path);
+        let doc_path = format!("{}/documental.gmem", dir_path);
+        let conv_path = format!("{}/conversational.gmem", dir_path);
+
+        let epi_tmp = format!("{}.tmp.{}", epi_path, pid);
+        let doc_tmp = format!("{}.tmp.{}", doc_path, pid);
+        let conv_tmp = format!("{}.tmp.{}", conv_path, pid);
+
+        // 1. Escribir y sincronizar los 3 temporales en el mismo directorio (mismo filesystem, sin EXDEV)
+        let write_res = (|| -> std::io::Result<()> {
+            self.episodic.save_to_file_raw(&epi_tmp)?;
+            self.documental.save_to_file_raw(&doc_tmp)?;
+            self.conversational.save_to_file_raw(&conv_tmp)?;
+            Ok(())
+        })();
+
+        if let Err(e) = write_res {
+            let _ = std::fs::remove_file(&epi_tmp);
+            let _ = std::fs::remove_file(&doc_tmp);
+            let _ = std::fs::remove_file(&conv_tmp);
+            return Err(e);
+        }
+
+        // 2. Renombrar los 3 archivos: todo o nada
+        if let Err(e) = std::fs::rename(&epi_tmp, &epi_path) {
+            let _ = std::fs::remove_file(&epi_tmp);
+            let _ = std::fs::remove_file(&doc_tmp);
+            let _ = std::fs::remove_file(&conv_tmp);
+            return Err(e);
+        }
+        if let Err(e) = std::fs::rename(&doc_tmp, &doc_path) {
+            let _ = std::fs::remove_file(&doc_tmp);
+            let _ = std::fs::remove_file(&conv_tmp);
+            return Err(e);
+        }
+        if let Err(e) = std::fs::rename(&conv_tmp, &conv_path) {
+            let _ = std::fs::remove_file(&conv_tmp);
+            return Err(e);
+        }
+
         Ok(())
     }
 
@@ -739,6 +834,23 @@ impl IslandOrchestrator {
         let mut transferred_conv = 0;
         let mut pruned = 0;
 
+        // 1. Desduplicar internamente el nicho documental si contiene hechos redundantes
+        let old_doc = std::mem::take(&mut self.documental.entries);
+        let mut clean_doc = Vec::with_capacity(old_doc.len());
+        for entry in old_doc {
+            let is_duplicate = clean_doc.iter().any(|existing: &crate::io::gmem::GmemEntry| {
+                crate::io::gmem::cosine_similarity(&existing.vector, &entry.vector) >= dedup_threshold
+            });
+            if is_duplicate {
+                pruned += 1;
+            } else {
+                clean_doc.push(entry);
+            }
+        }
+        self.documental.entries = clean_doc;
+        self.documental.header.num_entries = self.documental.entries.len() as u64;
+
+        // 2. Transferir desde episódico podando duplicados
         let epi_entries = std::mem::take(&mut self.episodic.entries);
         for entry in epi_entries {
             let max_sim = match self.documental.search_top_k(&entry.vector, 1).first() {

@@ -112,6 +112,7 @@ impl FlatHeaderV2 {
             3 => crate::io::arch::ModelFamily::Qwen2,
             4 => crate::io::arch::ModelFamily::Qwen2_5,
             5 => crate::io::arch::ModelFamily::Gemma,
+            6 => crate::io::arch::ModelFamily::Qwen3,
             _ => crate::io::arch::ModelFamily::Unknown,
         };
 
@@ -134,7 +135,9 @@ impl FlatHeaderV2 {
                 "swiglu".to_string(),
                 "chatml".to_string(),
             ),
-            crate::io::arch::ModelFamily::Qwen2 | crate::io::arch::ModelFamily::Qwen2_5 => (
+            crate::io::arch::ModelFamily::Qwen2
+            | crate::io::arch::ModelFamily::Qwen2_5
+            | crate::io::arch::ModelFamily::Qwen3 => (
                 1000000.0f32,
                 "split".to_string(),
                 "swiglu".to_string(),

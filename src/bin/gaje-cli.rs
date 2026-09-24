@@ -111,6 +111,17 @@ enum Commands {
     /// Muestra la guía rápida interactiva y mapa de comandos sin adivinar
     #[command(alias = "menu", alias = "comandos", alias = "guia", alias = "ayuda")]
     Guide,
+
+    /// Inicia el servidor MCP (Model Context Protocol) sobre stdio para agentes IA
+    #[command(alias = "protocol")]
+    Mcp(McpArgs),
+}
+
+#[derive(Args, Debug)]
+struct McpArgs {
+    /// URL base del servidor HTTP de GAJE Helix (por defecto: http://127.0.0.1:8080)
+    #[arg(long, default_value = "http://127.0.0.1:8080")]
+    server_url: String,
 }
 
 #[derive(Args, Debug)]
@@ -629,6 +640,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 chat_only: serve_args.chat_only,
             };
             _impl::server::run_server(config, running)?;
+            Ok(())
+        }
+        Some(Commands::Mcp(mcp_args)) => {
+            _impl::server::mcp::run_mcp_server(&mcp_args.server_url)?;
             Ok(())
         }
         Some(Commands::Chat(chat_args)) => {

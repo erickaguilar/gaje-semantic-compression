@@ -346,15 +346,18 @@ impl GajeFlatFileReader {
         let mut lm_head = self.get_linear("lm_head", block_size)?;
 
         // Defensa secundaria: si lm_head contiene únicamente ceros y la arquitectura
-        // tiene tied_word_embeddings (como Qwen2_5), rescatar con advertencia explícita
-        let is_qwen2_5 = self
+        // tiene tied_word_embeddings (como Qwen2_5 o Qwen3), rescatar con advertencia explícita
+        let is_qwen = self
             .header
             .architecture_descriptor()
-            .map(|d| d.family == crate::io::arch::ModelFamily::Qwen2_5)
+            .map(|d| {
+                d.family == crate::io::arch::ModelFamily::Qwen2_5
+                    || d.family == crate::io::arch::ModelFamily::Qwen3
+            })
             .unwrap_or(false);
         let lm_head_empty = lm_head.database_ref().iter().all(|&b| b == 0);
-        if lm_head_empty && is_qwen2_5 {
-            eprintln!("⚠️ [flat_reader] lm_head corrupto/vacío detectado en modelo Qwen2_5. Aplicando Tied Word Embeddings de respaldo (token_embd -> lm_head).");
+        if lm_head_empty && is_qwen {
+            eprintln!("⚠️ [flat_reader] lm_head corrupto/vacío detectado en modelo Qwen. Aplicando Tied Word Embeddings de respaldo (token_embd -> lm_head).");
             lm_head = embd_dna.clone();
         }
 

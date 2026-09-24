@@ -22,6 +22,19 @@ fn test_gemma_and_deepseek_detection() {
     assert_eq!(deepseek_desc.family, ModelFamily::Qwen2_5);
     assert_eq!(deepseek_desc.ffn_act, "swiglu");
     assert_eq!(deepseek_desc.rope_style, "split");
+
+    let qwen3_desc = ArchitectureDescriptor::infer_from_name_core(
+        "qwen3-0.6b-it.gguf",
+        1024,
+        16,
+        8,
+        24,
+    );
+    assert_eq!(qwen3_desc.family, ModelFamily::Qwen3);
+    assert_eq!(qwen3_desc.ffn_act, "swiglu");
+    assert_eq!(qwen3_desc.rope_style, "split");
+    assert_eq!(qwen3_desc.rope_base, 1000000.0);
+    assert_eq!(qwen3_desc.chat_template, "chatml");
 }
 
 #[test]

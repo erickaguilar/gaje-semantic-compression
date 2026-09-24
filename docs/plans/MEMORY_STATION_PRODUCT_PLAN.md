@@ -29,9 +29,10 @@
 | `serve` + Web UI + SSE + hot-swap | ✅ Implementado | `src/server/mod.rs:98`, `streaming.rs` |
 | Carga auto `<modelo>_memory/` al seleccionar modelo | ✅ Implementado, sin UI | `load_paired_for_model:842`, `mod.rs:159` |
 | `GET /api/memory` info + `GET /api/chat` + `POST /api/chat` | ✅ Implementado | `mod.rs:258,432` |
-| Ingesta núcleo `add_memory` + `save_all` + `consolidate_memory` | ✅ Librería, sin HTTP | `island.rs:194,655,737` |
-| `POST /api/memory/remember` ingesta en caliente | ❌ No implementado | grep `remember|ingest` vacío en `src/` y Web UI |
-| `DELETE /api/memory/entry` curación | ❌ No implementado | — |
+| Ingesta núcleo `add_memory` + `save_all` + `consolidate_memory` | ✅ Librería y atómico | `island.rs:194,655,737`, `gmem.rs:595` |
+| `POST /api/memory/remember` ingesta en caliente | ✅ Implementado y certificado | `src/server/mod.rs`, `tests/test_memory_station_endpoints.rs` (T1, T2, T5, T6) |
+| `DELETE /api/memory/entry` curación | ✅ Implementado y certificado | `src/server/mod.rs`, `tests/test_memory_station_endpoints.rs` (T3) |
+| `POST /api/memory/consolidate` desduplicación | ✅ Implementado y certificado | `src/server/mod.rs`, `tests/test_memory_station_endpoints.rs` (T4) |
 | Selector UI extracción/síntesis | ❌ No expuesto | grep vacío |
 | Panel memoria (nichos, τ, whitening, consolidar) | ❌ No existe | — |
 | Importador `md/txt` con chunking | ❌ No existe | — |
@@ -61,8 +62,8 @@ POST /api/memory/consolidate { "dedup_threshold": 0.97 }
 ### 3.2 Modos UI (la decisión producto correcta)
 | Modo | `max_tokens` | `temperature` | `system_prompt` | Uso |
 |---|---|---|---|---|
-| **Extracción** (defecto) | 128 | 0.1–0.2 | "Responde solo con el hecho citado. Si no está en memoria, dilo." | Q&A factual, tolera 4–5 tok/s |
-| **Síntesis** | 512 | 0.4–0.7 | Asistente conciso estándar | Redacción, tolera latencia mayor |
+| **Extracción** (defecto) | 128 | **0.0** (Greedy determinista) | "Responde solo con el hecho citado. Si no está en memoria, dilo." | Q&A factual exacto, elimina competencia del prior paramétrico |
+| **Síntesis** | 512 | 0.4–0.7 | Asistente conciso estándar | Redacción, tolera latencia y variación creativa |
 
 Toggle en header + persistencia en `localStorage`. Cada respuesta muestra `telemetry` (state 6-estados, `delta_top`, `threshold`, `latency_ms`) y `caveat` léxico.
 

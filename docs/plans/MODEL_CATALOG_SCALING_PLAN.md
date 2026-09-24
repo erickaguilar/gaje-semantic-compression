@@ -22,7 +22,7 @@
 | Candidato | Tamaño est. Q4_0 | Aporte vs 1.5B actual | Estado exportador | Veredicto |
 |---|---|---|---|---|
 | **SmolLM2-360M** | ~250MB | Rellena hueco 135M→500M en teléfonos | ✅ Mecánico (familia `SmolLM`, `apply_smollm_rope_patch`, `src/io/gguf/loader/metadata.rs:159`) | **1º — 1 tarde** |
-| **Qwen3-0.6B** | ~400MB | Heredero directo del 0.5B | ❌ **Gap: cae en `Unknown`** — `"qwen3".contains("qwen2")==false` (`src/io/arch.rs:94`); asignaría `rope_base 10000+silu+standard` en vez de `1000000+swiglu+chatml` | **2º — tras parche 3 líneas** (rama `qwen3` en `arch.rs` + `flat.rs:137`) |
+| **Qwen3-0.6B** | ~400MB | Heredero directo del 0.5B | ✅ **Listo** — `ModelFamily::Qwen3` implementado en `arch.rs:94`, `flat.rs:137`, `cli/models.rs:265` y certificado en `test_gemma_support.rs` (`rope_base 1000000+swiglu+chatml`) | **Desbloqueado para exportación** |
 | **DeepSeek-R1-Distill-1.5B** (transmutación directa) | ~1GB | Razonamiento `<think>`, ya registrado como `deepseek_r1_1_5b.flat` | ✅ Mecánico (mapeado a Qwen2_5, `arch.rs:113`; recetas en docs referenciados) | **3º — solo si se quiere variante GGUF nueva; si ya está en registry, no duplicar archivo** |
 | **Gemma 4 E2B** (transmutación directa) | ~1.5GB | Multilingüe + soporte Google; lo que el 1.5B menos tiene | 🟡 Parcial — rama `Gemma` existe (`interleaved+geglu`, `arch.rs:131`) pero pendiente validar tokenizador SentencePiece, GeGLU real, RMSNorm+1, soft-cap y sliding-window (ver `DEEPSEEK_GEMMA_SUPPORT_PLAN.md` Fase 4) | **4º — último, tras suite de paridad HF** |
 

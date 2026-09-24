@@ -12,7 +12,8 @@ pub enum ModelFamily {
     Qwen2 = 3,
     Qwen2_5 = 4,
     Gemma = 5,
-    Unknown = 6,
+    Qwen3 = 6,
+    Unknown = 7,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +93,16 @@ impl ArchitectureDescriptor {
     ) -> Self {
         let name_lower = name.to_lowercase();
         let (family, rope_base, qk_permute, chat_template, rope_style, ffn_act) =
-            if name_lower.contains("qwen2.5") {
+            if name_lower.contains("qwen3") {
+                (
+                    ModelFamily::Qwen3,
+                    1000000.0,
+                    false,
+                    "chatml".to_string(),
+                    "split".to_string(),
+                    "swiglu".to_string(),
+                )
+            } else if name_lower.contains("qwen2.5") {
                 (
                     ModelFamily::Qwen2_5,
                     1000000.0,

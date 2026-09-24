@@ -262,7 +262,7 @@ pub fn inject_gtok(flat_path: &Path, tokenizer_path_opt: Option<&Path>) -> Resul
         p.to_path_buf()
     } else {
         let candidate = match header.arch_family {
-            3 | 4 => PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok"),
+            3 | 4 | 6 => PathBuf::from("models/core/tokenizers/qwen2_5_tokenizer.gtok"),
             2 => PathBuf::from("models/core/tokenizers/smollm2_tokenizer.gtok"),
             _ => PathBuf::from("models/core/tokenizer.gtok"),
         };

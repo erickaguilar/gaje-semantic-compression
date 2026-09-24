@@ -115,6 +115,9 @@ pub fn get_loaded_memory_info(
     memory: &crate::compute::island::IslandOrchestrator,
     mem_dir: &std::path::Path,
     threshold: f32,
+    uses_whitening: bool,
+    whitening_missing: bool,
+    mu_path: Option<&std::path::Path>,
 ) -> serde_json::Value {
     let doc_count = memory.documental.entries.len();
     let epi_count = memory.episodic.entries.len();
@@ -137,11 +140,19 @@ pub fn get_loaded_memory_info(
         "memory_threshold": threshold,
         "entropy_gap_threshold": memory.entropy_gap_threshold,
         "kwta_ratio": memory.kwta_ratio,
+        "whitening_active": uses_whitening && !whitening_missing,
+        "whitening_missing": whitening_missing,
+        "calibration_path": mu_path.map(|p| p.to_string_lossy().to_string()),
         "niches": {
             "documental": doc_count,
             "episodic": epi_count,
             "conversational": conv_count,
         },
+        "niches_detail": [
+            { "name": "documental", "count": doc_count, "threshold": memory.documental_min_sim },
+            { "name": "episodic", "count": epi_count, "threshold": memory.episodic_min_sim },
+            { "name": "conversational", "count": conv_count, "threshold": memory.episodic_min_sim }
+        ],
         "niche_weights": memory.niche_weights,
         "sample_facts": sample_facts
     })
@@ -154,7 +165,8 @@ pub fn get_memory_info(model_path: Option<&str>, dim: usize) -> serde_json::Valu
         {
             let p = std::path::Path::new(path);
             let mem_dir = crate::compute::island::IslandOrchestrator::resolve_memory_dir(p);
-            return get_loaded_memory_info(&orch, &mem_dir, 0.65);
+            let mu_path = crate::compute::island::resolve_mu_vector_path(p);
+            return get_loaded_memory_info(&orch, &mem_dir, 0.65, false, false, mu_path.as_deref());
         }
     }
 

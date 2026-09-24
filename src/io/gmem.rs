@@ -31,7 +31,7 @@ pub struct GmemHeader {
     pub created_at_unix: i64, // Timestamp UTC de creación (8 bytes)
     pub metrics_hash: u64,    // Hash de integridad del manifiesto (8 bytes)
     pub flags: u32,           // bit0: Consolidada | bit1: Sellada | bit2: Promovida (4 bytes)
-    pub _reserved: [u8; 4],   // Alineación final a 64 bytes (4 bytes)
+    pub next_seq: u32,        // Contador monotónico persistido para IDs (4 bytes)
 }
 
 impl Default for GmemHeader {
@@ -48,7 +48,7 @@ impl Default for GmemHeader {
             created_at_unix: 0,
             metrics_hash: 0,
             flags: 0,
-            _reserved: [0u8; 4],
+            next_seq: 1,
         }
     }
 }
@@ -147,8 +147,34 @@ impl GmemMemoryIndex {
     pub fn add_entry(&mut self, id: u64, vector: Vec<f32>, text: String) {
         self.entries.push(GmemEntry { id, vector, text });
         self.header.num_entries = self.entries.len() as u64;
+        if self.header.next_seq <= id as u32 {
+            self.header.next_seq = (id + 1) as u32;
+        }
         // El indice IVF vigente cubre el PREFIJO; las entradas nuevas forman
         // una cola que se escanea linealmente hasta la proxima reconstruccion.
+    }
+
+    /// Genera un identificador monotónico persistente garantizando no colisión entre reinicios.
+    pub fn generate_next_id(&mut self) -> u64 {
+        if self.header.next_seq == 0 {
+            let max_id = self.entries.iter().map(|e| e.id).max().unwrap_or(0);
+            self.header.next_seq = (max_id + 1) as u32;
+        }
+        let id = self.header.next_seq as u64;
+        self.header.next_seq += 1;
+        id
+    }
+
+    /// Elimina una entrada por su ID e invalida el índice IVF si se encontró.
+    pub fn remove_entry(&mut self, id: u64) -> bool {
+        let initial_len = self.entries.len();
+        self.entries.retain(|e| e.id != id);
+        let removed = self.entries.len() < initial_len;
+        if removed {
+            self.header.num_entries = self.entries.len() as u64;
+            self.ivf = None; // Invalida el IVF hasta su próxima reconstrucción
+        }
+        removed
     }
 
     pub fn epoch_id(&self) -> u64 {
@@ -508,6 +534,11 @@ impl GmemMemoryIndex {
             entries.push(GmemEntry { id, vector, text });
         }
 
+        let max_id = entries.iter().map(|e| e.id).max().unwrap_or(0);
+        if header.next_seq <= max_id as u32 {
+            header.next_seq = (max_id + 1) as u32;
+        }
+
         // Parseo tolerante de la seccion IVF anexada. Un archivo sin IVF
         // termina aqui; un IVF corrupto se ignora (busqueda lineal), nunca
         // rompe la carga.
@@ -570,11 +601,28 @@ impl GmemMemoryIndex {
         })
     }
 
-    /// Guarda el índice en disco con la estructura binaria .gmem v2
-    pub fn save_to_file(&self, path: &str) -> IoResult<()> {
+    /// Escribe los bytes brutos directamente a un archivo (usado para escrituras atómicas en lote)
+    pub fn save_to_file_raw(&self, path: &str) -> IoResult<()> {
         let bytes = self.save_to_bytes();
         let mut file = File::create(path)?;
         file.write_all(&bytes)?;
+        file.sync_all()?;
+        Ok(())
+    }
+
+    /// Guarda el índice en disco con la estructura binaria .gmem v2 de forma atómica.
+    /// Escribe en un temporal en el mismo directorio para evitar EXDEV y renombra atómicamente.
+    pub fn save_to_file(&self, path: &str) -> IoResult<()> {
+        let tmp_path = format!("{}.tmp.{}", path, std::process::id());
+        let write_res = self.save_to_file_raw(&tmp_path);
+        if let Err(e) = write_res {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(e);
+        }
+        if let Err(e) = std::fs::rename(&tmp_path, path) {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(e);
+        }
         Ok(())
     }
 
