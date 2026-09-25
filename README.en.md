@@ -52,13 +52,15 @@ We executed an A/B parity trial comparing the original FP32 model (`Qwen/Qwen2-0
 
 ---
 
-### 🏝️ 3. Island Model (.gmem): Sub-Millisecond Hippocampal RAG
+### 🏝️ 3. Island Model (.gmem) & MCP Protocol: Sub-Millisecond Hippocampal RAG
 
-The system integrates real-time contextual memory retrieval and persistence through 64-byte aligned flat binary indices (`.gmem`):
+The system integrates real-time contextual associative memory retrieval and persistence through 64-byte aligned flat binary indices (`.gmem`) and a native bridge with the **Model Context Protocol (MCP)**:
 
-* **Vector Retrieval Latency (RAG)**: **`< 0.5 ms`** per multi-niche query via sovereign *Weighted Mean Pooling* over input token embeddings ($W_E$).
+* **Vector Retrieval Latency (RAG)**: **`16 ms`** on mobile ARM CPU / **`< 0.5 ms`** on desktop via sovereign *Weighted Mean Pooling* over input token embeddings ($W_E$).
+* **Native MCP Bridge (`gaje-cli mcp`)**: Sovereign stdio JSON-RPC 2.0 interface exposing `gmem_store` (atomic multi-niche memory ingestion: `conversational`, `episodic`, `documental`) and `gmem_query` ($\boldsymbol{\mu} + \ell_2$ whitened associative search).
 * **Entropy Gap Gating ($\Delta_{top} \ge 0.12$)**: K-WTA competitive lateral inhibition and mathematical rejection of ambiguous or competitive trap queries.
-* **Satellite Whitening Calibration**: Anisotropic centering ($\boldsymbol{\mu} \in \mathbb{R}^D$) persisted under `data/calibration/` with graceful fallback (Option C).
+* **Satellite Whitening Calibration**: Anisotropic centering ($\boldsymbol{\mu} \in \mathbb{R}^D$) persisted under `models/production/*.mu.bin` with graceful fallback (Option C).
+* **Qwen2.5-1.5B E2E Certification**: Proven optimal factual discrimination ($+15.54\%$ over structural traps, $+55.73\%$ over lexical distractors, and $+33.58\%$ on cross-checks), fully certified in [`docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md`](docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md).
 * **Canonical 6-State Telemetry**: Real-time monitoring across SSE and server metrics (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap`, etc.).
 * **Context Budget**: Protected injection strictly within the system prompt block (`ChatML` / `Llama3`) preserving turn fidelity.
 

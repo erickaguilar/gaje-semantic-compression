@@ -407,13 +407,14 @@ impl IslandOrchestrator {
         }
 
         // 1. Entropy Gap Gating:
-        // Si hay al menos 2 matches, evaluar Delta_top = Sim_1 - Sim_2.
+        // Evaluar Delta_top = Sim_1 - Sim_2 sobre similitudes puras ordenadas.
         // Si Delta_top < entropy_gap_threshold, se clasifica como búsqueda difusa / colisión ambigua
         // y se aborta la inyección para proteger al transformador de alucinaciones inducidas.
-        let top_sim = matches[0].similarity;
-        if matches.len() >= 2 {
-            let second_sim = matches[1].similarity;
-            let delta_top = top_sim - second_sim;
+        let mut sorted_sims: Vec<f32> = matches.iter().map(|m| m.similarity).collect();
+        sorted_sims.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        let top_sim = sorted_sims[0];
+        if sorted_sims.len() >= 2 {
+            let delta_top = top_sim - sorted_sims[1];
             if delta_top < self.entropy_gap_threshold {
                 return prompt.to_string();
             }
@@ -519,7 +520,10 @@ impl IslandOrchestrator {
             );
         }
 
-        let top_sim = matches[0].similarity;
+        let mut sorted_sims: Vec<f32> = matches.iter().map(|m| m.similarity).collect();
+        sorted_sims.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        let top_sim = sorted_sims[0];
+
         if top_sim < threshold {
             return (
                 system_prompt.to_string(),
@@ -531,13 +535,13 @@ impl IslandOrchestrator {
             );
         }
 
-        let delta_top = if matches.len() >= 2 {
-            top_sim - matches[1].similarity
+        let delta_top = if sorted_sims.len() >= 2 {
+            top_sim - sorted_sims[1]
         } else {
             1.0
         };
 
-        if matches.len() >= 2 && delta_top < self.entropy_gap_threshold {
+        if sorted_sims.len() >= 2 && delta_top < self.entropy_gap_threshold {
             return (
                 system_prompt.to_string(),
                 MemoryDecision::RejectedEntropyGap {
@@ -1446,8 +1450,21 @@ pub fn configure_model_memory(
         .to_string_lossy()
         .to_lowercase();
 
-    // 1. max.gaje (Llama Q2_0 256d): Weighted pooling nativo, sin whitening, tau*=0.42
+    // 1. max.gaje / modelos compactos (dim <= 384): Si existe vector satélite .mu.bin se activa whitening (tau*=0.33),
+    // de lo contrario opera en espacio nativo L2 con tau*=0.42 (sin alertar fallo si no se requiere).
     if stem.contains("max") || dim <= 384 {
+        if let Some(mu_path) = resolve_mu_vector_path(model_path) {
+            match load_mu_vector(&mu_path, dim) {
+                Ok(mu) => {
+                    println!("🧬 [Island Memory] Vector satélite μ cargado ({:?}, dim={}) -> Whitening activo (τ*=0.33)", mu_path, dim);
+                    return (0.33, true, Some(mu), false);
+                }
+                Err(e) => {
+                    eprintln!("⚠️ [Island Memory] Error leyendo .mu.bin {:?}: {}. Fallback a espacio L2 nativo (τ*=0.42).", mu_path, e);
+                    return (0.42, false, None, true);
+                }
+            }
+        }
         return (0.42, false, None, false);
     }
 

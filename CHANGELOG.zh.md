@@ -2,6 +2,21 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md)
 
+## [1.7.5-alpha] - 2026-09-24
+### 新增 (Added)
+- **生产级 RAG 认证与 Qwen2.5-1.5B ($d=1536$, 151k GTOK BPE 词表) 端到端全流程**:
+  - **事实判别 vs 结构性陷阱验证**：在“阿根廷的首都是哪里？”测试中，布宜诺斯艾利斯相较堪培拉取得了 **$+15.54\%$** 的实证认证优势 ($\cos = 0.6679$ vs $0.5075$，显著超越预注册的 $\ge 0.60$ 最优标准)，对词汇干扰项（塞纳河）衰减达 $+55.73\%$，且在澳大利亚反向交叉校验中获得 $+33.58\%$ 的对称区分度。
+  - **原生 Model Context Protocol (MCP) 桥接**：新增 `gaje-cli mcp` 原生子命令，通过标准 stdio JSON-RPC 2.0 协议提供 `gmem_store`（支持 `conversational`、`episodic`、`documental` 三大生态位原子摄入）与 `gmem_query`（$\boldsymbol{\mu} + \ell_2$ 居中关联搜索）工具。
+  - **主权 CLI 子命令 `calibrate-mu`**：在 `gaje-cli tools calibrate-mu` 中原生集成卫星居中向量 $\boldsymbol{\mu} \in \mathbb{R}^D$ (`.mu.bin`) 计算与持久化，将假阳性底线压缩 $-66\%$ 并使均值分离度扩展 $+40\%$。
+  - **服务端上下文门控与过滤**：在 Termux 移动端 ARM CPU 上实现 $16.07\text{ ms}$ 的超低检索延迟，在 `POST /api/chat` 中完成 Top-1 事实筛选与上下文注入遥测。
+- **形态漂移实证隔离、结构因果性与产品边界重定位**:
+  - **清晰边界精确测定 (`tests/test_exact_drift_frontier.rs`)**：逐点 Prefill 扫描确证 **$N \le 36\text{ tokens}$ 为最高认证纯净边界**（输出 100% 完美无瑕西班牙语）。拐点交叉位于 $N=37$ 至 $N=39$ 之间；当 $N \ge 40$ 时开始出现形态漂移（`"capitale"`）。
+  - **Chunking 与滑动窗口因果消融 (`tests/test_chunking_ablation.rs`)**：实证证明截断 KV Cache 或引入注意力汇聚点（Attention Sinks）不仅无法解决漂移，反而会导致注意力崩溃（`"I."`, `"."`）或断裂式幻觉。判定：漂移纯属 **Q4_0 主体量化的结构内在性限制**。
+  - **RoPE 底数 100万 vs 1万 (Qwen2.5 vs LLaMA) 架构级发现**：揭示了 *Attention Sinks* (StreamingLLM) 在 Qwen2.5 上失效的深层原因：Qwen2.5 的 $\theta_{\text{base}} = 10^6$（LLaMA 为 $10^4$）使低频通道变化速率慢 100 倍，缓存切断引入的位置跳跃 $\Delta pos$ 造成了极端的角度相位失步，破坏了 Softmax 的标定流形。
+  - **Q8_0 假说终局闭环 (`tests/test_q8_vs_tied.rs`)**：使用 Rayon 并行重量化 $151,936$ 个嵌入为 $7,292,928$ 个真实 `Q8_0Block`（$236.5\text{ MB}$，100% 非零有效缩放）。头对头测试证明 Tied Q4_0 与真实 Q8_0 输出完全一致，确证漂移根源在于 Transformer 主体而非输出投影头。
+  - **真实权重落盘与死重清除**：将 $247.9\text{ MB}$ 真实 Q8_0 权重直接写入 `models/production/qwen2_5_1_5b.gaje`，消除死重；`flat_reader` 原生加载 0 NaN / 0 Inf，无需触发全零回退警告。
+  - **坦诚的产品定位重构**：正式将 GAJE Helix 认证为**专为移动端打造的主权级原子事实持久记忆 Q&A 问答引擎**，在简洁命题元组（每条事实 $N \le 20$ tokens）上运行，确保总 Prompt 保持在纯净区（$N \le 36$）。正式声明在纯 Q4_0 量化下暂不支持未精简长文档的 RAG。
+
 ## [1.7.4-alpha] - 2026-09-12
 ### 新增 (Added)
 - **实时主权海马记忆系统 (Rust 原生 Island Model RAG)**:

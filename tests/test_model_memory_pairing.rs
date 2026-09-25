@@ -23,6 +23,7 @@ fn test_calibrate_memory_threshold_empirical() {
 
     // Modelos basados en Qwen2.5 (Con whitening .mu.bin: tau* = 0.33)
     assert_eq!(calibrate_memory_threshold("models/production/qwen2_5_0_5b_q2_0.gaje", 896), 0.33);
+    assert_eq!(calibrate_memory_threshold("models/production/qwen2_5_1_5b.gaje", 1536), 0.33);
 
     // Modelos SmolLM / Pico (Con whitening .mu.bin: tau* = 0.27)
     assert_eq!(calibrate_memory_threshold("models/production/gaje_pico_135m.gaje", 576), 0.27);
@@ -46,7 +47,7 @@ fn test_load_paired_for_model_max_laser() {
     );
 
     // Validar JSON de telemetría API
-    let json_info = get_loaded_memory_info(&orch, &mem_dir, threshold);
+    let json_info = get_loaded_memory_info(&orch, &mem_dir, threshold, false, false, None);
     assert_eq!(json_info["status"], "connected");
     assert_eq!(json_info["dim"], 384);
     assert!(json_info["total_facts"].as_u64().unwrap() >= 50);

@@ -115,6 +115,29 @@ enum Commands {
     /// Inicia el servidor MCP (Model Context Protocol) sobre stdio para agentes IA
     #[command(alias = "protocol")]
     Mcp(McpArgs),
+
+    /// Calibra y persiste el vector satélite μ (.mu.bin) para centrado anisotrópico
+    #[command(alias = "calibrate_mu", alias = "mu")]
+    CalibrateMu(CalibrateMuArgs),
+}
+
+#[derive(Args, Debug)]
+struct CalibrateMuArgs {
+    /// Archivo del modelo (.gaje o .flat)
+    #[arg(short, long)]
+    model: String,
+
+    /// Archivo del corpus de calibración (texto plano o JSONL)
+    #[arg(short, long, default_value = "data/corpus_es_diverse.txt")]
+    corpus: String,
+
+    /// Archivo de salida para el vector satélite (.mu.bin)
+    #[arg(short, long)]
+    output: Option<String>,
+
+    /// Límite máximo de frases a procesar del corpus
+    #[arg(long, default_value_t = 500)]
+    max_sentences: usize,
 }
 
 #[derive(Args, Debug)]
@@ -703,6 +726,15 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
         Some(Commands::Audit(audit_args)) => {
             cli_tools::audit_cmd(&audit_args.model, audit_args.entropy, audit_args.check_nan)?;
+            Ok(())
+        }
+        Some(Commands::CalibrateMu(cal_args)) => {
+            cli_tools::calibrate_mu_cmd(
+                &cal_args.model,
+                &cal_args.corpus,
+                cal_args.output.as_deref(),
+                cal_args.max_sentences,
+            )?;
             Ok(())
         }
         Some(Commands::Epoch(epoch_args)) => handle_epoch(&epoch_args),

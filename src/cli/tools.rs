@@ -699,3 +699,98 @@ pub fn audit_cmd(model_path: &str, entropy: bool, check_nan: bool) -> Result<(),
     println!("===============================================================================\n");
     Ok(())
 }
+
+/// 🧬 Calibra el vector satélite μ (.mu.bin) para centrado anisotrópico sobre un corpus
+pub fn calibrate_mu_cmd(
+    model_path: &str,
+    corpus_path: &str,
+    output_path_opt: Option<&str>,
+    max_sentences: usize,
+) -> Result<(), String> {
+    println!(
+        "\n🧬 ==============================================================================="
+    );
+    println!("🔬 GAJE HELIX — Calibración de Vector Satélite μ (.mu.bin)");
+    println!("===============================================================================\n");
+    println!("📦 Modelo: {}", model_path);
+    println!("📚 Corpus: {}", corpus_path);
+
+    let t0 = Instant::now();
+    let (llm, tokenizer) = load_model_and_tokenizer(model_path)?;
+    let dim = llm.dim();
+    println!("   • Modelo cargado en {:.2} ms (dim={})", t0.elapsed().as_secs_f64() * 1000.0, dim);
+
+    let file = File::open(corpus_path)
+        .map_err(|e| format!("Error abriendo corpus {}: {}", corpus_path, e))?;
+    let reader = BufReader::new(file);
+
+    let mut sum_mu = vec![0.0f32; dim];
+    let mut count = 0usize;
+
+    for line in reader.lines().flatten() {
+        let text = if line.contains("\"text\":") {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                val.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string()
+            } else {
+                line
+            }
+        } else {
+            line
+        };
+
+        let clean = text.trim();
+        if clean.len() < 10 {
+            continue;
+        }
+
+        if let Ok(v) = llm.embed_text(clean, &tokenizer) {
+            for d in 0..dim {
+                sum_mu[d] += v[d];
+            }
+            count += 1;
+            if count >= max_sentences {
+                break;
+            }
+        }
+    }
+
+    if count == 0 {
+        return Err("No se pudieron extraer embeddings de ninguna frase del corpus".to_string());
+    }
+
+    for d in 0..dim {
+        sum_mu[d] /= count as f32;
+    }
+
+    let norm: f32 = sum_mu.iter().map(|x| x * x).sum::<f32>().sqrt();
+    println!("✅ Vector satélite computado sobre {} oraciones.", count);
+    println!("   • Norma del vector medio ||μ||: {:.4}", norm);
+
+    let out_path = if let Some(p) = output_path_opt {
+        p.to_string()
+    } else {
+        let stem = Path::new(model_path)
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy();
+        format!("data/calibration/{}.mu.bin", stem)
+    };
+
+    let parent = Path::new(&out_path).parent();
+    if let Some(p) = parent {
+        let _ = std::fs::create_dir_all(p);
+    }
+
+    let mut bytes = Vec::with_capacity(dim * 4);
+    for val in sum_mu {
+        bytes.extend_from_slice(&val.to_le_bytes());
+    }
+
+    std::fs::write(&out_path, &bytes)
+        .map_err(|e| format!("Error guardando {}: {}", out_path, e))?;
+
+    println!("💾 Vector satélite guardado exitosamente en: {}", out_path);
+    println!("   • Tamaño: {} bytes ({} floats)", bytes.len(), dim);
+    println!("===============================================================================\n");
+    Ok(())
+}

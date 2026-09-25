@@ -72,7 +72,16 @@ Toggle en header + persistencia en `localStorage`. Cada respuesta muestra `telem
 - Botones: consolidar (dedup), exportar nicho (`.jsonl`), borrar entrada.
 - Importador `md/txt`: textarea + file input, chunking ~512 chars con overlap 64, preview antes de ingerir. PDF/OCR: fuera de MVP (documentar).
 
-### 3.4 Empaquetado
+### 3.5 Interacción Matemática: Filtrado (Threshold) vs. Ordenamiento (Niche Weight)
+
+Para evitar la contaminación del contexto por hechos espurios o el bloqueo accidental de recuerdos válidos:
+1. **Separación Estricta de Cantidades:**
+   - **Filtrado (`pure_sim` $\in [-1.0, 1.0]$):** La decisión binaria de inyectar o rechazar un hecho se evalúa **únicamente sobre la similitud coseno pura no ponderada** (`m.similarity >= threshold && m.similarity >= niche_min`). Jamás se inyecta un hecho cuya similitud real esté por debajo del corte, independientemente del peso de su nicho (e.g. peso 1.2 en Documental no puede rescatar un hecho irrelevante).
+   - **Ordenamiento (`pure_sim \times \text{niche\_weight}`):** El score ponderado se emplea exclusivamente como criterio de desempate en el ranking decreciente para priorizar qué hechos ocupan las primeras posiciones en el prompt.
+2. **Gating Libre de Inversión de Índice:**
+   - Tanto el umbral de entrada (`top_sim >= threshold`) como la brecha de entropía ($\Delta_{\text{top}} = S_1 - S_2 \ge \text{entropy\_gap\_threshold}$) se computan ordenando internamente las similitudes puras en orden descendente. Esto garantiza que $S_1$ sea siempre el máximo real del conjunto y que $\Delta_{\text{top}} \ge 0$, evitando que un hecho con menor similitud pero elevado peso de nicho genere deltas artificialmente negativas o un rechazo prematuro de candidatos afines.
+
+### 3.6 Empaquetado
 - Fase 0: `cargo-deb` (`.deb`) + `tar.gz` + guía Termux/APK. Fuente ofrecida por AGPL-3.0.
 - Fuera de MVP: estático musl (fricción `tokenizers`/`wgpu`), `.rpm`, AppImage.
 

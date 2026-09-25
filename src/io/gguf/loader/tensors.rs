@@ -99,10 +99,26 @@ impl GGUFLoader {
             unpermute_f32(&mut f32_data, n_head, head_dim, out_features, in_features);
         }
 
-        let (dna, centroids, anchors_u8) = if bit_depth == 4 {
-            crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold)
-        } else {
-            crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None)
+        let (dna, centroids, anchors_u8) = match bit_depth {
+            8 => {
+                if info.tensor_type == GGMLType::Q8_0 && !unpermute {
+                    (data.to_vec(), Vec::new(), Vec::new())
+                } else {
+                    let blocks = crate::compute::quantize::quantize_to_q8_0(&f32_data);
+                    let ptr = blocks.as_ptr() as *const u8;
+                    let len = blocks.len() * std::mem::size_of::<crate::io::header::Q8_0Block>();
+                    let dna_bytes = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                    (dna_bytes, Vec::new(), Vec::new())
+                }
+            }
+            4 => crate::compute::math::genomize_4bit_core(&f32_data, block_size, anchor_threshold),
+            2 => crate::compute::math::genomize_f32_core(&f32_data, block_size, anchor_threshold, None),
+            unsupported => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("bit_depth {} no soportado para tensor '{}'", unsupported, name),
+                ));
+            }
         };
 
         Ok(GenomicLinear::new(

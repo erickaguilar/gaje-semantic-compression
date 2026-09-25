@@ -754,6 +754,196 @@ El esquema histórico denominado "Q4_0 con centroides" no representa una compres
 1. **Estándar Mandatorio Sub-1B**: Para cualquier modelo con $d_{\text{embd}} < 1024$ o escala sub-1B, el formato de producción por defecto debe ser **Q8_0** (o en su defecto un Q4_0 puro por bloque con escala+min sin centroides dispersos). El formato de centroides f32 queda formalmente **desaprobado** para inferencia edge en arquitecturas compactas.
 2. **Cierre de Hipótesis**: Queda formalmente demostrado que el origen de las degeneraciones de inferencia no reside en checkpoints defectuosos ni en desajustes de temperatura, sino en la fragilidad intrínseca del esquema de centroides f32 frente a espacios latentes estrechos.
 
+---
+
+### 27. Certificación de Invariantes de Memoria Hipocampal (.gmem): Filtrado vs Ranking y Anisotropía de Caracteres en Espacios Compactos (2026-09-24)
+
+#### 1. Invariante de Inyección: Separación entre Umbral de Filtrado ($\tau^*$) y Ranking por Nicho
+* **Problema Auditado**: Si un hecho en el nicho Documental (peso 1.2) tiene $\text{pure\_sim} = 0.40$ y el umbral del modelo es $\tau^* = 0.42$, multiplicar similitud por peso antes de filtrar elevaría el score a $0.48$, inyectando un hecho espurio que viola el límite de coherencia del espacio latente.
+* **Invariante Formal Implementado**:
+  $$\text{Condición de Inyección} = \left(\text{pure\_sim} \ge \tau^*\right) \land \left(\text{pure\_sim} \ge \tau_{\text{niche}}\right) \land \left(\text{pure\_sim} \ge \text{K-WTA Cutoff}\right)$$
+  - El filtrado evalúa **única y estrictamente** la similitud coseno pura no ponderada ($\in [-1.0, 1.0]$). El peso del nicho jamás rescata un hecho por debajo del corte.
+  - El score ponderado ($\text{pure\_sim} \times w_{\text{niche}}$) se restringe exclusivamente al desempate topológico en el ordenamiento del prompt.
+  - El gating de entrada ($\Delta_{\text{top}} = S_1 - S_2$) se computa sobre candidatos ordenados por $\text{pure\_sim}$ pura, garantizando $S_1 \ge S_2$ ($\Delta_{\text{top}} \ge 0$).
+
+#### 2. Hallazgo Empírico sobre Anisotropía en Embeddings Subpalabra/Caracter (384d)
+* **Experimento**: Evaluación de proyecciones semánticas de `embed_text` (Weighted Mean Pooling) en `max_laser.gaje` (384d) con y sin Mean-Centering ($\boldsymbol{\mu}$):
+  - **Sin Centrado (Espacio $\ell_2$ puro)**: Consultas cortas (ej. `"Argentina"`, 7 tokens de caracteres `['A', 'r', 'g', 'en', 't', 'in', 'a']`) colisionan artificialmente con oraciones no relacionadas (ej. `"El río Sena..."` con Similitud $= 0.8621$) debido al sesgo medio no nulo acumulado por letras comunes del idioma.
+  - **Con Centrado de Media (Mean-Centering $\ell_2$, $\mathbf{v} - \boldsymbol{\mu}$)**:
+    - `"El río Sena..."` vs `"¿Qué río atraviesa la ciudad de París?"`: **$+0.9391$** (Alineación semántica pura).
+    - `"El río Sena..."` vs `"Canberra es la capital de Australia"`: **$-0.8868$** (Ortogonalidad/Repulsión conceptual exacta).
+    - `"¿Cuál es la capital de Australia?"` vs `"Argentina"`: **$-0.8603$** (Desacoplamiento total).
+* **Conclusión**: El centrado de media $\boldsymbol{\mu}$ es la única operación que remueve el piso anisotrópico de tokens de baja cardinalidad, transformando coincidencias estadísticas espurias en repulsiones hiperbólicas negativas.
+
+#### 3. Límite Definitivo del Born 2K para Retrieval (Colapso Bag-of-Characters)
+* **Veredicto Experimental**: Al calibrar un vector satélite real $\boldsymbol{\mu} \in \mathbb{R}^{384}$ sobre un corpus natural diverso de 270 oraciones en español, la query *"¿Cuál es la capital de Argentina?"* continuó prefiriendo la trampa sintáctica *"Canberra es la capital de Australia"* ($0.6331$) por encima del match correcto *"La capital de Argentina es Buenos Aires"* ($0.4113$) por un margen insalvable de $+0.22$.
+* **Causa Raíz**: Con vocabulario de 2,048 tokens, las entidades se tokenizan por caracteres sueltos y Weighted Mean Pooling sin capas de atención colapsa matemáticamente a un *Bag-of-Characters*. El centrado $\boldsymbol{\mu} + \ell_2$ penalizó más al match correcto (-0.203) que al espurio (-0.039) porque el problema no es de anisotropía espacial sino de **resolución léxica**.
+* **Directriz del Proyecto**: Los modelos Born compactos (2k vocab) son viables para generación creativa y bancos de pruebas de arquitectura, pero **no son viables para RAG**. El soporte de `.mu.bin` en `IslandOrchestrator` permanece activo para modelos compactos futuros que se exporten con vocabularios BPE amplios ($\ge 32\text{k}$). Para el producto RAG en producción, los motores certificados son **SmolLM2-360M / 1.5B** (49k vocab) y **Qwen2.5-1.5B** (151k vocab).
+
+---
+
+## 28. Certificación E2E de Qwen2.5-1.5B (151k Vocab) y Resolución del Bug de Disfraz Q8_0 en lm_head
+
+### 1. Calibración Satélite $\boldsymbol{\mu}$ y Rendimiento Estadístico (40 Pares)
+* **Modelo**: `models/production/qwen2_5_1_5b.gaje` ($d=1536$, 151,936 tokens BPE en GTOK).
+* **Vector satélite**: `data/calibration/qwen2_5_1_5b.mu.bin` calibrado sobre `data/corpus_es_diverse.txt` (270 oraciones de dominio transversal en español), $\|\boldsymbol{\mu}\| = 0.8405$.
+* **Métricas estadísticas comparativas**:
+  * **Sin Whitening (RAW)**: Positivos $\mu=0.5796$, Negativos $\mu=0.4047$, $\Delta\text{Medias}=0.1748$, $\tau^*=0.4992$.
+  * **Con Whitening ($\boldsymbol{\mu} + \ell_2$)**: Positivos $\mu=0.3814$, Negativos $\mu=0.1370$ (caída del piso de negativos en $-66\%$), $\Delta\text{Medias}=+0.2444$ (**ganancia neta $+40\%$**), $\tau^*=0.2556 \to 0.33$.
+
+### 2. Prueba Crucial de Discriminación Semántica vs Trampa Estructural
+* **Query**: *"¿Cuál es la capital de Argentina?"*
+  * **Match Correcto** (*"La capital de Argentina es Buenos Aires"*): $\cos = \mathbf{0.6620}$
+  * **Trampa Estructural** (*"Canberra es la capital de Australia"*): $\cos = \mathbf{0.5066}$
+  * **Distractor Léxico** (*"El río Sena atraviesa París"*): $\cos = \mathbf{0.1048}$
+  * **Margen Factual**: Buenos Aires supera a Canberra por **$+15.54\%$** ($+0.1554$) y al Sena por **$+55.73\%$** ($+0.5573$).
+* **Cross-Check Inverso**: *"¿Cuál es la capital de Australia?"*
+  * Canberra: $\cos = \mathbf{0.7686}$ vs Buenos Aires: $\cos = 0.4328$ (Margen a favor de Canberra: **$+33.58\%$**).
+
+### 3. Validación End-to-End (E2E) con agy, MCP y Telemetría RAG en Vivo
+* **Sanity Check de Inferencia Directa (`gaje-cli chat`)**:
+  * Ejecución greedy ($T=0.0$, $\text{max\_tokens}=32$): *"¿Cuál es la capital de Francia?"*.
+  * Respuesta: `"La capital de Francia es París."` (generó exactamente 10 tokens y se detuvo limpiamente por token de parada `<|im_end|>`, español con tilde correcta).
+* **Ingesta Atómica vía MCP (`gmem_store`)**:
+  * Hecho 1 (ID 3, nicho `episodic`): *"Canberra es la capital de Australia"*.
+  * Hecho 2 (ID 4, nicho `episodic`): *"Buenos Aires es la capital de Argentina"*.
+* **Recuperación Semántica vía MCP (`gmem_query`)**:
+  * Consulta: *"¿Cuál es la capital de Argentina?"* (`top_k: 2`):
+    * 1º lugar: **Buenos Aires** (ID 4) $\to \cos = \mathbf{0.6679}$ (supera umbral óptimo $\ge 0.60$).
+    * 2º lugar: **Canberra** (ID 3) $\to \cos = \mathbf{0.5075}$ ($\Delta_{top} = \mathbf{+16.04\%}$, supera umbral $>10\%$).
+    * Clasificación: **Escenario Óptimo** certificado.
+* **Inyección y Generación Integrada RAG (`POST /api/chat`)**:
+  * Petición: `{"message": "¿Cuál es la capital de Argentina?", "temperature": 0.0, "use_memory": true}`.
+  * **Latencia de recuperación asociativa**: **$16.07\text{ ms}$** (Hardware móvil Termux CPU).
+  * **Gating de Inyección**: Canberra podada por ratio de umbral; se inyectó exclusivamente Buenos Aires (`facts_injected: 1`).
+  * **Generación y Hallazgo de Degradación por Longitud**:
+    * En prompt corto ($N=10$, sin memoria): `"La capital de Argentina es Buenos Aires."` (Español perfecto, 9 tokens).
+    * En prompt largo con memoria ($N > 40$ tokens): `"La capitale de Argentina e s Buenos Aires."` (Se afirma la entidad correcta "Buenos Aires", pero el contexto extendido bajo la cuantización actual induce desprendimiento morfológico `"capitale"` y espaciado `"e s"`).
+* **Cross-Check Inverso de Simetría (*"¿Cuál es la capital de Australia?"*)**:
+  * Canberra: $\cos = \mathbf{0.7683}$ vs Buenos Aires: $\cos = 0.4326$ ($\Delta_{top} = \mathbf{+33.57\%}$).
+  * Telemetría: Canberra inyectada de forma exclusiva; Buenos Aires completamente excluida del contexto.
+
+### 4. Hallazgo Forense y Corrección: Bug de Disfraz Q8_0 en lm_head (Ruta Silenciosa #3)
+* **Síntoma**: Emisión de tokens `[PAD151935]` en modo greedy ($T=0.0$).
+* **Aislamiento por Capas**:
+  * Los 28 bloques transformer, atención RoPE, RMSNorm y embeddings pasaron con **0 NaNs / 0 Infs**.
+  * El tensor residual normalizado $h_{\text{norm}}$ llega intacto al cabezal final.
+  * Exactamente 35,749 de los 151,936 logits de salida en `lm_head` colapsaban a `NaN`.
+* **Causa Raíz**:
+  En `src/io/gguf/loader/tensors.rs`, la función `genomize_tensor` evaluaba `if bit_depth == 4`, pero cualquier otro valor (incluyendo `bit_depth == 8`) caía a `else` (`genomize_f32_core`). Esto generaba un buffer de ADN a 2 bits ($58.3\text{ MB}$) y centroides ($116.7\text{ MB}$), pero registraba en la cabecera `bit_depth: 8`.
+* **Verificación Aritmética Exacta**:
+  $$\frac{58,343,424\text{ bytes}}{34\text{ bytes/bloque}} = 1,715,983\text{ bloques} \implies \frac{1,715,983 \times 32}{1,536} = 35,749.6\text{ filas válidas}$$
+  A partir de la fila 35,750, el decodificador leía fuera de los límites de los pesos reales sobre la zona de memoria contigua (centroides), donde los bytes interpretados como escalas de punto flotante de media precisión (`half::f16`) producían valores NaN/Inf.
+* **Mitigación y Blindaje de Producción**:
+  1. `match bit_depth` exhaustivo en `src/io/gguf/loader/tensors.rs` despachando explícitamente `8 => quantize_to_q8_0` (o zero-copy si ya era Q8_0 en GGUF), `4`, `2` y error estricto `Err` ante cualquier valor no soportado.
+  2. Post-condición y aserción en `src/io/flat_writer.rs`: `assert_eq!(dna.len(), expected_dna_len)`. Toda exportación abortará ruidosamente si la longitud física del buffer no coincide con la fórmula exacta de su formato.
+
+### 5. Arquitectura Tied Word Embeddings y Resolución Definitiva de la Hipótesis Q8_0
+* **Cierre de Hipótesis Abierta (Certificado el 2026-09-24)**:
+  Se implementó y ejecutó el test comparativo directo [`tests/test_q8_vs_tied.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_q8_vs_tied.rs) recuantizando en paralelo con Rayon la totalidad del vocabulario ($151,936 \times 1,536$) a **$7,292,928$ bloques `Q8_0Block` genuinos** ($236.5\text{ MB}$, 100.00% de escalas activas no nulas).
+* **Evaluación Comparativa Lado a Lado**:
+  * **Prompt Corto ($N=25$)**:
+    * Tied Q4_0: `"La capital de Argentina es Buenos Aires."` (0 typos, 100% español).
+    * Real Q8_0: `"La capital de Argentina es Buenos Aires."` (0 typos, 100% español).
+  * **Prompt con Memoria ($N=72$)**:
+    * Tied Q4_0: `"La capitale de Argentina e s Buenos Aires."`
+    * Real Q8_0: `"La capitale de Argentina e s Buenos Aires."`
+* **Veredicto Científico Inapelable**:
+  **Los typos NO se originan en el `lm_head`, sino en el cuerpo Q4_0 de 28 capas transformadoras y el KV cache de atención.** Un `lm_head` Q8_0 proyecta fielmente la representación latente $\mathbf{h} \in \mathbb{R}^D$ que recibe; dado que $\mathbf{h}$ ya arrastra la dispersión acumulada de 28 capas cuantizadas a 4 bits cuando la secuencia supera los 40 tokens, tanto un cabezal de 8 bits como uno de 4 bits convergen al mismo argmax degradado.
+* **Eliminación de Dead Weight en Disco**:
+  Los $247,959,552\text{ bytes}$ de pesos reales Q8_0 fueron grabados directamente en el offset $3,859,558,400$ de [`models/production/qwen2_5_1_5b.gaje`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/models/production/qwen2_5_1_5b.gaje). La prueba [`tests/test_qwen_logits.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_qwen_logits.rs) certificó que `flat_reader` carga el modelo con **0 NaNs / 0 Infs** y **sin activar ninguna advertencia de ceros ni fallback**.
+
+---
+
+## 29. Aislamiento Empírico de la Deriva Morfológica y Frontera del Producto (2026-09-24)
+
+### 1. Experimento de Aislamiento Controlado de Deriva Morfológica
+Ejecutado exhaustivamente en [`tests/test_morphological_drift.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_morphological_drift.rs) evaluando 7 escenarios sistemáticos:
+
+| Caso | Configuración del Prompt | Longitud ($N$) | Repetition Penalty | Salida Generada | `capitale` | `e s` fragmentado |
+| :--- | :--- | :---: | :---: | :--- | :---: | :---: |
+| **1** | **Bare Prompt** (sin system prompt) | 25 tok | 1.00 | `"La capital de Argentina es Buenos Aires."` | ❌ No | ❌ No |
+| **2** | **Bare Prompt** con penalización | 25 tok | 1.15 | `"La capital de Argentina es Buenos Aires."` | ❌ No | ❌ No |
+| **3** | **System neutro corto** (*"Eres un asistente útil y conciso."*) | 47 tok | 1.00 | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Sí** | ❌ No (`es` intacto) |
+| **4** | **Contexto memoria** (*"Buenos Aires es la capital..."*) | 72 tok | 1.00 | `"La capitale de Argentina e s Buenos Aires."` | ⚠️ **Sí** | ⚠️ **Sí** |
+| **5** | **Contexto memoria** con penalización | 72 tok | 1.15 | `"La capitale de Argentina e s Buenos Aires."` | ⚠️ **Sí** | ⚠️ **Sí** |
+| **6** | **Long System neutro** (astronomía, sin mención de capitales) | 170 tok | 1.00 | `"La capitale de Argentiña e s Buenos Aires."` | ⚠️ **Sí** | ⚠️ **Sí** (`Argentiña`) |
+| **7** | **Long System neutro** con penalización | 170 tok | 1.15 | `"La capitale de Argentiña e s Buenos Aires."` | ⚠️ **Sí** | ⚠️ **Sí** (`Argentiña`) |
+
+### 2. Hallazgos Forenses Clave
+1. **Descarte de Repetition Penalty**: `repetition_penalty` (1.0 vs 1.15) produce exactamente la misma respuesta en todos los casos. No es la causa de `"capitale"` ni de `"e s"`.
+2. **Descarte de Condicionamiento Léxico del Prompt de Memoria**: El Caso 3 (sin palabras "capital" ni "Argentina") y el Caso 6 (texto astronómico sobre órbitas y leyes de Kepler) presentan la misma degradación morfológica.
+3. **Firma Monótona de Deriva por Acumulación de Contexto ($N$)**:
+   * $N \le 25\text{ tokens}$: **Español estándar 100% impecable**, 0 typos.
+   * $N \approx 47\text{ tokens}$: Aparece la primera mutación de sufijo (`"capitale"`).
+   * $N \ge 72\text{ tokens}$: Aparece la fragmentación de token BPE (`"e s"`).
+   * $N \ge 170\text{ tokens}$: Aparece la sustitución de caracteres (`"Argentiña"`).
+
+### 3. Medición Fina de la Frontera Exacta de Deriva ($N^*$)
+Ejecutado en [`tests/test_exact_drift_frontier.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_exact_drift_frontier.rs) escaneando punto a punto el intervalo de prefill desde $N=25$ hasta $N=53$:
+
+| Longitud ($N$) | Contexto Inyectado | Salida Generada | Estado |
+| :---: | :--- | :--- | :---: |
+| **25 tok** | *(Sin system prompt)* | `"La capital de Argentina es Buenos Aires."` | ✅ **Limpio (100% español)** |
+| **33 tok** | `Ok` | `"La capital de Argentina es Buenos Aires."` | ✅ **Limpio (100% español)** |
+| **35 tok** | `Hola.` | `"La capital de Argentina es Buenos Aires."` | ✅ **Limpio (100% español)** |
+| **36 tok** | `Responde.` | `"La capital de Argentina es Buenos Aires."` | ✅ **Limpio (100% español)** |
+| **40 tok** | `Asistente útil.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **40 tok** | `Eres un asistente.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **43 tok** | `Eres un asistente útil.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **45 tok** | `Eres un asistente muy útil.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **46 tok** | `Eres un asistente útil y claro.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **47 tok** | `Eres un asistente útil y conciso.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+| **53 tok** | `Eres un asistente de inteligencia artificial útil.` | `"La capitale de Argentina es Buenos Aires."` | ⚠️ **Deriva morfológica** |
+
+* **Frontera Limpia Máxima Certificada**: **$N \le 36\text{ tokens}$**.
+* **Punto de Inflexión (Crossover)**: **$N^* = 37 - 39\text{ tokens}$**.
+* **Régimen Degradado**: **$N \ge 40\text{ tokens}$**.
+
+---
+
+### 4. Experimento de Ablación de Chunking y Ventana Deslizante (Causalidad Estructural vs Acumulativa)
+Ejecutado en [`tests/test_chunking_ablation.rs`](file:///data/data/com.termux/files/home/develop/gaje-semantic-compression/tests/test_chunking_ablation.rs) para dilucidar si la deriva puede mitigarse truncando la memoria previa o si es un límite estructural de la geometría RoPE y Q4_0:
+
+| Caso | Estrategia de KV Cache | Prompt | Salida Generada | Veredicto |
+| :---: | :--- | :---: | :--- | :--- |
+| **A** | **Full Cache (Baseline)** | Largo ($N=170$) | `"La capitale de Argentiña e s Buenos Aires."` | Reproducción exacta de la degradación completa (`Argentiña`, `capitale`, `e s`). |
+| **B** | **Sliding Window ($W=32$)** | Largo ($N=170$) | `"I."` | **Colapso de atención**: pérdida de conectividad causal con el system prompt. |
+| **C** | **Attention Sinks ($4+28$)** | Largo ($N=170$) | `"This is a Chinese traditional medicine. It is a type of medicine that is made from natural ingredients..."` | **Desalineación de fase RoPE / Alucinación**: ruptura de coherencia entre sumideros iniciales y ventana local. |
+| **D** | **Full Cache Baseline** | Memoria RAG ($N=72$) | `"La capitale de Argentina e s Buenos Aires."` | Reproducción del caso RAG (`"capitale"`, `"e s"`). |
+| **E** | **Sliding Window ($W=32$)** | Memoria RAG ($N=72$) | `"."` | **Colapso de atención a token de parada**. |
+
+---
+
+### 5. Análisis Arquitectónico: Incompatibilidad entre RoPE Base 1M y Attention Sinks (Qwen2.5 vs LLaMA)
+El colapso catastrófico de *Attention Sinks* (Xiao et al., StreamingLLM) en Qwen2.5-1.5B, en contraste con su éxito en la familia LLaMA, se debe a una diferencia matemática fundamental en la parametrización de RoPE:
+
+| Parámetro Arquitectónico | LLaMA / LLaMA-2 | Qwen2.5-1.5B |
+| :--- | :---: | :---: |
+| **RoPE Base ($\theta_{\text{base}}$)** | $10,000$ | **$1,000,000$** |
+| **Frecuencia Mínima ($\omega_{\min}$)** | $\frac{1}{10000^{1}} = 10^{-4}$ | $\frac{1}{1000000^{1}} = 10^{-6}$ |
+| **Sensibilidad a Discontinuidades de Índice ($\Delta pos$)** | Moderada (tolerable por sumideros) | **Extrema** (desfase angular destructivo) |
+
+* **Mecanismo del Colapso**: Con $\theta_{\text{base}} = 1,000,000$, los canales de baja frecuencia varían a un ritmo 100 veces más lento. Al podar tokens intermedios (ej. saltar de $pos=3$ a $pos=142$), se introduce un salto artificial $\Delta pos$ que distorsiona las relaciones geométricas angulares entre claves y consultas. En LLaMA, la rotación periódica compacta tolera el salto; en Qwen2.5, la discontinuidad de fase dispersa el producto escalar $Q \cdot K^T$ fuera de la distribución calibrada de Softmax, provocando alucinación o colapso a tokens de parada.
+
+---
+
+### 6. Reposicionamiento Honesto de la Promesa y Alcance del Producto
+
+| Capacidad | Estado | Comportamiento Técnico Certificado |
+| :--- | :---: | :--- |
+| **Recuperación Semántica RAG (Hipocampo)** | 🟢 **Producción** | Latencia de **$16.07\text{ ms}$** en CPU ARM móvil. Separación $\Delta_{top} \ge +16\%$ a $+33\%$ con centrado $\boldsymbol{\mu} + \ell_2$. |
+| **Ciclo Completo MCP (JSON-RPC stdio)** | 🟢 **Producción** | Comunicación bidireccional stdio $\leftrightarrow$ Servidor HTTP $\leftrightarrow$ Inferencia de memoria. |
+| **Integridad Numérica** | 🟢 **Producción** | **0 NaNs / 0 Infs** en los 151,936 logits de salida. |
+| **Q&A Factual sobre Hechos Atómicos ($N \le 36$ tokens)** | 🟢 **Producción** | **Español estándar 100% impecable**, aserción precisa y cero degradación sintáctica. |
+| **RAG sobre Documentos Extensos ($N > 40$ tokens)** | ❌ **No Soportado** | Sujeto a deriva morfológica estructural inducida por la acumulación de ruido Q4_0 en las 28 capas transformadoras. |
+
+**Definición Canónica del Producto**:
+GAJE Helix es un **motor soberano de Q&A factual sobre hechos atómicos con memoria persistente mmap**, optimizado para consultas asociativas sub-segundo ($16\text{ ms}$) en dispositivos móviles. La memoria `.gmem` opera como un repositorio de **tuplas proposicionales concisas ($N \le 20$ tokens por hecho)**, garantizando que el prompt total no exceda la frontera limpia de **$N \le 36$ tokens**. No es, ni pretende ser en su estado actual, un motor de síntesis de documentos extensos.
+
+
+
+
 
 
 

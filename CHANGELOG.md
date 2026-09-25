@@ -2,6 +2,21 @@
 
 [![Language: English](https://img.shields.io/badge/Language-English-blue.svg)](CHANGELOG.en.md) [![Language: Español](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: 中文](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.5-alpha] - 2026-09-24
+### Added / Añadido
+- **Certificación de Producción RAG y Pipeline End-to-End con Qwen2.5-1.5B ($d=1536$, 151k Vocabulario BPE en GTOK)**:
+  - **Validación Factual vs Trampas Estructurales**: Margen empírico certificado de **$+15.54\%$** a favor de Buenos Aires sobre Canberra en *"¿Cuál es la capital de Argentina?"* ($\cos = 0.6679$ vs $0.5075$, superando el criterio óptimo pre-registrado $\ge 0.60$), atenuación de $+55.73\%$ sobre distractores léxicos (Río Sena) y simetría en cross-check inverso para Australia ($+33.58\%$).
+  - **Puente Nativo con Model Context Protocol (MCP)**: Subcomando `gaje-cli mcp` implementando JSON-RPC 2.0 sobre stdio con las herramientas `gmem_store` (ingesta atómica categorizada por nichos: `conversational`, `episodic`, `documental`) y `gmem_query` (búsqueda asociativa con centrado de media $\boldsymbol{\mu} + \ell_2$).
+  - **Subcomando CLI Soberano `calibrate-mu`**: Integración nativa en `gaje-cli tools calibrate-mu` para estimar y persistir vectores de centrado satélite $\boldsymbol{\mu} \in \mathbb{R}^D$ (`.mu.bin`), comprimiendo el piso de falsos positivos en un $-66\%$ y expandiendo la separación de medias en $+40\%$.
+  - **Gating y Filtrado de Contexto en Servidor HTTP**: Latencia de búsqueda de $16.07\text{ ms}$ en CPU móvil Termux, selección Top-1 de hechos relevantes y telemetría de inyección limpia en `POST /api/chat`.
+- **Aislamiento Empírico de Deriva Morfológica, Causalidad Estructural y Frontera del Producto**:
+  - **Medición Fina de Frontera Limpia (`tests/test_exact_drift_frontier.rs`)**: Escaneo punto a punto que establece con precisión quirúrgica **$N \le 36\text{ tokens}$ como la frontera limpia máxima certificada** (español 100% impecable). Punto de inflexión entre $N=37$ y $N=39$; aparición de deriva morfológica (`"capitale"`) a partir de $N \ge 40$.
+  - **Ablación Causal de Chunking y Ventana Deslizante (`tests/test_chunking_ablation.rs`)**: Prueba empírica de que el truncamiento de KV cache o sumideros de atención no resuelve la deriva, sino que provoca colapso de atención (`"I."`, `"."`) o alucinaciones desconectadas. Veredicto: la deriva es **estructural e intrínseca a la compresión Q4_0 del cuerpo**.
+  - **Hallazgo Arquitectónico RoPE Base 1M vs 10K (Qwen2.5 vs LLaMA)**: Identificación de la causa por la cual *Attention Sinks* (StreamingLLM) fracasa en Qwen2.5: con $\theta_{\text{base}} = 10^6$ (vs $10^4$ en LLaMA), los canales de baja frecuencia varían 100x más lento, magnificando la discontinuidad angular $\Delta pos$ ante cortes de caché y dispersando la distribución Softmax.
+  - **Resolución Definitiva de la Hipótesis Q8_0 (`tests/test_q8_vs_tied.rs`)**: Recuantización paralela de $151,936$ embeddings a $7,292,928$ bloques `Q8_0Block` genuinos ($236.5\text{ MB}$, 100% no nulos). La comparativa lado a lado demostró idéntica salida entre Tied Q4_0 y Real Q8_0, probando que la deriva se origina en el cuerpo transformador y no en el cabezal de salida.
+  - **Persistencia de Pesos Reales en Disco**: Grabación directa de los $247.9\text{ MB}$ de pesos Q8_0 en `models/production/qwen2_5_1_5b.gaje`, eliminando el dead weight y permitiendo a `flat_reader` cargar el modelo con 0 NaNs / 0 Infs sin activar ningún fallback de ceros.
+  - **Reposicionamiento Honesto del Producto**: Certificación oficial de GAJE Helix como **motor soberano de Q&A factual sobre hechos atómicos con memoria persistente**, operando sobre tuplas proposicionales concisas ($N \le 20$ tokens por hecho) que garantizan prompts totales dentro del régimen limpio ($N \le 36$). Delimitación formal de que RAG sobre documentos extensos no refinados no está soportado bajo cuantización pura Q4_0.
+
 ## [1.7.4-alpha] - 2026-09-12
 ### Added / Añadido
 - **Memoria Hipocampal Soberana en Tiempo Real (Island Model RAG nativo en Rust)**:

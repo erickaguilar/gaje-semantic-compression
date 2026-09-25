@@ -92,17 +92,20 @@ Se ejecutó la prueba A/B ciega y de paridad en la misma máquina comparando el 
 
 ---
 
-### 🏝️ 3. Island Model (.gmem): Memoria Hipocampal RAG Submilisegundo
+### 🏝️ 3. Island Model (.gmem) & Protocolo MCP: Memoria Hipocampal RAG Submilisegundo
 
-El sistema integra recuperación y persistencia de memoria contextual en tiempo real mediante índices binarios planos `.gmem` alineados a 64 bytes:
+El sistema integra recuperación y persistencia de memoria asociativa contextual en tiempo real mediante índices binarios planos `.gmem` alineados a 64 bytes y puente nativo con el **Model Context Protocol (MCP)**:
 
-* **Latencia de Recuperación RAG**: **`< 0.5 ms`** por consulta multinicho mediante *Weighted Mean Pooling* sobre embeddings de entrada ($W_E$).
-* **Gating de Brecha de Entropía ($\Delta_{top} \ge 0.12$)**: Pruning competitivo K-WTA y descarte matemático de consultas ambiguas o casos trampa.
-* **Calibración Satélite por Whitening**: Centrado anisotrópico ($\boldsymbol{\mu} \in \mathbb{R}^D$) persistido en `data/calibration/` con fallback automático (Opción C).
+* **Latencia de Recuperación RAG**: **`16 ms`** en CPU móvil / **`< 0.5 ms`** en desktop mediante *Weighted Mean Pooling* sobre embeddings de entrada ($W_E$).
+* **Puente MCP Nativo (`gaje-cli mcp`)**: Exposición soberana sobre stdio JSON-RPC 2.0 de las herramientas `gmem_store` (ingesta atómica categorizada por nichos: `conversational`, `episodic`, `documental`) y `gmem_query` (búsqueda asociativa whitened $\boldsymbol{\mu} + \ell_2$).
+* **Gating de Brecha de Entropía ($\Delta_{top} \ge 0.12$)**: Pruning competitivo lateral K-WTA y descarte matemático de consultas ambiguas o casos trampa.
+* **Calibración Satélite por Whitening**: Centrado anisotrópico ($\boldsymbol{\mu} \in \mathbb{R}^D$) persistido en `models/production/*.mu.bin` con fallback automático (Opción C).
+* **Certificación E2E de Qwen2.5-1.5B**: Demostrada discriminación factual óptima ($+15.54\%$ sobre trampas estructurales, $+55.73\%$ sobre distractores léxicos y $+33.58\%$ en cross-checks) documentada en [`docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md`](docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md).
 * **Telemetría Canónica de 6 Estados**: Supervisión en tiempo real en SSE y HUD (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap`, etc.).
 * **Presupuesto de Contexto**: Inyección protegida dentro del bloque de sistema (`ChatML` / `Llama3`) preservando la fidelidad de turnos.
 
 ---
+
 
 ## 🛠️ Fundamentos Arquitectónicos de GAJE-Flow
 

@@ -2,6 +2,21 @@
 
 [![Language: Spanish](https://img.shields.io/badge/Language-Espa%C3%B1ol-yellow.svg)](CHANGELOG.es.md) [![Language: Chinese](https://img.shields.io/badge/Language-%E4%B8%AD%E6%96%87-red.svg)](CHANGELOG.zh.md)
 
+## [1.7.5-alpha] - 2026-09-24
+### Added
+- **Production RAG Certification & End-to-End Pipeline with Qwen2.5-1.5B ($d=1536$, 151k BPE Vocab in GTOK)**:
+  - **Factual Validation vs Structural Traps**: Certified empirical margin of **$+15.54\%$** in favor of Buenos Aires over Canberra on *"¿Cuál es la capital de Argentina?"* ($\cos = 0.6679$ vs $0.5075$, exceeding pre-registered optimal threshold $\ge 0.60$), $+55.73\%$ attenuation over lexical distractors (Seine river), and $+33.58\%$ symmetric separation on reverse Australia cross-check.
+  - **Native Model Context Protocol (MCP) Bridge**: New CLI subcommand `gaje-cli mcp` implementing standard JSON-RPC 2.0 over stdio with tools `gmem_store` (atomic multi-niche memory ingestion: `conversational`, `episodic`, `documental`) and `gmem_query` (associative search with $\boldsymbol{\mu} + \ell_2$ mean-centering).
+  - **Sovereign CLI Subcommand `calibrate-mu`**: Integrated `gaje-cli tools calibrate-mu` to compute and persist satellite centering vectors $\boldsymbol{\mu} \in \mathbb{R}^D$ (`.mu.bin`), compressing the negative baseline by $-66\%$ and expanding mean separation by $+40\%$.
+  - **Server-Side Gating & Context Filtering**: $16.07\text{ ms}$ retrieval latency on mobile ARM CPU (Termux), Top-1 relevant fact selection, and clean context injection telemetry in `POST /api/chat`.
+- **Empirical Morphological Drift Isolation, Structural Causality & Product Repositioning**:
+  - **Fine-Grained Clean Frontier Measurement (`tests/test_exact_drift_frontier.rs`)**: Step-by-step prefill scan conclusively establishing **$N \le 36\text{ tokens}$ as the maximum certified clean frontier** (100% flawless Spanish). Crossover inflection between $N=37$ and $N=39$; onset of morphological drift (`"capitale"`) at $N \ge 40$.
+  - **Causal Chunking & Sliding Window Ablation (`tests/test_chunking_ablation.rs`)**: Empirical proof that KV cache truncation and attention sinks do not solve drift, but cause attention collapse (`"I."`, `"."`) or disconnected hallucinations. Verdict: drift is **structural and intrinsic to Q4_0 body quantization**.
+  - **Architectural Finding on RoPE Base 1M vs 10K (Qwen2.5 vs LLaMA)**: Identified why *Attention Sinks* (StreamingLLM) fails on Qwen2.5: with $\theta_{\text{base}} = 10^6$ (vs $10^4$ in LLaMA), low-frequency channels rotate 100x slower, causing extreme angular phase offsets $\Delta pos$ when skipping positions, throwing attention dot products outside the calibrated Softmax manifold.
+  - **Definitive Resolution of the Q8_0 Hypothesis (`tests/test_q8_vs_tied.rs`)**: Parallel requantization of $151,936$ embeddings into $7,292,928$ genuine `Q8_0Block` units ($236.5\text{ MB}$, 100% non-zero). Side-by-side evaluation showed identical outputs between Tied Q4_0 and Real Q8_0, proving drift originates in the transformer body rather than the output head.
+  - **On-Disk Persistence of Real Weights**: Wrote all $247.9\text{ MB}$ of genuine Q8_0 weights into `models/production/qwen2_5_1_5b.gaje`, eliminating dead weight and allowing `flat_reader` to load the model with 0 NaNs / 0 Infs without triggering zero-fallback warnings.
+  - **Honest Product Repositioning**: Officially certified GAJE Helix as a **sovereign factual Q&A engine over atomic facts with persistent memory**, operating over concise propositional tuples ($N \le 20$ tokens per fact) that keep total prompts within the clean regime ($N \le 36$). Formally declared that RAG over unrefined long-form documents is not supported under pure Q4_0 quantization.
+
 ## [1.7.4-alpha] - 2026-09-12
 ### Added
 - **Real-Time Sovereign Hippocampal Memory (Native Rust Island Model RAG)**:

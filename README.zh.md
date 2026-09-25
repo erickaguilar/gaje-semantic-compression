@@ -45,13 +45,15 @@
 
 ---
 
-### 🏝️ 3. Island Model (.gmem)：亚毫秒级海马 RAG 记忆检索
+### 🏝️ 3. Island Model (.gmem) 与 MCP 协议：亚毫秒级海马 RAG 记忆检索
 
-系统通过 64 字节内存对齐的平面二进制索引 (`.gmem`) 实现实时上下文关联检索与持久化：
+系统通过 64 字节内存对齐的平面二进制索引 (`.gmem`) 和原生的 **Model Context Protocol (MCP)** 桥接实现实时上下文关联检索与持久化：
 
-* **RAG 向量检索延迟**：多生态位每次查询 **`< 0.5 ms`**，采用针对输入词向量表 ($W_E$) 的原生*加权平均池化 (Weighted Mean Pooling)*。
+* **RAG 向量检索延迟**：在移动端 ARM CPU 上约为 **`16 ms`**，在桌面端 **`< 0.5 ms`**，采用针对输入词向量表 ($W_E$) 的原生*加权平均池化 (Weighted Mean Pooling)*。
+* **原生 MCP 桥接 (`gaje-cli mcp`)**：基于标准 stdio JSON-RPC 2.0 协议暴露 `gmem_store`（支持 `conversational`、`episodic`、`documental` 三大生态位原子摄入）与 `gmem_query`（$\boldsymbol{\mu} + \ell_2$ 居中白化关联搜索）工具。
 * **熵隙门控机制 ($\Delta_{top} \ge 0.12$)**：结合 K-WTA 侧向竞争抑制，在数学层面直接剔除模糊或竞争陷阱对。
-* **卫星白化标定**：各向异性居中向量 ($\boldsymbol{\mu} \in \mathbb{R}^D$) 持久化于 `data/calibration/`，支持平滑降级（方案 C）。
+* **卫星白化标定**：各向异性居中向量 ($\boldsymbol{\mu} \in \mathbb{R}^D$) 持久化于 `models/production/*.mu.bin`，支持平滑降级（方案 C）。
+* **Qwen2.5-1.5B 端到端认证**：实证验证了超越结构陷阱 **$+15.54\%$**、超越词汇干扰 **$+55.73\%$** 以及交叉校验 **$+33.58\%$** 的最优事实判别率，详见认证报告 [`docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md`](docs/certifications/QWEN_1_5B_PRODUCTION_RAG_CERTIFICATION.md)。
 * **规范化 6 状态实时遥测**：在 SSE 与服务端指标中实时监控 (`memory_injected`, `rejected_low_similarity`, `rejected_entropy_gap` 等)。
 * **安全系统级注入**：在 ChatML 与 Llama3 对话模板中严格注入于系统提示词区块，杜绝轮次错乱与提示词污染。
 

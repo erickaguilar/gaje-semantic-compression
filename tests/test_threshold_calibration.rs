@@ -228,6 +228,7 @@ fn evaluate_model_mode(
 #[test]
 fn test_calibrate_all_models_whitening_comparison() {
     let models = [
+        ("models/production/qwen2_5_1_5b.gaje", "qwen2_5_1_5b.gaje (Qwen2.5 Q4_0 1536d)"),
         ("models/born/max.gaje", "max.gaje (Llama Q2_0 256d)"),
         ("models/production/qwen2_5_0_5b_q2_0.gaje", "qwen2_5_0_5b_q2_0.gaje (Qwen2.5 Q2_0 896d)"),
         ("models/production/gaje_pico_135m.gaje", "gaje_pico_135m.gaje (SmolLM FP32 576d)"),
@@ -255,8 +256,13 @@ fn test_calibrate_all_models_whitening_comparison() {
         // 1. Evaluación SIN whitening (Standard Weighted Pooling)
         let eval_raw = evaluate_model_mode(&llm, &tokenizer, &corpus, None);
 
-        // 2. Cálculo de mu vector sobre corpus representativo (latam_corpus.jsonl)
-        let mu = compute_mu_vector(&llm, &tokenizer, "data/latam_corpus.jsonl", 150);
+        // 2. Vector satélite μ (.mu.bin o cálculo sobre corpus)
+        let mu = if let Some(mu_path) = _impl::compute::island::resolve_mu_vector_path(Path::new(path)) {
+            _impl::compute::island::load_mu_vector(&mu_path, llm.dim())
+                .unwrap_or_else(|_| compute_mu_vector(&llm, &tokenizer, "data/corpus_es_diverse.txt", 150))
+        } else {
+            compute_mu_vector(&llm, &tokenizer, "data/corpus_es_diverse.txt", 150)
+        };
         let eval_white = evaluate_model_mode(&llm, &tokenizer, &corpus, Some(&mu));
 
         let diag_raw = if eval_raw.margin_percentiles > 0.15 {

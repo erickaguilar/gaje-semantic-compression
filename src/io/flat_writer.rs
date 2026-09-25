@@ -71,6 +71,32 @@ fn add_linear<'a>(
     let anchors = l.anchors_sparse_buffer();
     let bias = f32_u8(&l.bias);
 
+    let expected_dna_len = match l.bit_depth() {
+        8 => (l.out_features * l.in_features / 32) * std::mem::size_of::<crate::io::header::Q8_0Block>(),
+        4 => if l.centroids.is_empty() {
+            (l.out_features * l.in_features / 32) * std::mem::size_of::<crate::io::header::Q4_0Block>()
+        } else {
+            l.out_features * l.in_features / 2
+        },
+        2 => if l.centroids.is_empty() {
+            (l.out_features * l.in_features / 32) * std::mem::size_of::<crate::io::header::Q2_0Block>()
+        } else {
+            l.out_features * l.in_features / 4
+        },
+        32 => l.out_features * l.in_features * 4,
+        other => panic!("bit_depth {} no soportado para serialización en '{}'", other, name),
+    };
+
+    assert_eq!(
+        dna.len(),
+        expected_dna_len,
+        "Corrupción detectada en '{}': dna_len ({}) != expected_dna_len ({}) para bit_depth={}",
+        name,
+        dna.len(),
+        expected_dna_len,
+        l.bit_depth()
+    );
+
     let dna_off = *current_offset;
     *current_offset = align64_size(dna_off + dna.len());
 
